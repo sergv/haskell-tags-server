@@ -1,0 +1,59 @@
+name:                tags-server
+version:             0.1.0.0
+synopsis:            Server that looks up haskell entities, similar to tags in editors but more precise
+-- description:
+license:             BSD3
+license-file:        LICENSE
+author:              Sergey Vinokurov
+maintainer:          serg.foo@gmail.com
+category:            Development
+build-type:          Simple
+cabal-version:       >=1.10
+
+library
+  build-depends:       base >=4,
+                       array,
+                       containers,
+                       filepath,
+                       directory,
+                       mtl,
+                       transformers,
+                       text,
+                       network >=2.6,
+                       haskell-src-exts >=1.16,
+                       bert >=1.2,
+                       utf8-string >=0.3,
+                       regex-tdfa >=1.0,
+                       regex-tdfa-text,
+                       fast-tags >=0.0.6
+  exposed-modules:     Server
+  other-modules:
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+
+executable tags-server
+  main-is:             src/Main.hs
+  build-depends:       base >=4,
+                       network >=2.6,
+                       filepath,
+                       directory,
+                       optparse-applicative,
+                       tags-server
+  default-language:    Haskell2010
+
+
+test-suite test-tags-server
+  default-language: Haskell2010
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   tests
+  main-is:          Main.hs
+  other-modules:    ServerTests
+  build-depends:    base >=4,
+                    containers,
+                    filepath,
+                    directory,
+                    tasty >=0.7,
+                    tasty-hunit >=0.4,
+                    utf8-string,
+                    bert,
+                    tags-server
