@@ -219,7 +219,7 @@ retrieveModule modName = do
     loadModule (ModuleName modName) = do
       srcDirs <- asks confSourceDirectories
       let possiblePaths = [ root </> filenamePart <.> ext
-                          | root <- srcDirs
+                          | root <- S.toList srcDirs
                           , ext  <- ["hs", "lhs", "hsc"]
                           ]
       actualPaths <- filterM (liftIO . doesFileExist) possiblePaths
@@ -255,7 +255,7 @@ loadModuleFromFile filename = do
             M.fromList $ catMaybes $
             zipWith (\x name -> ((,name) . convertModName) <$> HSE.importAs x) imports importedModules
       -- tie the knot
-      imports <- local (\conf -> conf { confSourceDirectories = rootFromFileName filename : confSourceDirectories conf }) $
+      imports <- local (\conf -> conf { confSourceDirectories = S.insert (rootFromFileName filename) $ confSourceDirectories conf }) $
                  mapM retrieveModule importedModules
       let exportsOfImports = M.fromList $ zipWith (curry (id *** map modExports)) importedModules imports
       exports <- case exportSpec of

@@ -19,6 +19,7 @@ module ServerTests (testsConfig, tests) where
 import Control.Exception
 import Control.Monad
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
+import qualified Data.Set as S
 import System.Directory
 import System.FilePath
 import Test.Tasty
@@ -34,7 +35,7 @@ testDataDir :: FilePath
 testDataDir = "test-data"
 
 testsConfig :: ServerConfig
-testsConfig = ServerConfig [testDataDir] [] 10000 True
+testsConfig = ServerConfig (S.singleton testDataDir) S.empty 10000 True
 
 tests :: TestTree
 tests =

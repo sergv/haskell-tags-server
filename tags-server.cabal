@@ -34,6 +34,7 @@ library
 executable tags-server
   main-is:             src/Main.hs
   build-depends:       base >=4,
+                       containers,
                        network >=2.6,
                        filepath,
                        directory,
