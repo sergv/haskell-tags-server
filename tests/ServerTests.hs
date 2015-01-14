@@ -43,14 +43,14 @@ tests =
     testGroup "server tests"
       [ mkTest "single module" getConn
           "SingleModule.hs" "foo"
-          (TupleTerm [AtomTerm "loc_known", TupleTerm [BinaryTerm "SingleModule.hs", IntTerm 16]])
+          (TupleTerm [AtomTerm "loc_known", TupleTerm [BinaryTerm "SingleModule.hs", IntTerm 16, AtomTerm "Function"]])
       , testGroup "imports"
           [ mkTest "wildcard import" getConn
               "ModuleWithImports.hs" "baz"
-              (TupleTerm [AtomTerm "loc_known", TupleTerm [BinaryTerm "Imported1.hs", IntTerm 16]])
+              (TupleTerm [AtomTerm "loc_known", TupleTerm [BinaryTerm "Imported1.hs", IntTerm 16, AtomTerm "Function"]])
           , mkTest "import list" getConn
               "ModuleWithImports.hs" "baz2"
-              (TupleTerm [AtomTerm "loc_known", TupleTerm [BinaryTerm "Imported2.hs", IntTerm 16]])
+              (TupleTerm [AtomTerm "loc_known", TupleTerm [BinaryTerm "Imported2.hs", IntTerm 16, AtomTerm "Function"]])
           ]
       , testGroup "export list"
           [
@@ -83,9 +83,9 @@ relativize term =
     x -> x
   where
     fixLoc :: Term -> Term
-    fixLoc (TupleTerm [BinaryTerm path, line]) =
-      TupleTerm [BinaryTerm $ toFilename path, line]
-    fixLoc x = error $ "invalid symobl location term: " ++ show x
+    fixLoc (TupleTerm [BinaryTerm path, line, typ]) =
+      TupleTerm [BinaryTerm $ toFilename path, line, typ]
+    fixLoc x = error $ "invalid symbol location term: " ++ show x
     toFilename :: UTF8.ByteString -> UTF8.ByteString
     toFilename = UTF8.fromString . takeFileName . UTF8.toString
 
