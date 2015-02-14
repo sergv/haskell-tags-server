@@ -41,6 +41,7 @@ import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import Data.Time.Clock (UTCTime)
 import Network.Socket (PortNumber)
 import System.Directory
 import System.Exit
@@ -83,6 +84,7 @@ data Module = Module
   , modAllSymbols       :: Map SymbolName Symbol
   , modSource           :: Text
   , modFile             :: FilePath
+  , modLastModified     :: UTCTime
   }
   deriving (Show, Eq, Ord)
 
@@ -189,6 +191,8 @@ findInModule sym mod
       mods <- retrieveModule modName
       return $ concatMap (maybe [] (:[]) . M.lookup sym . modExports) mods
 
+-- | Split qualified symbol name (e.g. Foo.Bar.baz) into
+-- qualified module part (Foo.Bar) and name part (baz).
 splitQualified :: SymbolName -> Maybe (ModuleName, SymbolName)
 splitQualified = \(SymbolName name) ->
   case matchOnce re name of
@@ -205,16 +209,22 @@ splitQualified = \(SymbolName name) ->
            "^(([[:upper:]][[:alnum:]_']*\\.)*[[:upper:]][[:alnum:]_']*)\\.(.*)$"
            -- "^((?:[A-Z][a-zA-Z_0-9']*\\.)*[A-Z][a-zA-Z_0-9']*)\\.(.*)$"
 
+-- Fetch module by it's name from cache or load it. Check modification time
+-- of module files and reload if anything changed
 retrieveModule :: forall m. (Functor m, MonadError String m, MonadState ServerState m, MonadReader ServerConfig m, MonadIO m)
                => ModuleName -> m [Module]
 retrieveModule modName = do
   modules <- gets stateModules
-  case M.lookup modName modules of
-    Nothing   -> do
-      mods <- loadModule modName
-      modify (\s -> s { stateModules = M.insert modName mods $ stateModules s })
-      return mods
-    Just mods -> return mods
+  mods <- case M.lookup modName modules of
+             Nothing   -> loadModule modName
+             Just mods -> do
+               forM mods $ \m -> do
+                 modTime <- liftIO $ getModificationTime (modFile m)
+                 if modLastModified m /= modTime
+                   then loadModuleFromFile (modFile m)
+                   else return m
+  modify (\s -> s { stateModules = M.insert modName mods $ stateModules s })
+  return mods
   where
     loadModule :: ModuleName -> m [Module]
     loadModule (ModuleName modName) = do
