@@ -14,33 +14,49 @@ library
   build-depends:       base >=4,
                        array,
                        containers,
+                       time,
                        filepath,
                        directory,
+                       filemanip,
                        mtl,
                        transformers,
                        text,
+                       stm,
                        network >=2.6,
                        haskell-src-exts >=1.16,
                        bert >=1.2,
                        utf8-string >=0.3,
+                       hslogger >=1.2,
                        regex-tdfa >=1.0,
                        regex-tdfa-text,
                        fast-tags >=0.0.6
   exposed-modules:     Server
+                       Logging
+                       Search
+                       Types
   other-modules:
   hs-source-dirs:      src
   default-language:    Haskell2010
+  ghc-options:         -W -Wall -fwarn-monomorphism-restriction
+                       -fno-warn-type-defaults
+                       -fno-warn-name-shadowing
+                       -ferror-spans -rtsopts
 
 executable tags-server
   main-is:             src/Main.hs
   build-depends:       base >=4,
                        containers,
-                       network >=2.6,
+                       bert,
+                       network,
                        filepath,
                        directory,
                        optparse-applicative,
                        tags-server
   default-language:    Haskell2010
+  ghc-options:         -W -Wall -fwarn-monomorphism-restriction
+                       -fno-warn-type-defaults
+                       -fno-warn-name-shadowing
+                       -ferror-spans -rtsopts
 
 
 test-suite test-tags-server
@@ -49,6 +65,7 @@ test-suite test-tags-server
   hs-source-dirs:   tests
   main-is:          Main.hs
   other-modules:    ServerTests
+                    LogCollectingServer
   build-depends:    base >=4,
                     containers,
                     filepath,
@@ -56,5 +73,13 @@ test-suite test-tags-server
                     tasty >=0.7,
                     tasty-hunit >=0.4,
                     utf8-string,
+                    dlist,
+                    hslogger,
+                    stm,
+                    network,
                     bert,
                     tags-server
+  ghc-options:      -W -Wall -fwarn-monomorphism-restriction
+                    -fno-warn-type-defaults
+                    -fno-warn-name-shadowing
+                    -ferror-spans -rtsopts
