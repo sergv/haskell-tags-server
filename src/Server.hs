@@ -110,9 +110,7 @@ runServer conf = do
                 ]
             Right [] ->
               return $ BERT.Success $ TupleTerm
-                [ AtomTerm "error"
-                , BinaryTerm (UTF8.fromString "no symbols found")
-                ]
+                [ AtomTerm "not_found" ]
             Right [sym] ->
               return $ BERT.Success $ TupleTerm
                 [ AtomTerm "loc_known"

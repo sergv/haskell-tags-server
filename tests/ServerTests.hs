@@ -27,6 +27,8 @@ import System.Directory
 import System.FilePath
 import Test.Tasty
 import Test.Tasty.HUnit
+import Text.Regex.TDFA
+import qualified Text.Regex.TDFA.Text as TDFA
 
 import Data.BERT
 import Network.BERT.Client
@@ -42,12 +44,43 @@ testDataDir = "test-data"
 testsConfig :: (Server s) => s -> ServerConfig s
 testsConfig serv = ServerConfig (S.singleton testDataDir) S.empty True serv
 
+type SymbolType = String
+
+data Response =
+    Known FilePath Int SymbolType
+  | Ambiguous [(FilePath, Int, SymbolType)]
+  | NotFound
+
+  -- | Error Regex
+  --
+-- mkRegex :: String -> Regex
+-- mkRegex re =
+--   either error id $ TDFA.compile
+--     (defaultCompOpt { multiline = False, caseSensitive = True })
+--     (defaultExecOpt { captureGroups = False })
+--     re
+
+responseToTerm :: Response -> Term
+responseToTerm resp =
+  case resp of
+    Known filename line typ ->
+      TupleTerm [AtomTerm "loc_known", mkLoc (filename, line, typ)]
+    Ambiguous xs ->
+      TupleTerm [AtomTerm "loc_ambiguous", ListTerm (map mkLoc xs)]
+    NotFound ->
+      TupleTerm [AtomTerm "not_found" ]
+  where
+    mkLoc (filename, line, typ) =
+      TupleTerm [ BinaryTerm $ UTF8.fromString filename
+                , IntTerm line
+                , AtomTerm typ ]
+
 data TestData =
     AtomicTest
       String   -- ^ name
       String   -- ^ symbol
       FilePath -- ^ filepath relative to testDataDir
-      Term     -- ^ expected
+      Response -- ^ expected response
   | GroupTest
       String -- ^ name
       [TestData]
@@ -58,29 +91,51 @@ testData = GroupTest "server tests"
       "single module"
       "foo"
       "0000single_module/SingleModule.hs"
-      (TupleTerm [ AtomTerm "loc_known"
-                 , TupleTerm [ BinaryTerm "SingleModule.hs"
-                             , IntTerm 16
-                             , AtomTerm "Function" ]])
+      (Known "SingleModule.hs" 16 "Function")
   , GroupTest "imports"
       [ AtomicTest
           "wildcard import"
           "baz"
-           "ModuleWithImports.hs"
-           (TupleTerm [ AtomTerm "loc_known"
-                      , TupleTerm [ BinaryTerm "Imported1.hs"
-                                  , IntTerm 16
-                                  , AtomTerm "Function" ]])
+           "0001module_with_imports/ModuleWithImports.hs"
+           (Known "Imported1.hs" 16 "Function")
       , AtomicTest
           "import list"
           "baz2"
-          "ModuleWithImports.hs"
-          (TupleTerm [ AtomTerm "loc_known"
-                     , TupleTerm [ BinaryTerm "Imported2.hs"
-                                 , IntTerm 16
-                                 , AtomTerm "Function" ]])
+          "0001module_with_imports/ModuleWithImports.hs"
+           (Known "Imported2.hs" 16 "Function")
       ]
-  , GroupTest "export list" []
+  , GroupTest "export list"
+      [ AtomicTest
+          "import module with export list"
+          "foo"
+          "0002export_lists/ModuleWithImportsThatHaveExportsList.hs"
+          (Known "ModuleWithExportList.hs" 16 "Function")
+      , AtomicTest
+          "import module with export list #2"
+          "bar"
+          "0002export_lists/ModuleWithImportsThatHaveExportsList.hs"
+          (Known "ModuleWithExportList.hs" 19 "Function")
+      , AtomicTest
+          "import module with export list #3"
+          "baz"
+          "0002export_lists/ModuleWithImportsThatHaveExportsList.hs"
+          NotFound
+      , AtomicTest
+          "import module with multiline export list"
+          "foo2"
+          "0002export_lists/ModuleWithImportsThatHaveExportsList.hs"
+          (Known "ModuleWithMultilineExportList.hs" 20 "Function")
+      , AtomicTest
+          "import module with multiline export list #2"
+          "bar2"
+          "0002export_lists/ModuleWithImportsThatHaveExportsList.hs"
+          (Known "ModuleWithMultilineExportList.hs" 23 "Function")
+      , AtomicTest
+          "import module with multiline export list #2"
+          "baz2"
+          "0002export_lists/ModuleWithImportsThatHaveExportsList.hs"
+          NotFound
+      ]
   ]
 
 tests :: TestTree
@@ -130,8 +185,8 @@ connect =
       (Right <$> tcpClient "localhost" defaultPort) `catch`
         \(e :: IOException) -> return $ Left e
 
-mkTest :: String -> IO ServerConnection -> String -> FilePath -> Term -> TestTree
-mkTest name getConn sym filename expected = testCase name $ do
+mkTest :: String -> IO ServerConnection -> String -> FilePath -> Response -> TestTree
+mkTest name getConn sym filename resp = testCase name $ do
   conn <- getConn
   f    <- canonicalizePath $ testDataDir </> filename
   r    <- call conn "tags-server" "find" [ BinaryTerm (UTF8.fromString f)
@@ -149,8 +204,9 @@ mkTest name getConn sym filename expected = testCase name $ do
       unless (actual == expected) $ do
         assertFailure $ msg ++ unlines logs
       where
-        actual = relativizeFilepaths res
-        msg = "expected: " ++ show expected ++ "\n but got: " ++ show actual
+        actual   = relativizeFilepaths res
+        expected = responseToTerm resp
+        msg      = "expected: " ++ show expected ++ "\n but got: " ++ show actual
 
 relativizeFilepaths :: Term -> Term
 relativizeFilepaths term =

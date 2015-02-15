@@ -78,6 +78,8 @@ test-suite test-tags-server
                     stm,
                     network,
                     bert,
+                    regex-tdfa >=1.0,
+                    regex-tdfa-text,
                     tags-server
   ghc-options:      -W -Wall -fwarn-monomorphism-restriction
                     -fno-warn-type-defaults
