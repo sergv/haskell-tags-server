@@ -22,6 +22,7 @@ import Control.Concurrent (ThreadId, forkIO, killThread)
 import Control.Exception
 import Control.Monad
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
+import Data.Set (Set)
 import qualified Data.Set as S
 import System.Directory
 import System.FilePath
@@ -41,8 +42,9 @@ import LogCollectingServer
 testDataDir :: FilePath
 testDataDir = "test-data"
 
-testsConfig :: (Server s) => s -> ServerConfig s
-testsConfig serv = ServerConfig (S.singleton testDataDir) S.empty True serv
+testsConfig :: (Server s) => FilePath -> s -> ServerConfig s
+testsConfig srcDir serv =
+  ServerConfig (S.singleton (testDataDir </> srcDir)) S.empty True serv
 
 type SymbolType = String
 
@@ -79,7 +81,8 @@ data TestData =
     AtomicTest
       String   -- ^ name
       String   -- ^ symbol
-      FilePath -- ^ filepath relative to testDataDir
+      FilePath -- ^ directory
+      FilePath -- ^ filepath relative to testDataDir </> <directory-from-prev-field>
       Response -- ^ expected response
   | GroupTest
       String -- ^ name
@@ -90,50 +93,59 @@ testData = GroupTest "server tests"
   [ AtomicTest
       "single module"
       "foo"
-      "0000single_module/SingleModule.hs"
+      "0000single_module"
+      "SingleModule.hs"
       (Known "SingleModule.hs" 16 "Function")
   , GroupTest "imports"
       [ AtomicTest
           "wildcard import"
           "baz"
-           "0001module_with_imports/ModuleWithImports.hs"
-           (Known "Imported1.hs" 16 "Function")
+          "0001module_with_imports"
+          "ModuleWithImports.hs"
+          (Known "Imported1.hs" 16 "Function")
       , AtomicTest
           "import list"
           "baz2"
-          "0001module_with_imports/ModuleWithImports.hs"
+          "0001module_with_imports"
+          "ModuleWithImports.hs"
            (Known "Imported2.hs" 16 "Function")
       ]
   , GroupTest "export list"
       [ AtomicTest
           "import module with export list"
           "foo"
-          "0002export_lists/ModuleWithImportsThatHaveExportsList.hs"
+          "0002export_lists"
+          "ModuleWithImportsThatHaveExportsList.hs"
           (Known "ModuleWithExportList.hs" 16 "Function")
       , AtomicTest
           "import module with export list #2"
           "bar"
-          "0002export_lists/ModuleWithImportsThatHaveExportsList.hs"
+          "0002export_lists"
+          "ModuleWithImportsThatHaveExportsList.hs"
           (Known "ModuleWithExportList.hs" 19 "Function")
       , AtomicTest
           "import module with export list #3"
           "baz"
-          "0002export_lists/ModuleWithImportsThatHaveExportsList.hs"
+          "0002export_lists"
+          "ModuleWithImportsThatHaveExportsList.hs"
           NotFound
       , AtomicTest
           "import module with multiline export list"
           "foo2"
-          "0002export_lists/ModuleWithImportsThatHaveExportsList.hs"
+          "0002export_lists"
+          "ModuleWithImportsThatHaveExportsList.hs"
           (Known "ModuleWithMultilineExportList.hs" 20 "Function")
       , AtomicTest
           "import module with multiline export list #2"
           "bar2"
-          "0002export_lists/ModuleWithImportsThatHaveExportsList.hs"
+          "0002export_lists"
+          "ModuleWithImportsThatHaveExportsList.hs"
           (Known "ModuleWithMultilineExportList.hs" 23 "Function")
       , AtomicTest
           "import module with multiline export list #2"
           "baz2"
-          "0002export_lists/ModuleWithImportsThatHaveExportsList.hs"
+          "0002export_lists"
+          "ModuleWithImportsThatHaveExportsList.hs"
           NotFound
       ]
   ]
@@ -143,9 +155,9 @@ tests = makeTest testData
   where
     makeTest :: TestData -> TestTree
     makeTest (GroupTest name xs) = testGroup name $ map makeTest xs
-    makeTest (AtomicTest name sym filename expected) =
-      withResource connect closeConnection $ \getConn ->
-        mkTest name getConn sym filename expected
+    makeTest (AtomicTest name sym srcDir filename expected) =
+      withResource (connect srcDir S.empty) closeConnection $ \getConn ->
+        mkTest name getConn sym srcDir filename expected
 
 data ServerConnection =
     ExistingServer TCP
@@ -159,8 +171,8 @@ instance Transport ServerConnection where
     closeConnection tcp
     killThread servThread
 
-connect :: IO ServerConnection
-connect =
+connect :: FilePath -> Set FilePath -> IO ServerConnection
+connect sourceDir dirTree =
   -- Try to connect to server. If attempt succeeds then server is running
   -- and there's no need to run server ourselves.
   tryConnect >>= either (const startServer) (return . ExistingServer)
@@ -169,8 +181,8 @@ connect =
     startServer = do
       serv       <- logCollectingServer defaultPort
       servThread <- forkIO (runServerWithRecursiveDirs
-                              (testsConfig serv)
-                              (S.singleton testDataDir))
+                              (testsConfig sourceDir serv)
+                              dirTree)
       waitUntilStart serv
       conn       <- tryConnect
       case conn of
@@ -185,10 +197,10 @@ connect =
       (Right <$> tcpClient "localhost" defaultPort) `catch`
         \(e :: IOException) -> return $ Left e
 
-mkTest :: String -> IO ServerConnection -> String -> FilePath -> Response -> TestTree
-mkTest name getConn sym filename resp = testCase name $ do
+mkTest :: String -> IO ServerConnection -> String -> FilePath -> FilePath -> Response -> TestTree
+mkTest name getConn sym dir filename resp = testCase name $ do
   conn <- getConn
-  f    <- canonicalizePath $ testDataDir </> filename
+  f    <- canonicalizePath $ testDataDir </> dir </> filename
   r    <- call conn "tags-server" "find" [ BinaryTerm (UTF8.fromString f)
                                          , BinaryTerm (UTF8.fromString sym)
                                          ]
