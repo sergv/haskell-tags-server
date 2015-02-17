@@ -188,10 +188,6 @@ loadModuleFromFile filename = do
         in Just $ header <> " where"
       | otherwise = Nothing
 
-    -- TODO handle multiline imports
-    extractImports :: Text -> Text
-    extractImports = T.unlines . filter ("import" `T.isInfixOf`) . T.lines
-
     convertModName :: HSE.ModuleName -> ModuleName
     convertModName (HSE.ModuleName name) = ModuleName $ T.pack name
 
@@ -237,6 +233,26 @@ loadModuleFromFile filename = do
                Just sym -> return $ M.singleton symName sym
         HSE.Special _spec ->
           throwError "ERROR: HSE.Special should not occur in the export list (or should it? - please recheck)"
+
+
+-- NB won't handle indented module, but nobody seems to do that anyway
+extractImports :: Text -> Text
+extractImports = T.unlines . keepImports . T.lines
+  where
+    keepImports :: [Text] -> [Text]
+    -- keepImports = filter ("import " `T.isInfixOf`)
+    keepImports [] = []
+    keepImports (t:ts)
+      | "import" `T.isPrefixOf` t = t : keepBlock ts
+      | otherwise                 = keepImports ts
+
+    keepBlock :: [Text] -> [Text]
+    keepBlock []         = []
+    keepBlock ts'@(t:ts) =
+      case T.uncons t of
+        Nothing        -> t : keepBlock ts
+        Just (' ', cs) -> t : keepBlock ts
+        _              -> keepImports ts'
 
 -- | Strip trailing part that corresponds to module names and return presumable
 -- project root the @filename@ belongs to.

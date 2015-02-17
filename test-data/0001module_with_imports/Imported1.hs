@@ -13,6 +13,8 @@
 
 module Imported1 where
 
-baz :: a -> a
-baz x = x
+foo :: a -> a
+foo x = x
 
+bar :: a -> a
+bar x = x

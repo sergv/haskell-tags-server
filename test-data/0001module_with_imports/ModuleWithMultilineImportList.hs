@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------------
 -- |
--- Module      :  Imported2
+-- Module      :  ModuleWithMultilineImportList
 -- Copyright   :  (c) Sergey Vinokurov 2015
 -- License     :  BSD3-style (see LICENSE)
 --
@@ -11,10 +11,17 @@
 --
 ----------------------------------------------------------------------------
 
-module Imported2 where
+module ModuleWithMultilineImportList where
 
-foo2 :: a -> a
-foo2 x = x
+import Imported1 ( foo
+                 , bar
+                 )
+-- somewhat degenerate but still syntactically valid import
+import
+ Imported2
+ ( foo2
+ , bar2
+ )
 
-bar2 :: a -> a
-bar2 x = x
+baz :: a -> a
+baz x = x

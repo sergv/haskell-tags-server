@@ -14,7 +14,7 @@
 module ModuleWithImports where
 
 import Imported1
-import Imported2 (baz2)
+import Imported2 (foo2)
 
-bar :: a -> a
-bar x = x
+baz :: a -> a
+baz x = x

@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------------
 -- |
--- Module      :  Imported2
+-- Module      :  ModuleWithImportsAndHiding
 -- Copyright   :  (c) Sergey Vinokurov 2015
 -- License     :  BSD3-style (see LICENSE)
 --
@@ -11,10 +11,10 @@
 --
 ----------------------------------------------------------------------------
 
-module Imported2 where
+module ModuleWithImportsAndHiding where
 
-foo2 :: a -> a
-foo2 x = x
+import Imported1
+import Imported2 hiding (bar2)
 
-bar2 :: a -> a
-bar2 x = x
+baz :: a -> a
+baz x = x
