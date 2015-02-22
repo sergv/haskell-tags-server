@@ -22,6 +22,7 @@ library
                        transformers,
                        text,
                        stm,
+                       semigroups,
                        network >=2.6,
                        haskell-src-exts >=1.16,
                        bert >=1.2,

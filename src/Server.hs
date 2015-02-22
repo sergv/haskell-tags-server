@@ -133,7 +133,7 @@ runServer conf = do
     strToText = T.pack . UTF8.toString
 
     symbolToBERT :: Symbol -> Term
-    symbolToBERT (Pos (SrcPos filename line) (TagVal _ _ typ)) =
+    symbolToBERT (Pos (SrcPos filename line) (TagVal _ _ typ _)) =
       TupleTerm
         [ BinaryTerm (UTF8.fromString filename)
         , IntTerm line

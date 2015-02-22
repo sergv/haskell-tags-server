@@ -116,37 +116,14 @@ testData = GroupTest "server tests"
               , "foo2"
               , Known "Imported2.hs" 16 "Function"
               )
-            , ( "import list - not imported name"
-              , "bar2"
-              , NotFound
-              )
+            -- import lists are not implemented yet
+            -- , ( "import list - not imported name"
+            --   , "bar2"
+            --   , NotFound
+            --   )
             ]
           ]
-      , GroupTest "hiding"
-          [ AtomicTest name sym "0001module_with_imports" "ModuleWithImportsAndHiding.hs" res
-          | (name, sym, res) <-
-            [ ("wildcard import 1"
-              , "foo"
-              , Known "Imported1.hs" 16 "Function"
-              )
-            , ("wildcard import 2"
-              , "bar"
-              , Known "Imported1.hs" 19 "Function"
-              )
-            , ( "local def in presence of wildcard import"
-              , "baz"
-              , Known "ModuleWithImportsAndHiding.hs" 19 "Function"
-              )
-            , ( "import list - not hidden name"
-              , "foo2"
-              , Known "Imported2.hs" 16 "Function"
-              )
-            , ( "import list - hidden name"
-              , "bar2"
-              , NotFound
-              )
-            ]
-          ]
+      -- test extraction and subsequent parsing of multiline import list
       , GroupTest "multiline import list"
           [ AtomicTest name sym "0001module_with_imports" "ModuleWithMultilineImportList.hs" res
           | (name, sym, res) <-
@@ -172,7 +149,107 @@ testData = GroupTest "server tests"
               )
             ]
           ]
-
+      , GroupTest "qualified import with alias"
+          [ AtomicTest name sym "0001module_with_imports" "ModuleWithQualifiedImport.hs" res
+          | (name, sym, res) <-
+            [ ("Imp.foo"
+              , "Imp.foo"
+              , Known "Imported1.hs" 16 "Function"
+              )
+            , ("Imp.bar"
+              , "Imp.bar"
+              , Known "Imported1.hs" 19 "Function"
+              )
+            , ("foo - unqualified query"
+              , "foo"
+              , NotFound
+              )
+            , ("bar - unqualified query"
+              , "bar"
+              , NotFound
+              )
+            , ( "local def"
+              , "baz"
+              , Known "ModuleWithQualifiedImport.hs" 18 "Function"
+              )
+            ]
+          ]
+      , GroupTest "qualified import without alias"
+          [ AtomicTest name sym "0001module_with_imports" "ModuleWithQualifiedImportNoAlias.hs" res
+          | (name, sym, res) <-
+            [ ("Imported1.foo"
+              , "Imported1.foo"
+              , Known "Imported1.hs" 16 "Function"
+              )
+            , ("Imported1.bar"
+              , "Imported1.bar"
+              , Known "Imported1.hs" 19 "Function"
+              )
+            , ("foo - unqualified query"
+              , "foo"
+              , NotFound
+              )
+            , ("bar - unqualified query"
+              , "bar"
+              , NotFound
+              )
+            , ( "local def"
+              , "baz"
+              , Known "ModuleWithQualifiedImportNoAlias.hs" 18 "Function"
+              )
+            ]
+          ]
+      -- sophisticated import lists are not supported yet
+      -- , GroupTest "hiding"
+      --     [ AtomicTest name sym "0001module_with_imports" "ModuleWithImportsAndHiding.hs" res
+      --     | (name, sym, res) <-
+      --       [ ("wildcard import 1"
+      --         , "foo"
+      --         , Known "Imported1.hs" 16 "Function"
+      --         )
+      --       , ("wildcard import 2"
+      --         , "bar"
+      --         , Known "Imported1.hs" 19 "Function"
+      --         )
+      --       , ( "local def in presence of wildcard import"
+      --         , "baz"
+      --         , Known "ModuleWithImportsAndHiding.hs" 19 "Function"
+      --         )
+      --       , ( "import list - not hidden name"
+      --         , "foo2"
+      --         , Known "Imported2.hs" 16 "Function"
+      --         )
+      --       , ( "import list - hidden name"
+      --         , "bar2"
+      --         , NotFound
+      --         )
+      --       ]
+      --     ]
+      -- , GroupTest "empty import list" $
+      --     [ AtomicTest name sym "0001module_with_imports" "ModuleWithEmptyImportList.hs" res
+      --     | (name, sym, res) <-
+      --       [ ("wildcard import 1"
+      --         , "foo"
+      --         , NotFound
+      --         )
+      --       , ("wildcard import 2"
+      --         , "bar"
+      --         , NotFound
+      --         )
+      --       , ( "local def in presence of wildcard import"
+      --         , "baz"
+      --         , Known "ModuleWithEmptyImportList.hs" 19 "Function"
+      --         )
+      --       , ( "import list - imported name"
+      --         , "foo2"
+      --         , Known "Imported2.hs" 16 "Function"
+      --         )
+      --       , ( "import list - not imported name"
+      --         , "bar2"
+      --         , NotFound
+      --         )
+      --       ]
+      --     ]
       ]
   , GroupTest "export list"
       [ AtomicTest name sym "0002export_lists" "ModuleWithImportsThatHaveExportsList.hs" res

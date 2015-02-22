@@ -22,7 +22,7 @@
 {-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
-module Search where
+module Search (findSymbol, findInModule) where
 
 import Control.Applicative
 import Control.Arrow
@@ -72,10 +72,10 @@ findInModule sym mod
   | Just (qualifier, sym') <- splitQualified sym =
     case M.lookup qualifier (modImportQualifiers mod) of
       Nothing      ->
-        throwError $ "qualifier not listed among module's import qualifiers: " ++ show qualifier
+        throwError $ "qualifier " ++ show qualifier ++ " not listed among module's import qualifiers: " ++ show (modImportQualifiers mod)
       Just modName -> lookupInExports modName sym'
   | otherwise = do
-    importedSyms <- forM (modImports mod) $ \modName ->
+    importedSyms <- forM (filter (importsUnqualifiedNames . snd) $ modImports mod) $ \(modName, qualif) ->
       lookupInExports modName sym
     return $ maybeToList (M.lookup sym (modAllSymbols mod)) ++ concat importedSyms
   where
@@ -134,51 +134,15 @@ retrieveModule modName = do
         filenamePart :: FilePath
         filenamePart = T.unpack $ T.map (\c -> if c == '.' then pathSeparator else c) modName
 
--- | Recursively load module from file - load given filename, then load all its
--- imports.
-loadModuleFromFile :: (Functor m, MonadError String m, MonadState ServerState m, MonadReader (ServerConfig s) m, MonadIO m)
-                   => FilePath -> m Module
-loadModuleFromFile filename = do
-  debugM $ "loading module from file " <> T.pack filename
-  source <- liftIO $ T.readFile filename
-  let (allTags, _warnings) = process filename False source
-      allSymbols           = M.fromList $ map (\tag@(Pos _ (TagVal _ name _)) -> (SymbolName name, tag)) allTags
-      moduleHeader         = extractHeader source
-      moduleImports        = extractImports source
-      interface            = fromMaybe T.empty moduleHeader <>
-                             T.singleton '\n' <>
-                             moduleImports
-  debugM $ "parsing\n>>>>\n" <> interface <> "\n<<<<"
-  case parseWithMode parseMode (T.unpack interface) of
-    ParseFailed loc msg -> do
-      errorM $ "failed to parse module header and imports: " <> interface
-      throwError $ "failed to parse module header and imports at " ++ show loc ++ ": " ++ msg
-    ParseOk (HSE.Module _loc _name _pragmas _warnings exportSpec imports _body) -> do
-      let importedModules  = map (convertModName . HSE.importModule) imports
-          importQualifiers =
-            M.fromList $ catMaybes $
-            zipWith (\x name -> ((,name) . convertModName) <$> HSE.importAs x) imports importedModules
-      -- tie the knot
-      debugM $ "loading imported modules " <> show' (map getModuleName importedModules)
-      imports <- local (\conf -> conf { confSourceDirectories = S.insert (rootFromFileName filename) $ confSourceDirectories conf }) $
-                 mapM retrieveModule importedModules
-      exports <- case exportSpec of
-                   -- if there's no export spec then everything is exported
-                   Nothing    -> return allSymbols
-                   Just specs -> do
-                     let exportsOfImports =
-                           M.fromList $
-                           zipWith (curry (id *** map modExports)) importedModules imports
-                     M.unions <$> mapM (exportSpecToMap allSymbols exportsOfImports) specs
-      lastModified <- liftIO $ getModificationTime filename
-      return $ Module importedModules importQualifiers exports allSymbols source filename lastModified
+-- | extract module header (the "module ... where" part) and imports
+extractModuleInterface :: Text -> Text
+extractModuleInterface source = interface
   where
-    parseMode :: ParseMode
-    parseMode = defaultParseMode { parseFilename         = filename
-                                 , baseLanguage          = Haskell2010
-                                 , ignoreLanguagePragmas = False
-                                 , ignoreLinePragmas     = True
-                                 }
+    moduleHeader  = extractHeader source
+    moduleImports = extractImports source
+    interface     = fromMaybe T.empty moduleHeader <>
+                    T.singleton '\n' <>
+                    moduleImports
 
     extractHeader :: Text -> Maybe Text
     extractHeader source
@@ -188,12 +152,78 @@ loadModuleFromFile filename = do
         in Just $ header <> " where"
       | otherwise = Nothing
 
-    convertModName :: HSE.ModuleName -> ModuleName
-    convertModName (HSE.ModuleName name) = ModuleName $ T.pack name
+    -- NB won't handle indented module, but nobody seems to do that anyway
+    extractImports :: Text -> Text
+    extractImports = T.unlines . keepImports . T.lines
+      where
+        keepImports :: [Text] -> [Text]
+        -- keepImports = filter ("import " `T.isInfixOf`)
+        keepImports [] = []
+        keepImports (t:ts)
+          | "import" `T.isPrefixOf` t = t : keepBlock ts
+          | otherwise                 = keepImports ts
 
-    convertName :: HSE.Name -> SymbolName
-    convertName (HSE.Ident name)  = SymbolName $ T.pack name
-    convertName (HSE.Symbol name) = SymbolName $ T.pack name
+        keepBlock :: [Text] -> [Text]
+        keepBlock []         = []
+        keepBlock ts'@(t:ts) =
+          case T.uncons t of
+            Nothing        -> t : keepBlock ts
+            Just (' ', cs) -> t : keepBlock ts
+            _              -> keepImports ts'
+
+-- | Recursively load module from file - load given filename, then load all its
+-- imports.
+loadModuleFromFile :: (Functor m, MonadError String m, MonadState ServerState m, MonadReader (ServerConfig s) m, MonadIO m)
+                   => FilePath -> m Module
+loadModuleFromFile filename = do
+  debugM $ "loading module from file " <> T.pack filename
+  source <- liftIO $ T.readFile filename
+  let (allTags, _) = process filename False source
+      allSymbols   = M.fromList $ map (\tag@(Pos _ (TagVal _ name _ _)) -> (SymbolName name, tag)) allTags
+      interface    = extractModuleInterface source
+  debugM $ "parsing module interface\n>>>>\n" <> interface <> "\n<<<<"
+  case parseWithMode (parseMode filename) (T.unpack interface) of
+    ParseFailed loc msg -> do
+      errorM $ "failed to parse module header and imports: " <> interface
+      throwError $ "failed to parse module header and imports at " ++ show loc ++ ": " ++ msg
+    ParseOk (HSE.Module _loc _name _pragmas _warnings exportSpec importDecls _body) -> do
+      let importedModules  = mkModules importDecls
+          importQualifiers = mkQualifiersMap importedModules
+      -- tie the knot
+      debugM $ "loading imported modules " <> show' (map (getModuleName . fst) importedModules)
+      imports' <- local (\conf ->
+                           let srcDirs' = S.insert (rootFromFileName filename) $ confSourceDirectories conf
+                           in conf { confSourceDirectories = srcDirs' }) $
+                  mapM (retrieveModule . fst) importedModules
+      exports <- case exportSpec of
+                   -- if there's no export spec then everything is exported
+                   Nothing    -> return allSymbols
+                   Just specs -> do
+                     let exportsOfImports =
+                           M.fromList $
+                           zipWith (curry (fst *** map modExports)) importedModules imports'
+                     M.unions <$> mapM (exportSpecToMap allSymbols exportsOfImports) specs
+      lastModified <- liftIO $ getModificationTime filename
+      return $ Module
+                 { modImports          = importedModules
+                 , modImportQualifiers = importQualifiers
+                 , modExports          = exports
+                 , modAllSymbols       = allSymbols
+                 , modSource           = source
+                 , modFile             = filename
+                 , modLastModified     = lastModified
+                 }
+  where
+    mkModules :: [HSE.ImportDecl] -> [(ModuleName, Qualification)]
+    mkModules = map (\decl ->
+                      let modName = convertModName (HSE.importModule decl)
+                      in (modName, mkQualification modName decl))
+
+    mkQualifiersMap :: [(ModuleName, Qualification)] -> Map ModuleName ModuleName
+    mkQualifiersMap importedModules =
+       M.fromList $
+       catMaybes $
+       map (\(name, qual) -> (, name) <$> getQualifier qual) importedModules
 
     exportSpecToMap :: (MonadError String m)
                     => Map SymbolName Symbol
@@ -211,48 +241,53 @@ loadModuleFromFile filename = do
       -- (<>) <$> convertQName allSymbols exportsOfImports name `
       --      <*> mapM (convertCName allSymbols)
     exportSpecToMap allSymbols exportsOfImports (HSE.EModuleContents modName) =
-      let modName' = convertModName modName
-      in case M.lookup modName' exportsOfImports of
-           Nothing -> throwError $ "cannot find exported module " ++ show modName' ++ " among imports of " ++ filename
-           Just exports -> return $ M.unions exports
+      case M.lookup modName' exportsOfImports of
+        Nothing      ->
+          throwError $ "cannot find exported module " ++ show modName' ++ " among imports of " ++ filename
+        Just exports -> return $ M.unions exports
+      where
+        modName' = convertModName modName
 
-    convertQName :: (MonadError String m)
-                 => Map SymbolName Symbol
-                 -> Map ModuleName [Map SymbolName Symbol]
-                 -> HSE.QName
-                 -> m (Map SymbolName Symbol)
-    convertQName allSymbols exportsOfImports qname =
-      case qname of
-        HSE.Qual modName name ->
-          throwError $ "unsure whether modName in Qual is a raw qualifier or resolved module name: " ++
-            "HSE.Qual: modName = " ++ show modName ++ ", name = " ++ show name
-        HSE.UnQual name ->
-          let symName = convertName name
-          in case M.lookup symName allSymbols of
-               Nothing  -> throwError $ "exported symbol " ++ show symName ++ " not detected by tags"
-               Just sym -> return $ M.singleton symName sym
-        HSE.Special _spec ->
-          throwError "ERROR: HSE.Special should not occur in the export list (or should it? - please recheck)"
+parseMode :: FilePath -> ParseMode
+parseMode filename =
+  defaultParseMode
+    { parseFilename         = filename
+    , baseLanguage          = Haskell2010
+    , ignoreLanguagePragmas = False
+    , ignoreLinePragmas     = True
+    }
 
+mkQualification :: ModuleName -> HSE.ImportDecl -> Qualification
+mkQualification modName decl
+  | HSE.importQualified decl =
+    Qualified $ maybe modName convertModName $ HSE.importAs decl
+  | otherwise                =
+    maybe Unqualified (BothQualifiedAndUnqualified . convertModName) $ HSE.importAs decl
 
--- NB won't handle indented module, but nobody seems to do that anyway
-extractImports :: Text -> Text
-extractImports = T.unlines . keepImports . T.lines
-  where
-    keepImports :: [Text] -> [Text]
-    -- keepImports = filter ("import " `T.isInfixOf`)
-    keepImports [] = []
-    keepImports (t:ts)
-      | "import" `T.isPrefixOf` t = t : keepBlock ts
-      | otherwise                 = keepImports ts
+convertModName :: HSE.ModuleName -> ModuleName
+convertModName (HSE.ModuleName name) = ModuleName $ T.pack name
 
-    keepBlock :: [Text] -> [Text]
-    keepBlock []         = []
-    keepBlock ts'@(t:ts) =
-      case T.uncons t of
-        Nothing        -> t : keepBlock ts
-        Just (' ', cs) -> t : keepBlock ts
-        _              -> keepImports ts'
+convertName :: HSE.Name -> SymbolName
+convertName (HSE.Ident name)  = SymbolName $ T.pack name
+convertName (HSE.Symbol name) = SymbolName $ T.pack name
+
+convertQName :: (MonadError String m)
+             => Map SymbolName Symbol
+             -> Map ModuleName [Map SymbolName Symbol]
+             -> HSE.QName
+             -> m (Map SymbolName Symbol)
+convertQName allSymbols exportsOfImports qname =
+  case qname of
+    HSE.Qual modName name ->
+      throwError $ "unsure whether modName in Qual is a raw qualifier or resolved module name: " ++
+        "HSE.Qual: modName = " ++ show modName ++ ", name = " ++ show name
+    HSE.UnQual name ->
+      let symName = convertName name
+      in case M.lookup symName allSymbols of
+           Nothing  -> throwError $ "exported symbol " ++ show symName ++ " not detected by tags"
+           Just sym -> return $ M.singleton symName sym
+    HSE.Special _spec ->
+      throwError "ERROR: HSE.Special should not occur in the export list (or should it? - please recheck)"
 
 -- | Strip trailing part that corresponds to module names and return presumable
 -- project root the @filename@ belongs to.
