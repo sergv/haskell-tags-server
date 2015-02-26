@@ -32,6 +32,7 @@ library
                        regex-tdfa-text,
                        fast-tags >=0.0.6
   exposed-modules:     Server
+                       LoadModule
                        Logging
                        Search
                        Types

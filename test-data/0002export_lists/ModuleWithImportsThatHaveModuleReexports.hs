@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------------
 -- |
--- Module      :  ModuleWithWildcardExports
+-- Module      :  ModuleWithImportsThatHaveModuleReexports
 -- Copyright   :  (c) Sergey Vinokurov 2015
 -- License     :  BSD3-style (see LICENSE)
 --
@@ -11,17 +11,9 @@
 --
 ----------------------------------------------------------------------------
 
-module ModuleWithWildcardExports
-  ( foo2
-  , bar2
-  )
-where
+module ModuleWithImportsThatHaveModuleReexports where
 
-foo2 :: a -> a
-foo2 = baz2
+import ModuleWithModuleReexport
+-- this brings in no new names because that's what GHC does
+import ModuleWithQualifiedModuleReexport
 
-bar2 :: a -> a
-bar2 = baz2
-
-baz2 :: a -> a
-baz2 x = x

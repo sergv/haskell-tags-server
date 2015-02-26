@@ -252,33 +252,135 @@ testData = GroupTest "server tests"
       --     ]
       ]
   , GroupTest "export list"
-      [ AtomicTest name sym "0002export_lists" "ModuleWithImportsThatHaveExportsList.hs" res
-      | (name, sym, res) <-
-        [ ( "import module with export list"
-          , "foo"
-          , Known "ModuleWithExportList.hs" 16 "Function"
-          )
-        , ( "import module with export list #2"
-          , "bar"
-          , Known "ModuleWithExportList.hs" 19 "Function"
-          )
-        , ( "import module with export list #3"
-          , "baz"
-          , NotFound
-          )
-        , ( "import module with multiline export list"
-          , "foo2"
-          , Known "ModuleWithMultilineExportList.hs" 20 "Function"
-          )
-        , ( "import module with multiline export list #2"
-          , "bar2"
-          , Known "ModuleWithMultilineExportList.hs" 23 "Function"
-          )
-        , ( "import module with multiline export list #2"
-          , "baz2"
-          , NotFound
-          )
-        ]
+      [ GroupTest "vanilla export list"
+          [ AtomicTest name sym "0002export_lists" "ModuleWithImportsThatHaveExportsList.hs" res
+          | (name, sym, res) <-
+            [ ( "import module with export list"
+              , "foo"
+              , Known "ModuleWithExportList.hs" 16 "Function"
+              )
+            , ( "import module with export list #2"
+              , "bar"
+              , Known "ModuleWithExportList.hs" 19 "Function"
+              )
+            , ( "import module with export list #3"
+              , "baz"
+              , NotFound
+              )
+            , ( "import module with multiline export list"
+              , "foo2"
+              , Known "ModuleWithMultilineExportList.hs" 20 "Function"
+              )
+            , ( "import module with multiline export list #2"
+              , "bar2"
+              , Known "ModuleWithMultilineExportList.hs" 23 "Function"
+              )
+            , ( "import module with multiline export list #3"
+              , "baz2"
+              , NotFound
+              )
+            ]
+          ]
+      , GroupTest "wildcard export list"
+          [ AtomicTest name sym "0002export_lists" "ModuleWithImportsThatHaveExportsList.hs" res
+          | (name, sym, res) <-
+            [ ( "import exported name"
+              , "Foo"
+              , Known "ModuleWithWildcardExport.hs" 19 "Type"
+              )
+            , ( "import wildcard-exported name #2"
+              , "Bar"
+              , Known "ModuleWithWildcardExport.hs" 19 "Constructor"
+              )
+            , ( "import wildcard-exported name #3"
+              , "Baz"
+              , Known "ModuleWithWildcardExport.hs" 20 "Constructor"
+              )
+            , ( "import wildcard-exported name #4"
+              , "getBar"
+              , Known "ModuleWithWildcardExport.hs" 19 "Function"
+              )
+            , ( "import wildcard-exported name #5"
+              , "getBaz"
+              , Known "ModuleWithWildcardExport.hs" 20 "Function"
+              )
+            ]
+          ]
+      , GroupTest "explicit export list"
+          [ AtomicTest name sym "0002export_lists" "ModuleWithImportsThatHaveExportsList.hs" res
+          | (name, sym, res) <-
+            [ ( "import exported name"
+              , "Foo2"
+              , Known "ModuleWithExplicitExport.hs" 19 "Type"
+              )
+            , ( "import wildcard-exported name #2"
+              , "Bar2"
+              , Known "ModuleWithExplicitExport.hs" 19 "Constructor"
+              )
+            , ( "import wildcard-exported name #3"
+              , "Baz2"
+              , NotFound
+              )
+            , ( "import wildcard-exported name #4"
+              , "getBar2"
+              , Known "ModuleWithExplicitExport.hs" 19 "Function"
+              )
+            , ( "import wildcard-exported name #5"
+              , "getBaz2"
+              , NotFound
+              )
+            ]
+          ]
+      , GroupTest "reexport"
+          [ AtomicTest name sym "0002export_lists" "ModuleWithImportsThatHaveReexports.hs" res
+          | (name, sym, res) <-
+            [ ( "import non-exported name"
+              , "baz"
+              , NotFound
+              )
+            , ( "import re-exported name without qualification"
+              , "foo"
+              , Known "ModuleWithExportList.hs" 16 "Function"
+              )
+            , ( "import re-exported name without qualification #2"
+              , "bar"
+              , Known "ModuleWithExportList.hs" 19 "Function"
+              )
+            , ( "import re-exported name without qualification #3"
+              , "foo2"
+              , Known "ModuleWithMultilineExportList.hs" 20 "Function"
+              )
+            , ( "import re-exported name with qualification"
+              , "bar2"
+              , Known "ModuleWithMultilineExportList.hs" 23 "Function"
+              )
+            ]
+          ]
+      , GroupTest "module reexport"
+          [ AtomicTest name sym "0002export_lists" "ModuleWithImportsThatHaveModuleReexports.hs" res
+          | (name, sym, res) <-
+            [ ( "import non-exported & non-reexported name"
+              , "baz"
+              , NotFound
+              )
+            , ( "name imported through reexporting module"
+              , "foo"
+              , Known "ModuleWithExportList.hs" 16 "Function"
+              )
+            , ( "name imported through reexporting module #2"
+              , "bar"
+              , Known "ModuleWithExportList.hs" 19 "Function"
+              )
+            , ( "name imported through module reexporting with a qualifier"
+              , "foo2"
+              , NotFound
+              )
+            , ( "name imported through module reexporting with a qualifier #2"
+              , "bar2"
+              , NotFound
+              )
+            ]
+          ]
       ]
   ]
 

@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------------
 -- |
--- Module      :  ModuleWithImportsThatHaveExportsList
+-- Module      :  ModuleWithImportsThatHaveReexports
 -- Copyright   :  (c) Sergey Vinokurov 2015
 -- License     :  BSD3-style (see LICENSE)
 --
@@ -11,10 +11,7 @@
 --
 ----------------------------------------------------------------------------
 
-module ModuleWithImportsThatHaveExportsList where
+module ModuleWithImportsThatHaveReexports where
 
-import ModuleWithExportList
-import ModuleWithMultilineExportList
-import ModuleWithWildcardExport
-import ModuleWithExplicitExport
-
+import ModuleWithUnqualifiedReexport
+import ModuleWithQualifiedReexport

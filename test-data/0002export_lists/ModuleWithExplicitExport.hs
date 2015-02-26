@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------------
 -- |
--- Module      :  ModuleWithImportsThatHaveExportsList
+-- Module      :  ModuleWithExplicitExport
 -- Copyright   :  (c) Sergey Vinokurov 2015
 -- License     :  BSD3-style (see LICENSE)
 --
@@ -11,10 +11,11 @@
 --
 ----------------------------------------------------------------------------
 
-module ModuleWithImportsThatHaveExportsList where
+module ModuleWithExplicitExport
+  ( Foo2(Bar2, getBar2)
+  )
+where
 
-import ModuleWithExportList
-import ModuleWithMultilineExportList
-import ModuleWithWildcardExport
-import ModuleWithExplicitExport
-
+data Foo2 = Bar2 { getBar2 :: Int }
+          | Baz2 { getBaz2 :: Int }
+  deriving (Eq)

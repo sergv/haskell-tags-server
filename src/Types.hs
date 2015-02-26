@@ -13,7 +13,8 @@
 
 module Types where
 
-import Data.List.NonEmpty (NonEmpty)
+import Control.Applicative
+-- import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Set (Set)
@@ -22,7 +23,7 @@ import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 
 import qualified Network.BERT.Transport as BERT
-import FastTags (Pos(..), TagVal(..))
+import FastTags (Pos(..), TagVal(..), Type(..))
 
 
 data ServerConfig s = ServerConfig
@@ -41,7 +42,17 @@ emptyServerConfig serv = ServerConfig S.empty S.empty False serv
 newtype ModuleName = ModuleName { getModuleName :: Text }
   deriving (Show, Eq, Ord)
 
-type Symbol = Pos TagVal
+newtype Symbol = Symbol (Pos TagVal)
+  deriving (Show, Eq, Ord)
+
+symbolName :: Symbol -> SymbolName
+symbolName (Symbol (Pos _ (TagVal _ name _ _))) = SymbolName name
+
+symbolType :: Symbol -> Type
+symbolType (Symbol (Pos _ (TagVal _ _ typ _))) = typ
+
+symbolParent :: Symbol -> Maybe SymbolName
+symbolParent (Symbol (Pos _ (TagVal _ _ _ parent))) = SymbolName <$> parent
 
 newtype SymbolName = SymbolName { getSymbolName :: Text }
   deriving (Show, Eq, Ord)
@@ -76,6 +87,11 @@ importsUnqualifiedNames (Qualified _)                   = False
 importsUnqualifiedNames Unqualified                     = True
 importsUnqualifiedNames (BothQualifiedAndUnqualified _) = True
 
+importsQualifiedNames :: Qualification -> Bool
+importsQualifiedNames (Qualified _)                   = True
+importsQualifiedNames Unqualified                     = False
+importsQualifiedNames (BothQualifiedAndUnqualified _) = True
+
 
 data Module = Module
   { modImports          :: [(ModuleName, Qualification)]
@@ -86,6 +102,11 @@ data Module = Module
     -- ^ mapping from qualifiers to original module names
   , modExports          :: Map SymbolName Symbol
     -- ^ exports of a given module
+  , modChildrenMap      :: Map SymbolName [SymbolName]
+    -- ^ map for tags that can influence other tags when exporting, e.g.
+    -- keys are data types and values are their constructors and fields. Thus
+    -- export list construction Foo(..) will export all constructors and fields
+    -- for datatype Foo.
   , modAllSymbols       :: Map SymbolName Symbol
     -- ^ all symbols defined in this module
   , modSource           :: Text
