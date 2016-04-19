@@ -46,7 +46,7 @@ findSymbol filename sym = do
   modName <- fileNameToModuleName filename
   case M.lookup modName modules of
     Nothing  -> do
-      mod <- loadModuleFromFile modName filename
+      mod <- loadModuleFromFile filename
       findInModule sym mod
     Just mods ->
       concat <$> mapM (findInModule sym) mods

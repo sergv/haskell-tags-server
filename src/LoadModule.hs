@@ -60,7 +60,7 @@ retrieveModule modName = do
                forM mods $ \m -> do
                  modTime <- liftIO $ getModificationTime $ modFile m
                  if modLastModified m /= modTime
-                   then loadModuleFromFile modName $ modFile m
+                   then loadModuleFromFile $ modFile m
                    else return m
   modify (\s -> s { stateModules = M.insert modName mods $ stateModules s })
   return mods
@@ -68,13 +68,13 @@ retrieveModule modName = do
     loadModule :: ModuleName -> m [Module]
     loadModule (ModuleName modName) = do
       srcDirs <- asks confSourceDirectories
-      debugM $ "loading module " <> modName <> " in directories " <> show' (S.toList srcDirs)
+      debugM $ "loading module " <> modName
       let possiblePaths = [ root </> filenamePart <.> ext
                           | root <- S.toList srcDirs
                           , ext  <- ["hs", "lhs", "hsc"]
                           ]
       actualPaths <- filterM (liftIO . doesFileExist) possiblePaths
-      mapM (loadModuleFromFile $ ModuleName modName) actualPaths
+      mapM loadModuleFromFile actualPaths
       where
         filenamePart :: FilePath
         filenamePart = T.unpack $ T.map (\c -> if c == '.' then pathSeparator else c) modName
@@ -82,8 +82,8 @@ retrieveModule modName = do
 -- | Recursively load module from file - load given filename, then load all its
 -- imports.
 loadModuleFromFile :: (Functor m, MonadError String m, MonadState ServerState m, MonadReader (ServerConfig s) m, MonadIO m)
-                   => ModuleName -> FilePath -> m Module
-loadModuleFromFile modName filename = do
+                   => FilePath -> m Module
+loadModuleFromFile filename = do
   debugM $ "loading module from file " <> T.pack filename
   source <- liftIO $ T.readFile filename
   let allTags    = fst $ process filename False source
@@ -93,11 +93,14 @@ loadModuleFromFile modName filename = do
                    map (\(child, parent) -> (parent, [child])) $
                    M.toList $
                    M.mapMaybe symbolParent allSymbols
+      interface :: Text
       interface  = extractModuleInterface source
-  debugM $ "parsing module interface\n>>>>\n" <> interface <> "\n<<<<"
+  -- debugM $ "parsing module interface\n>>>>\n" <> interface <> "\n<<<<"
   case parseWithMode (parseMode filename) (T.unpack interface) of
     ParseFailed loc msg -> do
-      errorM $ "failed to parse module header and imports: " <> interface
+      errorM $ "failed to parse module header and imports:\n" <>
+        "haskel-src-exts error message: " <> show' loc <> ": " <> T.pack msg <> "\n" <>
+        ">>>>" <> interface <> "\n<<<<"
       throwError $ "failed to parse module header and imports at " ++ show loc ++ ": " ++ msg
     ParseOk (HSE.Module _loc _name _pragmas _warnings exportSpec importDecls _body) -> do
       let importedModules  = mkModules importDecls
@@ -188,7 +191,7 @@ loadModuleFromFile modName filename = do
       -- (<>) <$> convertQName modName allSymbols name `
       --      <*> mapM (convertCName allSymbols)
     exportSpecToMap _          _ imports _ (HSE.EModuleContents (convertModName -> exportedModName)) =
-      case filter (\(name, qual, _) -> name == exportedModName) imports of
+      case filter (\(name, _, _) -> name == exportedModName) imports of
         []       ->
           case filter (\(_, qual, _) -> maybe False (== exportedModName) (getQualifier qual)) imports of
             [] ->
@@ -211,11 +214,13 @@ extractModuleInterface source = interface
 
     extractHeader :: Text -> Maybe Text
     extractHeader source
-      | "module" `T.isInfixOf` source =
+      | Just line <- find ("module" `T.isPrefixOf`) lines =
         let (_prefix, headerAndBody) = T.breakOn "module" source
             (header, _body)          = T.breakOn "where" headerAndBody
         in Just $ header <> " where"
       | otherwise = Nothing
+
+    lines = T.lines source
 
     -- NB won't handle indented module, but nobody seems to do that anyway
     extractImports :: Text -> Text

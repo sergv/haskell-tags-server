@@ -382,6 +382,19 @@ testData = GroupTest "server tests"
             ]
           ]
       ]
+  , GroupTest "module header detection"
+      [ AtomicTest name sym "0003module_header_detection" "ModuleWithCommentsResemblingModuleHeader.hs" res
+      | (name, sym, res) <-
+        [ ( "name defined locally"
+          , "foo"
+          , Known "ModuleWithCommentsResemblingModuleHeader.hs" 11 "Function"
+          )
+        , ( "imported name"
+          , "bar"
+          , Known "EmptyModule.hs" 3 "Function"
+          )
+        ]
+      ]
   ]
 
 tests :: TestTree

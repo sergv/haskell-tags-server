@@ -57,12 +57,12 @@ defaultPort = 10000
 
 runServerWithRecursiveDirs :: forall s. (BERT.Server s) => ServerConfig s -> Set FilePath -> IO ()
 runServerWithRecursiveDirs conf dirTrees = do
-  debugM $ "runServerWithRecursiveDirs: source directories = " <> show' (confSourceDirectories conf)
+  debugM $ "runServerWithRecursiveDirs: source directories = " <> T.take 1000 (show' (confSourceDirectories conf))
   srcDirs   <- S.fromList <$> mapM canonicalizePath (S.toList (confSourceDirectories conf))
   cabalDirs <- S.fromList <$> mapM canonicalizePath (S.toList (confCabalDirectories conf))
   dirs      <- forM (S.toList dirTrees) $
                  find always (fileType ==? Directory) <=< canonicalizePath
-  debugM $ "dirs = " <> show' (S.fromList $ concat dirs)
+  debugM $ "dirs = " <> T.take 1000 (show' (S.fromList $ concat dirs))
   runServer $ conf { confSourceDirectories = srcDirs <> S.fromList (concat dirs)
                    , confCabalDirectories  = cabalDirs
                    }
