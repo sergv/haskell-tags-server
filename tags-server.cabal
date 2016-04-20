@@ -1,89 +1,123 @@
-name:                tags-server
-version:             0.1.0.0
-synopsis:            Server that looks up haskell entities, similar to tags in editors but more precise
+name:
+  tags-server
+version:
+  0.1.0.0
+synopsis:
+  Server that looks up haskell entities, similar to tags in editors but more precise
 -- description:
-license:             BSD3
-license-file:        LICENSE
-author:              Sergey Vinokurov
-maintainer:          serg.foo@gmail.com
-category:            Development
-build-type:          Simple
-cabal-version:       >=1.10
+license:
+  BSD3
+license-file:
+  LICENSE
+author:
+  Sergey Vinokurov
+maintainer:
+  serg.foo@gmail.com
+category:
+  Development
+build-type:
+  Simple
+cabal-version:
+  >=1.10
 
 library
-  build-depends:       base >=4,
-                       array,
-                       containers,
-                       time,
-                       filepath,
-                       directory,
-                       filemanip,
-                       mtl,
-                       transformers,
-                       text,
-                       stm,
-                       semigroups,
-                       network >=2.6,
-                       haskell-src-exts >=1.16,
-                       bert >=1.2,
-                       utf8-string >=0.3,
-                       hslogger >=1.2,
-                       regex-tdfa >=1.0,
-                       regex-tdfa-text,
-                       fast-tags >=0.0.6
-  exposed-modules:     Server
-                       LoadModule
-                       Logging
-                       Search
-                       Types
+  build-depends:
+    array,
+    base >=4,
+    bert >=1.2.2.5,
+    containers,
+    directory,
+    fast-tags >=1.2,
+    filemanip,
+    filepath,
+    haskell-src-exts >=1.16,
+    hslogger >=1.2,
+    mtl,
+    network >=2.6,
+    regex-tdfa >=1.0,
+    regex-tdfa-text,
+    semigroups,
+    stm,
+    text,
+    time,
+    transformers,
+    utf8-string >=0.3
+  exposed-modules:
+    LoadModule
+    Logging
+    Search
+    Server
+    Types
   other-modules:
-  hs-source-dirs:      src
-  default-language:    Haskell2010
-  ghc-options:         -W -Wall -fwarn-monomorphism-restriction
-                       -fno-warn-type-defaults
-                       -fno-warn-name-shadowing
-                       -ferror-spans -rtsopts
+  hs-source-dirs:
+    src
+  default-language:
+    Haskell2010
+  ghc-options:
+    -Wall
+    -fwarn-monomorphism-restriction
+    -fno-warn-type-defaults
+    -fno-warn-name-shadowing
+    -ferror-spans -rtsopts
+  ghc-prof-options:
+    -fprof-auto
 
 executable tags-server
-  main-is:             src/Main.hs
-  build-depends:       base >=4,
-                       containers,
-                       bert,
-                       network,
-                       filepath,
-                       directory,
-                       optparse-applicative,
-                       tags-server
-  default-language:    Haskell2010
-  ghc-options:         -W -Wall -fwarn-monomorphism-restriction
-                       -fno-warn-type-defaults
-                       -fno-warn-name-shadowing
-                       -ferror-spans -rtsopts
-
+  main-is:
+    src/Main.hs
+  build-depends:
+    base >=4,
+    bert,
+    containers,
+    directory,
+    filepath,
+    network,
+    optparse-applicative,
+    tags-server
+  default-language:
+    Haskell2010
+  ghc-options:
+    -Wall
+    -fwarn-monomorphism-restriction
+    -fno-warn-type-defaults
+    -fno-warn-name-shadowing
+    -ferror-spans -rtsopts
+  ghc-prof-options:
+    -fprof-auto
 
 test-suite test-tags-server
-  default-language: Haskell2010
-  type:             exitcode-stdio-1.0
-  hs-source-dirs:   tests
-  main-is:          Main.hs
-  other-modules:    ServerTests
-                    LogCollectingServer
-  build-depends:    base >=4,
-                    containers,
-                    filepath,
-                    directory,
-                    tasty >=0.7,
-                    tasty-hunit >=0.4,
-                    utf8-string,
-                    dlist,
-                    hslogger,
-                    stm,
-                    network,
-                    bert,
-                    regex-tdfa >=1.0,
-                    regex-tdfa-text,
-                    tags-server
-  ghc-options:      -W -Wall -fwarn-monomorphism-restriction
-                    -fno-warn-type-defaults
-                    -fno-warn-name-shadowing
-                    -ferror-spans -rtsopts
+  default-language:
+    Haskell2010
+  type:
+    exitcode-stdio-1.0
+  hs-source-dirs:
+    tests
+  main-is:
+    Main.hs
+  other-modules:
+    LogCollectingServer
+    ServerTests
+  build-depends:
+    base >=4,
+    bert,
+    containers,
+    directory,
+    dlist,
+    filepath,
+    hslogger,
+    network,
+    regex-tdfa >=1.0,
+    regex-tdfa-text,
+    stm,
+    tags-server,
+    tasty >=0.7,
+    tasty-hunit >=0.4,
+    utf8-string
+  ghc-options:
+    -Wall
+    -fwarn-monomorphism-restriction
+    -fno-warn-type-defaults
+    -fno-warn-name-shadowing
+    -ferror-spans -rtsopts
+  ghc-prof-options:
+    -fprof-auto
