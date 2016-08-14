@@ -36,7 +36,7 @@ import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import qualified Data.Traversable as Tr
+import Data.Traversable (for)
 import System.Directory
 import System.FilePath
 
@@ -175,7 +175,7 @@ loadModuleFromFile filename = do
             throwError $ "no items export with wildcard export for " ++ T.unpack (getSymbolName $ symbolName sym)
           Just children -> do
             let allSymbols' = maybe allSymbols modAllSymbols mod
-            case Tr.traverse (`M.lookup` allSymbols') children of
+            case traverse (`M.lookup` allSymbols') children of
               Nothing -> throwError $ "module " ++ maybe filename modFile mod ++
                          " has modChildrenMap entries that don't resolve to " ++
                          "any symbol in that module: " ++ show children
@@ -188,7 +188,7 @@ loadModuleFromFile filename = do
         -- and thus should be found within allSymbols map rather than exports map
         -- which is not finish at this time.
         let candidateSyms = maybe allSymbols modExports mod
-        case Tr.traverse (`M.lookup` candidateSyms) cs of
+        case traverse (`M.lookup` candidateSyms) cs of
           -- not all exported symbols found - this is the wrong module
           Nothing      -> return M.empty
           Just symbols -> return $ mkSymbolMap $ sym :| symbols
