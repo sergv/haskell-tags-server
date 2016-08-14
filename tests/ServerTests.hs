@@ -53,8 +53,8 @@ data Response =
   | Ambiguous [(FilePath, Int, SymbolType)]
   | NotFound
 
-  -- | Error Regex
-  --
+-- | Error Regex
+--
 -- mkRegex :: String -> Regex
 -- mkRegex re =
 --   either error id $ TDFA.compile
@@ -457,10 +457,10 @@ mkTest name getConn sym dir filename resp = testCase name $ do
               logs <- getLogs serv
               return $ "" : "Logs:" : logs
   case r of
-    Left err  -> do
+    Left err  ->
       assertFailure $ show err ++ unlines logs
     Right res ->
-      unless (actual == expected) $ do
+      unless (actual == expected) $
         assertFailure $ msg ++ unlines logs
       where
         actual   = relativizeFilepaths res

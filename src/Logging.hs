@@ -28,8 +28,7 @@ module Logging
   , Log.setLevel
   , Log.clearLevel
   , module System.Log.Handler.Simple
-  )
-where
+  ) where
 
 import Control.Monad.IO.Class
 import Data.Text (Text)

@@ -39,8 +39,9 @@ import LoadModule
 -- import Logging
 import Types
 
-findSymbol :: (Functor m, MonadError String m, MonadState ServerState m, MonadReader (ServerConfig s) m, MonadIO m)
-           => FilePath -> SymbolName -> m [Symbol]
+findSymbol
+  :: (MonadError String m, MonadState ServerState m, MonadReader (ServerConfig s) m, MonadIO m)
+  => FilePath -> SymbolName -> m [Symbol]
 findSymbol filename sym = do
   modules <- gets stateModules
   modName <- fileNameToModuleName filename
@@ -51,8 +52,9 @@ findSymbol filename sym = do
     Just mods ->
       concat <$> mapM (findInModule sym) mods
 
-findInModule :: forall m s. (Functor m, MonadError String m, MonadState ServerState m, MonadReader (ServerConfig s) m, MonadIO m)
-             => SymbolName -> Module -> m [Symbol]
+findInModule
+  :: forall m s. (MonadError String m, MonadState ServerState m, MonadReader (ServerConfig s) m, MonadIO m)
+  => SymbolName -> Module -> m [Symbol]
 findInModule sym mod
   | Just (qualifier, sym') <- splitQualified sym =
     case M.lookup qualifier (modImportQualifiers mod) of
@@ -87,7 +89,7 @@ splitQualified = \(SymbolName name) ->
            "^(([[:upper:]][[:alnum:]_']*\\.)*[[:upper:]][[:alnum:]_']*)\\.(.*)$"
            -- "^((?:[A-Z][a-zA-Z_0-9']*\\.)*[A-Z][a-zA-Z_0-9']*)\\.(.*)$"
 
-fileNameToModuleName :: (Functor m, MonadError String m) => FilePath -> m ModuleName
+fileNameToModuleName :: (MonadError String m) => FilePath -> m ModuleName
 fileNameToModuleName fname =
   case reverse dirs of
     []           -> throwError "Cannot convert empty file name to module name"

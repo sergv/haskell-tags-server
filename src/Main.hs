@@ -13,7 +13,7 @@
 
 {-# LANGUAGE RecordWildCards #-}
 
-module Main where
+module Main (main) where
 
 import Control.Applicative
 import Control.Monad
@@ -38,8 +38,7 @@ data ProgramConfig = ProgramConfig
                                           -- all their subdirectories are added to progSourceDirectories
   , progPort              :: PortNumber
   , progLazyTagging       :: Bool       -- ^ whether to read and compute tags lazily
-  }
-  deriving (Show, Eq, Ord)
+  } deriving (Show, Eq, Ord)
 
 opts :: ParserInfo ProgramConfig
 opts = info parser fullDesc
@@ -63,12 +62,12 @@ opts = info parser fullDesc
                            (long "recursive" <>
                             help "recursively add directory tree with haskell files to index" <>
                             metavar "DIR")))
-               <*> (option (fmap fromIntegral auto)
-                      (short 'p' <>
-                       long "port" <>
-                       help "port to listen to" <>
-                       value defaultPort <>
-                       metavar "PORT"))
+               <*> option (fmap fromIntegral auto)
+                     (short 'p' <>
+                      long "port" <>
+                      help "port to listen to" <>
+                      value defaultPort <>
+                      metavar "PORT")
                <*> switch
                      (long "lazy-tagging" <>
                       help "whether to compute tags lazily - only for files asked")
@@ -79,7 +78,7 @@ main = do
   -- validate that specified directories actually exist
   forM_ (S.toList progSourceDirectories) ensureDirExists
   unless (S.null progCabalDirectories) $ do
-    hPutStrLn stderr $ "NOT IMPLEMENTED YET: analysis of cabal packages"
+    hPutStrLn stderr "NOT IMPLEMENTED YET: analysis of cabal packages"
     exitFailure
   forM_ (S.toList progCabalDirectories) ensureDirExists
   forM_ (S.toList progDirTrees) ensureDirExists

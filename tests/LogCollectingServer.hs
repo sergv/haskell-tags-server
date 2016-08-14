@@ -19,8 +19,7 @@ module LogCollectingServer
   , logCollectingServer
   , waitUntilStart
   , getLogs
-  )
-where
+  ) where
 
 import Control.Applicative
 import Control.Concurrent.STM
@@ -67,9 +66,7 @@ waitUntilStart serv = atomically go
     go :: STM ()
     go = do
       isStarted <- readTVar (lcStarted serv)
-      if isStarted
-        then return ()
-        else retry
+      unless isStarted retry
 
 getLogs :: LogCollectingServer -> IO [String]
 getLogs serv = DL.toList <$> readTVarIO (lcLogs serv)

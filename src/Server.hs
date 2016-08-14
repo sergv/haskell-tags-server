@@ -21,8 +21,7 @@ module Server
   , emptyServerConfig
   , defaultPort
   , runServerWithRecursiveDirs
-  )
-where
+  ) where
 
 import Control.Applicative
 import Control.Monad.Except

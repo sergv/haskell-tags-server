@@ -25,6 +25,7 @@ import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Char
+import qualified Data.List as L
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
@@ -42,15 +43,16 @@ import System.FilePath
 import FastTags (process) -- processAll,
 import Language.Haskell.Exts.Extension
 import Language.Haskell.Exts.Parser
-import qualified Language.Haskell.Exts.Syntax as HSE
+import qualified Language.Haskell.Exts.Annotated.Syntax as HSE
 
 import Logging
 import Types
 
 -- Fetch module by it's name from cache or load it. Check modification time
 -- of module files and reload if anything changed
-retrieveModule :: forall m s. (Functor m, MonadError String m, MonadState ServerState m, MonadReader (ServerConfig s) m, MonadIO m)
-               => ModuleName -> m [Module]
+retrieveModule
+  :: forall m s. (MonadError String m, MonadState ServerState m, MonadReader (ServerConfig s) m, MonadIO m)
+  => ModuleName -> m [Module]
 retrieveModule modName = do
   debugM $ "retrieving module " <> getModuleName modName
   modules <- gets stateModules
@@ -81,8 +83,9 @@ retrieveModule modName = do
 
 -- | Recursively load module from file - load given filename, then load all its
 -- imports.
-loadModuleFromFile :: (Functor m, MonadError String m, MonadState ServerState m, MonadReader (ServerConfig s) m, MonadIO m)
-                   => FilePath -> m Module
+loadModuleFromFile
+  :: (MonadError String m, MonadState ServerState m, MonadReader (ServerConfig s) m, MonadIO m)
+  => FilePath -> m Module
 loadModuleFromFile filename = do
   debugM $ "loading module from file " <> T.pack filename
   source <- liftIO $ T.readFile filename
@@ -127,16 +130,16 @@ loadModuleFromFile filename = do
                      M.unions <$> mapM convertSpec specs
       lastModified <- liftIO $ getModificationTime filename
       debugM $ "inferred exports " <> show' (M.keys exports)
-      return $ Module
-                 { modImports          = importedModules
-                 , modImportQualifiers = importQualifiers
-                 , modExports          = exports
-                 , modChildrenMap      = children
-                 , modAllSymbols       = allSymbols
-                 , modSource           = source
-                 , modFile             = filename
-                 , modLastModified     = lastModified
-                 }
+      return Module
+        { modImports          = importedModules
+        , modImportQualifiers = importQualifiers
+        , modExports          = exports
+        , modChildrenMap      = children
+        , modAllSymbols       = allSymbols
+        , modSource           = source
+        , modFile             = filename
+        , modLastModified     = lastModified
+        }
   where
     mkModules :: [HSE.ImportDecl] -> [(ModuleName, Qualification)]
     mkModules = map (\decl ->
@@ -151,20 +154,21 @@ loadModuleFromFile filename = do
     mkSymbolMap :: NonEmpty Symbol -> Map SymbolName Symbol
     mkSymbolMap = M.fromList . map (symbolName &&& id) . NE.toList
 
-    exportSpecToMap :: (MonadError String m, Functor m)
-                    => Map SymbolName Symbol
-                    -> Map SymbolName [SymbolName]
-                    -> [(ModuleName, Qualification, [Module])]
-                    -> Map ModuleName ModuleName
-                    -> HSE.ExportSpec
-                    -> m (Map SymbolName Symbol)
+    exportSpecToMap
+      :: (MonadError String m, Functor m)
+      => Map SymbolName Symbol
+      -> Map SymbolName [SymbolName]
+      -> [(ModuleName, Qualification, [Module])]
+      -> Map ModuleName ModuleName
+      -> HSE.ExportSpec
+      -> m (Map SymbolName Symbol)
     exportSpecToMap allSymbols _ imports importQualifiers (HSE.EVar _ qname) =
       mkSymbolMap . NE.map fst <$> convertQName allSymbols imports importQualifiers qname
     exportSpecToMap allSymbols _ imports importQualifiers (HSE.EAbs qname) =
       mkSymbolMap . NE.map fst <$> convertQName allSymbols imports importQualifiers qname
     exportSpecToMap allSymbols childrenMap imports importQualifiers (HSE.EThingAll qname) = do
       syms <- convertQName allSymbols imports importQualifiers qname
-      liftM M.unions $ forM (NE.toList syms) $ \(sym, mod) -> do
+      fmap M.unions $ for (NE.toList syms) $ \(sym, mod) -> do
         let childrenMap' = maybe childrenMap modChildrenMap mod
         case M.lookup (symbolName sym) childrenMap' of
           Nothing ->
@@ -179,7 +183,7 @@ loadModuleFromFile filename = do
                 return $ mkSymbolMap $ sym :| children'
     exportSpecToMap allSymbols _ imports importQualifiers (HSE.EThingWith qname (map convertCName -> cs)) = do
       syms <- convertQName allSymbols imports importQualifiers qname
-      liftM M.unions $ forM (NE.toList syms) $ \(sym, mod) -> do
+      fmap M.unions $ for (NE.toList syms) $ \(sym, mod) -> do
         -- if mod is Nothing then sym comes from the module we're currently loading
         -- and thus should be found within allSymbols map rather than exports map
         -- which is not finish at this time.
@@ -214,7 +218,7 @@ extractModuleInterface source = interface
 
     extractHeader :: Text -> Maybe Text
     extractHeader source
-      | Just line <- find ("module" `T.isPrefixOf`) lines =
+      | Just line <- L.find ("module" `T.isPrefixOf`) lines =
         let (_prefix, headerAndBody) = T.breakOn "module" source
             (header, _body)          = T.breakOn "where" headerAndBody
         in Just $ header <> " where"
@@ -271,12 +275,13 @@ convertName (HSE.Symbol name) = SymbolName $ T.pack name
 -- | Resolve haskell-src-exts qualified name into symbol along with its module.
 -- If symbol module is Nothing then the symbol is from the module we're currently
 -- loading (aka "this" module).
-convertQName :: (MonadError String m)
-             => Map SymbolName Symbol
-             -> [(ModuleName, Qualification, [Module])]
-             -> Map ModuleName ModuleName
-             -> HSE.QName
-             -> m (NonEmpty (Symbol, Maybe Module))
+convertQName
+  :: (MonadError String m)
+  => Map SymbolName Symbol
+  -> [(ModuleName, Qualification, [Module])]
+  -> Map ModuleName ModuleName
+  -> HSE.QName
+  -> m (NonEmpty (Symbol, Maybe Module))
 convertQName thisModSymbols thisModImports thisModQualifiers qname =
   case qname of
     HSE.Qual modName (convertName -> symName) ->

@@ -32,8 +32,7 @@ data ServerConfig s = ServerConfig
   , confLazyTagging       :: Bool         -- ^ whether to read and compute tags lazily
                                           -- or read them all at once on server start
   , confServer            :: s
-  }
-  deriving (Show, Eq, Ord)
+  } deriving (Show, Eq, Ord)
 
 emptyServerConfig :: (BERT.Server s) => s -> ServerConfig s
 emptyServerConfig serv = ServerConfig S.empty S.empty False serv
@@ -46,13 +45,13 @@ newtype Symbol = Symbol (Pos TagVal)
   deriving (Show, Eq, Ord)
 
 symbolName :: Symbol -> SymbolName
-symbolName (Symbol (Pos _ (TagVal _ name _ _))) = SymbolName name
+symbolName (Symbol (Pos _ (TagVal name _ _))) = SymbolName name
 
 symbolType :: Symbol -> Type
-symbolType (Symbol (Pos _ (TagVal _ _ typ _))) = typ
+symbolType (Symbol (Pos _ (TagVal _ typ _))) = typ
 
 symbolParent :: Symbol -> Maybe SymbolName
-symbolParent (Symbol (Pos _ (TagVal _ _ _ parent))) = SymbolName <$> parent
+symbolParent (Symbol (Pos _ (TagVal _ _ parent))) = SymbolName <$> parent
 
 newtype SymbolName = SymbolName { getSymbolName :: Text }
   deriving (Show, Eq, Ord)
@@ -112,13 +111,11 @@ data Module = Module
   , modSource           :: Text
   , modFile             :: FilePath
   , modLastModified     :: UTCTime -- ^ time as reported by getModificationTime
-  }
-  deriving (Show, Eq, Ord)
+  } deriving (Show, Eq, Ord)
 
 data ServerState = ServerState
   { stateModules :: Map ModuleName [Module]
-  }
-  deriving (Show, Eq, Ord)
+  } deriving (Show, Eq, Ord)
 
 emptyServerState :: ServerState
 emptyServerState = ServerState M.empty
