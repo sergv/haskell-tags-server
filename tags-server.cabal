@@ -18,7 +18,7 @@ category:
 build-type:
   Simple
 cabal-version:
-  >=1.10
+  >=1.16
 
 library
   build-depends:
@@ -34,7 +34,7 @@ library
     hslogger >=1.2,
     mtl,
     network >=2.6,
-    regex-tdfa >=1.0,
+    regex-tdfa >=1.2.2,
     regex-tdfa-text,
     semigroups,
     stm,
@@ -98,7 +98,7 @@ test-suite test-tags-server
     LogCollectingServer
     ServerTests
   build-depends:
-    base >=4,
+    base,
     bert,
     containers,
     directory,
@@ -106,7 +106,7 @@ test-suite test-tags-server
     filepath,
     hslogger,
     network,
-    regex-tdfa >=1.0,
+    regex-tdfa,
     regex-tdfa-text,
     stm,
     tags-server,
