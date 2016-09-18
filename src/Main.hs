@@ -11,12 +11,14 @@
 --
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 module Main (main) where
 
 import Control.Applicative
 import Control.Monad
+import Control.Monad.Except
+import Data.Foldable (for_)
 import Data.Set (Set)
 import qualified Data.Set as S
 import Network.Socket (PortNumber)
@@ -25,76 +27,87 @@ import System.Directory
 import System.Exit
 import System.IO
 
-import qualified Network.BERT.Transport as BERT
-
-import Logging
-import Server
-
+import Control.Monad.Logging
+import Control.Monad.Logging.Simple
+import Server.BERT
+import Server.Tags
+import Text.PrettyPrint.Leijen.Text.Utils
 
 data ProgramConfig = ProgramConfig
-  { progSourceDirectories :: Set FilePath -- ^ directories with haskell files to index
-  , progCabalDirectories  :: Set FilePath -- ^ directories with cabal packages to index
-  , progDirTrees          :: Set FilePath -- ^ directories that should be searched recursively - i.e.
-                                          -- all their subdirectories are added to progSourceDirectories
-  , progPort              :: PortNumber
-  , progLazyTagging       :: Bool       -- ^ whether to read and compute tags lazily
+  { cfgSourceDirectories :: Set FilePath -- ^ directories with haskell files to index
+  , cfgCabalDirectories  :: Set FilePath -- ^ directories with cabal packages to index
+  , cfgDirTrees          :: Set FilePath -- ^ directories that should be searched recursively - i.e.
+                                         -- all their subdirectories are added to cfgSourceDirectories
+  , cfgPort              :: PortNumber
+  , cfgLazyTagging       :: Bool         -- ^ whether to read and compute tags lazily
   } deriving (Show, Eq, Ord)
 
-opts :: ParserInfo ProgramConfig
-opts = info parser fullDesc
-  where
-    parser = ProgramConfig
-               <$> (S.fromList <$>
-                      many
-                        (strOption
-                           (long "dir" <>
-                            help "add directory with haskell files to index" <>
-                            metavar "DIR")))
-               <*> (S.fromList <$>
-                      many
-                        (strOption
-                           (long "package" <>
-                            help "add directory with cabal package to index" <>
-                            metavar "DIR")))
-               <*> (S.fromList <$>
-                      many
-                        (strOption
-                           (long "recursive" <>
-                            help "recursively add directory tree with haskell files to index" <>
-                            metavar "DIR")))
-               <*> option (fmap fromIntegral auto)
-                     (short 'p' <>
-                      long "port" <>
-                      help "port to listen to" <>
-                      value defaultPort <>
-                      metavar "PORT")
-               <*> switch
-                     (long "lazy-tagging" <>
-                      help "whether to compute tags lazily - only for files asked")
+optsParser :: Parser ProgramConfig
+optsParser = ProgramConfig
+  <$> (S.fromList <$>
+         many
+           (strOption
+              (long "dir" <>
+               help "add directory with haskell files to index" <>
+               metavar "DIR")))
+  <*> (S.fromList <$>
+         many
+           (strOption
+              (long "package" <>
+               help "add directory with cabal package to index" <>
+               metavar "DIR")))
+  <*> (S.fromList <$>
+         many
+           (strOption
+              (long "recursive" <>
+               help "recursively add directory tree with haskell files to index" <>
+               metavar "DIR")))
+  <*> option (fmap fromIntegral auto)
+        (short 'p' <>
+         long "port" <>
+         help "port to listen to" <>
+         value defaultPort <>
+         metavar "PORT")
+  <*> switch
+        (long "lazy-tagging" <>
+         help "whether to compute tags lazily - only for files asked")
+
+progInfo :: ParserInfo ProgramConfig
+progInfo = info optsParser fullDesc
 
 main :: IO ()
 main = do
-  ProgramConfig {..} <- execParser opts
+  ProgramConfig{cfgSourceDirectories, cfgCabalDirectories, cfgDirTrees, cfgPort, cfgLazyTagging} <- execParser progInfo
   -- validate that specified directories actually exist
-  forM_ (S.toList progSourceDirectories) ensureDirExists
-  unless (S.null progCabalDirectories) $ do
+  for_ cfgSourceDirectories ensureDirExists
+  unless (S.null cfgCabalDirectories) $ do
     hPutStrLn stderr "NOT IMPLEMENTED YET: analysis of cabal packages"
     exitFailure
-  forM_ (S.toList progCabalDirectories) ensureDirExists
-  forM_ (S.toList progDirTrees) ensureDirExists
-  serv <- BERT.tcpServer progPort
-  let conf = ServerConfig
-               { confSourceDirectories = progSourceDirectories
-               , confCabalDirectories  = progCabalDirectories
-               , confLazyTagging       = progLazyTagging
-               , confServer            = serv
-               }
-  handler <- streamHandler stderr DEBUG
-  initLogger (setHandlers [handler] . setLevel DEBUG)
-  runServerWithRecursiveDirs conf progDirTrees
-  where
-    ensureDirExists dir = do
-      exists <- doesDirectoryExist dir
-      unless exists $ do
-        hPutStrLn stderr $ "error: directory " ++ dir ++ " does not exist"
-        exitFailure
+  for_ cfgCabalDirectories ensureDirExists
+  for_ cfgDirTrees ensureDirExists
+  let conf  = TagsServerConf
+                { tsconfSourceDirectories = cfgSourceDirectories
+                , tsconfCabalDirectories  = cfgCabalDirectories
+                , tsconfLazyTagging       = cfgLazyTagging
+                }
+      state = TagsServerState
+                { tssLoadedModules = mempty
+                }
+  conf'  <- canonicalizeConfPaths =<< addRecursiveRootsToConf cfgDirTrees conf
+  result <- runSimpleLoggerT (Just Stderr) Debug
+          $ runExceptT
+          $ startTagsServer conf' state
+  case result of
+    Left err         -> putDocLn err
+    Right tagsServer -> do
+      bertServer <- runBertServer cfgPort $ tsRequestHandler tagsServer
+      waitForBertServerStart bertServer
+      -- Wait for tag server to finish
+      void $ waitForTagsServerFinish tagsServer
+
+ensureDirExists :: FilePath -> IO ()
+ensureDirExists dir = do
+  exists <- doesDirectoryExist dir
+  unless exists $ do
+    hPutStrLn stderr $ "error: directory " ++ dir ++ " does not exist"
+    exitFailure

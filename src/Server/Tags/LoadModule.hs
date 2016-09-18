@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------------
 -- |
--- Module      :  LoadModule
+-- Module      :  Server.Tags.LoadModule
 -- Copyright   :  (c) Sergey Vinokurov 2015
 -- License     :  BSD3-style (see LICENSE)
 --
@@ -17,80 +17,84 @@
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE ViewPatterns        #-}
 
-module LoadModule (retrieveModule, loadModuleFromFile) where
+module Server.Tags.LoadModule (retrieveModule) where
 
-import Control.Applicative
-import Control.Arrow
+-- import Control.Applicative
+-- import Control.Arrow
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
-import Data.Char
-import qualified Data.List as L
-import Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as NE
-import Data.Map (Map)
-import qualified Data.Map as M
-import Data.Maybe
-import Data.Monoid
-import qualified Data.Set as S
-import Data.Text (Text)
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import Data.Traversable (for)
-import System.Directory
-import System.FilePath
+-- import Data.Char
+-- import qualified Data.List as L
+-- import Data.List.NonEmpty (NonEmpty(..))
+-- import qualified Data.List.NonEmpty as NE
+-- import Data.Map (Map)
+-- import qualified Data.Map as M
+-- import Data.Maybe
+-- import Data.Monoid
+-- import qualified Data.Set as S
+-- import Data.Text (Text)
+-- import qualified Data.Text as T
+-- import qualified Data.Text.IO as T
+-- import Data.Traversable (for)
+-- import System.Directory
+-- import System.FilePath
+import Text.PrettyPrint.Leijen.Text (Doc)
+-- import Text.PrettyPrint.Leijen.Text.Utils
 
-import FastTags (process) -- processAll,
-import Language.Haskell.Exts.Extension
-import Language.Haskell.Exts.Parser
-import qualified Language.Haskell.Exts.Annotated.Syntax as HSE
+-- import FastTags (process) -- processAll,
+-- import Language.Haskell.Exts.Extension
+-- import Language.Haskell.Exts.Parser
+-- import qualified Language.Haskell.Exts.Annotated.Syntax as HSE
 
-import Logging
-import Types
+-- import Control.Monad.Logging
+import Server.Tags.Types
 
--- Fetch module by it's name from cache or load it. Check modification time
+-- | Fetch module by it's name from cache or load it. Check modification time
 -- of module files and reload if anything changed
 retrieveModule
-  :: forall m s. (MonadError String m, MonadState ServerState m, MonadReader (ServerConfig s) m, MonadIO m)
+  :: forall m. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m)
   => ModuleName -> m [Module]
-retrieveModule modName = do
-  debugM $ "retrieving module " <> getModuleName modName
-  modules <- gets stateModules
-  mods <- case M.lookup modName modules of
-             Nothing   -> loadModule modName
-             Just mods ->
-               forM mods $ \m -> do
-                 modTime <- liftIO $ getModificationTime $ modFile m
-                 if modLastModified m /= modTime
-                   then loadModuleFromFile $ modFile m
-                   else return m
-  modify (\s -> s { stateModules = M.insert modName mods $ stateModules s })
-  return mods
-  where
-    loadModule :: ModuleName -> m [Module]
-    loadModule (ModuleName modName) = do
-      srcDirs <- asks confSourceDirectories
-      debugM $ "loading module " <> modName
-      let possiblePaths = [ root </> filenamePart <.> ext
-                          | root <- S.toList srcDirs
-                          , ext  <- ["hs", "lhs", "hsc"]
-                          ]
-      actualPaths <- filterM (liftIO . doesFileExist) possiblePaths
-      mapM loadModuleFromFile actualPaths
-      where
-        filenamePart :: FilePath
-        filenamePart = T.unpack $ T.map (\c -> if c == '.' then pathSeparator else c) modName
+retrieveModule _modName =
+  throwError "retrieving module not implemented yet"
+  -- logDebug $ "retrieving module " <> show' modName
+  -- modules <- gets tssLoadedModules
+  -- mods    <- case M.lookup modName modules of
+  --               Nothing   -> loadModule modName
+  --               Just mods ->
+  --                 for mods $ \m -> do
+  --                   modTime <- liftBase $ getModificationTime $ modFile m
+  --                   if modLastModified m /= modTime
+  --                   then loadModuleFromFile $ modFile m
+  --                   else return m
+  -- modify (\s -> s { tssLoadedModules = M.insert modName mods $ tssLoadedModules s })
+  -- return mods
+  -- where
+  --   loadModule :: ModuleName -> m [Module]
+  --   loadModule modName = do
+  --     srcDirs <- asks tsconfSourceDirectories
+  --     logDebug $ "loading module " <> show' modName
+  --     let possiblePaths = [ root </> filenamePart <.> ext
+  --                         | root <- S.toList srcDirs
+  --                         , ext  <- ["hs", "lhs", "hsc"]
+  --                         ]
+  --     actualPaths <- filterM (liftBase . doesFileExist) possiblePaths
+  --     mapM loadModuleFromFile actualPaths
+  --     where
+  --       filenamePart :: FilePath
+  --       filenamePart = T.unpack $ T.map (\c -> if c == '.' then pathSeparator else c) $ getModuleName modName
 
+{-
 -- | Recursively load module from file - load given filename, then load all its
 -- imports.
 loadModuleFromFile
-  :: (MonadError String m, MonadState ServerState m, MonadReader (ServerConfig s) m, MonadIO m)
+  :: (MonadError String m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadBase IO m)
   => FilePath -> m Module
 loadModuleFromFile filename = do
-  debugM $ "loading module from file " <> T.pack filename
-  source <- liftIO $ T.readFile filename
+  logDebug $ "loading module from file " <> T.pack filename
+  source <- liftBase $ T.readFile filename
   let allTags    = fst $ process filename False source
-      allSymbols = M.fromList $ map ((symbolName &&& id) . Symbol) allTags
+      allSymbols = M.fromList $ map ((symbolName &&& id) . mkSymbol) allTags
       -- todo include children of dependent modules
       children   = M.fromListWith (++) $
                    map (\(child, parent) -> (parent, [child])) $
@@ -98,10 +102,10 @@ loadModuleFromFile filename = do
                    M.mapMaybe symbolParent allSymbols
       interface :: Text
       interface  = extractModuleInterface source
-  -- debugM $ "parsing module interface\n>>>>\n" <> interface <> "\n<<<<"
+  -- logDebug $ "parsing module interface\n>>>>\n" <> interface <> "\n<<<<"
   case parseWithMode (parseMode filename) (T.unpack interface) of
     ParseFailed loc msg -> do
-      errorM $ "failed to parse module header and imports:\n" <>
+      logError $ "failed to parse module header and imports:\n" <>
         "haskel-src-exts error message: " <> show' loc <> ": " <> T.pack msg <> "\n" <>
         ">>>>" <> interface <> "\n<<<<"
       throwError $ "failed to parse module header and imports at " ++ show loc ++ ": " ++ msg
@@ -113,10 +117,10 @@ loadModuleFromFile filename = do
                    Nothing    -> return allSymbols
                    Just specs -> do
                      -- tie the knot
-                     debugM $ "loading imported modules " <> show' (map (getModuleName . fst) importedModules)
+                     logDebug $ "loading imported modules " <> show' (map (getModuleName . fst) importedModules)
                      imports' <- local (\conf ->
-                                          let srcDirs' = S.insert (rootFromFileName filename) $ confSourceDirectories conf
-                                          in conf { confSourceDirectories = srcDirs' }) $
+                                          let srcDirs' = S.insert (rootFromFileName filename) $ tsconfSourceDirectories conf
+                                          in conf { tsconfSourceDirectories = srcDirs' }) $
                                  mapM (retrieveModule . fst) importedModules
                      let importedModsMap =
                            zipWith (\(modName, qual) modss -> (modName, qual, modss))
@@ -128,8 +132,8 @@ loadModuleFromFile filename = do
                                          importedModsMap
                                          importQualifiers
                      M.unions <$> mapM convertSpec specs
-      lastModified <- liftIO $ getModificationTime filename
-      debugM $ "inferred exports " <> show' (M.keys exports)
+      lastModified <- liftBase $ getModificationTime filename
+      logDebug $ "inferred exports " <> show' (M.keys exports)
       return Module
         { modImports          = importedModules
         , modImportQualifiers = importQualifiers
@@ -141,7 +145,7 @@ loadModuleFromFile filename = do
         , modLastModified     = lastModified
         }
   where
-    mkModules :: [HSE.ImportDecl] -> [(ModuleName, Qualification)]
+    mkModules :: [HSE.ImportDecl ()] -> [(ModuleName, Qualification)]
     mkModules = map (\decl ->
                       let modName = convertModName (HSE.importModule decl)
                       in (modName, mkQualification modName decl))
@@ -160,7 +164,7 @@ loadModuleFromFile filename = do
       -> Map SymbolName [SymbolName]
       -> [(ModuleName, Qualification, [Module])]
       -> Map ModuleName ModuleName
-      -> HSE.ExportSpec
+      -> HSE.ExportSpec ()
       -> m (Map SymbolName Symbol)
     exportSpecToMap allSymbols _ imports importQualifiers (HSE.EVar _ qname) =
       mkSymbolMap . NE.map fst <$> convertQName allSymbols imports importQualifiers qname
@@ -254,23 +258,23 @@ parseMode filename =
     , ignoreLinePragmas     = True
     }
 
-mkQualification :: ModuleName -> HSE.ImportDecl -> Qualification
+mkQualification :: ModuleName -> HSE.ImportDecl () -> Qualification
 mkQualification modName decl
   | HSE.importQualified decl =
     Qualified $ maybe modName convertModName $ HSE.importAs decl
   | otherwise                =
     maybe Unqualified (BothQualifiedAndUnqualified . convertModName) $ HSE.importAs decl
 
-convertModName :: HSE.ModuleName -> ModuleName
-convertModName (HSE.ModuleName name) = ModuleName $ T.pack name
+convertModName :: HSE.ModuleName () -> ModuleName
+convertModName (HSE.ModuleName name) = mkModuleName $ T.pack name
 
-convertCName :: HSE.CName -> SymbolName
+convertCName :: HSE.CName () -> SymbolName
 convertCName (HSE.VarName name) = convertName name
 convertCName (HSE.ConName name) = convertName name
 
-convertName :: HSE.Name -> SymbolName
-convertName (HSE.Ident name)  = SymbolName $ T.pack name
-convertName (HSE.Symbol name) = SymbolName $ T.pack name
+convertName :: HSE.Name () -> SymbolName
+convertName (HSE.Ident name)  = mkSymbolName $ T.pack name
+convertName (HSE.Symbol name) = mkSymbolName $ T.pack name
 
 -- | Resolve haskell-src-exts qualified name into symbol along with its module.
 -- If symbol module is Nothing then the symbol is from the module we're currently
@@ -280,7 +284,7 @@ convertQName
   => Map SymbolName Symbol
   -> [(ModuleName, Qualification, [Module])]
   -> Map ModuleName ModuleName
-  -> HSE.QName
+  -> HSE.QName ()
   -> m (NonEmpty (Symbol, Maybe Module))
 convertQName thisModSymbols thisModImports thisModQualifiers qname =
   case qname of
@@ -332,3 +336,4 @@ rootFromFileName =
   tail .
   reverse .
   splitDirectories
+-}

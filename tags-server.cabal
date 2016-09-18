@@ -22,17 +22,20 @@ cabal-version:
 
 library
   build-depends:
+    attoparsec >= 0.13.0.2,
     array,
     base >=4,
     bert >=1.2.2.5,
+    bytestring,
     containers,
     directory,
+    exceptions >= 0.8,
     fast-tags >=1.2,
     filemanip,
     filepath,
     haskell-src-exts >=1.16,
-    hslogger >=1.2,
-    mtl,
+    monad-control >=1.0,
+    mtl >= 2.2,
     network >=2.6,
     regex-tdfa >=1.2.2,
     regex-tdfa-text,
@@ -41,14 +44,23 @@ library
     text,
     time,
     transformers,
-    utf8-string >=0.3
+    transformers-base,
+    utf8-string >=0.3,
+    wl-pprint-text >= 1.1.0.4
   exposed-modules:
-    LoadModule
-    Logging
-    Search
-    Server
-    Types
+    Control.Monad.Logging
+    Control.Monad.Logging.Simple
+    Data.CompiledRegex
+    Data.Condition
+    Data.Promise
+    Server.BERT
+    Server.Tags
+    Text.PrettyPrint.Leijen.Text.Utils
   other-modules:
+    Server.Tags.LoadModule
+    Server.Tags.Search
+    Server.Tags.SearchM
+    Server.Tags.Types
   hs-source-dirs:
     src
   default-language:
@@ -71,9 +83,11 @@ executable tags-server
     containers,
     directory,
     filepath,
+    mtl,
     network,
     optparse-applicative,
-    tags-server
+    tags-server,
+    text
   default-language:
     Haskell2010
   ghc-options:
@@ -95,16 +109,18 @@ test-suite test-tags-server
   main-is:
     Main.hs
   other-modules:
-    LogCollectingServer
     ServerTests
+    ServerTests.LogCollectingServer
   build-depends:
     base,
     bert,
     containers,
     directory,
     dlist,
+    exceptions,
     filepath,
-    hslogger,
+    monad-control,
+    mtl,
     network,
     regex-tdfa,
     regex-tdfa-text,
@@ -112,7 +128,9 @@ test-suite test-tags-server
     tags-server,
     tasty >=0.7,
     tasty-hunit >=0.4,
-    utf8-string
+    transformers-base,
+    utf8-string,
+    wl-pprint-text
   ghc-options:
     -Wall
     -fwarn-monomorphism-restriction
