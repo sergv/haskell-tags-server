@@ -15,10 +15,14 @@ module Main (main) where
 
 import Test.Tasty
 
-import qualified ServerTests as ST
+import qualified ServerTests
+import qualified Server.Tags.TypesTests as TypesTests
 
 main :: IO ()
 main = do
   -- Try to connect to server. If attempt succeeds then server is running
   -- and there's no need to run server ourselves.
-  defaultMain $ testGroup "Tests" [ST.tests]
+  defaultMain $ testGroup "Tests"
+    [ ServerTests.tests
+    , TypesTests.tests
+    ]

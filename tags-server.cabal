@@ -55,12 +55,12 @@ library
     Data.Promise
     Server.BERT
     Server.Tags
+    Server.Tags.Types
     Text.PrettyPrint.Leijen.Text.Utils
   other-modules:
     Server.Tags.LoadModule
     Server.Tags.Search
     Server.Tags.SearchM
-    Server.Tags.Types
   hs-source-dirs:
     src
   default-language:
@@ -111,6 +111,7 @@ test-suite test-tags-server
   other-modules:
     ServerTests
     ServerTests.LogCollectingServer
+    Server.Tags.TypesTests
   build-depends:
     base,
     bert,
@@ -128,6 +129,7 @@ test-suite test-tags-server
     tags-server,
     tasty >=0.7,
     tasty-hunit >=0.4,
+    text,
     transformers-base,
     utf8-string,
     wl-pprint-text

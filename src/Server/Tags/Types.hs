@@ -34,6 +34,7 @@ module Server.Tags.Types
   , getModuleName
   , mkModuleName
   , ImportQualifier
+  , mkImportQualifier
   , getImportQualifier
   , SymbolName
   , getSymbolName
@@ -56,12 +57,9 @@ module Server.Tags.Types
   , ImportedName(..)
   ) where
 
-import Control.Applicative
 import Control.Monad
 import Control.Monad.Base
 import Control.Monad.Except
-import Data.Attoparsec.Text (Parser)
-import qualified Data.Attoparsec.Text as Atto
 import Data.Char
 import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
@@ -76,7 +74,6 @@ import System.Directory
 import System.FilePath.Find (FileType(Directory), find, fileType, (==?), always)
 import Text.PrettyPrint.Leijen.Text (Pretty(..), Doc)
 import qualified Text.PrettyPrint.Leijen.Text as PP
-import Text.PrettyPrint.Leijen.Text.Utils
 
 import FastTags (Pos(..), TagVal(..), Type(..), SrcPos)
 
@@ -161,6 +158,9 @@ mkModuleName = ModuleName
 newtype ImportQualifier = ImportQualifier { getImportQualifier :: ModuleName }
   deriving (Show, Eq, Ord, Pretty)
 
+mkImportQualifier :: ModuleName -> ImportQualifier
+mkImportQualifier = ImportQualifier
+
 -- | Name the @Symbol@ refers to.
 newtype SymbolName = SymbolName { getSymbolName :: Text }
   deriving (Show, Eq, Ord)
@@ -174,21 +174,14 @@ mkSymbolName = SymbolName
 -- | Split qualified symbol name (e.g. Foo.Bar.baz) into
 -- qualified module part (Foo.Bar) and name part (baz). Return Nothing
 splitQualifiedPart :: (MonadError Doc m) => SymbolName -> m (Maybe ImportQualifier, SymbolName)
-splitQualifiedPart
-  = either (throwError . docFromString) return
-  . Atto.parseOnly ((,) <$> optional (pImportQualifier <* dot) <*> pRest)
-  . getSymbolName
-  where
-    dot :: Parser Char
-    dot = Atto.char '.'
-    pRest :: Parser SymbolName
-    pRest = mkSymbolName <$> Atto.takeText
-    pImportQualifier :: Parser ImportQualifier
-    pImportQualifier = ImportQualifier . mkModuleName . T.intercalate "." <$> (pModuleName `Atto.sepBy1` dot)
-    pModuleName :: Parser Text
-    pModuleName = T.cons
-      <$> Atto.satisfy isUpper
-      <*> Atto.takeWhile isModuleNameConstituentChar
+splitQualifiedPart sym =
+  -- . Atto.parseOnly ((,) <$> optional (pImportQualifier <* dot) <*> pRest)
+  case reverse $ T.split (=='.') $ getSymbolName sym of
+    []             -> throwError "No components after split"
+    [sym']         -> pure (Nothing, mkSymbolName sym')
+    sym' : modPart -> pure (Just qual, mkSymbolName sym')
+      where
+        qual = mkImportQualifier $ mkModuleName $ T.intercalate "." $ reverse modPart
 
 isModuleNameConstituentChar :: Char -> Bool
 isModuleNameConstituentChar '\'' = True
