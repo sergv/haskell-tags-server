@@ -40,12 +40,12 @@ module Server.Tags.Types
   , getSymbolName
   , splitQualifiedPart
   , isModuleNameConstituentChar
-  , Symbol
+  , ResolvedSymbol
   , mkSymbol
-  , symbolName
-  , symbolType
-  , symbolParent
-  , symbolPosition
+  , resolvedSymbolName
+  , resolvedSymbolType
+  , resolvedSymbolParent
+  , resolvedSymbolPosition
   , mkSymbolName
   , Module(..)
   , ModuleImport(..)
@@ -90,7 +90,7 @@ data Request =
   deriving (Show, Eq, Ord)
 
 data Response =
-    Found (NonEmpty Symbol)
+    Found (NonEmpty ResolvedSymbol)
   | NotFound SymbolName
   deriving (Show, Eq, Ord)
 
@@ -161,7 +161,7 @@ newtype ImportQualifier = ImportQualifier { getImportQualifier :: ModuleName }
 mkImportQualifier :: ModuleName -> ImportQualifier
 mkImportQualifier = ImportQualifier
 
--- | Name the @Symbol@ refers to.
+-- | Name the @ResolvedSymbol@ refers to.
 newtype SymbolName = SymbolName { getSymbolName :: Text }
   deriving (Show, Eq, Ord)
 
@@ -190,23 +190,23 @@ isModuleNameConstituentChar c    = isAlphaNum c
 
 -- | A symbolic name that identifier some Haskell entity. Has position,
 -- entity type and possibly a parent.
-newtype Symbol = Symbol (Pos TagVal)
+newtype ResolvedSymbol = ResolvedSymbol (Pos TagVal)
   deriving (Show, Eq, Ord)
 
-mkSymbol :: Pos TagVal -> Symbol
-mkSymbol = Symbol
+mkSymbol :: Pos TagVal -> ResolvedSymbol
+mkSymbol = ResolvedSymbol
 
-symbolName :: Symbol -> SymbolName
-symbolName (Symbol (Pos _ (TagVal name _ _))) = SymbolName name
+resolvedSymbolName :: ResolvedSymbol -> SymbolName
+resolvedSymbolName (ResolvedSymbol (Pos _ (TagVal name _ _))) = SymbolName name
 
-symbolType :: Symbol -> Type
-symbolType (Symbol (Pos _ (TagVal _ typ _))) = typ
+resolvedSymbolType :: ResolvedSymbol -> Type
+resolvedSymbolType (ResolvedSymbol (Pos _ (TagVal _ typ _))) = typ
 
-symbolParent :: Symbol -> Maybe SymbolName
-symbolParent (Symbol (Pos _ (TagVal _ _ parent))) = SymbolName <$> parent
+resolvedSymbolParent :: ResolvedSymbol -> Maybe SymbolName
+resolvedSymbolParent (ResolvedSymbol (Pos _ (TagVal _ _ parent))) = SymbolName <$> parent
 
-symbolPosition :: Symbol -> SrcPos
-symbolPosition (Symbol (Pos pos _)) = pos
+resolvedSymbolPosition :: ResolvedSymbol -> SrcPos
+resolvedSymbolPosition (ResolvedSymbol (Pos pos _)) = pos
 
 data Module = Module
   { -- | All imports of a given module, including qualified ones.
@@ -217,14 +217,14 @@ data Module = Module
     -- may be used for several modules.
   , modImportQualifiers :: Map ImportQualifier (NonEmpty ModuleName)
     -- | Exports of a module.
-  , modExports          :: Map SymbolName Symbol
+  , modExports          :: Map SymbolName ResolvedSymbol
     -- | Map for tags that can influence other tags when exporting, e.g.
     -- keys are data types and values are their constructors and fields. Thus
     -- export list construction Foo(..) will export all constructors and fields
     -- for datatype Foo, which is a key in this map.
   , modChildrenMap      :: Map SymbolName [SymbolName]
-    -- | All symbols defined in this module.
-  , modAllSymbols       :: Map SymbolName Symbol
+    -- | All symbols defined in this module. Keys are unqualified.
+  , modAllSymbols       :: Map SymbolName ResolvedSymbol
     -- | Module source code.
   , modSource           :: Text
     -- | File the module was loaded from.

@@ -147,7 +147,7 @@ responseToTerm = \case
       , ListTerm $ toList $ symbolToBERT <$> symbols
       ]
 
-symbolToBERT :: Symbol -> Term
+symbolToBERT :: ResolvedSymbol -> Term
 symbolToBERT sym =
   TupleTerm
     [ BinaryTerm $ UTF8.fromString posFile
@@ -155,6 +155,6 @@ symbolToBERT sym =
     , AtomTerm $ show typ
     ]
   where
-    SrcPos {posFile, posLine} = symbolPosition sym
+    SrcPos{posFile, posLine} = resolvedSymbolPosition sym
     typ :: Type
-    typ = symbolType sym
+    typ = resolvedSymbolType sym

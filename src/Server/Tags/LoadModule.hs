@@ -17,7 +17,7 @@
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE ViewPatterns        #-}
 
-module Server.Tags.LoadModule (retrieveModule) where
+module Server.Tags.LoadModule (loadModule) where
 
 -- import Control.Applicative
 -- import Control.Arrow
@@ -52,15 +52,15 @@ import Server.Tags.Types
 
 -- | Fetch module by it's name from cache or load it. Check modification time
 -- of module files and reload if anything changed
-retrieveModule
+loadModule
   :: forall m. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m)
   => ModuleName -> m [Module]
-retrieveModule _modName =
+loadModule _modName =
   throwError "retrieving module not implemented yet"
   -- logDebug $ "retrieving module " <> show' modName
   -- modules <- gets tssLoadedModules
   -- mods    <- case M.lookup modName modules of
-  --               Nothing   -> loadModule modName
+  --               Nothing   -> loadModule' modName
   --               Just mods ->
   --                 for mods $ \m -> do
   --                   modTime <- liftBase $ getModificationTime $ modFile m
@@ -70,8 +70,8 @@ retrieveModule _modName =
   -- modify (\s -> s { tssLoadedModules = M.insert modName mods $ tssLoadedModules s })
   -- return mods
   -- where
-  --   loadModule :: ModuleName -> m [Module]
-  --   loadModule modName = do
+  --   loadModule' :: ModuleName -> m [Module]
+  --   loadModule' modName = do
   --     srcDirs <- asks tsconfSourceDirectories
   --     logDebug $ "loading module " <> show' modName
   --     let possiblePaths = [ root </> filenamePart <.> ext
@@ -121,7 +121,7 @@ loadModuleFromFile filename = do
                      imports' <- local (\conf ->
                                           let srcDirs' = S.insert (rootFromFileName filename) $ tsconfSourceDirectories conf
                                           in conf { tsconfSourceDirectories = srcDirs' }) $
-                                 mapM (retrieveModule . fst) importedModules
+                                 mapM (loadModule . fst) importedModules
                      let importedModsMap =
                            zipWith (\(modName, qual) modss -> (modName, qual, modss))
                                    importedModules
