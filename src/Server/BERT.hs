@@ -39,8 +39,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy.Encoding as TLE
 import Network.Socket (PortNumber)
-import Text.PrettyPrint.Leijen.Text (Doc)
-import qualified Text.PrettyPrint.Leijen.Text as PP
 import Text.PrettyPrint.Leijen.Text.Utils
 
 import Data.BERT
@@ -60,9 +58,9 @@ defaultPort = 10000
 decodeUtf8 :: (MonadError Doc m) => Doc -> UTF8.ByteString -> m T.Text
 decodeUtf8 thing = either (throwError . mkErr) pure . TE.decodeUtf8' . C8.toStrict
   where
-    mkErr = (msg PP.<+>) . showDoc
+    mkErr = (msg <+>) . showDoc
     msg :: Doc
-    msg = "Invalid utf8 encoding of" PP.<+> thing <> ":"
+    msg = "Invalid utf8 encoding of" <+> thing <> ":"
 
 -- | Bert transport that can be waiter for.
 data SynchronizedTransport = SynchronizedTransport
@@ -119,7 +117,7 @@ runBertServer port reqHandler = do
           response <- liftIO $ Promise.getPromisedValue =<< reqHandler request
           BERT.Success <$> either throwError (pure . responseToTerm) response
         _                                    ->
-          throwError $ "Expected 2 arguments but got:" PP.<+> showDoc args
+          throwError $ "Expected 2 arguments but got:" <+> showDoc args
     go "tags-server" "find" args =
       case args of
         [BinaryTerm filename, BinaryTerm symbol] -> do
@@ -129,7 +127,7 @@ runBertServer port reqHandler = do
           response <- liftIO $ Promise.getPromisedValue =<< reqHandler request
           BERT.Success <$> either throwError (pure . responseToTerm) response
         _                                    ->
-          throwError $ "Expected 2 arguments but got:" PP.<+> showDoc args
+          throwError $ "Expected 2 arguments but got:" <+> showDoc args
     go "tags-server" _ _ = return BERT.NoSuchFunction
     go _             _ _ = return BERT.NoSuchModule
 

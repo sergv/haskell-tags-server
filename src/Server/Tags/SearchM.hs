@@ -24,6 +24,8 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Text.PrettyPrint.Leijen.Text (Doc)
 
+import Control.Monad.Filesystem (MonadFS)
+import Control.Monad.Logging (MonadLog)
 import Server.Tags.Types
 
 newtype SearchT m a = SearchM (ExceptT Doc (StateT TagsServerState (ReaderT TagsServerConf m)) a)
@@ -34,6 +36,8 @@ newtype SearchT m a = SearchM (ExceptT Doc (StateT TagsServerState (ReaderT Tags
     , MonadState TagsServerState
     , MonadReader TagsServerConf
     , MonadError Doc
+    , MonadLog
+    , MonadFS
     )
 
 runSearchT :: TagsServerConf -> TagsServerState -> SearchT m a -> m (Either Doc a, TagsServerState)

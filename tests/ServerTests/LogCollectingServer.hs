@@ -19,6 +19,7 @@
 module ServerTests.LogCollectingServer
   ( LogCollectingServer
   , mkLogCollectingServer
+  , stopLogCollectingServer
   , waitUntilStart
   , getLogs
   ) where
@@ -32,10 +33,11 @@ import Data.Foldable (toList)
 import Network.Socket (PortNumber)
 import Text.PrettyPrint.Leijen.Text (Doc)
 
+import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging
 import Control.Monad.Logging.Simple
-import Server.Tags
 import Server.BERT
+import Server.Tags
 
 data LogCollectingServer = LogCollectingServer
   { lcsLogs       :: MVar [Doc]
@@ -44,7 +46,7 @@ data LogCollectingServer = LogCollectingServer
   }
 
 mkLogCollectingServer
-  :: (MonadBaseControl IO m, MonadError Doc m, MonadCatch m)
+  :: (MonadBaseControl IO m, MonadError Doc m, MonadCatch m, MonadFS m)
   => TagsServerConf -> PortNumber -> m LogCollectingServer
 mkLogCollectingServer conf port = do
   logOutputVar <- liftBase $ newMVar mempty
@@ -57,6 +59,11 @@ mkLogCollectingServer conf port = do
     , lcsTagsServer = tagsServer
     , lcsBertServer = bertServer
     }
+
+stopLogCollectingServer :: (MonadBase IO m) => LogCollectingServer -> m ()
+stopLogCollectingServer LogCollectingServer{lcsTagsServer, lcsBertServer} = do
+  stopBertServer lcsBertServer
+  stopTagsServer lcsTagsServer
 
 -- | Block current thread until server will be started and will listen on
 -- its port.

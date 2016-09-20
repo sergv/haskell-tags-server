@@ -33,7 +33,6 @@ module Control.Monad.Logging.Simple
 import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.Except
-import Control.Monad.Logging
 import Control.Monad.Reader
 import Control.Monad.Trans.Control
 import Data.Coerce
@@ -43,6 +42,8 @@ import System.IO
 import Text.PrettyPrint.Leijen.Text (Doc)
 import Text.PrettyPrint.Leijen.Text.Utils
 
+import Control.Monad.Logging
+import Control.Monad.Filesystem
 
 data SimpleLoggerCfg m = SimpleLoggerCfg
   { logSink     :: Doc -> m ()
@@ -58,6 +59,7 @@ newtype SimpleLoggerT m a = SimpleLoggerT (ReaderT (SimpleLoggerCfg m) m a)
     , MonadError e
     , MonadThrow
     , MonadCatch
+    , MonadFS
     )
 
 instance MonadTrans SimpleLoggerT where

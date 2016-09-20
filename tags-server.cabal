@@ -48,10 +48,12 @@ library
     utf8-string >=0.3,
     wl-pprint-text >= 1.1.0.4
   exposed-modules:
+    Control.Monad.Filesystem
     Control.Monad.Logging
     Control.Monad.Logging.Simple
     Data.CompiledRegex
     Data.Condition
+    Data.KeyMap
     Data.Promise
     Server.BERT
     Server.Tags

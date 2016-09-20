@@ -27,6 +27,7 @@ import Control.Monad.Except
 import qualified Data.Text.Lazy as TL
 import Text.PrettyPrint.Leijen.Text (Doc)
 import qualified Text.PrettyPrint.Leijen.Text as PP
+import Text.PrettyPrint.Leijen.Text.Utils ((<+>))
 import Text.Regex.TDFA
 
 -- | Wrapper around Regex that provides dummy Show, Eq and Ord instances
@@ -48,7 +49,7 @@ instance Ord CompiledRegex where
 compileRegex :: (MonadError Doc m) => Bool -> String -> m CompiledRegex
 compileRegex captureGroups src =
   case makeRegexOptsM compOpt execOpt src of
-    Left err -> throwError $ "Invalid regexp. Error:" PP.<+> PP.text (TL.pack err)
+    Left err -> throwError $ "Invalid regexp. Error:" <+> PP.text (TL.pack err)
     Right re -> pure CompiledRegex
       { source = src
       , regex  = re

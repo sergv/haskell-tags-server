@@ -15,6 +15,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE TypeFamilies               #-}
 
 module Server.Tags.Types
   ( -- * API types
@@ -48,13 +49,18 @@ module Server.Tags.Types
   , resolvedSymbolPosition
   , mkSymbolName
   , Module(..)
-  , ModuleImport(..)
+  , ModuleHeader(..)
+  , ImportSpec(..)
   , importBringsUnqualifiedNames
   , importBringQualifiedNames
-  , Qualification(..)
+  , ImpotQualification(..)
   , getQualifier
   , ImportList(..)
-  , ImportedName(..)
+  , ModuleExports(..)
+  , ExportSpec(..)
+  , EntryWithChildren(..)
+  , ChildrenExportSpec(..)
+  , isChildExported
   ) where
 
 import Control.Monad
@@ -72,12 +78,13 @@ import qualified Data.Text.Lazy as TL
 import Data.Time.Clock (UTCTime(..))
 import System.Directory
 import System.FilePath.Find (FileType(Directory), find, fileType, (==?), always)
-import Text.PrettyPrint.Leijen.Text (Pretty(..), Doc)
 import qualified Text.PrettyPrint.Leijen.Text as PP
+import Text.PrettyPrint.Leijen.Text.Utils
 
 import FastTags (Pos(..), TagVal(..), Type(..), SrcPos)
 
 import Data.CompiledRegex
+import Data.KeyMap (KeyMap, HasKey(..))
 import Data.Promise (Promise)
 
 -- | Types of user requests that can be handled.
@@ -133,7 +140,8 @@ addRecursiveRootsToConf dirTrees conf = liftBase $ do
 
 -- | Server state that may change while processing request.
 data TagsServerState = TagsServerState
-  { tssLoadedModules :: Map ModuleName [Module]
+  { -- | Single module name can refer to multiple modules.
+    tssLoadedModules :: Map ModuleName (NonEmpty Module)
   } deriving (Show, Eq, Ord)
 
 emptyTagsServerState :: TagsServerState
@@ -209,21 +217,18 @@ resolvedSymbolPosition :: ResolvedSymbol -> SrcPos
 resolvedSymbolPosition (ResolvedSymbol (Pos pos _)) = pos
 
 data Module = Module
-  { -- | All imports of a given module, including qualified ones.
-    -- NB same module name may be present several times with different qualifications
-    -- because it may be imported several times.
-    modImports          :: [ModuleImport]
-    -- | Mapping from qualifiers to original module names. Single qualifier
-    -- may be used for several modules.
-  , modImportQualifiers :: Map ImportQualifier (NonEmpty ModuleName)
-    -- | Exports of a module.
-  , modExports          :: Map SymbolName ResolvedSymbol
-    -- | Map for tags that can influence other tags when exporting, e.g.
-    -- keys are data types and values are their constructors and fields. Thus
-    -- export list construction Foo(..) will export all constructors and fields
-    -- for datatype Foo, which is a key in this map.
-  , modChildrenMap      :: Map SymbolName [SymbolName]
-    -- | All symbols defined in this module. Keys are unqualified.
+  { modHeader           :: ModuleHeader
+    -- -- | Map for tags that can influence other tags when exporting, e.g.
+    -- -- keys are data types and values are their constructors and fields. Thus
+    -- -- export list construction Foo(..) will export all constructors and fields
+    -- -- for datatype Foo, and Foo will be a key in this map.
+  -- , modChildrenMap      :: Map SymbolName (NonEmpty SymbolName)
+
+    -- | Map from children entities to parents containing them. E.g.
+    -- constructors are mapped to their corresponding datatypes, typeclass
+    -- members - to typeclass names, etc.
+  , modParentMap        :: Map SymbolName SymbolName
+    -- | All symbols defined in this module. Keys are unqualified names.
   , modAllSymbols       :: Map SymbolName ResolvedSymbol
     -- | Module source code.
   , modSource           :: Text
@@ -233,29 +238,50 @@ data Module = Module
   , modLastModified     :: UTCTime
   } deriving (Show, Eq, Ord)
 
--- | Information about import statement
-data ModuleImport = ModuleImport
-  { -- | Name of imported module
-    miImportedName  :: ModuleName
-  , miQualification :: Qualification
-  , miImportList    :: Maybe ImportList
+instance Pretty Module where
+  pretty mod =
+    ppDict "Module"
+      [ "Name"          :-> pretty (mhModName (modHeader mod))
+      , "File"          :-> pretty (modFile mod)
+      , "Last modified" :-> showDoc (modLastModified mod)
+      ]
+
+data ModuleHeader = ModuleHeader
+  { mhModName          :: ModuleName
+    -- | All imports of a given module, including qualified ones.
+    -- NB same module name may be present several times with different qualifications
+    -- because it may be imported several times.
+  , mhImports          :: [ImportSpec]
+    -- | Mapping from qualifiers to original module names. Single qualifier
+    -- may be used for several modules.
+  , mhImportQualifiers :: Map ImportQualifier (NonEmpty ModuleName)
+    -- | Exports of a module.
+  , mhExports          :: ModuleExports
   } deriving (Show, Eq, Ord)
 
-importBringsUnqualifiedNames :: ModuleImport -> Bool
-importBringsUnqualifiedNames ModuleImport{miQualification} =
-  case miQualification of
+-- | Information about import statement
+data ImportSpec = ImportSpec
+  { -- | Name of imported module
+    ispecModuleName    :: ModuleName
+  , ispecQualification :: ImpotQualification
+  , ispecImportList    :: Maybe ImportList
+  } deriving (Show, Eq, Ord)
+
+importBringsUnqualifiedNames :: ImportSpec -> Bool
+importBringsUnqualifiedNames ImportSpec{ispecQualification} =
+  case ispecQualification of
     Qualified _                   -> False
     Unqualified                   -> True
     BothQualifiedAndUnqualified _ -> True
 
-importBringQualifiedNames :: ModuleImport -> Bool
-importBringQualifiedNames ModuleImport{miQualification} =
-  case miQualification of
+importBringQualifiedNames :: ImportSpec -> Bool
+importBringQualifiedNames ImportSpec{ispecQualification} =
+  case ispecQualification of
     Qualified _                   -> True
     Unqualified                   -> False
     BothQualifiedAndUnqualified _ -> True
 
-data Qualification =
+data ImpotQualification =
     -- | Qualified import, e.g.
     --
     -- import qualified X as Y
@@ -272,7 +298,7 @@ data Qualification =
   | BothQualifiedAndUnqualified ImportQualifier
   deriving (Show, Eq, Ord)
 
-getQualifier :: Qualification -> Maybe ImportQualifier
+getQualifier :: ImpotQualification -> Maybe ImportQualifier
 getQualifier (Qualified q)                   = Just q
 getQualifier Unqualified                     = Nothing
 getQualifier (BothQualifiedAndUnqualified q) = Just q
@@ -281,21 +307,42 @@ getQualifier (BothQualifiedAndUnqualified q) = Just q
 data ImportList =
     -- | Explicit import list of an import statement, e.g.
     --
-    -- import Foo (x, y, z)
+    -- import Foo (x, y, z(Baz))
     -- import Bar ()
-    Imported [ImportedName]
+    Imported [EntryWithChildren]
     -- | Hiding import list
     --
-    -- import Foo hiding (x, y, z)
-  | Hidden [ImportedName]
+    -- import Foo hiding (x, y(Bar), z)
+    -- import Foo hiding ()
+  | Hidden [EntryWithChildren]
   deriving (Show, Eq, Ord)
 
--- | Single entity from import/hiding list.
-data ImportedName =
-    -- | Vanilla import entity, e.g. x, Foo
-    ImportSingleEntity SymbolName
-    -- | Import with explicit list of children, e.g. Foo(Bar, Baz), Quux(foo, bar)
-  | ImportWithSpecifilChildren SymbolName [SymbolName]
-    -- | Wildcard import, e.g. Foo(..)
-  | ImportWithAllChildren SymbolName
+data ModuleExports = ModuleExports
+  { -- Toplevel names exported from this particular module.
+    meExportedEntries :: KeyMap EntryWithChildren
+  , meReexports       :: [ModuleName]
+  -- , meAllExportedNames :: Set SymbolName
+  } deriving (Show, Eq, Ord)
+
+data ExportSpec =
+    ExportSingleEntry EntryWithChildren
+  | ExportModule ModuleName
   deriving (Show, Eq, Ord)
+
+data EntryWithChildren = EntryWithChildren SymbolName (Maybe ChildrenExportSpec)
+  deriving (Show, Eq, Ord)
+
+instance HasKey EntryWithChildren where
+  type Key EntryWithChildren = SymbolName
+  getKey (EntryWithChildren name _) = name
+
+data ChildrenExportSpec =
+    -- | Wildcard import/export, e.g. Foo(..)
+    ExportAllChidlren
+    -- | Import/export with explicit list of children, e.g. Foo(Bar, Baz), Quux(foo, bar)
+  | ExportSpecificChildren (Set SymbolName)
+  deriving (Show, Eq, Ord)
+
+isChildExported :: SymbolName -> ChildrenExportSpec -> Bool
+isChildExported _    ExportAllChidlren                 = True
+isChildExported name (ExportSpecificChildren exported) = S.member name exported

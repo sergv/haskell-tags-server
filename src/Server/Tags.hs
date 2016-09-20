@@ -43,6 +43,7 @@ import Text.PrettyPrint.Leijen.Text (Doc)
 import Data.Promise (Promise)
 import qualified Data.Promise as Promise
 
+import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging
 import Server.Tags.Search
 import Server.Tags.SearchM
@@ -66,7 +67,7 @@ waitForTagsServerFinish = liftBase . readMVar . tsFinishState
 -- | Start new tags server thread that will serve requests supplied via returned
 -- RequestHandler.
 startTagsServer
-  :: forall m. (MonadBase IO m, MonadBaseControl IO m, MonadCatch m, MonadError Doc m, MonadLog m)
+  :: forall m. (MonadBase IO m, MonadBaseControl IO m, MonadCatch m, MonadError Doc m, MonadLog m, MonadFS m)
   => TagsServerConf
   -> TagsServerState
   -> m TagsServer

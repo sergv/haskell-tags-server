@@ -21,7 +21,6 @@ import Control.Exception
 import Control.Monad
 import Control.Monad.Except
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
-import Data.Monoid
 import Data.Set (Set)
 import qualified Data.Set as S
 import System.Directory
@@ -87,7 +86,7 @@ data TestData =
       )
       BertResponse    -- ^ Expected response
   | GroupTest
-      String     -- ^ name
+      String     -- ^ Name
       [TestData] -- ^ Children tests
 
 testData :: TestData
@@ -97,306 +96,354 @@ testData = GroupTest "server tests"
       "0000single_module"
       ("foo", "SingleModule.hs")
       (Known "SingleModule.hs" 16 "Function")
-  -- , GroupTest "imports"
-  --     [ GroupTest "vanilla"
-  --         [ AtomicTest name sym "0001module_with_imports" "ModuleWithImports.hs" res
-  --         | (name, sym, res) <-
-  --           [ ("wildcard import 1"
-  --             , "foo"
-  --             , Known "Imported1.hs" 16 "Function"
-  --             )
-  --           , ("wildcard import 2"
-  --             , "bar"
-  --             , Known "Imported1.hs" 19 "Function"
-  --             )
-  --           , ( "local def in presence of wildcard import"
-  --             , "baz"
-  --             , Known "ModuleWithImports.hs" 19 "Function"
-  --             )
-  --           , ( "import list - imported name"
-  --             , "foo2"
-  --             , Known "Imported2.hs" 16 "Function"
-  --             )
-  --           -- import lists are not implemented yet
-  --           -- , ( "import list - not imported name"
-  --           --   , "bar2"
-  --           --   , NotFound
-  --           --   )
-  --           ]
-  --         ]
-  --     -- test extraction and subsequent parsing of multiline import list
-  --     , GroupTest "multiline import list"
-  --         [ AtomicTest name sym "0001module_with_imports" "ModuleWithMultilineImportList.hs" res
-  --         | (name, sym, res) <-
-  --           [ ("import 1"
-  --             , "foo"
-  --             , Known "Imported1.hs" 16 "Function"
-  --             )
-  --           , ("import 2"
-  --             , "bar"
-  --             , Known "Imported1.hs" 19 "Function"
-  --             )
-  --           , ( "local def in presence of wildcard import"
-  --             , "baz"
-  --             , Known "ModuleWithMultilineImportList.hs" 26 "Function"
-  --             )
-  --           , ( "import 3"
-  --             , "foo2"
-  --             , Known "Imported2.hs" 16 "Function"
-  --             )
-  --           , ( "import 4"
-  --             , "bar2"
-  --             , Known "Imported2.hs" 19 "Function"
-  --             )
-  --           ]
-  --         ]
-  --     , GroupTest "qualified import with alias"
-  --         [ AtomicTest name sym "0001module_with_imports" "ModuleWithQualifiedImport.hs" res
-  --         | (name, sym, res) <-
-  --           [ ("Imp.foo"
-  --             , "Imp.foo"
-  --             , Known "Imported1.hs" 16 "Function"
-  --             )
-  --           , ("Imp.bar"
-  --             , "Imp.bar"
-  --             , Known "Imported1.hs" 19 "Function"
-  --             )
-  --           , ("foo - unqualified query"
-  --             , "foo"
-  --             , NotFound
-  --             )
-  --           , ("bar - unqualified query"
-  --             , "bar"
-  --             , NotFound
-  --             )
-  --           , ( "local def"
-  --             , "baz"
-  --             , Known "ModuleWithQualifiedImport.hs" 18 "Function"
-  --             )
-  --           ]
-  --         ]
-  --     , GroupTest "qualified import without alias"
-  --         [ AtomicTest name sym "0001module_with_imports" "ModuleWithQualifiedImportNoAlias.hs" res
-  --         | (name, sym, res) <-
-  --           [ ("Imported1.foo"
-  --             , "Imported1.foo"
-  --             , Known "Imported1.hs" 16 "Function"
-  --             )
-  --           , ("Imported1.bar"
-  --             , "Imported1.bar"
-  --             , Known "Imported1.hs" 19 "Function"
-  --             )
-  --           , ("foo - unqualified query"
-  --             , "foo"
-  --             , NotFound
-  --             )
-  --           , ("bar - unqualified query"
-  --             , "bar"
-  --             , NotFound
-  --             )
-  --           , ( "local def"
-  --             , "baz"
-  --             , Known "ModuleWithQualifiedImportNoAlias.hs" 18 "Function"
-  --             )
-  --           ]
-  --         ]
-  --     -- sophisticated import lists are not supported yet
-  --     -- , GroupTest "hiding"
-  --     --     [ AtomicTest name sym "0001module_with_imports" "ModuleWithImportsAndHiding.hs" res
-  --     --     | (name, sym, res) <-
-  --     --       [ ("wildcard import 1"
-  --     --         , "foo"
-  --     --         , Known "Imported1.hs" 16 "Function"
-  --     --         )
-  --     --       , ("wildcard import 2"
-  --     --         , "bar"
-  --     --         , Known "Imported1.hs" 19 "Function"
-  --     --         )
-  --     --       , ( "local def in presence of wildcard import"
-  --     --         , "baz"
-  --     --         , Known "ModuleWithImportsAndHiding.hs" 19 "Function"
-  --     --         )
-  --     --       , ( "import list - not hidden name"
-  --     --         , "foo2"
-  --     --         , Known "Imported2.hs" 16 "Function"
-  --     --         )
-  --     --       , ( "import list - hidden name"
-  --     --         , "bar2"
-  --     --         , NotFound
-  --     --         )
-  --     --       ]
-  --     --     ]
-  --     -- , GroupTest "empty import list" $
-  --     --     [ AtomicTest name sym "0001module_with_imports" "ModuleWithEmptyImportList.hs" res
-  --     --     | (name, sym, res) <-
-  --     --       [ ("wildcard import 1"
-  --     --         , "foo"
-  --     --         , NotFound
-  --     --         )
-  --     --       , ("wildcard import 2"
-  --     --         , "bar"
-  --     --         , NotFound
-  --     --         )
-  --     --       , ( "local def in presence of wildcard import"
-  --     --         , "baz"
-  --     --         , Known "ModuleWithEmptyImportList.hs" 19 "Function"
-  --     --         )
-  --     --       , ( "import list - imported name"
-  --     --         , "foo2"
-  --     --         , Known "Imported2.hs" 16 "Function"
-  --     --         )
-  --     --       , ( "import list - not imported name"
-  --     --         , "bar2"
-  --     --         , NotFound
-  --     --         )
-  --     --       ]
-  --     --     ]
-  --     ]
-  -- , GroupTest "export list"
-  --     [ GroupTest "vanilla export list"
-  --         [ AtomicTest name sym "0002export_lists" "ModuleWithImportsThatHaveExportsList.hs" res
-  --         | (name, sym, res) <-
-  --           [ ( "import module with export list"
-  --             , "foo"
-  --             , Known "ModuleWithExportList.hs" 16 "Function"
-  --             )
-  --           , ( "import module with export list #2"
-  --             , "bar"
-  --             , Known "ModuleWithExportList.hs" 19 "Function"
-  --             )
-  --           , ( "import module with export list #3"
-  --             , "baz"
-  --             , NotFound
-  --             )
-  --           , ( "import module with multiline export list"
-  --             , "foo2"
-  --             , Known "ModuleWithMultilineExportList.hs" 20 "Function"
-  --             )
-  --           , ( "import module with multiline export list #2"
-  --             , "bar2"
-  --             , Known "ModuleWithMultilineExportList.hs" 23 "Function"
-  --             )
-  --           , ( "import module with multiline export list #3"
-  --             , "baz2"
-  --             , NotFound
-  --             )
-  --           ]
-  --         ]
-  --     , GroupTest "wildcard export list"
-  --         [ AtomicTest name sym "0002export_lists" "ModuleWithImportsThatHaveExportsList.hs" res
-  --         | (name, sym, res) <-
-  --           [ ( "import exported name"
-  --             , "Foo"
-  --             , Known "ModuleWithWildcardExport.hs" 19 "Type"
-  --             )
-  --           , ( "import wildcard-exported name #2"
-  --             , "Bar"
-  --             , Known "ModuleWithWildcardExport.hs" 19 "Constructor"
-  --             )
-  --           , ( "import wildcard-exported name #3"
-  --             , "Baz"
-  --             , Known "ModuleWithWildcardExport.hs" 20 "Constructor"
-  --             )
-  --           , ( "import wildcard-exported name #4"
-  --             , "getBar"
-  --             , Known "ModuleWithWildcardExport.hs" 19 "Function"
-  --             )
-  --           , ( "import wildcard-exported name #5"
-  --             , "getBaz"
-  --             , Known "ModuleWithWildcardExport.hs" 20 "Function"
-  --             )
-  --           ]
-  --         ]
-  --     , GroupTest "explicit export list"
-  --         [ AtomicTest name sym "0002export_lists" "ModuleWithImportsThatHaveExportsList.hs" res
-  --         | (name, sym, res) <-
-  --           [ ( "import exported name"
-  --             , "Foo2"
-  --             , Known "ModuleWithExplicitExport.hs" 19 "Type"
-  --             )
-  --           , ( "import wildcard-exported name #2"
-  --             , "Bar2"
-  --             , Known "ModuleWithExplicitExport.hs" 19 "Constructor"
-  --             )
-  --           , ( "import wildcard-exported name #3"
-  --             , "Baz2"
-  --             , NotFound
-  --             )
-  --           , ( "import wildcard-exported name #4"
-  --             , "getBar2"
-  --             , Known "ModuleWithExplicitExport.hs" 19 "Function"
-  --             )
-  --           , ( "import wildcard-exported name #5"
-  --             , "getBaz2"
-  --             , NotFound
-  --             )
-  --           ]
-  --         ]
-  --     , GroupTest "reexport"
-  --         [ AtomicTest name sym "0002export_lists" "ModuleWithImportsThatHaveReexports.hs" res
-  --         | (name, sym, res) <-
-  --           [ ( "import non-exported name"
-  --             , "baz"
-  --             , NotFound
-  --             )
-  --           , ( "import re-exported name without qualification"
-  --             , "foo"
-  --             , Known "ModuleWithExportList.hs" 16 "Function"
-  --             )
-  --           , ( "import re-exported name without qualification #2"
-  --             , "bar"
-  --             , Known "ModuleWithExportList.hs" 19 "Function"
-  --             )
-  --           , ( "import re-exported name without qualification #3"
-  --             , "foo2"
-  --             , Known "ModuleWithMultilineExportList.hs" 20 "Function"
-  --             )
-  --           , ( "import re-exported name with qualification"
-  --             , "bar2"
-  --             , Known "ModuleWithMultilineExportList.hs" 23 "Function"
-  --             )
-  --           ]
-  --         ]
-  --     , GroupTest "module reexport"
-  --         [ AtomicTest name sym "0002export_lists" "ModuleWithImportsThatHaveModuleReexports.hs" res
-  --         | (name, sym, res) <-
-  --           [ ( "import non-exported & non-reexported name"
-  --             , "baz"
-  --             , NotFound
-  --             )
-  --           , ( "name imported through reexporting module"
-  --             , "foo"
-  --             , Known "ModuleWithExportList.hs" 16 "Function"
-  --             )
-  --           , ( "name imported through reexporting module #2"
-  --             , "bar"
-  --             , Known "ModuleWithExportList.hs" 19 "Function"
-  --             )
-  --           , ( "name imported through module reexporting with a qualifier"
-  --             , "foo2"
-  --             , NotFound
-  --             )
-  --           , ( "name imported through module reexporting with a qualifier #2"
-  --             , "bar2"
-  --             , NotFound
-  --             )
-  --           ]
-  --         ]
-  --     ]
-  -- , GroupTest "module header detection"
-  --     [ AtomicTest name sym "0003module_header_detection" "ModuleWithCommentsResemblingModuleHeader.hs" res
-  --     | (name, sym, res) <-
-  --       [ ( "name defined locally"
-  --         , "foo"
-  --         , Known "ModuleWithCommentsResemblingModuleHeader.hs" 11 "Function"
-  --         )
-  --       , ( "imported name"
-  --         , "bar"
-  --         , Known "EmptyModule.hs" 3 "Function"
-  --         )
-  --       ]
-  --     ]
+  , GroupTest "imports"
+      [ mkTests "vanilla"
+          "0001module_with_imports"
+          "ModuleWithImports.hs"
+          [ ("wildcard import 1"
+            , "foo"
+            , Known "Imported1.hs" 16 "Function"
+            )
+          , ("wildcard import 2"
+            , "bar"
+            , Known "Imported1.hs" 19 "Function"
+            )
+          , ( "local def in presence of wildcard import"
+            , "baz"
+            , Known "ModuleWithImports.hs" 19 "Function"
+            )
+          , ( "import list - imported name"
+            , "foo2"
+            , Known "Imported2.hs" 16 "Function"
+            )
+          -- TODO: import lists are not implemented yet
+          , ( "import list - not imported name"
+            , "bar2"
+            , NotFound
+            )
+          ]
+      -- test extraction and subsequent parsing of multiline import list
+      , mkTests
+          "multiline import list"
+          "0001module_with_imports"
+          "ModuleWithMultilineImportList.hs"
+          [ ("import 1"
+            , "foo"
+            , Known "Imported1.hs" 16 "Function"
+            )
+          , ("import 2"
+            , "bar"
+            , Known "Imported1.hs" 19 "Function"
+            )
+          , ( "local def in presence of wildcard import"
+            , "baz"
+            , Known "ModuleWithMultilineImportList.hs" 26 "Function"
+            )
+          , ( "import 3"
+            , "foo2"
+            , Known "Imported2.hs" 16 "Function"
+            )
+          , ( "import 4"
+            , "bar2"
+            , Known "Imported2.hs" 19 "Function"
+            )
+          ]
+      , mkTests
+          "qualified import with alias"
+          "0001module_with_imports"
+          "ModuleWithQualifiedImport.hs"
+          [ ("Imp.foo"
+            , "Imp.foo"
+            , Known "Imported1.hs" 16 "Function"
+            )
+          , ("Imp.bar"
+            , "Imp.bar"
+            , Known "Imported1.hs" 19 "Function"
+            )
+          , ("foo - unqualified query"
+            , "foo"
+            , NotFound
+            )
+          , ("bar - unqualified query"
+            , "bar"
+            , NotFound
+            )
+          , ( "local def"
+            , "baz"
+            , Known "ModuleWithQualifiedImport.hs" 18 "Function"
+            )
+          ]
+      , mkTests
+          "qualified import without alias"
+          "0001module_with_imports"
+          "ModuleWithQualifiedImportNoAlias.hs"
+          [ ("Imported1.foo"
+            , "Imported1.foo"
+            , Known "Imported1.hs" 16 "Function"
+            )
+          , ("Imported1.bar"
+            , "Imported1.bar"
+            , Known "Imported1.hs" 19 "Function"
+            )
+          , ("foo - unqualified query"
+            , "foo"
+            , NotFound
+            )
+          , ("bar - unqualified query"
+            , "bar"
+            , NotFound
+            )
+          , ( "local def"
+            , "baz"
+            , Known "ModuleWithQualifiedImportNoAlias.hs" 18 "Function"
+            )
+          ]
+      -- TODO: sophisticated import lists are not supported yet
+      , mkTests
+          "hiding"
+          "0001module_with_imports"
+          "ModuleWithImportsAndHiding.hs"
+          [ ("wildcard import 1"
+            , "foo"
+            , Known "Imported1.hs" 16 "Function"
+            )
+          , ("wildcard import 2"
+            , "bar"
+            , Known "Imported1.hs" 19 "Function"
+            )
+          , ( "local def in presence of wildcard import"
+            , "baz"
+            , Known "ModuleWithImportsAndHiding.hs" 19 "Function"
+            )
+          , ( "import list - not hidden name"
+            , "foo2"
+            , Known "Imported2.hs" 16 "Function"
+            )
+          , ( "import list - hidden name"
+            , "bar2"
+            , NotFound
+            )
+          ]
+      , mkTests
+          "empty import list"
+          "0001module_with_imports"
+          "ModuleWithEmptyImportList.hs"
+          [ ("wildcard import 1"
+            , "foo"
+            , NotFound
+            )
+          , ("wildcard import 2"
+            , "bar"
+            , NotFound
+            )
+          , ( "local def in presence of wildcard import"
+            , "baz"
+            , Known "ModuleWithEmptyImportList.hs" 19 "Function"
+            )
+          , ( "import list - imported name"
+            , "foo2"
+            , Known "Imported2.hs" 16 "Function"
+            )
+          , ( "import list - not imported name"
+            , "bar2"
+            , NotFound
+            )
+          ]
+      ]
+  , GroupTest "export list"
+      [ mkTests
+          "vanilla export list"
+          "0002export_lists"
+          "ModuleWithImportsThatHaveExportsList.hs"
+          [ ( "import module with export list"
+            , "foo"
+            , Known "ModuleWithExportList.hs" 16 "Function"
+            )
+          , ( "import module with export list #2"
+            , "bar"
+            , Known "ModuleWithExportList.hs" 19 "Function"
+            )
+          , ( "import module with export list #3"
+            , "baz"
+            , NotFound
+            )
+          , ( "import module with multiline export list"
+            , "foo2"
+            , Known "ModuleWithMultilineExportList.hs" 20 "Function"
+            )
+          , ( "import module with multiline export list #2"
+            , "bar2"
+            , Known "ModuleWithMultilineExportList.hs" 23 "Function"
+            )
+          , ( "import module with multiline export list #3"
+            , "baz2"
+            , NotFound
+            )
+          ]
+      , mkTests
+          "wildcard export list"
+          "0002export_lists"
+          "ModuleWithImportsThatHaveExportsList.hs"
+          [ ( "import exported name"
+            , "Foo"
+            , Known "ModuleWithWildcardExport.hs" 19 "Type"
+            )
+          , ( "import wildcard-exported name #2"
+            , "Bar"
+            , Known "ModuleWithWildcardExport.hs" 19 "Constructor"
+            )
+          , ( "import wildcard-exported name #3"
+            , "Baz"
+            , Known "ModuleWithWildcardExport.hs" 20 "Constructor"
+            )
+          , ( "import wildcard-exported name #4"
+            , "getBar"
+            , Known "ModuleWithWildcardExport.hs" 19 "Function"
+            )
+          , ( "import wildcard-exported name #5"
+            , "getBaz"
+            , Known "ModuleWithWildcardExport.hs" 20 "Function"
+            )
+          ]
+      , mkTests
+          "explicit export list"
+          "0002export_lists"
+          "ModuleWithImportsThatHaveExportsList.hs"
+          [ ( "import exported name"
+            , "Foo2"
+            , Known "ModuleWithExplicitExport.hs" 19 "Type"
+            )
+          , ( "import wildcard-exported name #2"
+            , "Bar2"
+            , Known "ModuleWithExplicitExport.hs" 19 "Constructor"
+            )
+          , ( "import wildcard-exported name #3"
+            , "Baz2"
+            , NotFound
+            )
+          , ( "import wildcard-exported name #4"
+            , "getBar2"
+            , Known "ModuleWithExplicitExport.hs" 19 "Function"
+            )
+          , ( "import wildcard-exported name #5"
+            , "getBaz2"
+            , NotFound
+            )
+          ]
+      , mkTests
+          "reexport"
+          "0002export_lists"
+          "ModuleWithImportsThatHaveReexports.hs"
+          [ ( "import non-exported name"
+            , "baz"
+            , NotFound
+            )
+          , ( "import re-exported name without qualification"
+            , "foo"
+            , Known "ModuleWithExportList.hs" 16 "Function"
+            )
+          , ( "import re-exported name without qualification #2"
+            , "bar"
+            , Known "ModuleWithExportList.hs" 19 "Function"
+            )
+          , ( "import re-exported name without qualification #3"
+            , "foo2"
+            , Known "ModuleWithMultilineExportList.hs" 20 "Function"
+            )
+          , ( "import re-exported name with qualification"
+            , "bar2"
+            , Known "ModuleWithMultilineExportList.hs" 23 "Function"
+            )
+          ]
+      , mkTests
+          "module reexport"
+          "0002export_lists"
+          "ModuleWithImportsThatHaveModuleReexports.hs"
+          [ ( "import non-exported & non-reexported name"
+            , "baz"
+            , NotFound
+            )
+          , ( "name imported through reexporting module"
+            , "foo"
+            , Known "ModuleWithExportList.hs" 16 "Function"
+            )
+          , ( "name imported through reexporting module #2"
+            , "bar"
+            , Known "ModuleWithExportList.hs" 19 "Function"
+            )
+          , ( "name imported through module reexporting with a qualifier"
+            , "foo2"
+            , NotFound
+            )
+          , ( "name imported through module reexporting with a qualifier #2"
+            , "bar2"
+            , NotFound
+            )
+          ]
+      ]
+  , mkTests
+      "module header detection"
+      "0003module_header_detection"
+      "ModuleWithCommentsResemblingModuleHeader.hs"
+      [ ( "name defined locally"
+        , "foo"
+        , Known "ModuleWithCommentsResemblingModuleHeader.hs" 11 "Function"
+        )
+      , ( "imported name"
+        , "bar"
+        , Known "EmptyModule.hs" 3 "Function"
+        )
+      ]
+  , mkTests
+      "typeclass export"
+      "0004typeclass_export_assoociated_types"
+      "MainModule.hs"
+      [ ( "name defined locally"
+        , "foo"
+        , Known "MainModule.hs" 19 "Function"
+        )
+      , ( "typeclass member function"
+        , "wrap"
+        , Known "ModuleWithTypeclass.hs" 25 "Function"
+        )
+      , ( "associated type family"
+        , "TestFam"
+        , Known "ModuleWithTypeclass.hs" 23 "Family"
+        )
+      , ( "imported constructor of associated type"
+        , "IntBox"
+        , Known "ModuleWithTypeclass.hs" 28 "Constructor"
+        )
+      , ( "imported field accessor of associated typeh"
+        , "unIntBox"
+        , Known "ModuleWithTypeclass.hs" 29 "Function"
+        )
+      , ( "associated private type family"
+        , "PrivateFam"
+        , NotFound
+        )
+      , ( "imported constructor of associated type"
+        , "IntBoxPrivate"
+        , NotFound
+        )
+      , ( "imported field accessor of associated type"
+        , "unIntBoxPrivate"
+        , NotFound
+        )
+      ]
   ]
+
+mkTests
+  :: String
+  -> FilePath -- ^ Working directory under testDataDir
+  -> FilePath -- ^ Filepath within the working directory
+  -> [(String, UTF8.ByteString, BertResponse)]
+  -> TestData
+mkTests groupName dir file requests = GroupTest groupName ts
+  where
+    ts = [ AtomicTest name dir (sym, file) response
+         | (name, sym, response) <- requests
+         ]
 
 tests :: TestTree
 tests = makeTest testData
@@ -414,8 +461,10 @@ data ServerConnection =
 instance Transport ServerConnection where
   runSession (ExistingServer tcp) session = runSession tcp session
   runSession (LocalServer _ tcp)  session = runSession tcp session
-  closeConnection (ExistingServer tcp) = closeConnection tcp
-  closeConnection (LocalServer _ tcp)  = closeConnection tcp
+  closeConnection (ExistingServer tcp)   = closeConnection tcp
+  closeConnection (LocalServer serv tcp) = do
+    stopLogCollectingServer serv
+    closeConnection tcp
 
 reportErr :: String -> IO a
 reportErr = throwIO . ErrorCall
@@ -441,7 +490,6 @@ connect sourceDir dirTree =
               "Failed to connect to locally started server\n" ++ show err
             Right conn' ->
               return $ LocalServer serv' conn'
-    -- err e = throwIO $ ErrorCall $ "Failed to connect; is tags-server running?\n" ++ show e
 
     tryConnect :: IO (Either IOException TCP)
     tryConnect =
@@ -465,17 +513,35 @@ mkFindSymbolTest name getConn sym dir filename resp = testCase name $ do
             ExistingServer _   -> return mempty
             LocalServer serv _ -> do
               logs <- getLogs serv
-              pure $ "Logs:" <> PP.indent 2 (PP.vcat logs)
+              pure $ "Logs:" PP.</> PP.indent 2 (PP.vcat logs)
   case r of
     Left err  ->
       assertFailure $ displayDocString $ showDoc err PP.<$> logs
     Right res ->
-      unless (actual == expected) $
-        assertFailure $ displayDocString $ msg PP.<$> showDoc logs
+      if responseType actual == responseType expected
+      then
+        unless (actual == expected) $
+          assertFailure $ displayDocString $ msg PP.<$> showDoc logs
+      else
+        assertFailure $
+          case extractResponseError actual of
+            Nothing  ->
+              displayDocString $ msg PP.<$> logs
+            Just msg ->
+              displayDocString $
+                "Error from server:" PP.<$> PP.nest 2 (docFrombyteString msg) PP.<$> logs
       where
         actual   = relativizeFilepaths res
         expected = responseToTerm resp
         msg      = docFromString $ "expected: " ++ show expected ++ "\n but got: " ++ show actual
+
+responseType :: Term -> Maybe String
+responseType (TupleTerm (AtomTerm x : _)) = Just x
+responseType _                            = Nothing
+
+extractResponseError :: Term -> Maybe UTF8.ByteString
+extractResponseError (TupleTerm [AtomTerm "error", BinaryTerm msg]) = Just msg
+extractResponseError _                                              = Nothing
 
 relativizeFilepaths :: Term -> Term
 relativizeFilepaths term =
