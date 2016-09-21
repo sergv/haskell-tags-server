@@ -38,7 +38,7 @@ import Data.Monoid
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy.Encoding as TLE
-import Network.Socket (PortNumber)
+import Network.Socket
 import Text.PrettyPrint.Leijen.Text.Utils
 
 import Data.BERT
@@ -71,8 +71,13 @@ data SynchronizedTransport = SynchronizedTransport
 instance BERT.Server SynchronizedTransport where
   type ServerTransport SynchronizedTransport = BERT.TCP
   runServer SynchronizedTransport{stTransport, stStartedLock} handle = do
+    let sock = BERT.getTcpListenSocket stTransport
+    listen sock sOMAXCONN
     setCondition stStartedLock
-    BERT.runServer stTransport handle
+    forever $ do
+      (clientsock, _) <- accept sock
+      setSocketOption clientsock NoDelay 1
+      handle $ BERT.TCP clientsock
   cleanup = BERT.cleanup . stTransport
 
 data BertServer = BertServer
@@ -83,6 +88,8 @@ data BertServer = BertServer
 stopBertServer :: (MonadBase IO m) => BertServer -> m ()
 stopBertServer = liftBase . killThread . bsThreadId
 
+-- | After this function returns the server is guaranteed to be ready
+-- to receive new connections.
 waitForBertServerStart :: (MonadBase IO m) => BertServer -> m ()
 waitForBertServerStart = waitForCondition . stStartedLock . bsTransport
 

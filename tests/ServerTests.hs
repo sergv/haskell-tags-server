@@ -17,12 +17,14 @@
 
 module ServerTests (tests) where
 
+import Control.Concurrent
 import Control.Exception
 import Control.Monad
 import Control.Monad.Except
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
 import Data.Set (Set)
 import qualified Data.Set as S
+import Network.Socket (PortNumber)
 import System.Directory
 import System.FilePath
 import Test.Tasty
@@ -33,6 +35,7 @@ import Data.BERT
 import Network.BERT.Client
 import Network.BERT.Transport
 
+import PortPool
 import Server.BERT
 import Server.Tags
 import Text.PrettyPrint.Leijen.Text.Utils
@@ -446,12 +449,16 @@ mkTests groupName dir file requests = GroupTest groupName ts
          ]
 
 tests :: TestTree
-tests = makeTest testData
+tests =
+  withResource
+    (getNumCapabilities >>= \caps -> newPortPool caps (defaultPort + 1))
+    (const (return ()))
+    (\pool -> makeTest pool testData)
   where
-    makeTest :: TestData -> TestTree
-    makeTest (GroupTest name xs) = testGroup name $ map makeTest xs
-    makeTest (AtomicTest name srcDir (sym, filename) expected) =
-      withResource (connect srcDir S.empty) closeConnection $ \getConn ->
+    makeTest :: IO PortPool -> TestData -> TestTree
+    makeTest pool (GroupTest name xs) = testGroup name $ map (makeTest pool) xs
+    makeTest pool (AtomicTest name srcDir (sym, filename) expected) =
+      withResource (connect pool srcDir S.empty) closeConnection $ \getConn ->
         mkFindSymbolTest name getConn sym srcDir filename expected
 
 data ServerConnection =
@@ -469,31 +476,33 @@ instance Transport ServerConnection where
 reportErr :: String -> IO a
 reportErr = throwIO . ErrorCall
 
-connect :: FilePath -> Set FilePath -> IO ServerConnection
-connect sourceDir dirTree =
+connect :: IO PortPool -> FilePath -> Set FilePath -> IO ServerConnection
+connect pool sourceDir dirTree =
   -- Try to connect to server. If attempt succeeds then server is running
   -- and there's no need to run server ourselves.
-  tryConnect >>= either (const startLocalServer) (return . ExistingServer)
+  tryConnect defaultPort >>= either (const startLocalServer) (return . ExistingServer)
   where
     startLocalServer :: IO ServerConnection
     startLocalServer = do
-      conf <- canonicalizeConfPaths =<< addRecursiveRootsToConf dirTree (testsConfig sourceDir)
-      serv <- runExceptT $ mkLogCollectingServer conf defaultPort
-      case serv of
-        Left err -> throwIO $ ErrorCall $
-          "Failed to start local server\n" ++ show err
-        Right serv' -> do
-          waitUntilStart serv'
-          conn <- tryConnect
-          case conn of
-            Left err    -> reportErr $
-              "Failed to connect to locally started server\n" ++ show err
-            Right conn' ->
-              return $ LocalServer serv' conn'
+      pool' <- pool
+      withPort pool' $ \port -> do
+        conf <- canonicalizeConfPaths =<< addRecursiveRootsToConf dirTree (testsConfig sourceDir)
+        serv <- runExceptT $ mkLogCollectingServer conf port
+        case serv of
+          Left err -> throwIO $ ErrorCall $
+            "Failed to start local server\n" ++ show err
+          Right serv' -> do
+            waitUntilStart serv'
+            conn <- tryConnect port
+            case conn of
+              Left err    -> reportErr $
+                "Failed to connect to locally started server\n" ++ show err
+              Right conn' ->
+                return $ LocalServer serv' conn'
 
-    tryConnect :: IO (Either IOException TCP)
-    tryConnect =
-      (Right <$> tcpClient "localhost" defaultPort) `catch` (pure . Left)
+    tryConnect :: PortNumber -> IO (Either IOException TCP)
+    tryConnect port =
+      (Right <$> tcpClient "localhost" port) `catch` (pure . Left)
 
 mkFindSymbolTest
   :: String

@@ -111,6 +111,7 @@ test-suite test-tags-server
   main-is:
     Main.hs
   other-modules:
+    PortPool
     ServerTests
     ServerTests.LogCollectingServer
     Server.Tags.TypesTests
