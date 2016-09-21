@@ -31,6 +31,7 @@ module Text.PrettyPrint.Leijen.Text.Utils
   , (<+>)
   , ppList
   , ppDict
+  , ppMap
   , MapEntry(..)
   , Pretty(..)
   , Doc
@@ -39,6 +40,8 @@ module Text.PrettyPrint.Leijen.Text.Utils
 import Control.Monad.Base
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
 import Data.Foldable (toList)
+import Data.Map (Map)
+import qualified Data.Map as M
 import Data.Monoid
 import qualified Data.Text as T
 import qualified Data.Text.Encoding.Error as TEE
@@ -93,6 +96,9 @@ ppDict header entries =
   where
     entries' = map (\(k :-> v) -> PP.fillBreak maxWidth (PP.text k) :-> v) entries
     maxWidth = fromIntegral $ maximum $ map (\(k :-> _) -> TL.length k) entries
+
+ppMap :: (Pretty a, Pretty b) => Map a b -> Doc
+ppMap = ppList PP.lbrace PP.rbrace . map (uncurry (:->)) . M.toList
 
 infix 0 :->
 

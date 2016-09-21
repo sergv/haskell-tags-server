@@ -81,7 +81,7 @@ import System.FilePath.Find (FileType(Directory), find, fileType, (==?), always)
 import qualified Text.PrettyPrint.Leijen.Text as PP
 import Text.PrettyPrint.Leijen.Text.Utils
 
-import FastTags (Pos(..), TagVal(..), Type(..), SrcPos)
+import FastTags (Pos(..), TagVal(..), Type(..), SrcPos(..), Line(..))
 
 import Data.CompiledRegex
 import Data.KeyMap (KeyMap, HasKey(..))
@@ -201,6 +201,21 @@ isModuleNameConstituentChar c    = isAlphaNum c
 newtype ResolvedSymbol = ResolvedSymbol (Pos TagVal)
   deriving (Show, Eq, Ord)
 
+instance Pretty ResolvedSymbol where
+  pretty sym@(ResolvedSymbol _) =
+    ppDict "ResolvedSymbol"
+      [ "name"     :-> pretty (resolvedSymbolName sym)
+      , "type"     :-> ppType (resolvedSymbolType sym)
+      , "parent"   :-> pretty (resolvedSymbolParent sym)
+      , "position" :-> ppSrcPos (resolvedSymbolPosition sym)
+      ]
+    where
+      ppType :: Type -> Doc
+      ppType = showDoc
+
+      ppSrcPos :: SrcPos -> Doc
+      ppSrcPos (SrcPos file line _) = docFromString file <> ":" <> pretty (unLine line)
+
 mkSymbol :: Pos TagVal -> ResolvedSymbol
 mkSymbol = ResolvedSymbol
 
@@ -244,6 +259,7 @@ instance Pretty Module where
       [ "Name"          :-> pretty (mhModName (modHeader mod))
       , "File"          :-> pretty (modFile mod)
       , "Last modified" :-> showDoc (modLastModified mod)
+      , "Names"         :-> ppMap (modAllSymbols mod)
       ]
 
 data ModuleHeader = ModuleHeader
@@ -323,6 +339,11 @@ data ModuleExports = ModuleExports
   , meReexports       :: [ModuleName]
   -- , meAllExportedNames :: Set SymbolName
   } deriving (Show, Eq, Ord)
+
+instance Monoid ModuleExports where
+  mempty = ModuleExports mempty mempty
+  mappend (ModuleExports x y) (ModuleExports x' y') =
+    ModuleExports (x <> x') (y <> y')
 
 data ExportSpec =
     ExportSingleEntry EntryWithChildren

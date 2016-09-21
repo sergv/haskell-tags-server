@@ -19,7 +19,6 @@
 
 module Server.Tags.Search (findSymbol) where
 
-import Control.Applicative
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
@@ -28,17 +27,11 @@ import Data.Foldable (toList)
 import Data.List
 import qualified Data.Map as M
 import Data.Maybe
-import Data.Monoid
-import Data.Set (Set)
-import qualified Data.Set as S
 import qualified Data.Text as T
 import Data.Traversable (for)
 import System.FilePath
-import Text.PrettyPrint.Leijen.Text (Doc)
-import qualified Text.PrettyPrint.Leijen.Text as PP
 import Text.PrettyPrint.Leijen.Text.Utils
 
-import Data.KeyMap (KeyMap)
 import qualified Data.KeyMap as KM
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging
@@ -94,14 +87,26 @@ lookupInModulesExports modNames name =
     fmap concat $ for mods $ \mod@Module{modHeader, modAllSymbols} -> do
       let exports               = mhExports modHeader
           lookupInCurrentModule =
-            maybe (throwError missingMsg) (pure . (:[])) $ M.lookup name modAllSymbols
-          missingMsg            =
-            "Internal error: exported symbol" <+> pretty name <+> "is missing from module" <+> pretty mod
+            case M.lookup name modAllSymbols of
+              Nothing  ->
+                -- | If name is exported but is not defined in current module
+                -- then it is either defined by template Haskell or preprocessor,
+                -- in which case we're out of luck, or it is just re-exported
+                -- and it it still possible to find it.
+                lookupInModulesExports (map ispecModuleName $ mhImports modHeader) name
+                -- throwError missingMsg
+              Just sym -> pure [sym]
+          -- missingMsg            =
+          --   "Internal error: exported symbol" <+> pretty name <+> "is missing from module" <+> pretty mod
+
       -- NB: each name can be reexported from only one source. Thus, name
       -- cannot be exported by module and at the same time be also present in
       -- some of the reexported modules.
       case KM.lookup name $ meExportedEntries exports of
         Nothing ->
+          -- It is enough to resolve parent only once, because exponting everything
+          -- from a grandparent does not automatically exports children two
+          -- levels deep.
           case resolveParent mod name >>= \name' -> KM.lookup name' $ meExportedEntries exports of
             Just (EntryWithChildren _ (Just children))
               | isChildExported name children -> lookupInCurrentModule

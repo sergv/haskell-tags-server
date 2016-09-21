@@ -39,7 +39,6 @@ import Data.Coerce
 import qualified Data.Text.Lazy.IO as TLIO
 import System.IO
 
-import Text.PrettyPrint.Leijen.Text (Doc)
 import Text.PrettyPrint.Leijen.Text.Utils
 
 import Control.Monad.Logging
