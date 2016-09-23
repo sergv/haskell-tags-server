@@ -399,7 +399,7 @@ testData = GroupTest "server tests"
       ]
   , mkTests
       "typeclass export"
-      "0004typeclass_export_assoociated_types"
+      "0004typeclass_export_associated_types"
       "MainModule.hs"
       [ ( "name defined locally"
         , "foo"
