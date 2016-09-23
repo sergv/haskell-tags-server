@@ -28,6 +28,7 @@ import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging (MonadLog)
 import Server.Tags.Types
 
+-- | Monad for carrying out symbol search  operations.
 newtype SearchT m a = SearchM (ExceptT Doc (StateT TagsServerState (ReaderT TagsServerConf m)) a)
   deriving
     ( Functor
