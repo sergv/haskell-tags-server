@@ -23,6 +23,8 @@ module Data.KeyMap
   , HasKey(..)
   , insert
   , lookup
+  , member
+  , notMember
   ) where
 
 import Data.Coerce
@@ -36,6 +38,9 @@ deriving instance (Ord a, Ord (Key a))   => Ord (KeyMap a)
 deriving instance (Show a, Show (Key a)) => Show (KeyMap a)
 deriving instance (Ord (Key a))          => Monoid (KeyMap a)
 
+instance Foldable KeyMap where
+  foldMap f = foldMap f . unKeyMap
+
 class (Ord (Key a)) => HasKey a where
   type Key a :: *
   getKey :: a -> Key a
@@ -45,3 +50,9 @@ insert x = coerce $ M.insert (getKey x) x
 
 lookup :: (HasKey a) => Key a -> KeyMap a -> Maybe a
 lookup k = M.lookup k . unKeyMap
+
+member :: (HasKey a) => Key a -> KeyMap a -> Bool
+member k = M.member k . unKeyMap
+
+notMember :: (HasKey a) => Key a -> KeyMap a -> Bool
+notMember k = M.notMember k . unKeyMap

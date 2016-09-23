@@ -27,6 +27,7 @@ import Control.Arrow (first)
 import Control.Monad.Except
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Monoid
@@ -80,10 +81,13 @@ pattern PComma     <- Pos _ Comma
 
 analyzeImports
   :: forall m. (MonadError Doc m, MonadLog m)
-  => [ImportSpec]
+  => Map ModuleName (NonEmpty ImportSpec)
   -> Map ImportQualifier (NonEmpty ModuleName)
   -> [Token]
-  -> m ([ImportSpec], Map ImportQualifier (NonEmpty ModuleName), [Token])
+  -> m ( Map ModuleName (NonEmpty ImportSpec)
+       , Map ImportQualifier (NonEmpty ModuleName)
+       , [Token]
+       )
 analyzeImports imports qualifiers ts = case dropNLs ts of
   -- Vanilla imports
   PImport : (d ->                 PQualified : (d -> PName name : (d -> PAs : (d -> PName qualName : rest))))  -> add name (Qualified $ mkQual qualName) rest
@@ -102,15 +106,24 @@ analyzeImports imports qualifiers ts = case dropNLs ts of
     add
       :: Text
       -> ImportQualification
-    d = dropNLs
       -> [Token]
-      -> m ([ImportSpec], Map ImportQualifier (NonEmpty ModuleName), [Token])
+      -> m ( Map ModuleName (NonEmpty ImportSpec)
+           , Map ImportQualifier (NonEmpty ModuleName)
+           , [Token]
+           )
     add name qual toks = do
       (importList, toks') <- analyzeImportList toks
-      analyzeImports (newSpec importList : imports) qualifiers toks'
+      let spec     = newSpec importList
+          upd prev = Just $ case prev of
+                       Nothing    -> spec :| []
+                       Just specs -> NE.cons spec specs
+          impotrs' = M.alter upd modName imports
+      analyzeImports impotrs' qualifiers toks'
       where
+        modName = mkModuleName name
+        newSpec :: Maybe ImportList -> ImportSpec
         newSpec importList = ImportSpec
-          { ispecModuleName    = mkModuleName name
+          { ispecModuleName    = modName
           , ispecQualification = qual
           , ispecImportList    = importList
           }
@@ -127,17 +140,17 @@ analyzeImports imports qualifiers ts = case dropNLs ts of
         _                                     -> pure (Nothing, toks)
       where
         findImportListEntries
-          :: [EntryWithChildren]
+          :: KeyMap EntryWithChildren
           -> [Token]
-          -> m ([EntryWithChildren], [Token])
+          -> m (KeyMap EntryWithChildren, [Token])
         findImportListEntries acc toks =
           case dropNLs toks of
-            []                -> pure (reverse acc, [])
-            PRParen : rest    -> pure (reverse acc, rest)
+            []                -> pure (acc, [])
+            PRParen : rest    -> pure (acc, rest)
             PName name : rest -> do
               (children, rest') <- analyzeChildren "import" $ dropNLs rest
               let newEntry = EntryWithChildren (mkSymbolName name) children
-              findImportListEntries (newEntry : acc) $ dropComma rest'
+              findImportListEntries (KM.insert newEntry acc) $ dropComma rest'
             rest ->
               throwError $ "Unrecognized shape of import list:" <+> pretty (Tokens rest)
 

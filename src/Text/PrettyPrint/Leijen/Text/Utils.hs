@@ -33,6 +33,7 @@ module Text.PrettyPrint.Leijen.Text.Utils
   , ppDict
   , ppListWithHeader
   , ppMap
+  , ppNE
   , MapEntry(..)
   , Pretty(..)
   , Doc
@@ -41,6 +42,7 @@ module Text.PrettyPrint.Leijen.Text.Utils
 import Control.Monad.Base
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
 import Data.Foldable (toList)
+import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Monoid
@@ -105,6 +107,9 @@ ppListWithHeader header entries =
 
 ppMap :: (Pretty a, Pretty b) => Map a b -> Doc
 ppMap = ppList PP.lbrace PP.rbrace . map (uncurry (:->)) . M.toList
+
+ppNE :: (Pretty a) => NonEmpty a -> Doc
+ppNE = ppList "[" "]" . toList
 
 infix 0 :->
 

@@ -61,62 +61,82 @@ findInModule sym mod = do
     -- Unqualified name
     Nothing -> do
       let localSyms       = maybeToList $ M.lookup sym' $ modAllSymbols mod
-          relevantImports = map ispecModuleName
-                          $ filter importBringsUnqualifiedNames
+          relevantImports = -- map ispecModuleName $
+                            filter importBringsUnqualifiedNames
+                          $ foldMap toList
                           $ mhImports header
-      (localSyms ++) <$> lookupInModulesExports relevantImports sym'
+      (localSyms ++) <$> lookupInImportedModules sym' relevantImports
     -- Qualified name
-    Just qualifier' ->
-      case M.lookup qualifier' $ mhImportQualifiers header of
-        Nothing       ->
-          throwError $ "Qualifier" <+> showDoc qualifier' <+> "not listed among module's import qualifiers:" <+> showDoc (mhImportQualifiers header)
-        Just modNames ->
-          lookupInModulesExports (toList modNames) sym'
+    Just qualifier' -> do
+      resolvedSpecs <- resolveQualifier qualifier' header
+      case resolvedSpecs of
+        Nothing     ->
+          throwError $ "Qualifier" <+> showDoc qualifier' <+>
+            "not listed among module's import qualifiers:" <+> showDoc (mhImportQualifiers header)
+        Just specs ->
+          lookupInImportedModules sym' $ toList specs
   where
     header :: ModuleHeader
     header = modHeader mod
 
-lookupInModulesExports
+lookupInImportedModules
   :: forall m. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => [ModuleName]
-  -> SymbolName
+  => SymbolName
+  -> [ImportSpec]
   -> m [ResolvedSymbol]
-lookupInModulesExports modNames name =
-  fmap concat $ for modNames $ \modName -> do
-    mods <- loadModule modName
-    fmap concat $ for mods $ \mod@Module{modHeader, modAllSymbols} -> do
-      let exports               = mhExports modHeader
-          lookupInCurrentModule =
-            case M.lookup name modAllSymbols of
-              Nothing  ->
-                -- | If name is exported but is not defined in current module
-                -- then it is either defined by template Haskell or preprocessor,
-                -- in which case we're out of luck, or it is just re-exported
-                -- and it it still possible to find it.
-                lookupInModulesExports (map ispecModuleName $ mhImports modHeader) name
-                -- throwError missingMsg
-              Just sym -> pure [sym]
-          -- missingMsg            =
-          --   "Internal error: exported symbol" <+> pretty name <+> "is missing from module" <+> pretty mod
+lookupInImportedModules name specs =
+  fmap concat $ for specs $ \ImportSpec{ispecModuleName, ispecImportList} -> do
+    let nameVisible =
+          case ispecImportList of
+            Nothing               -> True
+            Just (Imported names) -> KM.member name names
+            Just (Hidden names)   -> KM.notMember name names
+    if not nameVisible
+    then pure mempty
+    else do
+      mods <- loadModule ispecModuleName
+      fmap concat $ for mods $ \mod@Module{modHeader, modAllSymbols} -> do
+        let exports               = mhExports modHeader
+            lookupInCurrentModule :: m [ResolvedSymbol]
+            lookupInCurrentModule =
+              case M.lookup name modAllSymbols of
+                Nothing  ->
+                  -- | If name is exported but is not defined in current module
+                  -- then it is either defined by template Haskell or preprocessor,
+                  -- in which case we're out of luck, or it is just re-exported
+                  -- and it it still possible to find it.
+                  lookupInImportedModules name $ foldMap toList $ mhImports modHeader
+                  -- throwError missingMsg
+                Just sym -> pure [sym]
+            -- missingMsg            =
+            --   "Internal error: exported symbol" <+> pretty name <+> "is missing from module" <+> pretty mod
 
-      case exports of
-        -- No export list - only names from this module are reexported.
-        Nothing                                            ->
-          lookupInCurrentModule
-        Just ModuleExports{meExportedEntries, meReexports} ->
-          -- NB: each name can be reexported from only one source. Thus, name
-          -- cannot be exported by module and at the same time be also present in
-          -- some of the reexported modules.
-          case KM.lookup name meExportedEntries of
-            Nothing ->
-              -- It is enough to resolve parent only once, because exponting everything
-              -- from a grandparent does not automatically exports children two
-              -- levels deep.
-              case resolveParent mod name >>= \name' -> KM.lookup name' meExportedEntries of
-                Just (EntryWithChildren _ (Just children))
-                  | isChildExported name children -> lookupInCurrentModule
-                _                                 -> lookupInModulesExports meReexports name
-            Just _  -> lookupInCurrentModule
+        case exports of
+          -- No export list - only names from this module are reexported.
+          Nothing                                            ->
+            lookupInCurrentModule
+          Just ModuleExports{meExportedEntries, meReexports} ->
+            -- NB: each name can be reexported from only one source. Thus, name
+            -- cannot be exported by module and at the same time be also present in
+            -- some of the reexported modules.
+            case KM.lookup name meExportedEntries of
+              Nothing ->
+                -- It is enough to resolve parent only once, because exponting everything
+                -- from a grandparent does not automatically exports children two
+                -- levels deep.
+                case resolveParent mod name >>= \name' -> KM.lookup name' meExportedEntries of
+                  Just (EntryWithChildren _ (Just children))
+                    | isChildExported name children -> lookupInCurrentModule
+                  _                                 ->
+                    fmap concat $ for meReexports $ \modName ->
+                      case M.lookup modName $ mhImports modHeader of
+                        Nothing    ->
+                          throwError $
+                            "Internal error: reexported module" <+> pretty modName <+>
+                              "not found in imports map"
+                        Just specs ->
+                          lookupInImportedModules name $ toList specs
+              Just _  -> lookupInCurrentModule
 
 resolveParent :: Module -> SymbolName -> Maybe SymbolName
 resolveParent Module{modParentMap} name = M.lookup name modParentMap

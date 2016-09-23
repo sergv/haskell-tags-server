@@ -13,6 +13,7 @@
 
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE TypeFamilies               #-}
@@ -50,10 +51,12 @@ module Server.Tags.Types
   , mkSymbolName
   , Module(..)
   , ModuleHeader(..)
+  , resolveQualifier
   , ImportSpec(..)
   , importBringsUnqualifiedNames
   , importBringQualifiedNames
   , ImportQualification(..)
+  , hasQualifier
   , getQualifier
   , ImportList(..)
   , ModuleExports(..)
@@ -67,15 +70,19 @@ import Control.Monad
 import Control.Monad.Base
 import Control.Monad.Except
 import Data.Char
+import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
+import qualified Data.Map as M
 import Data.Monoid
+import qualified Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import Data.Time.Clock (UTCTime(..))
+import Data.Traversable (for)
 import System.Directory
 import System.FilePath.Find (FileType(Directory), find, fileType, (==?), always)
 import qualified Text.PrettyPrint.Leijen.Text as PP
@@ -259,21 +266,54 @@ instance Pretty Module where
       [ "Name"          :-> pretty (mhModName (modHeader mod))
       , "File"          :-> pretty (modFile mod)
       , "Last modified" :-> showDoc (modLastModified mod)
+      , "Header"        :-> pretty (modHeader mod)
       , "Names"         :-> ppMap (modAllSymbols mod)
       ]
 
 data ModuleHeader = ModuleHeader
   { mhModName          :: ModuleName
-    -- | All imports of a given module, including qualified ones.
-    -- NB same module name may be present several times with different qualifications
-    -- because it may be imported several times.
-  , mhImports          :: [ImportSpec]
+  , mhExports          :: Maybe ModuleExports
     -- | Mapping from qualifiers to original module names. Single qualifier
     -- may be used for several modules.
   , mhImportQualifiers :: Map ImportQualifier (NonEmpty ModuleName)
+    -- | All imports of a given module, including qualified ones.
+    -- NB same module name may be present several times with different qualifications
+    -- because it may be imported several times.
+  , mhImports          :: Map ModuleName (NonEmpty ImportSpec)
     -- | Exports of a module. Nothing - everything is exported
-  , mhExports          :: Maybe ModuleExports
   } deriving (Show, Eq, Ord)
+
+instance Pretty ModuleHeader where
+  pretty header =
+    ppDict "Module" $
+      [ "Name"             :-> pretty (mhModName header)
+      ] ++
+      [ "Exports"          :-> pretty exports
+      | Just exports <- [mhExports header]
+      ] ++
+      [ "ImportQualifiers" :-> ppMap (ppNE <$> mhImportQualifiers header)
+      , "Imports"          :-> ppMap (ppNE <$> mhImports header)
+      ]
+
+-- | Find out which modules a given @ImportQualifier@ refers to.
+resolveQualifier
+  :: (MonadError Doc m)
+  => ImportQualifier
+  -> ModuleHeader
+  -> m (Maybe (NonEmpty ImportSpec))
+resolveQualifier qual ModuleHeader{mhImports, mhImportQualifiers} =
+  case M.lookup qual mhImportQualifiers of
+    Nothing    -> pure Nothing
+    Just names ->
+      fmap (Just . foldr1 (Semigroup.<>)) $ for names $ \modName ->
+        case M.lookup modName mhImports of
+          Nothing    ->
+            -- If module's not found then this is a violation of internal
+            -- invariant of ModuleHeader module header datastructure.
+            throwError $
+              "Internal error: module" <+> pretty modName <+>
+              "for qualifier" <+> pretty qual <+> "not found in the imports map"
+          Just specs -> return specs
 
 -- | Information about import statement
 data ImportSpec = ImportSpec
@@ -282,6 +322,15 @@ data ImportSpec = ImportSpec
   , ispecQualification :: ImportQualification
   , ispecImportList    :: Maybe ImportList
   } deriving (Show, Eq, Ord)
+
+instance Pretty ImportSpec where
+  pretty spec = ppDict "ImportSpec" $
+    [ "ModuleName"    :-> pretty (ispecModuleName spec)
+    , "Qualification" :-> pretty (ispecQualification spec)
+    ] ++
+    [ "ImportList"    :-> pretty importList
+    | Just importList <- [ispecImportList spec]
+    ]
 
 importBringsUnqualifiedNames :: ImportSpec -> Bool
 importBringsUnqualifiedNames ImportSpec{ispecQualification} =
@@ -314,6 +363,15 @@ data ImportQualification =
   | BothQualifiedAndUnqualified ImportQualifier
   deriving (Show, Eq, Ord)
 
+instance Pretty ImportQualification where
+  pretty = \case
+    Qualified qual                   -> "Qualified" <+> pretty qual
+    Unqualified                      -> "Unqualified"
+    BothQualifiedAndUnqualified qual -> "BothQualifiedAndUnqualified" <+> pretty qual
+
+hasQualifier :: ImportQualifier -> ImportQualification -> Bool
+hasQualifier qual = maybe False (== qual) . getQualifier
+
 getQualifier :: ImportQualification -> Maybe ImportQualifier
 getQualifier (Qualified q)                   = Just q
 getQualifier Unqualified                     = Nothing
@@ -325,13 +383,21 @@ data ImportList =
     --
     -- import Foo (x, y, z(Baz))
     -- import Bar ()
-    Imported [EntryWithChildren]
+    Imported (KeyMap EntryWithChildren)
     -- | Hiding import list
     --
     -- import Foo hiding (x, y(Bar), z)
     -- import Foo hiding ()
-  | Hidden [EntryWithChildren]
+  | Hidden (KeyMap EntryWithChildren)
   deriving (Show, Eq, Ord)
+
+instance Pretty ImportList where
+  pretty importList =
+    ppListWithHeader ("Import list[" <> descr <> "]") $ toList items
+    where
+      (descr, items) = case importList of
+        Imported items -> ("Imported", items)
+        Hidden   items -> ("Hidden",   items)
 
 data ModuleExports = ModuleExports
   { -- Toplevel names exported from this particular module.
@@ -340,6 +406,13 @@ data ModuleExports = ModuleExports
   -- , meAllExportedNames :: Set SymbolName
   } deriving (Show, Eq, Ord)
 
+instance Pretty ModuleExports where
+  pretty exports =
+    ppDict "ModuleExports"
+      [ "ExportedEntries" :-> pretty (ppList "[" "]" $ toList $ meExportedEntries exports)
+      , "Reexports"       :-> pretty (meReexports exports)
+      ]
+
 instance Monoid ModuleExports where
   mempty = ModuleExports mempty mempty
   mappend (ModuleExports x y) (ModuleExports x' y') =
@@ -347,6 +420,15 @@ instance Monoid ModuleExports where
 
 data EntryWithChildren = EntryWithChildren SymbolName (Maybe ChildrenVisibility)
   deriving (Show, Eq, Ord)
+
+instance Pretty EntryWithChildren where
+  pretty (EntryWithChildren name children) =
+    ppDict "EntryWithChildren" $
+      [ "Name" :-> pretty name
+      ] ++
+      [ "Children" :-> pretty children'
+      | Just children' <- [children]
+      ]
 
 mkEntryWithoutChildren :: SymbolName -> EntryWithChildren
 mkEntryWithoutChildren name = EntryWithChildren name Nothing
@@ -362,6 +444,12 @@ data ChildrenVisibility =
     -- Set is always non-empty.
   | ExportSpecificChildren (Set SymbolName)
   deriving (Show, Eq, Ord)
+
+instance Pretty ChildrenVisibility where
+  pretty = \case
+    ExportAllChildren               -> "ExportAllChildren"
+    ExportSpecificChildren children ->
+      ppListWithHeader "ExportSpecificChildren" $ toList children
 
 isChildExported :: SymbolName -> ChildrenVisibility -> Bool
 isChildExported _    ExportAllChildren                 = True
