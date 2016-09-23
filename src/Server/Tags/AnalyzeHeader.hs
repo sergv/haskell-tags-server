@@ -86,21 +86,23 @@ analyzeImports
   -> m ([ImportSpec], Map ImportQualifier (NonEmpty ModuleName), [Token])
 analyzeImports imports qualifiers ts = case dropNLs ts of
   -- Vanilla imports
-  PImport :           PQualified : PName name : PAs : PName qualName : rest -> add name (Qualified $ mkQual qualName) rest
-  PImport :           PQualified : PName name :                        rest -> add name (Qualified $ mkQual name) rest
-  PImport :                        PName name : PAs : PName qualName : rest -> add name (BothQualifiedAndUnqualified $ mkQual qualName) rest
-  PImport :                        PName name :                        rest -> add name Unqualified rest
+  PImport : (d ->                 PQualified : (d -> PName name : (d -> PAs : (d -> PName qualName : rest))))  -> add name (Qualified $ mkQual qualName) rest
+  PImport : (d ->                 PQualified : (d -> PName name :                                    rest))    -> add name (Qualified $ mkQual name) rest
+  PImport : (d ->                                    PName name : (d -> PAs : (d -> PName qualName : rest)))   -> add name (BothQualifiedAndUnqualified $ mkQual qualName) rest
+  PImport : (d ->                                    PName name :                                    rest)     -> add name Unqualified rest
   -- Package-qualified imports
-  PImport : PString : PQualified : PName name : PAs : PName qualName : rest -> add name (Qualified $ mkQual qualName) rest
-  PImport : PString : PQualified : PName name :                        rest -> add name (Qualified $ mkQual name) rest
-  PImport : PString :              PName name : PAs : PName qualName : rest -> add name (BothQualifiedAndUnqualified $ mkQual qualName) rest
-  PImport : PString :              PName name :                        rest -> add name Unqualified rest
+  PImport : (d -> PString : (d -> PQualified : (d -> PName name : (d -> PAs : (d -> PName qualName : rest))))) -> add name (Qualified $ mkQual qualName) rest
+  PImport : (d -> PString : (d -> PQualified : (d -> PName name :                                    rest)))   -> add name (Qualified $ mkQual name) rest
+  PImport : (d -> PString : (d ->                    PName name : (d -> PAs : (d -> PName qualName : rest))))  -> add name (BothQualifiedAndUnqualified $ mkQual qualName) rest
+  PImport : (d -> PString : (d ->                    PName name :                                    rest))    -> add name Unqualified rest
   _ -> pure (imports, qualifiers, ts)
   where
+    d      = dropNLs
     mkQual = mkImportQualifier . mkModuleName
     add
       :: Text
       -> ImportQualification
+    d = dropNLs
       -> [Token]
       -> m ([ImportSpec], Map ImportQualifier (NonEmpty ModuleName), [Token])
     add name qual toks = do
