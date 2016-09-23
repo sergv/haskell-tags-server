@@ -57,7 +57,6 @@ module Server.Tags.Types
   , getQualifier
   , ImportList(..)
   , ModuleExports(..)
-  , ExportSpec(..)
   , EntryWithChildren(..)
   , mkEntryWithoutChildren
   , ChildrenVisibility(..)
@@ -345,15 +344,6 @@ instance Monoid ModuleExports where
   mempty = ModuleExports mempty mempty
   mappend (ModuleExports x y) (ModuleExports x' y') =
     ModuleExports (x <> x') (y <> y')
-
--- Not sure what this may be useful for
--- data ExportType = ExportPattern | ExportName
---   deriving (Show, Eq, Ord)
-
-data ExportSpec =
-    ExportSingleEntry EntryWithChildren -- ExportType
-  | ExportModule ModuleName
-  deriving (Show, Eq, Ord)
 
 data EntryWithChildren = EntryWithChildren SymbolName (Maybe ChildrenVisibility)
   deriving (Show, Eq, Ord)
