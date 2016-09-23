@@ -95,7 +95,7 @@ ppList left right xs =
 ppDict :: (Pretty a) => Doc -> [MapEntry TL.Text a] -> Doc
 ppDict header entries =
   header PP.<$>
-  PP.nest 2 (ppList PP.lbrace PP.rbrace entries')
+  PP.indent 2 (ppList PP.lbrace PP.rbrace entries')
   where
     entries' = map (\(k :-> v) -> PP.fillBreak maxWidth (PP.text k) :-> v) entries
     maxWidth = fromIntegral $ maximum $ map (\(k :-> _) -> TL.length k) entries
@@ -103,7 +103,7 @@ ppDict header entries =
 ppListWithHeader :: (Pretty a) => Doc -> [a] -> Doc
 ppListWithHeader header entries =
   header PP.<$>
-  PP.nest 2 (PP.vsep (map (("-" PP.<+>) . pretty) entries))
+  PP.indent 2 (PP.vsep (map (("-" PP.<+>) . pretty) entries))
 
 ppMap :: (Pretty a, Pretty b) => Map a b -> Doc
 ppMap = ppList PP.lbrace PP.rbrace . map (uncurry (:->)) . M.toList
@@ -118,4 +118,4 @@ data MapEntry k v = k :-> v
 
 instance (Pretty k, Pretty v) => Pretty (MapEntry k v) where
   pretty (x :-> y) =
-    PP.group $ PP.nest 4 $ pretty (pretty x) <+> "->" PP.<$> PP.align (pretty y)
+    PP.group $ pretty (pretty x) <+> "->" PP.<$> PP.indent 4 (PP.align (pretty y))
