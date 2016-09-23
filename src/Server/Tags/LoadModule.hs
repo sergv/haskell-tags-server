@@ -119,9 +119,10 @@ loadModuleFromFile moduleName modifTime filename = do
         , mhImportQualifiers = mempty
         , mhExports          = Nothing
         }
-  logError $ ppListWithHeader
-    ("fast-tags errors while loading " <> showDoc filename)
-    (map docFromString errors)
+  unless (null errors) $
+    logError $ ppListWithHeader
+      ("fast-tags errors while loading " <> showDoc filename)
+      (map docFromString errors)
   case header of
     Nothing                      -> return ()
     Just ModuleHeader{mhModName} ->
