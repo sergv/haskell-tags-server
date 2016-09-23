@@ -31,6 +31,7 @@ module Text.PrettyPrint.Leijen.Text.Utils
   , (<+>)
   , ppList
   , ppDict
+  , ppListWithHeader
   , ppMap
   , MapEntry(..)
   , Pretty(..)
@@ -96,6 +97,11 @@ ppDict header entries =
   where
     entries' = map (\(k :-> v) -> PP.fillBreak maxWidth (PP.text k) :-> v) entries
     maxWidth = fromIntegral $ maximum $ map (\(k :-> _) -> TL.length k) entries
+
+ppListWithHeader :: (Pretty a) => Doc -> [a] -> Doc
+ppListWithHeader header entries =
+  header PP.<$>
+  PP.nest 2 (PP.vsep (map (("-" PP.<+>) . pretty) entries))
 
 ppMap :: (Pretty a, Pretty b) => Map a b -> Doc
 ppMap = ppList PP.lbrace PP.rbrace . map (uncurry (:->)) . M.toList

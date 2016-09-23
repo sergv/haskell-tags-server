@@ -53,13 +53,14 @@ module Server.Tags.Types
   , ImportSpec(..)
   , importBringsUnqualifiedNames
   , importBringQualifiedNames
-  , ImpotQualification(..)
+  , ImportQualification(..)
   , getQualifier
   , ImportList(..)
   , ModuleExports(..)
   , ExportSpec(..)
   , EntryWithChildren(..)
-  , ChildrenExportSpec(..)
+  , mkEntryWithoutChildren
+  , ChildrenVisibility(..)
   , isChildExported
   ) where
 
@@ -271,15 +272,15 @@ data ModuleHeader = ModuleHeader
     -- | Mapping from qualifiers to original module names. Single qualifier
     -- may be used for several modules.
   , mhImportQualifiers :: Map ImportQualifier (NonEmpty ModuleName)
-    -- | Exports of a module.
-  , mhExports          :: ModuleExports
+    -- | Exports of a module. Nothing - everything is exported
+  , mhExports          :: Maybe ModuleExports
   } deriving (Show, Eq, Ord)
 
 -- | Information about import statement
 data ImportSpec = ImportSpec
   { -- | Name of imported module
     ispecModuleName    :: ModuleName
-  , ispecQualification :: ImpotQualification
+  , ispecQualification :: ImportQualification
   , ispecImportList    :: Maybe ImportList
   } deriving (Show, Eq, Ord)
 
@@ -297,7 +298,7 @@ importBringQualifiedNames ImportSpec{ispecQualification} =
     Unqualified                   -> False
     BothQualifiedAndUnqualified _ -> True
 
-data ImpotQualification =
+data ImportQualification =
     -- | Qualified import, e.g.
     --
     -- import qualified X as Y
@@ -314,7 +315,7 @@ data ImpotQualification =
   | BothQualifiedAndUnqualified ImportQualifier
   deriving (Show, Eq, Ord)
 
-getQualifier :: ImpotQualification -> Maybe ImportQualifier
+getQualifier :: ImportQualification -> Maybe ImportQualifier
 getQualifier (Qualified q)                   = Just q
 getQualifier Unqualified                     = Nothing
 getQualifier (BothQualifiedAndUnqualified q) = Just q
@@ -345,25 +346,33 @@ instance Monoid ModuleExports where
   mappend (ModuleExports x y) (ModuleExports x' y') =
     ModuleExports (x <> x') (y <> y')
 
+-- Not sure what this may be useful for
+-- data ExportType = ExportPattern | ExportName
+--   deriving (Show, Eq, Ord)
+
 data ExportSpec =
-    ExportSingleEntry EntryWithChildren
+    ExportSingleEntry EntryWithChildren -- ExportType
   | ExportModule ModuleName
   deriving (Show, Eq, Ord)
 
-data EntryWithChildren = EntryWithChildren SymbolName (Maybe ChildrenExportSpec)
+data EntryWithChildren = EntryWithChildren SymbolName (Maybe ChildrenVisibility)
   deriving (Show, Eq, Ord)
+
+mkEntryWithoutChildren :: SymbolName -> EntryWithChildren
+mkEntryWithoutChildren name = EntryWithChildren name Nothing
 
 instance HasKey EntryWithChildren where
   type Key EntryWithChildren = SymbolName
   getKey (EntryWithChildren name _) = name
 
-data ChildrenExportSpec =
+data ChildrenVisibility =
     -- | Wildcard import/export, e.g. Foo(..)
-    ExportAllChidlren
-    -- | Import/export with explicit list of children, e.g. Foo(Bar, Baz), Quux(foo, bar)
+    ExportAllChildren
+    -- | Import/export with explicit list of children, e.g. Foo(Bar, Baz), Quux(foo, bar).
+    -- Set is always non-empty.
   | ExportSpecificChildren (Set SymbolName)
   deriving (Show, Eq, Ord)
 
-isChildExported :: SymbolName -> ChildrenExportSpec -> Bool
-isChildExported _    ExportAllChidlren                 = True
+isChildExported :: SymbolName -> ChildrenVisibility -> Bool
+isChildExported _    ExportAllChildren                 = True
 isChildExported name (ExportSpecificChildren exported) = S.member name exported

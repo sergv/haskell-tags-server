@@ -16,44 +16,31 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
-{-# LANGUAGE ViewPatterns        #-}
 
 module Server.Tags.LoadModule (loadModule) where
 
--- import Control.Applicative
 import Control.Arrow (first, (&&&))
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
--- import Data.Char
--- import qualified Data.List as L
-import Data.Time.Clock (UTCTime)
 import Data.List.NonEmpty (NonEmpty(..))
--- import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe
 import Data.Monoid
 import qualified Data.Set as S
-import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Time.Clock (UTCTime)
 import Data.Traversable (for)
--- import System.Directory
 import System.FilePath
-import Text.PrettyPrint.Leijen.Text (Doc, Pretty(..))
 import qualified Text.PrettyPrint.Leijen.Text as PP
 
-import Token (Pos(..), Line(..), SrcPos(..), TokenVal(..), Token)
-import FastTags (tokenizeInput, processTokens, TagVal(..))
--- import FastTags (process) -- processAll,
--- import Language.Haskell.Exts.Extension
--- import Language.Haskell.Exts.Parser
--- import qualified Language.Haskell.Exts.Annotated.Syntax as HSE
-
+import FastTags (tokenizeInput, processTokens)
 
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging
 import qualified Control.Monad.Filesystem as MonadFS
+import Server.Tags.AnalyzeHeader
 import Server.Tags.Types
 import Text.PrettyPrint.Leijen.Text.Utils
 
@@ -105,9 +92,6 @@ reloadIfFileChanged m = do
     loadModuleFromFile (mhModName (modHeader m)) (Just modifTime) $ modFile m
   else return m
 
-analyzeHeader :: [Token] -> (Maybe ModuleHeader, [Token])
-analyzeHeader ts = (Nothing, ts)
-
 -- | Recursively load module from file - load given filename, then load all its
 -- imports.
 loadModuleFromFile
@@ -118,10 +102,11 @@ loadModuleFromFile
   -> m Module
 loadModuleFromFile moduleName modifTime filename = do
   logDebug $ "[loadModuleFromFile] loading file " <> showDoc filename
-  source <- MonadFS.readFile filename
-  tokens <- either (throwError . docFromString) return $ tokenizeInput filename False source
-  let (header, tokens') = analyzeHeader tokens
-      syms :: [ResolvedSymbol]
+  source            <- MonadFS.readFile filename
+  tokens            <- either (throwError . docFromString) return $ tokenizeInput filename False source
+  (header, tokens') <- analyzeHeader tokens
+  let syms   :: [ResolvedSymbol]
+      errors :: [String]
       (syms, errors)    = first (fmap mkSymbol) $ processTokens tokens'
       allSymbols :: Map SymbolName ResolvedSymbol
       allSymbols        = M.fromList $ map (resolvedSymbolName &&& id) syms
@@ -132,8 +117,11 @@ loadModuleFromFile moduleName modifTime filename = do
         { mhModName          = moduleName
         , mhImports          = mempty
         , mhImportQualifiers = mempty
-        , mhExports          = mempty
+        , mhExports          = Nothing
         }
+  logError $ ppListWithHeader
+    ("fast-tags errors while loading " <> showDoc filename)
+    (map docFromString errors)
   case header of
     Nothing                      -> return ()
     Just ModuleHeader{mhModName} ->

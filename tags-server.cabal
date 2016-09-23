@@ -60,6 +60,7 @@ library
     Server.Tags.Types
     Text.PrettyPrint.Leijen.Text.Utils
   other-modules:
+    Server.Tags.AnalyzeHeader
     Server.Tags.LoadModule
     Server.Tags.Search
     Server.Tags.SearchM
