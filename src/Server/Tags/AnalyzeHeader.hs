@@ -50,6 +50,7 @@ analyzeHeader
   => [Token]
   -> m (Maybe ModuleHeader, [Token])
 analyzeHeader ts =
+  -- logDebug $ "[analyzeHeader] ts =" <+> pretty (Tokens ts)
   case dropWhile ((/= KWModule) . valOf) ts of
     Pos _ KWModule :
       (dropNLs -> Pos _ (T modName) :
@@ -147,19 +148,27 @@ analyzeImports imports qualifiers ts = case dropNLs ts of
         _                                     -> pure (Nothing, toks)
       where
         findImportListEntries
-          :: KeyMap EntryWithChildren
+          :: KeyMap (EntryWithChildren UnqualifiedSymbolName)
           -> [Token]
-          -> m (KeyMap EntryWithChildren, [Token])
+          -> m (KeyMap (EntryWithChildren UnqualifiedSymbolName), [Token])
         findImportListEntries acc toks =
           case dropNLs toks of
             []                -> pure (acc, [])
             PRParen : rest    -> pure (acc, rest)
             PName name : rest -> do
               (children, rest') <- analyzeChildren "import" $ dropNLs rest
-              let newEntry = EntryWithChildren (mkSymbolName name) children
-              findImportListEntries (KM.insert newEntry acc) $ dropComma rest'
+              case mkUnqualifiedSymbolName (mkSymbolName name) of
+                Nothing    ->
+                  throwError $ "Invalid qualified entry on import list:" <+> docFromText name
+                Just name' ->
+                  findImportListEntries (KM.insert newEntry acc) $ dropComma rest'
+                  where
+                    newEntry = EntryWithChildren name' children
             rest ->
               throwError $ "Unrecognized shape of import list:" <+> pretty (Tokens rest)
+
+stripQualification :: SymbolName -> UnqualifiedSymbolName
+stripQualification = snd . splitQualifiedPart
 
 analyzeExports
   :: forall m. (MonadError Doc m, MonadLog m)
@@ -179,22 +188,27 @@ analyzeExports importQualifiers ts =
     -- - Quux(..)
     -- - pattern PFoo
     -- - module Data.Foo.Bar
-    go :: KeyMap EntryWithChildren -> [ModuleName] -> [Token] -> m ModuleExports
+    go :: Map UnqualifiedSymbolName (EntryWithChildren SymbolName)
+       -> [ModuleName]
+       -> [Token]
+       -> m ModuleExports
     go entries reexports = \case
       []                           -> pure exports
       [PRParen]                    -> pure exports
       PName name : rest            -> do
         (children, rest') <- analyzeChildren "export" rest
-        let newEntry = EntryWithChildren (mkSymbolName name) children
-        consumeComma (KM.insert newEntry entries) reexports rest'
+        let name'    = mkSymbolName name
+            newEntry = EntryWithChildren name' children
+        consumeComma (M.insert (stripQualification name') newEntry entries) reexports rest'
       PPattern : PName name : rest ->
-        consumeComma (KM.insert newEntry entries) reexports rest
+        consumeComma (M.insert (stripQualification name') newEntry entries) reexports rest
         where
-          newEntry = mkEntryWithoutChildren $ mkSymbolName name
+          name'    = mkSymbolName name
+          newEntry = mkEntryWithoutChildren name'
       PModule  : PName name : rest ->
         consumeComma entries (newReexports ++ reexports) rest
         where
-          modName      = mkModuleName name
+          modName = mkModuleName name
           newReexports
             = toList
             $ M.findWithDefault (modName :| []) (mkImportQualifier modName) importQualifiers
@@ -202,12 +216,21 @@ analyzeExports importQualifiers ts =
         throwError $ "Unrecognized export list structure:" <+> pretty (Tokens toks)
       where
         exports = ModuleExports
-          { meExportedEntries = entries
-          , meReexports       = reexports
+          { meExportedEntries    = entries
+          , meReexports          = reexports
+          , meHasWildcardExports = getAny $ foldMap exportsAllChildren entries
           }
+        exportsAllChildren (EntryWithChildren _ visibility) =
+          maybe mempty isExportAllChildren visibility
+          where
+            isExportAllChildren ExportAllChildren          = Any True
+            isExportAllChildren (ExportSpecificChildren _) = mempty
     -- Continue parsing by consuming comma delimiter.
     consumeComma
-      :: KeyMap EntryWithChildren -> [ModuleName] -> [Token] -> m ModuleExports
+      :: Map UnqualifiedSymbolName (EntryWithChildren SymbolName)
+      -> [ModuleName]
+      -> [Token]
+      -> m ModuleExports
     consumeComma entries reexports = go entries reexports . dropComma
 
 analyzeChildren
@@ -227,13 +250,17 @@ analyzeChildren listType = \case
   toks ->
     throwError $ "Cannot handle" <+> listType <+> "children list:" <+> pretty (Tokens toks)
   where
-    extractChildren :: Set SymbolName -> [Token] -> m (Set SymbolName, [Token])
+    extractChildren
+      :: Set UnqualifiedSymbolName
+      -> [Token]
+      -> m (Set UnqualifiedSymbolName, [Token])
     extractChildren names = \case
-      []                -> pure (names, [])
-      PRParen : rest    -> pure (names, rest)
-      PName name : rest ->
-        extractChildren (S.insert (mkSymbolName name) names) $ dropComma rest
-      toks              ->
+      []             -> pure (names, [])
+      PRParen : rest -> pure (names, rest)
+      PName name : rest
+        | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
+          extractChildren (S.insert name' names) $ dropComma rest
+      toks           ->
         throwError $ "Unrecognized children list structure:" <+> pretty (Tokens toks)
 
 -- analyzeCommaSeparatedNameList

@@ -108,9 +108,9 @@ loadModuleFromFile moduleName modifTime filename = do
   let syms   :: [ResolvedSymbol]
       errors :: [String]
       (syms, errors)    = first (fmap mkSymbol) $ processTokens tokens'
-      allSymbols :: Map SymbolName ResolvedSymbol
+      allSymbols :: Map UnqualifiedSymbolName ResolvedSymbol
       allSymbols        = M.fromList $ map (resolvedSymbolName &&& id) syms
-      parentSymbols :: Map SymbolName SymbolName
+      parentSymbols :: Map UnqualifiedSymbolName UnqualifiedSymbolName
       parentSymbols     = M.fromList $ mapMaybe (\sym -> (,resolvedSymbolName sym) <$> resolvedSymbolParent sym) syms
       defaultHeader :: ModuleHeader
       defaultHeader     = ModuleHeader

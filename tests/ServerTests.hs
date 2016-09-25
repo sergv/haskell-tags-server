@@ -538,7 +538,7 @@ mkFindSymbolTest name getConn sym dir filename resp = testCase name $ do
               displayDocString $ msg PP.<$> logs
             Just msg ->
               displayDocString $
-                "Error from server:" PP.<$> PP.nest 2 (docFrombyteString msg) PP.<$> logs
+                "Error from server:" PP.<$> PP.nest 2 (docFromByteString msg) PP.<$> logs
       where
         actual   = relativizeFilepaths res
         expected = responseToTerm resp

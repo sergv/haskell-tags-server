@@ -28,13 +28,13 @@ import Data.List
 import qualified Data.Map as M
 import Data.Maybe
 import qualified Data.Text as T
-import Data.Traversable (for)
 import System.FilePath
 import Text.PrettyPrint.Leijen.Text.Utils
 
-import qualified Data.KeyMap as KM
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging
+import Data.Foldable.Ext
+import qualified Data.KeyMap as KM
 import Server.Tags.LoadModule
 import Server.Tags.Types
 
@@ -46,8 +46,7 @@ findSymbol
 findSymbol filename sym = do
   modName <- fileNameToModuleName filename
   mods    <- loadModule modName
-  fmap concat $ traverse (findInModule sym) mods
-  -- evalStateT (fmap concat $ traverse (findInModule sym) mods) mempty
+  foldMapA (findInModule sym) mods
 
 -- | Try to find out what @sym@ refers to in the context of module @mod@.
 findInModule
@@ -55,17 +54,15 @@ findInModule
   => SymbolName
   -> Module
   -> m [ResolvedSymbol]
-findInModule sym mod = do
-  (qualifier, sym') <- splitQualifiedPart sym
+findInModule sym mod =
   case qualifier of
     -- Unqualified name
     Nothing -> do
       let localSyms       = maybeToList $ M.lookup sym' $ modAllSymbols mod
-          relevantImports = -- map ispecModuleName $
-                            filter importBringsUnqualifiedNames
+          relevantImports = filter importBringsUnqualifiedNames
                           $ foldMap toList
                           $ mhImports header
-      (localSyms ++) <$> lookupInImportedModules sym' relevantImports
+      (localSyms ++) <$> lookUpInImportedModules sym' relevantImports
     -- Qualified name
     Just qualifier' -> do
       resolvedSpecs <- resolveQualifier qualifier' header
@@ -74,18 +71,21 @@ findInModule sym mod = do
           throwError $ "Qualifier" <+> showDoc qualifier' <+>
             "not listed among module's import qualifiers:" <+> showDoc (mhImportQualifiers header)
         Just specs ->
-          lookupInImportedModules sym' $ toList specs
+          lookUpInImportedModules sym' specs
   where
+    qualifier :: Maybe ImportQualifier
+    sym'      :: UnqualifiedSymbolName
+    (qualifier, sym') = splitQualifiedPart sym
     header :: ModuleHeader
     header = modHeader mod
 
-lookupInImportedModules
-  :: forall m. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => SymbolName
-  -> [ImportSpec]
+lookUpInImportedModules
+  :: forall m f. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m, Foldable f)
+  => UnqualifiedSymbolName
+  -> f ImportSpec
   -> m [ResolvedSymbol]
-lookupInImportedModules name specs =
-  fmap concat $ for specs $ \ImportSpec{ispecModuleName, ispecImportList} -> do
+lookUpInImportedModules name specs =
+  flip foldMapA specs $ \ImportSpec{ispecModuleName, ispecImportList} -> do
     let nameVisible =
           case ispecImportList of
             Nothing               -> True
@@ -93,52 +93,79 @@ lookupInImportedModules name specs =
             Just (Hidden names)   -> KM.notMember name names
     if not nameVisible
     then pure mempty
-    else do
-      mods <- loadModule ispecModuleName
-      fmap concat $ for mods $ \mod@Module{modHeader, modAllSymbols} -> do
-        let exports               = mhExports modHeader
-            lookupInCurrentModule :: m [ResolvedSymbol]
-            lookupInCurrentModule =
-              case M.lookup name modAllSymbols of
-                Nothing  ->
-                  -- | If name is exported but is not defined in current module
-                  -- then it is either defined by template Haskell or preprocessor,
-                  -- in which case we're out of luck, or it is just re-exported
-                  -- and it it still possible to find it.
-                  lookupInImportedModules name $ foldMap toList $ mhImports modHeader
-                  -- throwError missingMsg
-                Just sym -> pure [sym]
-            -- missingMsg            =
-            --   "Internal error: exported symbol" <+> pretty name <+> "is missing from module" <+> pretty mod
+    else
+      foldMapA (lookUpInImportedModule name) =<< loadModule ispecModuleName
 
-        case exports of
-          -- No export list - only names from this module are reexported.
-          Nothing                                            ->
-            lookupInCurrentModule
-          Just ModuleExports{meExportedEntries, meReexports} ->
-            -- NB: each name can be reexported from only one source. Thus, name
-            -- cannot be exported by module and at the same time be also present in
-            -- some of the reexported modules.
-            case KM.lookup name meExportedEntries of
-              Nothing ->
-                -- It is enough to resolve parent only once, because exponting everything
-                -- from a grandparent does not automatically exports children two
-                -- levels deep.
-                case resolveParent mod name >>= \name' -> KM.lookup name' meExportedEntries of
-                  Just (EntryWithChildren _ (Just children))
-                    | isChildExported name children -> lookupInCurrentModule
-                  _                                 ->
-                    fmap concat $ for meReexports $ \modName ->
-                      case M.lookup modName $ mhImports modHeader of
-                        Nothing    ->
-                          throwError $
-                            "Internal error: reexported module" <+> pretty modName <+>
-                              "not found in imports map"
-                        Just specs ->
-                          lookupInImportedModules name $ toList specs
-              Just _  -> lookupInCurrentModule
+lookUpInImportedModule
+  :: forall m. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  => UnqualifiedSymbolName
+  -> Module
+  -> m [ResolvedSymbol]
+lookUpInImportedModule name importedMod@Module{} =
+  case mhExports $ modHeader importedMod of
+    -- No export list - only names from this module are reexported.
+    Nothing                                            ->
+      pure $ maybeToList $ M.lookup name $ modAllSymbols importedMod
+    Just ModuleExports{meExportedEntries, meReexports, meHasWildcardExports} ->
+      -- NB: each name can be reexported from only one source. Thus, name
+      -- cannot be exported by module and at the same time be also present in
+      -- some of the reexported modules.
+      case M.lookup name meExportedEntries of
+        Nothing ->
+          -- It is enough to resolve parent only once, because exponting
+          -- everything from a grandparent does not automatically exports
+          -- children two levels deep.
+          case resolveParent importedMod name >>= \name' -> M.lookup name' meExportedEntries of
+            Just entry@(EntryWithChildren _ (Just children))
+              | isChildExported name children -> lookupExportedInCurrentModuleAndImports entry
+            _
+              | meHasWildcardExports ->
+                findInModule (getUnqualifiedSymbolName name) importedMod
+              | otherwise            ->
+                flip foldMapA meReexports $ \modName ->
+                  case M.lookup modName $ mhImports $ modHeader importedMod of
+                    Nothing    ->
+                      throwError $
+                        "Internal error: reexported module" <+> pretty modName <+>
+                          "not found in imports map"
+                    Just specs ->
+                      lookUpInImportedModules name $ toList specs
+        Just entry -> lookupExportedInCurrentModuleAndImports entry
+  where
+    lookupExportedInCurrentModuleAndImports = lookupExportedSymbolInModuleAndImports name importedMod
 
-resolveParent :: Module -> SymbolName -> Maybe SymbolName
+-- | Search for symbol in module given that the symbol is exported from module.
+lookupExportedSymbolInModuleAndImports
+  :: forall m. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  => UnqualifiedSymbolName
+  -> Module
+  -> EntryWithChildren SymbolName
+  -> m [ResolvedSymbol]
+lookupExportedSymbolInModuleAndImports
+  name
+  Module{modHeader, modAllSymbols}
+  (EntryWithChildren exportedName _) =
+  case fst $ splitQualifiedPart exportedName of
+    Nothing        ->
+      case M.lookup name modAllSymbols of
+        Just sym -> pure [sym]
+        Nothing  ->
+          -- If name is exported but is not defined in current module
+          -- then it is either defined by template Haskell or preprocessor,
+          -- in which case we're out of luck, or it is just re-exported
+          -- and it it still possible to find it.
+          lookUpInImportedModules name
+            $ filter importBringsUnqualifiedNames
+            $ foldMap toList
+            $ mhImports modHeader
+    -- If export has qualifiers then it must be a reexport.
+    Just qualifier ->
+      lookUpInImportedModules name
+        $ filter (`importBringsNamesQualifiedWith` qualifier)
+        $ foldMap toList
+        $ mhImports modHeader
+
+resolveParent :: Module -> UnqualifiedSymbolName -> Maybe UnqualifiedSymbolName
 resolveParent Module{modParentMap} name = M.lookup name modParentMap
 
 -- | Try to infer suitable module name from the file name. Tries to take

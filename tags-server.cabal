@@ -53,6 +53,7 @@ library
     Control.Monad.Logging.Simple
     Data.CompiledRegex
     Data.Condition
+    Data.Foldable.Ext
     Data.KeyMap
     Data.Promise
     Server.BERT

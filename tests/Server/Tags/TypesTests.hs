@@ -16,7 +16,7 @@
 
 module Server.Tags.TypesTests (tests) where
 
-import Control.Arrow (left)
+import Control.Arrow (second)
 import Data.Text (Text)
 import qualified Data.Text.Lazy as TL
 import Test.Tasty
@@ -35,35 +35,35 @@ splitQualifiedPartTests = testGroup "splitting of qualified part of symbol"
   [ mkQualifierTest
       "variable name, no qualification"
       "foo"
-      (Right (Nothing, mkSymbolName "foo"))
+      (Nothing, mkSymbolName "foo")
   , mkQualifierTest
       "type name, no qualification"
       "Typ"
-      (Right (Nothing, mkSymbolName "Typ"))
+      (Nothing, mkSymbolName "Typ")
   , mkQualifierTest
       "operator, no qualification"
       "++"
-      (Right (Nothing, mkSymbolName "++"))
+      (Nothing, mkSymbolName "++")
   , mkQualifierTest
       "operator in paretheses, no qualification"
       "(++)"
-      (Right (Nothing, mkSymbolName "(++)"))
+      (Nothing, mkSymbolName "(++)")
   , mkQualifierTest
       "variable name, qualified"
       "Foo.Bar.foo"
-      (Right (fooBarQual, mkSymbolName "foo"))
+      (fooBarQual, mkSymbolName "foo")
   , mkQualifierTest
       "type name, qualified"
       "Foo.Bar.Typ"
-      (Right (fooBarQual, mkSymbolName "Typ"))
+      (fooBarQual, mkSymbolName "Typ")
   , mkQualifierTest
       "operator, qualified"
       "Foo.Bar.++"
-      (Right (fooBarQual, mkSymbolName "++"))
+      (fooBarQual, mkSymbolName "++")
   , mkQualifierTest
       "operator in paretheses, qualified"
       "Foo.Bar.(++)"
-      (Right (fooBarQual, mkSymbolName "(++)"))
+      (fooBarQual, mkSymbolName "(++)")
   ]
   where
     fooBarQual :: Maybe ImportQualifier
@@ -72,8 +72,9 @@ splitQualifiedPartTests = testGroup "splitting of qualified part of symbol"
 mkQualifierTest
   :: String
   -> Text
-  -> Either TL.Text (Maybe ImportQualifier, SymbolName)
+  -> (Maybe ImportQualifier, SymbolName)
   -> TestTree
 mkQualifierTest name input expected =
-  testCase name $
-    left displayDoc (splitQualifiedPart (mkSymbolName input)) @?= expected
+  testCase name $ actual @?= expected
+  where
+    actual = second getUnqualifiedSymbolName (splitQualifiedPart (mkSymbolName input))

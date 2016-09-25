@@ -27,7 +27,8 @@ module Text.PrettyPrint.Leijen.Text.Utils
   , show''
   , showDoc
   , docFromString
-  , docFrombyteString
+  , docFromByteString
+  , docFromText
   , (<+>)
   , ppList
   , ppAlist
@@ -76,8 +77,11 @@ showDoc = docFromString . show
 docFromString :: String -> Doc
 docFromString = PP.text . TL.pack
 
-docFrombyteString :: UTF8.ByteString -> Doc
-docFrombyteString = PP.text . TLE.decodeUtf8With TEE.lenientDecode
+docFromByteString :: UTF8.ByteString -> Doc
+docFromByteString = PP.text . TLE.decodeUtf8With TEE.lenientDecode
+
+docFromText :: T.Text -> Doc
+docFromText = PP.text . TL.fromStrict
 
 ppList :: forall a f. (Pretty a, Functor f, Foldable f) => Doc -> Doc -> f a -> Doc
 ppList left right xs =

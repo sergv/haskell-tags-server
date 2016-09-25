@@ -22,6 +22,7 @@ import Control.Monad.Except
 import Data.Functor.Identity
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map as M
+import Data.Maybe
 import qualified Data.Set as S
 import qualified Data.Text as T
 import Test.Tasty
@@ -118,7 +119,7 @@ moduleWithUnqualifiedImportAndSingletonImportListTest = doTest "Module with unqu
               { ispecModuleName    = mkModuleName "Imported1"
               , ispecQualification = Unqualified
               , ispecImportList    = Just $ Imported $ KM.fromList
-                  [ EntryWithChildren (mkSymbolName "foo") Nothing
+                  [ EntryWithChildren (mkUnqualifiedSymbolName' "foo") Nothing
                   ]
               }
           )
@@ -139,9 +140,9 @@ moduleWithUnqualifiedImportAndNonemptyImportListTest = doTest "Module with unqua
               { ispecModuleName    = mkModuleName "Imported1"
               , ispecQualification = Unqualified
               , ispecImportList    = Just $ Imported $ KM.fromList
-                  [ EntryWithChildren (mkSymbolName "foo") Nothing
-                  , EntryWithChildren (mkSymbolName "bar") Nothing
-                  , EntryWithChildren (mkSymbolName "baz") Nothing
+                  [ EntryWithChildren (mkUnqualifiedSymbolName' "foo") Nothing
+                  , EntryWithChildren (mkUnqualifiedSymbolName' "bar") Nothing
+                  , EntryWithChildren (mkUnqualifiedSymbolName' "baz") Nothing
                   ]
               }
           )
@@ -162,11 +163,11 @@ moduleWithUnqualifiedImportAndNonemptyImportListWithDifferentVisibilitiesTest = 
               { ispecModuleName    = mkModuleName "Imported1"
               , ispecQualification = Unqualified
               , ispecImportList    = Just $ Imported $ KM.fromList
-                  [ EntryWithChildren (mkSymbolName "foo") Nothing
-                  , EntryWithChildren (mkSymbolName "Bar") $ Just ExportAllChildren
-                  , EntryWithChildren (mkSymbolName "Baz") $ Just $ ExportSpecificChildren $ S.fromList
-                      [ mkSymbolName "Quux"
-                      , mkSymbolName "Fizz"
+                  [ EntryWithChildren (mkUnqualifiedSymbolName' "foo") Nothing
+                  , EntryWithChildren (mkUnqualifiedSymbolName' "Bar") $ Just ExportAllChildren
+                  , EntryWithChildren (mkUnqualifiedSymbolName' "Baz") $ Just $ ExportSpecificChildren $ S.fromList
+                      [ mkUnqualifiedSymbolName' "Quux"
+                      , mkUnqualifiedSymbolName' "Fizz"
                       ]
                   ]
               }
@@ -265,10 +266,10 @@ moduleWithImportAndAliasAndHidingImportListTest = doTest "Module with import, al
               , ispecQualification =
                   BothQualifiedAndUnqualified $ mkImportQualifier $ mkModuleName "Imp"
               , ispecImportList    = Just $ Hidden $ KM.fromList
-                  [ EntryWithChildren (mkSymbolName "Foo") $ Just ExportAllChildren
-                  , EntryWithChildren (mkSymbolName "bar") Nothing
-                  , EntryWithChildren (mkSymbolName "Quux") $ Just $ ExportSpecificChildren $ S.fromList
-                      [ mkSymbolName "Baz"
+                  [ EntryWithChildren (mkUnqualifiedSymbolName' "Foo") $ Just ExportAllChildren
+                  , EntryWithChildren (mkUnqualifiedSymbolName' "bar") Nothing
+                  , EntryWithChildren (mkUnqualifiedSymbolName' "Quux") $ Just $ ExportSpecificChildren $ S.fromList
+                      [ mkUnqualifiedSymbolName' "Baz"
                       ]
                   ]
               }
@@ -282,8 +283,9 @@ moduleWithEmptyExportsTest = doTest "Module with empty exports"
   ModuleHeader
     { mhModName          = mkModuleName "ModuleWithEmptyExport"
     , mhExports          = Just ModuleExports
-        { meExportedEntries = mempty
-        , meReexports       = mempty
+        { meExportedEntries    = mempty
+        , meReexports          = mempty
+        , meHasWildcardExports = False
         }
     , mhImportQualifiers = mempty
     , mhImports          = mempty
@@ -295,16 +297,25 @@ moduleWithExportsTest = doTest "Module exports"
   ModuleHeader
     { mhModName          = mkModuleName "ModuleWithExport"
     , mhExports          = Just ModuleExports
-        { meExportedEntries = KM.fromList
-            [ EntryWithChildren (mkSymbolName "foo") Nothing
-            , EntryWithChildren (mkSymbolName "Bar") $ Just ExportAllChildren
-            , EntryWithChildren (mkSymbolName "Baz") $ Just $ ExportSpecificChildren $ S.fromList
-                [ mkSymbolName "Quux"
-                , mkSymbolName "Fizz"
-                ]
-            , EntryWithChildren (mkSymbolName "Pat") Nothing
+        { meExportedEntries    = M.fromList
+            [ ( mkUnqualifiedSymbolName' "foo"
+              , EntryWithChildren (mkSymbolName "foo") Nothing
+              )
+            , ( mkUnqualifiedSymbolName' "Bar"
+              , EntryWithChildren (mkSymbolName "Bar") $ Just ExportAllChildren
+              )
+            , ( mkUnqualifiedSymbolName' "Baz"
+              , EntryWithChildren (mkSymbolName "Baz") $ Just $ ExportSpecificChildren $ S.fromList
+                  [ mkUnqualifiedSymbolName' "Quux"
+                  , mkUnqualifiedSymbolName' "Fizz"
+                  ]
+              )
+            , ( mkUnqualifiedSymbolName' "Pat"
+              , EntryWithChildren (mkSymbolName "Pat") Nothing
+              )
             ]
-        , meReexports       = [mkModuleName "Frob"]
+        , meReexports          = [mkModuleName "Frob"]
+        , meHasWildcardExports = True
         }
     , mhImportQualifiers = mempty
     , mhImports          = mempty
@@ -334,16 +345,25 @@ moduleWithMultilineExportsTest = doTest "Module with peculiarly indented export 
   ModuleHeader
     { mhModName          = mkModuleName "ModuleWithExport"
     , mhExports          = Just ModuleExports
-        { meExportedEntries = KM.fromList
-            [ EntryWithChildren (mkSymbolName "foo") Nothing
-            , EntryWithChildren (mkSymbolName "Bar") $ Just ExportAllChildren
-            , EntryWithChildren (mkSymbolName "Baz") $ Just $ ExportSpecificChildren $ S.fromList
-                [ mkSymbolName "Quux"
-                , mkSymbolName "Fizz"
-                ]
-            , EntryWithChildren (mkSymbolName "Pat") Nothing
+        { meExportedEntries    = M.fromList
+            [ ( mkUnqualifiedSymbolName' "foo"
+              , EntryWithChildren (mkSymbolName "foo") Nothing
+              )
+            , ( mkUnqualifiedSymbolName' "Bar"
+              , EntryWithChildren (mkSymbolName "Bar") $ Just ExportAllChildren
+              )
+            , ( mkUnqualifiedSymbolName' "Baz"
+              , EntryWithChildren (mkSymbolName "Baz") $ Just $ ExportSpecificChildren $ S.fromList
+                  [ mkUnqualifiedSymbolName' "Quux"
+                  , mkUnqualifiedSymbolName' "Fizz"
+                  ]
+              )
+            , ( mkUnqualifiedSymbolName'  "Pat"
+              , EntryWithChildren (mkSymbolName "Pat") Nothing
+              )
             ]
-        , meReexports       = [mkModuleName "Frob"]
+        , meReexports          = [mkModuleName "Frob"]
+        , meHasWildcardExports = True
         }
     , mhImportQualifiers = mempty
     , mhImports          = mempty
@@ -370,9 +390,6 @@ tests = testGroup "Header analysis tests"
     , moduleWithMultilineExportsTest
     ]
   ]
-
-neSingleton :: a -> NonEmpty a
-neSingleton x = x :| []
 
 doTest :: String -> T.Text -> ModuleHeader -> TestTree
 doTest name input expectedHeader =
@@ -413,3 +430,12 @@ doTest name input expectedHeader =
     tokens :: forall m. (MonadError Doc m) => m [Token]
     tokens = either (throwError . docFromString) return $ tokenizeInput "test" False input
 
+mkUnqualifiedSymbolName' :: T.Text -> UnqualifiedSymbolName
+mkUnqualifiedSymbolName' name =
+  fromMaybe err $ mkUnqualifiedSymbolName $ mkSymbolName name
+  where
+    err = error $ "invalid unqualified symbol name: " ++ show name
+
+
+neSingleton :: a -> NonEmpty a
+neSingleton x = x :| []
