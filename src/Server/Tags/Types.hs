@@ -352,6 +352,8 @@ data ImportQualification =
     -- import qualified X as Y
     --
     -- The ModuleName field would store "Y" in this case.
+    --
+    -- import qualified X - field would store "X"
     Qualified ImportQualifier
     -- | Vanilla import, e.g.
     --
