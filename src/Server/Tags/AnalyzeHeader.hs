@@ -114,19 +114,26 @@ analyzeImports imports qualifiers ts = case dropNLs ts of
     add name qual toks = do
       (importList, toks') <- analyzeImportList toks
       let spec     = newSpec importList
-          upd prev = Just $ case prev of
-                       Nothing    -> spec :| []
-                       Just specs -> NE.cons spec specs
-          impotrs' = M.alter upd modName imports
-      analyzeImports impotrs' qualifiers toks'
+          imports' = M.alter (upd spec) modName imports
+      analyzeImports imports' qualifiers' toks'
       where
+        modName :: ModuleName
         modName = mkModuleName name
+        qualifiers' :: Map ImportQualifier (NonEmpty ModuleName)
+        qualifiers' = case getQualifier qual of
+                        Just q  -> M.alter (upd modName) q qualifiers
+                        Nothing -> qualifiers
         newSpec :: Maybe ImportList -> ImportSpec
         newSpec importList = ImportSpec
           { ispecModuleName    = modName
           , ispecQualification = qual
           , ispecImportList    = importList
           }
+        upd :: a -> Maybe (NonEmpty a) -> Maybe (NonEmpty a)
+        upd x prev  = Just $
+          case prev of
+            Nothing    -> x :| []
+            Just specs -> NE.cons x specs
     -- Analyze comma-separated list of entries like
     -- - Foo
     -- - Foo(Bar, Baz)
