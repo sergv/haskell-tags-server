@@ -30,6 +30,7 @@ module Text.PrettyPrint.Leijen.Text.Utils
   , docFrombyteString
   , (<+>)
   , ppList
+  , ppAlist
   , ppDict
   , ppListWithHeader
   , ppMap
@@ -92,13 +93,16 @@ ppList left right xs =
   where
     separator = ","
 
-ppDict :: (Pretty a) => Doc -> [MapEntry TL.Text a] -> Doc
-ppDict header entries =
-  header PP.<$>
-  PP.indent 2 (ppList PP.lbrace PP.rbrace entries')
+ppAlist :: (Pretty a) => [MapEntry TL.Text a] -> Doc
+ppAlist entries = ppList PP.lbrace PP.rbrace entries'
   where
     entries' = map (\(k :-> v) -> PP.fillBreak maxWidth (PP.text k) :-> v) entries
     maxWidth = fromIntegral $ maximum $ map (\(k :-> _) -> TL.length k) entries
+
+ppDict :: (Pretty a) => Doc -> [MapEntry TL.Text a] -> Doc
+ppDict header entries =
+  header PP.<$>
+  PP.indent 2 (ppAlist entries)
 
 ppListWithHeader :: (Pretty a) => Doc -> [a] -> Doc
 ppListWithHeader header entries =

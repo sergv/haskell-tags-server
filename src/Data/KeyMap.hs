@@ -25,8 +25,10 @@ module Data.KeyMap
   , lookup
   , member
   , notMember
+  , fromList
   ) where
 
+import Control.Arrow
 import Data.Coerce
 import qualified Data.Map as M
 import Prelude hiding (lookup)
@@ -56,3 +58,6 @@ member k = M.member k . unKeyMap
 
 notMember :: (HasKey a) => Key a -> KeyMap a -> Bool
 notMember k = M.notMember k . unKeyMap
+
+fromList :: (HasKey a) => [a] -> KeyMap a
+fromList = KeyMap . M.fromList . map (getKey &&& id)

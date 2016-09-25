@@ -57,10 +57,10 @@ library
     Data.Promise
     Server.BERT
     Server.Tags
+    Server.Tags.AnalyzeHeader
     Server.Tags.Types
     Text.PrettyPrint.Leijen.Text.Utils
   other-modules:
-    Server.Tags.AnalyzeHeader
     Server.Tags.LoadModule
     Server.Tags.Search
     Server.Tags.SearchM
@@ -112,9 +112,11 @@ test-suite test-tags-server
   main-is:
     Main.hs
   other-modules:
+    Control.Monad.Logging.DiscardLogs
     PortPool
     ServerTests
     ServerTests.LogCollectingServer
+    Server.Tags.AnalyzeHeaderTests
     Server.Tags.TypesTests
   build-depends:
     base,
@@ -123,16 +125,19 @@ test-suite test-tags-server
     directory,
     dlist,
     exceptions,
+    fast-tags,
     filepath,
     monad-control,
     mtl,
     network,
     regex-tdfa,
     regex-tdfa-text,
+    semigroups,
     stm,
     tags-server,
     tasty >=0.7,
     tasty-hunit >=0.4,
+    template-haskell,
     text,
     transformers-base,
     utf8-string,

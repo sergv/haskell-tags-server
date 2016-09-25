@@ -15,8 +15,9 @@ module Main (main) where
 
 import Test.Tasty
 
-import qualified ServerTests
+import qualified Server.Tags.AnalyzeHeaderTests as AnalyzeHeaderTests
 import qualified Server.Tags.TypesTests as TypesTests
+import qualified ServerTests
 
 main :: IO ()
 main = do
@@ -25,4 +26,5 @@ main = do
   defaultMain $ testGroup "Tests"
     [ ServerTests.tests
     , TypesTests.tests
+    , AnalyzeHeaderTests.tests
     ]
