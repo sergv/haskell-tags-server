@@ -137,7 +137,6 @@ loadModuleFromFile moduleName modifTime filename = do
         { modHeader       = fromMaybe defaultHeader header
         , modParentMap    = parentSymbols
         , modAllSymbols   = allSymbols
-        , modSource       = source
         , modFile         = filename
         , modLastModified = modifTime'
         }

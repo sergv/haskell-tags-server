@@ -277,8 +277,6 @@ data Module = Module
   , modParentMap        :: Map UnqualifiedSymbolName UnqualifiedSymbolName
     -- | All symbols defined in this module. Keys are unqualified names.
   , modAllSymbols       :: Map UnqualifiedSymbolName ResolvedSymbol
-    -- | Module source code.
-  , modSource           :: Text
     -- | File the module was loaded from.
   , modFile             :: FilePath
     -- | Time as reported by getModificationTime.
@@ -302,6 +300,7 @@ instance Pretty Module where
 
 data ModuleHeader = ModuleHeader
   { mhModName          :: ModuleName
+    -- | Exports of a module. Nothing - everything is exported
   , mhExports          :: Maybe ModuleExports
     -- | Mapping from qualifiers to original module names. Single qualifier
     -- may be used for several modules.
@@ -310,7 +309,6 @@ data ModuleHeader = ModuleHeader
     -- NB same module name may be present several times with different qualifications
     -- because it may be imported several times.
   , mhImports          :: Map ModuleName (NonEmpty ImportSpec)
-    -- | Exports of a module. Nothing - everything is exported
   } deriving (Show, Eq, Ord)
 
 instance Pretty ModuleHeader where
