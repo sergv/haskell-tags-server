@@ -18,12 +18,10 @@ module Server.Tags.TypesTests (tests) where
 
 import Control.Arrow (second)
 import Data.Text (Text)
-import qualified Data.Text.Lazy as TL
 import Test.Tasty
 import Test.Tasty.HUnit
 
 import Server.Tags.Types
-import Text.PrettyPrint.Leijen.Text.Utils (displayDoc)
 
 tests :: TestTree
 tests = testGroup "Type tests"
