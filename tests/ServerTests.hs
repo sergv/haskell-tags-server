@@ -316,19 +316,19 @@ testData = GroupTest "server tests"
             , "Foo2"
             , Known "ModuleWithExplicitExport.hs" 19 "Type"
             )
-          , ( "import wildcard-exported name #2"
+          , ( "import explicitly exported name #1"
             , "Bar2"
             , Known "ModuleWithExplicitExport.hs" 19 "Constructor"
             )
-          , ( "import wildcard-exported name #3"
+          , ( "import explicitly exported name #2"
             , "Baz2"
             , NotFound
             )
-          , ( "import wildcard-exported name #4"
+          , ( "import explicitly exported name #3"
             , "getBar2"
             , Known "ModuleWithExplicitExport.hs" 19 "Function"
             )
-          , ( "import wildcard-exported name #5"
+          , ( "import explicitly exported name #4"
             , "getBaz2"
             , NotFound
             )
