@@ -53,6 +53,7 @@ module Server.Tags.Types
   , resolvedSymbolParent
   , resolvedSymbolPosition
   , Module(..)
+  , moduleNeedsReloading
   , ModuleHeader(..)
   , resolveQualifier
   , ImportSpec(..)
@@ -94,6 +95,8 @@ import Text.PrettyPrint.Leijen.Text.Utils
 
 import FastTags (Pos(..), TagVal(..), Type(..), SrcPos(..), Line(..))
 
+import Control.Monad.Filesystem (MonadFS)
+import qualified Control.Monad.Filesystem as MonadFS
 import Data.CompiledRegex
 import Data.KeyMap (KeyMap, HasKey(..))
 import Data.Promise (Promise)
@@ -281,6 +284,11 @@ data Module = Module
     -- | Time as reported by getModificationTime.
   , modLastModified     :: UTCTime
   } deriving (Show, Eq, Ord)
+
+moduleNeedsReloading :: (MonadFS m) => Module -> m (Bool, UTCTime)
+moduleNeedsReloading m = do
+  modifTime <- MonadFS.getModificationTime $ modFile m
+  pure $ (modLastModified m /= modifTime, modifTime)
 
 instance Pretty Module where
   pretty mod =

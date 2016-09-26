@@ -85,10 +85,10 @@ reloadIfFileChanged
   => Module
   -> m Module
 reloadIfFileChanged m = do
-  modifTime <- MonadFS.getModificationTime $ modFile m
-  if modLastModified m /= modifTime
+  (needsReloading, modifTime) <- moduleNeedsReloading m
+  if needsReloading
   then do
-    logDebug $ "[reloadIfFileChanged] reloading module " <> showDoc (mhModName $ modHeader m)
+    logDebug $ "[reloadIfFileChanged] reloading module" <+> showDoc (mhModName $ modHeader m)
     loadModuleFromFile (mhModName (modHeader m)) (Just modifTime) $ modFile m
   else return m
 
