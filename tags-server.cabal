@@ -55,7 +55,10 @@ library
     Data.Condition
     Data.Foldable.Ext
     Data.KeyMap
+    Data.MonoidalMap
     Data.Promise
+    Data.SymbolMap
+    Data.Symbols
     Server.BERT
     Server.Tags
     Server.Tags.AnalyzeHeader
@@ -74,7 +77,7 @@ library
     -fwarn-monomorphism-restriction
     -fno-warn-type-defaults
     -fno-warn-name-shadowing
-    -ferror-spans -rtsopts
+    -ferror-spans
   ghc-prof-options:
     -fprof-auto
 

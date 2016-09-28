@@ -12,7 +12,6 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -32,26 +31,7 @@ module Server.Tags.Types
   , emptyTagsServerState
 
     -- * Types for representing Haskell modules
-  , ModuleName
-  , getModuleName
-  , mkModuleName
-  , ImportQualifier
-  , mkImportQualifier
-  , getImportQualifier
-  , SymbolName
-  , getSymbolName
-  , mkSymbolName
   , isModuleNameConstituentChar
-  , UnqualifiedSymbolName
-  , getUnqualifiedSymbolName
-  , mkUnqualifiedSymbolName
-  , splitQualifiedPart
-  , ResolvedSymbol
-  , mkSymbol
-  , resolvedSymbolName
-  , resolvedSymbolType
-  , resolvedSymbolParent
-  , resolvedSymbolPosition
   , Module(..)
   , moduleNeedsReloading
   , ModuleHeader(..)
@@ -83,23 +63,20 @@ import Data.Monoid
 import qualified Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
-import Data.Text (Text)
-import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
 import Data.Time.Clock (UTCTime(..))
 import Data.Traversable (for)
 import System.Directory
 import System.FilePath.Find (FileType(Directory), find, fileType, (==?), always)
-import qualified Text.PrettyPrint.Leijen.Text as PP
 import Text.PrettyPrint.Leijen.Text.Utils
 
-import FastTags (Pos(..), TagVal(..), Type(..), SrcPos(..), Line(..))
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
 import Data.CompiledRegex
 import Data.KeyMap (KeyMap, HasKey(..))
 import Data.Promise (Promise)
+import Data.SymbolMap (SymbolMap)
+import Data.Symbols
 
 -- | Types of user requests that can be handled.
 data Request =
@@ -161,107 +138,10 @@ data TagsServerState = TagsServerState
 emptyTagsServerState :: TagsServerState
 emptyTagsServerState = TagsServerState mempty
 
-
--- e.g. Foo, Foo.Bar
-newtype ModuleName = ModuleName { getModuleName :: Text }
-  deriving (Show, Eq, Ord)
-
-instance Pretty ModuleName where
-  pretty = PP.text . TL.fromStrict . getModuleName
-
-mkModuleName :: Text -> ModuleName
-mkModuleName = ModuleName
-
--- | Custom module name used for qualification. This is the XXX part of the
--- import statement:
---
--- import Foo.Bar as XXX
--- import qualified Fizz.Buzz as XXX
-newtype ImportQualifier = ImportQualifier { getImportQualifier :: ModuleName }
-  deriving (Show, Eq, Ord, Pretty)
-
-mkImportQualifier :: ModuleName -> ImportQualifier
-mkImportQualifier = ImportQualifier
-
--- | Name the @ResolvedSymbol@ refers to. Can be either qualified or unqualified.
-newtype SymbolName = SymbolName { getSymbolName :: Text }
-  deriving (Show, Eq, Ord)
-
-instance Pretty SymbolName where
-  pretty = PP.text . TL.fromStrict . getSymbolName
-
-mkSymbolName :: Text -> SymbolName
-mkSymbolName = SymbolName
-
--- | Name the @ResolvedSymbol@ refers to.
-newtype UnqualifiedSymbolName = UnqualifiedSymbolName { getUnqualifiedSymbolName :: SymbolName }
-  deriving (Show, Eq, Ord)
-
-instance Pretty UnqualifiedSymbolName where
-  pretty = pretty . getUnqualifiedSymbolName
-
-mkUnqualifiedSymbolName :: SymbolName -> Maybe UnqualifiedSymbolName
-mkUnqualifiedSymbolName name
-  | isQualified name = Nothing
-  | otherwise        = Just $ UnqualifiedSymbolName name
-  where
-    isQualified :: SymbolName -> Bool
-    isQualified = T.any (== '.') . getSymbolName
-
--- | Split qualified symbol name (e.g. Foo.Bar.baz) into
--- qualified module part (Foo.Bar) and name part (baz). Return Nothing
-splitQualifiedPart
-  :: SymbolName
-  -> (Maybe ImportQualifier, UnqualifiedSymbolName)
-splitQualifiedPart sym =
-  case reverse $ T.split (=='.') $ getSymbolName sym of
-    []             -> (Nothing, UnqualifiedSymbolName sym)
-    [sym']         -> (Nothing, UnqualifiedSymbolName $ SymbolName sym')
-    sym' : modPart -> (Just qual, UnqualifiedSymbolName $ SymbolName sym')
-      where
-        qual = mkImportQualifier $ mkModuleName $ T.intercalate "." $ reverse modPart
-
 isModuleNameConstituentChar :: Char -> Bool
 isModuleNameConstituentChar '\'' = True
 isModuleNameConstituentChar '_'  = True
 isModuleNameConstituentChar c    = isAlphaNum c
-
--- | A symbolic name that identifier some Haskell entity. Has position,
--- entity type and possibly a parent.
-newtype ResolvedSymbol = ResolvedSymbol (Pos TagVal)
-  deriving (Show, Eq, Ord)
-
-instance Pretty ResolvedSymbol where
-  pretty sym@(ResolvedSymbol _) =
-    ppDict "ResolvedSymbol"
-      [ "name"     :-> pretty (resolvedSymbolName sym)
-      , "type"     :-> ppType (resolvedSymbolType sym)
-      , "parent"   :-> pretty (resolvedSymbolParent sym)
-      , "position" :-> ppSrcPos (resolvedSymbolPosition sym)
-      ]
-    where
-      ppType :: Type -> Doc
-      ppType = showDoc
-
-      ppSrcPos :: SrcPos -> Doc
-      ppSrcPos (SrcPos file line _) = docFromString file <> ":" <> pretty (unLine line)
-
-mkSymbol :: Pos TagVal -> ResolvedSymbol
-mkSymbol = ResolvedSymbol
-
-resolvedSymbolName :: ResolvedSymbol -> UnqualifiedSymbolName
-resolvedSymbolName (ResolvedSymbol (Pos _ (TagVal name _ _))) =
-  UnqualifiedSymbolName $ SymbolName name
-
-resolvedSymbolType :: ResolvedSymbol -> Type
-resolvedSymbolType (ResolvedSymbol (Pos _ (TagVal _ typ _))) = typ
-
-resolvedSymbolParent :: ResolvedSymbol -> Maybe UnqualifiedSymbolName
-resolvedSymbolParent (ResolvedSymbol (Pos _ (TagVal _ _ parent))) =
-  UnqualifiedSymbolName . SymbolName <$> parent
-
-resolvedSymbolPosition :: ResolvedSymbol -> SrcPos
-resolvedSymbolPosition (ResolvedSymbol (Pos pos _)) = pos
 
 data Module = Module
   { modHeader           :: ModuleHeader
@@ -271,22 +151,23 @@ data Module = Module
     -- -- for datatype Foo, and Foo will be a key in this map.
   -- , modChildrenMap      :: Map SymbolName (NonEmpty SymbolName)
 
-    -- | Map from children entities to parents containing them. E.g.
-    -- constructors are mapped to their corresponding datatypes, typeclass
-    -- members - to typeclass names, etc.
-  , modParentMap        :: Map UnqualifiedSymbolName UnqualifiedSymbolName
-    -- | All symbols defined in this module. Keys are unqualified names.
-  , modAllSymbols       :: Map UnqualifiedSymbolName ResolvedSymbol
+    -- | All symbols defined in this module.
+  , modAllSymbols       :: SymbolMap
     -- | File the module was loaded from.
   , modFile             :: FilePath
     -- | Time as reported by getModificationTime.
   , modLastModified     :: UTCTime
+    -- | All names that this module brings into scope
+  , meAllExportedNames  :: SymbolMap
+    -- | Whether some imports of this module were updated and thus revolved
+    -- module exports are no longer valid.
+  , meIsDirty           :: Bool
   } deriving (Show, Eq, Ord)
 
 moduleNeedsReloading :: (MonadFS m) => Module -> m (Bool, UTCTime)
 moduleNeedsReloading m = do
   modifTime <- MonadFS.getModificationTime $ modFile m
-  pure $ (modLastModified m /= modifTime, modifTime)
+  pure (modLastModified m /= modifTime || meIsDirty m, modifTime)
 
 instance Pretty Module where
   pretty mod =
@@ -295,7 +176,7 @@ instance Pretty Module where
       , "File"          :-> pretty (modFile mod)
       , "Last modified" :-> showDoc (modLastModified mod)
       , "Header"        :-> pretty (modHeader mod)
-      , "Names"         :-> ppMap (modAllSymbols mod)
+      , "Names"         :-> pretty (modAllSymbols mod)
       ]
 
 data ModuleHeader = ModuleHeader
@@ -434,20 +315,20 @@ instance Pretty ImportList where
         Hidden   items -> ("Hidden",   items)
 
 data ModuleExports = ModuleExports
-  { -- | Toplevel names exported from this particular module as specifie in
+  { -- | Toplevel names exported from this particular module as specified in
     -- the header.
-    meExportedEntries    :: Map UnqualifiedSymbolName (EntryWithChildren SymbolName)
+    meExportedEntries    :: KeyMap (EntryWithChildren SymbolName)
+    -- | Module name here can refer to either real module or to a qualifier.
   , meReexports          :: [ModuleName]
     -- | Whether this module exports some entities that export all children.
   , meHasWildcardExports :: Bool
-  -- , meAllExportedNames :: Set SymbolName
   } deriving (Show, Eq, Ord)
 
 instance Pretty ModuleExports where
   pretty exports =
     ppDict "ModuleExports"
-      [ "ExportedEntries"    :-> pretty (ppList "[" "]" $ toList $ meExportedEntries exports)
-      , "Reexports"          :-> pretty (meReexports exports)
+      [ "ExportedEntries"    :-> ppList (toList $ meExportedEntries exports)
+      , "Reexports"          :-> ppList (meReexports exports)
       , "HasWildcardExports" :-> pretty (meHasWildcardExports exports)
       ]
 
@@ -456,8 +337,10 @@ instance Monoid ModuleExports where
   mappend (ModuleExports x y z) (ModuleExports x' y' z') =
     ModuleExports (x <> x') (y <> y') (z || z')
 
-data EntryWithChildren name = EntryWithChildren name (Maybe ChildrenVisibility)
-  deriving (Show, Eq, Ord)
+data EntryWithChildren name = EntryWithChildren
+  { entryName               :: name
+  , entryChildrenVisibility :: Maybe ChildrenVisibility
+  } deriving (Show, Eq, Ord)
 
 instance (Pretty name) => Pretty (EntryWithChildren name) where
   pretty (EntryWithChildren name children) =
@@ -477,18 +360,18 @@ instance (Ord a) => HasKey (EntryWithChildren a) where
 
 data ChildrenVisibility =
     -- | Wildcard import/export, e.g. Foo(..)
-    ExportAllChildren
+    VisibleAllChildren
     -- | Import/export with explicit list of children, e.g. Foo(Bar, Baz), Quux(foo, bar).
     -- Set is always non-empty.
-  | ExportSpecificChildren (Set UnqualifiedSymbolName)
+  | VisibleSpecificChildren (Set UnqualifiedSymbolName)
   deriving (Show, Eq, Ord)
 
 instance Pretty ChildrenVisibility where
   pretty = \case
-    ExportAllChildren               -> "ExportAllChildren"
-    ExportSpecificChildren children ->
-      ppListWithHeader "ExportSpecificChildren" $ toList children
+    VisibleAllChildren               -> "VisibleAllChildren"
+    VisibleSpecificChildren children ->
+      ppListWithHeader "VisibleSpecificChildren" $ toList children
 
 isChildExported :: UnqualifiedSymbolName -> ChildrenVisibility -> Bool
-isChildExported _    ExportAllChildren                 = True
-isChildExported name (ExportSpecificChildren exported) = S.member name exported
+isChildExported _    VisibleAllChildren                 = True
+isChildExported name (VisibleSpecificChildren exported) = S.member name exported

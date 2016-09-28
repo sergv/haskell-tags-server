@@ -46,6 +46,7 @@ import FastTags (SrcPos(..), Type, Line(..))
 import qualified Network.BERT.Server as BERT
 import qualified Network.BERT.Transport as BERT
 
+import Data.Symbols
 import Data.Condition
 import Data.CompiledRegex
 import qualified Data.Promise as Promise

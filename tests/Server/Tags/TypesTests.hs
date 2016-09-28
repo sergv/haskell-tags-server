@@ -21,7 +21,7 @@ import Data.Text (Text)
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import Server.Tags.Types
+import Data.Symbols
 
 tests :: TestTree
 tests = testGroup "Type tests"

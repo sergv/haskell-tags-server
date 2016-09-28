@@ -20,12 +20,14 @@
 
 module Data.KeyMap
   ( KeyMap
+  , unKeyMap
   , HasKey(..)
   , insert
   , lookup
   , member
   , notMember
   , fromList
+  , toList
   ) where
 
 import Control.Arrow
@@ -61,3 +63,6 @@ notMember k = M.notMember k . unKeyMap
 
 fromList :: (HasKey a) => [a] -> KeyMap a
 fromList = KeyMap . M.fromList . map (getKey &&& id)
+
+toList :: (HasKey a) => KeyMap a -> [(Key a, a)]
+toList = M.toList . unKeyMap

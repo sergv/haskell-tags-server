@@ -32,8 +32,10 @@ import qualified Text.PrettyPrint.Leijen.Text as PP
 import FastTags (tokenizeInput)
 import Token (Token)
 
+
 import Control.Monad.Logging.DiscardLogs
 import qualified Data.KeyMap as KM
+import Data.Symbols
 import Server.Tags.AnalyzeHeader
 import Server.Tags.Types
 import Text.PrettyPrint.Leijen.Text.Utils
@@ -164,8 +166,8 @@ moduleWithUnqualifiedImportAndNonemptyImportListWithDifferentVisibilitiesTest = 
               , ispecQualification = Unqualified
               , ispecImportList    = Just $ Imported $ KM.fromList
                   [ EntryWithChildren (mkUnqualifiedSymbolName' "foo") Nothing
-                  , EntryWithChildren (mkUnqualifiedSymbolName' "Bar") $ Just ExportAllChildren
-                  , EntryWithChildren (mkUnqualifiedSymbolName' "Baz") $ Just $ ExportSpecificChildren $ S.fromList
+                  , EntryWithChildren (mkUnqualifiedSymbolName' "Bar") $ Just VisibleAllChildren
+                  , EntryWithChildren (mkUnqualifiedSymbolName' "Baz") $ Just $ VisibleSpecificChildren $ S.fromList
                       [ mkUnqualifiedSymbolName' "Quux"
                       , mkUnqualifiedSymbolName' "Fizz"
                       ]
@@ -266,9 +268,9 @@ moduleWithImportAndAliasAndHidingImportListTest = doTest "Module with import, al
               , ispecQualification =
                   BothQualifiedAndUnqualified $ mkImportQualifier $ mkModuleName "Imp"
               , ispecImportList    = Just $ Hidden $ KM.fromList
-                  [ EntryWithChildren (mkUnqualifiedSymbolName' "Foo") $ Just ExportAllChildren
+                  [ EntryWithChildren (mkUnqualifiedSymbolName' "Foo") $ Just VisibleAllChildren
                   , EntryWithChildren (mkUnqualifiedSymbolName' "bar") Nothing
-                  , EntryWithChildren (mkUnqualifiedSymbolName' "Quux") $ Just $ ExportSpecificChildren $ S.fromList
+                  , EntryWithChildren (mkUnqualifiedSymbolName' "Quux") $ Just $ VisibleSpecificChildren $ S.fromList
                       [ mkUnqualifiedSymbolName' "Baz"
                       ]
                   ]
@@ -297,22 +299,14 @@ moduleWithExportsTest = doTest "Module exports"
   ModuleHeader
     { mhModName          = mkModuleName "ModuleWithExport"
     , mhExports          = Just ModuleExports
-        { meExportedEntries    = M.fromList
-            [ ( mkUnqualifiedSymbolName' "foo"
-              , EntryWithChildren (mkSymbolName "foo") Nothing
-              )
-            , ( mkUnqualifiedSymbolName' "Bar"
-              , EntryWithChildren (mkSymbolName "Bar") $ Just ExportAllChildren
-              )
-            , ( mkUnqualifiedSymbolName' "Baz"
-              , EntryWithChildren (mkSymbolName "Baz") $ Just $ ExportSpecificChildren $ S.fromList
-                  [ mkUnqualifiedSymbolName' "Quux"
-                  , mkUnqualifiedSymbolName' "Fizz"
-                  ]
-              )
-            , ( mkUnqualifiedSymbolName' "Pat"
-              , EntryWithChildren (mkSymbolName "Pat") Nothing
-              )
+        { meExportedEntries    = KM.fromList
+            [ EntryWithChildren (mkSymbolName "foo") Nothing
+            , EntryWithChildren (mkSymbolName "Bar") $ Just VisibleAllChildren
+            , EntryWithChildren (mkSymbolName "Baz") $ Just $ VisibleSpecificChildren $ S.fromList
+                [ mkUnqualifiedSymbolName' "Quux"
+                , mkUnqualifiedSymbolName' "Fizz"
+                ]
+            , EntryWithChildren (mkSymbolName "Pat") Nothing
             ]
         , meReexports          = [mkModuleName "Frob"]
         , meHasWildcardExports = True
@@ -345,22 +339,14 @@ moduleWithMultilineExportsTest = doTest "Module with peculiarly indented export 
   ModuleHeader
     { mhModName          = mkModuleName "ModuleWithExport"
     , mhExports          = Just ModuleExports
-        { meExportedEntries    = M.fromList
-            [ ( mkUnqualifiedSymbolName' "foo"
-              , EntryWithChildren (mkSymbolName "foo") Nothing
-              )
-            , ( mkUnqualifiedSymbolName' "Bar"
-              , EntryWithChildren (mkSymbolName "Bar") $ Just ExportAllChildren
-              )
-            , ( mkUnqualifiedSymbolName' "Baz"
-              , EntryWithChildren (mkSymbolName "Baz") $ Just $ ExportSpecificChildren $ S.fromList
-                  [ mkUnqualifiedSymbolName' "Quux"
-                  , mkUnqualifiedSymbolName' "Fizz"
-                  ]
-              )
-            , ( mkUnqualifiedSymbolName'  "Pat"
-              , EntryWithChildren (mkSymbolName "Pat") Nothing
-              )
+        { meExportedEntries    = KM.fromList
+            [ EntryWithChildren (mkSymbolName "foo") Nothing
+            , EntryWithChildren (mkSymbolName "Bar") $ Just VisibleAllChildren
+            , EntryWithChildren (mkSymbolName "Baz") $ Just $ VisibleSpecificChildren $ S.fromList
+                [ mkUnqualifiedSymbolName' "Quux"
+                , mkUnqualifiedSymbolName' "Fizz"
+                ]
+            , EntryWithChildren (mkSymbolName "Pat") Nothing
             ]
         , meReexports          = [mkModuleName "Frob"]
         , meHasWildcardExports = True

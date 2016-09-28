@@ -42,6 +42,7 @@ import FastTags (stripNewlines, UnstrippedTokens(..))
 import Control.Monad.Logging
 import Data.KeyMap (KeyMap)
 import qualified Data.KeyMap as KM
+import Data.Symbols
 import Server.Tags.Types
 import Text.PrettyPrint.Leijen.Text.Utils
 
@@ -167,9 +168,6 @@ analyzeImports imports qualifiers ts = case dropNLs ts of
             rest ->
               throwError $ "Unrecognized shape of import list:" <+> pretty (Tokens rest)
 
-stripQualification :: SymbolName -> UnqualifiedSymbolName
-stripQualification = snd . splitQualifiedPart
-
 analyzeExports
   :: forall m. (MonadError Doc m, MonadLog m)
   => Map ImportQualifier (NonEmpty ModuleName)
@@ -188,7 +186,7 @@ analyzeExports importQualifiers ts =
     -- - Quux(..)
     -- - pattern PFoo
     -- - module Data.Foo.Bar
-    go :: Map UnqualifiedSymbolName (EntryWithChildren SymbolName)
+    go :: KeyMap (EntryWithChildren SymbolName)
        -> [ModuleName]
        -> [Token]
        -> m ModuleExports
@@ -199,9 +197,9 @@ analyzeExports importQualifiers ts =
         (children, rest') <- analyzeChildren "export" rest
         let name'    = mkSymbolName name
             newEntry = EntryWithChildren name' children
-        consumeComma (M.insert (stripQualification name') newEntry entries) reexports rest'
+        consumeComma (KM.insert newEntry entries) reexports rest'
       PPattern : PName name : rest ->
-        consumeComma (M.insert (stripQualification name') newEntry entries) reexports rest
+        consumeComma (KM.insert newEntry entries) reexports rest
         where
           name'    = mkSymbolName name
           newEntry = mkEntryWithoutChildren name'
@@ -223,11 +221,11 @@ analyzeExports importQualifiers ts =
         exportsAllChildren (EntryWithChildren _ visibility) =
           maybe mempty isExportAllChildren visibility
           where
-            isExportAllChildren ExportAllChildren          = Any True
-            isExportAllChildren (ExportSpecificChildren _) = mempty
+            isExportAllChildren VisibleAllChildren          = Any True
+            isExportAllChildren (VisibleSpecificChildren _) = mempty
     -- Continue parsing by consuming comma delimiter.
     consumeComma
-      :: Map UnqualifiedSymbolName (EntryWithChildren SymbolName)
+      :: KeyMap (EntryWithChildren SymbolName)
       -> [ModuleName]
       -> [Token]
       -> m ModuleExports
@@ -240,13 +238,13 @@ analyzeChildren listType = \case
   []                                     -> pure (Nothing, [])
   toks@(PComma : _)                      -> pure (Nothing, toks)
   toks@(PRParen : _)                     -> pure (Nothing, toks)
-  -- PLParen : PDot : PDot : PRParen : rest -> pure (Just ExportAllChildren, rest)
-  PLParen : PName ".." : PRParen : rest  -> pure (Just ExportAllChildren, rest)
+  -- PLParen : PDot : PDot : PRParen : rest -> pure (Just VisibleAllChildren, rest)
+  PLParen : PName ".." : PRParen : rest  -> pure (Just VisibleAllChildren, rest)
   PLParen : PRParen : rest               -> pure (Nothing, rest)
   PLParen : rest@(PName _ : _)           -> do
     -- (children, rest') <- analyzeCommaSeparatedNameList rest
     (children, rest') <- extractChildren mempty rest
-    pure (Just $ ExportSpecificChildren children, rest')
+    pure (Just $ VisibleSpecificChildren children, rest')
   toks ->
     throwError $ "Cannot handle" <+> listType <+> "children list:" <+> pretty (Tokens toks)
   where
@@ -299,7 +297,7 @@ instance Pretty Tokens where
   pretty (Tokens ts@(t : _)) =
     ppDict "Tokens"
       [ "file"   :-> showDoc (posFile $ posOf t)
-      , "tokens" :-> ppList "[" "]" (map ppTokenVal ts)
+      , "tokens" :-> ppList (map ppTokenVal ts)
       ]
     where
       ppTokenVal :: Pos TokenVal -> Doc

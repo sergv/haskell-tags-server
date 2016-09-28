@@ -31,11 +31,14 @@ module Text.PrettyPrint.Leijen.Text.Utils
   , docFromText
   , (<+>)
   , ppList
+  , ppList'
   , ppAlist
   , ppDict
   , ppListWithHeader
   , ppMap
+  , ppKeyMap
   , ppNE
+  , ppSet
   , MapEntry(..)
   , Pretty(..)
   , Doc
@@ -48,6 +51,7 @@ import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Monoid
+import Data.Set (Set)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding.Error as TEE
 import qualified Data.Text.Lazy as TL
@@ -55,6 +59,9 @@ import qualified Data.Text.Lazy.Encoding as TLE
 import qualified Data.Text.Lazy.IO as TLIO
 import Text.PrettyPrint.Leijen.Text (Pretty(..), Doc, (<+>))
 import qualified Text.PrettyPrint.Leijen.Text as PP
+
+import Data.KeyMap (KeyMap)
+import qualified Data.KeyMap as KM
 
 putDocLn :: (MonadBase IO m) => Doc -> m ()
 putDocLn = liftBase . TLIO.putStrLn . displayDoc
@@ -83,8 +90,11 @@ docFromByteString = PP.text . TLE.decodeUtf8With TEE.lenientDecode
 docFromText :: T.Text -> Doc
 docFromText = PP.text . TL.fromStrict
 
-ppList :: forall a f. (Pretty a, Functor f, Foldable f) => Doc -> Doc -> f a -> Doc
-ppList left right xs =
+ppList :: forall a. (Pretty a) => [a] -> Doc
+ppList = ppList' PP.lbracket PP.rbracket
+
+ppList' :: forall a f. (Pretty a, Functor f, Foldable f) => Doc -> Doc -> f a -> Doc
+ppList' left right xs =
   case toList xs of
     []   -> left <> right
     [y]  -> left <> PP.pretty y <> right
@@ -98,7 +108,7 @@ ppList left right xs =
     separator = ","
 
 ppAlist :: (Pretty a) => [MapEntry TL.Text a] -> Doc
-ppAlist entries = ppList PP.lbrace PP.rbrace entries'
+ppAlist entries = ppList' PP.lbrace PP.rbrace entries'
   where
     entries' = map (\(k :-> v) -> PP.fillBreak maxWidth (PP.text k) :-> v) entries
     maxWidth = fromIntegral $ maximum $ map (\(k :-> _) -> TL.length k) entries
@@ -114,10 +124,19 @@ ppListWithHeader header entries =
   PP.indent 2 (PP.vsep (map (("-" PP.<+>) . pretty) entries))
 
 ppMap :: (Pretty a, Pretty b) => Map a b -> Doc
-ppMap = ppList PP.lbrace PP.rbrace . map (uncurry (:->)) . M.toList
+ppMap = ppAlist' . M.toList
+
+ppKeyMap :: (KM.HasKey a, Pretty (KM.Key a), Pretty a) => KeyMap a -> Doc
+ppKeyMap = ppAlist' . KM.toList
+
+ppAlist' :: (Pretty k, Pretty v) => [(k, v)] -> Doc
+ppAlist' = ppList' PP.lbrace PP.rbrace . map (uncurry (:->))
 
 ppNE :: (Pretty a) => NonEmpty a -> Doc
-ppNE = ppList "[" "]" . toList
+ppNE = ppList' PP.lbracket PP.rbracket . toList
+
+ppSet :: (Pretty a) => Set a -> Doc
+ppSet = ppList' PP.lbrace PP.rbrace . toList
 
 infix 0 :->
 

@@ -291,19 +291,19 @@ testData = GroupTest "server tests"
             , "Foo"
             , Known "ModuleWithWildcardExport.hs" 19 "Type"
             )
-          , ( "import wildcard-exported name #2"
+          , ( "import wildcard-exported name #1"
             , "Bar"
             , Known "ModuleWithWildcardExport.hs" 19 "Constructor"
             )
-          , ( "import wildcard-exported name #3"
+          , ( "import wildcard-exported name #2"
             , "Baz"
             , Known "ModuleWithWildcardExport.hs" 20 "Constructor"
             )
-          , ( "import wildcard-exported name #4"
+          , ( "import wildcard-exported name #3"
             , "getBar"
             , Known "ModuleWithWildcardExport.hs" 19 "Function"
             )
-          , ( "import wildcard-exported name #5"
+          , ( "import wildcard-exported name #4"
             , "getBaz"
             , Known "ModuleWithWildcardExport.hs" 20 "Function"
             )
