@@ -109,11 +109,11 @@ lookupChildren sym = M.lookup sym . smChildrenMap
 
 fromList :: [ResolvedSymbol] -> SymbolMap
 fromList syms = SymbolMap
-  { smParentMap   = M.fromList $
+  { smParentMap   = M.fromListWith (<>) $
       map (second S.singleton) symbolsWithParents
-  , smChildrenMap = M.fromList $
+  , smChildrenMap = M.fromListWith (<>) $
       map (\(child, parent) -> (parent, S.singleton child)) symbolsWithParents
-  , smAllSymbols  = M.fromList $
+  , smAllSymbols  = M.fromListWith (Semigroup.<>) $
       map (resolvedSymbolName &&& (:| [])) syms
   }
   where
