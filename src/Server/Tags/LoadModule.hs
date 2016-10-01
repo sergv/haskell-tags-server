@@ -39,6 +39,7 @@ import System.FilePath
 import qualified Text.PrettyPrint.Leijen.Text as PP
 
 import FastTags (tokenizeInput, processTokens)
+import Token (Token)
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
@@ -112,8 +113,19 @@ loadModuleFromFile
   -> m Module
 loadModuleFromFile moduleName modifTime filename = do
   logDebug $ "[loadModuleFromFile] loading file " <> showDoc filename
-  source            <- MonadFS.readFile filename
-  tokens            <- either (throwError . docFromString) return $ tokenizeInput filename False source
+  source     <- MonadFS.readFile filename
+  modifTime' <- maybe (MonadFS.getModificationTime filename) return modifTime
+  tokens     <- either (throwError . docFromString) return $ tokenizeInput filename False source
+  makeModule moduleName modifTime' filename tokens
+
+makeModule
+  :: (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  => ModuleName
+  -> UTCTime
+  -> FilePath
+  -> [Token]
+  -> m Module
+makeModule moduleName modifTime filename tokens = do
   (header, tokens') <- analyzeHeader tokens
   let syms           :: [ResolvedSymbol]
       errors         :: [String]
@@ -133,14 +145,13 @@ loadModuleFromFile moduleName modifTime filename = do
           , "module name in file"  :-> pretty mhModName
           , "expected module name" :-> pretty moduleName
           ]
-  modifTime' <- maybe (MonadFS.getModificationTime filename) return modifTime
   let moduleHeader = fromMaybe defaultHeader header
   exportedNames <- resolveModuleExports moduleHeader allSymbols
   let mod = Module
         { modHeader          = moduleHeader
         , modAllSymbols      = allSymbols
         , modFile            = filename
-        , modLastModified    = modifTime'
+        , modLastModified    = modifTime
         , meAllExportedNames = exportedNames
         , meIsDirty          = False
         }

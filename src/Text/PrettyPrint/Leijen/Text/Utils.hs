@@ -145,4 +145,4 @@ data MapEntry k v = k :-> v
 
 instance (Pretty k, Pretty v) => Pretty (MapEntry k v) where
   pretty (x :-> y) =
-    PP.group $ pretty (pretty x) <+> PP.nest 4 ("->" PP.<$> PP.align (pretty y))
+    PP.group $ pretty x <+> PP.nest 4 ("->" PP.<$> PP.align (pretty y))

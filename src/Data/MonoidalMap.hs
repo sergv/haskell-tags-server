@@ -15,7 +15,6 @@
 module Data.MonoidalMap
   ( MonoidalMap
   , singleton
-  -- , mkMonoidalMap
   , unMonoidalMap
   ) where
 
@@ -25,9 +24,6 @@ import Data.Monoid
 
 newtype MonoidalMap k v = MonoidalMap { unMonoidalMap :: Map k v }
   deriving (Show, Eq, Ord)
-
-mkMonoidalMap :: Map k v -> MonoidalMap k v
-mkMonoidalMap = MonoidalMap
 
 instance (Ord k, Monoid v) => Monoid (MonoidalMap k v) where
   mempty = MonoidalMap mempty
