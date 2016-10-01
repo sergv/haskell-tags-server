@@ -261,35 +261,6 @@ analyzeChildren listType = \case
       toks           ->
         throwError $ "Unrecognized children list structure:" <+> pretty (Tokens toks)
 
--- analyzeCommaSeparatedNameList
---   :: forall m. (MonadError Doc m)
---   => [Token] -> m (Set SymbolName, [Token])
--- analyzeCommaSeparatedNameList = extractChildren mempty
---   where
---     extractChildren :: Set SymbolName -> [Token] -> m (Set SymbolName, [Token])
---     extractChildren !names = \case
---       []                -> pure (names, [])
---       PRParen : rest    -> pure (names, rest)
---       PName name : rest ->
---         extractChildren (S.insert (mkSymbolName name) names) $ dropComma rest
---       toks              ->
---         throwError $ "Unrecognized children list structure:" <+> pretty (Tokens toks)
-
--- analyzeCommaSeparatedList
---   :: forall m a. (MonadError Doc m)
---   => ([Token] -> m (a, [Token]))
---   -> [Token]
---   -> m ([a], [Token])
--- analyzeCommaSeparatedList match = extractChildren []
---   where
---     extractChildren :: [a] -> [Token] -> m ([a], [Token])
---     extractChildren xs = \case
---       []                -> pure (reverse xs, [])
---       PRParen : rest    -> pure (reverse xs, rest)
---       toks              -> do
---         (x, rest) <- match toks
---         extractChildren (x : xs) $ dropComma rest
-
 newtype Tokens = Tokens [Token]
 
 instance Pretty Tokens where
