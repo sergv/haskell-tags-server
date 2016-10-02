@@ -423,15 +423,15 @@ testData = GroupTest "server tests"
         )
       , ( "imported constructor of public associated type"
         , "IntBox"
-        , Known "ModuleWithTypeclass.hs" 28 "Constructor"
+        , Known "ModuleWithTypeclass.hs" 31 "Constructor"
         )
       , ( "imported field accessor of public associated type"
         , "unIntBox"
-        , Known "ModuleWithTypeclass.hs" 29 "Function"
+        , Known "ModuleWithTypeclass.hs" 32 "Function"
         )
       , ( "associated private type family"
         , "PrivateFam"
-        , NotFound
+        , Known "ModuleWithTypeclass.hs" 24 "Family"
         )
       , ( "imported constructor of private associated type"
         , "IntBoxPrivate"
