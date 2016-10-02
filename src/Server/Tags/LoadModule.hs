@@ -69,11 +69,13 @@ loadModule name = do
                 Nothing   -> doLoad name
                 Just mods -> for mods reloadIfFileChanged
   modify (\s -> s { tssLoadedModules = M.insert name mods $ tssLoadedModules s })
+  loadedMods <- gets (M.keys . tssLoadedModules)
+  logDebug $ "[loadModule] loaded modules are:" <+> ppList loadedMods
   return mods
   where
     doLoad :: ModuleName -> m (NonEmpty Module)
     doLoad name = do
-      logDebug $ "[loadModule.doLoad] loading module" <+> showDoc name
+      logInfo $ "[loadModule.doLoad] loading module" <+> showDoc name
       srcDirs <- asks tsconfSourceDirectories
       let possiblePaths = [ root </> filenamePart <.> ext
                           | root <- S.toList srcDirs
@@ -99,7 +101,7 @@ reloadIfFileChanged m = do
   (needsReloading, modifTime) <- moduleNeedsReloading m
   if needsReloading
   then do
-    logDebug $ "[reloadIfFileChanged] reloading module" <+> showDoc (mhModName $ modHeader m)
+    logInfo $ "[reloadIfFileChanged] reloading module" <+> showDoc (mhModName $ modHeader m)
     loadModuleFromFile (mhModName (modHeader m)) (Just modifTime) $ modFile m
   else return m
 
@@ -112,7 +114,7 @@ loadModuleFromFile
   -> FilePath
   -> m Module
 loadModuleFromFile moduleName modifTime filename = do
-  logDebug $ "[loadModuleFromFile] loading file " <> showDoc filename
+  logInfo $ "[loadModuleFromFile] loading file " <> showDoc filename
   source     <- MonadFS.readFile filename
   modifTime' <- maybe (MonadFS.getModificationTime filename) return modifTime
   tokens     <- either (throwError . docFromString) return $ tokenizeInput filename False source
