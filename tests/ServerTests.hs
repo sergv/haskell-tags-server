@@ -374,12 +374,16 @@ testData = GroupTest "server tests"
             , "bar"
             , Known "ModuleWithExportList.hs" 19 "Function"
             )
-          , ( "name imported through module reexporting with a qualifier"
+          , ( "name imported through module reexporting with a qualifier #1"
             , "foo2"
-            , NotFound
+            , Known "ModuleWithMultilineExportList.hs" 20 "Function"
             )
           , ( "name imported through module reexporting with a qualifier #2"
             , "bar2"
+            , Known "ModuleWithMultilineExportList.hs" 23 "Function"
+            )
+          , ( "name imported through module reexporting with a qualifier #3"
+            , "baz2"
             , NotFound
             )
           ]
