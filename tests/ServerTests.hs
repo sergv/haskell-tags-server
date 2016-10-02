@@ -417,15 +417,15 @@ testData = GroupTest "server tests"
         , "wrap"
         , Known "ModuleWithTypeclass.hs" 25 "Function"
         )
-      , ( "associated type family"
+      , ( "associated public type family"
         , "TestFam"
         , Known "ModuleWithTypeclass.hs" 23 "Family"
         )
-      , ( "imported constructor of associated type"
+      , ( "imported constructor of public associated type"
         , "IntBox"
         , Known "ModuleWithTypeclass.hs" 28 "Constructor"
         )
-      , ( "imported field accessor of associated typeh"
+      , ( "imported field accessor of public associated type"
         , "unIntBox"
         , Known "ModuleWithTypeclass.hs" 29 "Function"
         )
@@ -433,11 +433,11 @@ testData = GroupTest "server tests"
         , "PrivateFam"
         , NotFound
         )
-      , ( "imported constructor of associated type"
+      , ( "imported constructor of private associated type"
         , "IntBoxPrivate"
         , NotFound
         )
-      , ( "imported field accessor of associated type"
+      , ( "imported field accessor of private associated type"
         , "unIntBoxPrivate"
         , NotFound
         )
