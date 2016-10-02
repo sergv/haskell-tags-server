@@ -308,7 +308,7 @@ moduleWithExportsTest = doTest "Module exports"
                 ]
             , EntryWithChildren (mkSymbolName "Pat") Nothing
             ]
-        , meReexports          = [mkModuleName "Frob"]
+        , meReexports          = S.singleton $ mkModuleName "Frob"
         , meHasWildcardExports = True
         }
     , mhImportQualifiers = mempty
@@ -348,7 +348,7 @@ moduleWithMultilineExportsTest = doTest "Module with peculiarly indented export 
                 ]
             , EntryWithChildren (mkSymbolName "Pat") Nothing
             ]
-        , meReexports          = [mkModuleName "Frob"]
+        , meReexports          = S.singleton $ mkModuleName "Frob"
         , meHasWildcardExports = True
         }
     , mhImportQualifiers = mempty

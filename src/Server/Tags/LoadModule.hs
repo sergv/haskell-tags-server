@@ -173,12 +173,16 @@ resolveModuleExports
   => ModuleHeader
   -> SymbolMap
   -> m SymbolMap
-resolveModuleExports header@ModuleHeader{mhImports} allSymbols =
+resolveModuleExports header@ModuleHeader{mhImports} allLocalSymbols =
   case mhExports header of
-    Nothing -> pure allSymbols
+    Nothing                                            ->
+      pure allLocalSymbols
     Just ModuleExports{meExportedEntries, meReexports} -> do
       imports <- M.traverseWithKey (\modName importSpecs -> (importSpecs,) <$> loadModule modName) mhImports
-      exports <- foldMap (foldMap meAllExportedNames) <$> traverse loadModule meReexports
+      let (lt, reexportsItself, gt) = S.splitMember (mhModName header) meReexports
+      exports <- (<>)
+                   <$> foldMapA (fmap (foldMap meAllExportedNames) . loadModule) lt
+                   <*> foldMapA (fmap (foldMap meAllExportedNames) . loadModule) gt
       (filteredNames :: [(ImportQualification, SymbolMap)]) <-
         flip foldMapA imports $ \(importSpecs, modules) -> do
           let importedNames :: SymbolMap
@@ -188,25 +192,30 @@ resolveModuleExports header@ModuleHeader{mhImports} allSymbols =
           traverse (filterVisibleNames importedMods importedNames) $ toList importSpecs
       let namesByNamespace :: Map (Maybe ImportQualifier) SymbolMap
           namesByNamespace = M.fromListWith (<>)
-                           $ (Nothing, allSymbols)
+                           $ (Nothing, allLocalSymbols)
                            : concatMap expandImportQualification filteredNames
 
           modulesInScope :: [ModuleName]
           modulesInScope = M.keys mhImports
 
+      -- Names exported from current module, grouped by export qualifier.
       (exportedNames :: MonoidalMap (Maybe ImportQualifier) (Set UnqualifiedSymbolName)) <-
         flip foldMapA meExportedEntries $ \entry -> do
           let (qualifier, name) = splitQualifiedPart $ entryName entry
           case M.lookup qualifier namesByNamespace of
             Nothing -> throwError $
               "Internal error: export qualifier" <+> showDoc qualifier <+>
-              "has no namespaces among imports"
+              "has no corresponding qualified imports"
             Just sm -> do
               names <- namesFromEntry modulesInScope sm $ entry { entryName = name }
               pure $ MM.singleton qualifier names
-      pure $
-        exports <>
-        fold (M.intersectionWith SM.leaveNames namesByNamespace $ MM.unMonoidalMap exportedNames)
+      pure $ mconcat
+        [ if reexportsItself then allLocalSymbols else mempty
+        , exports
+        , fold
+        $ M.intersectionWith SM.leaveNames namesByNamespace
+        $ MM.unMonoidalMap exportedNames
+        ]
     where
       expandImportQualification :: (ImportQualification, a) -> [(Maybe ImportQualifier, a)]
       expandImportQualification = \case
@@ -231,7 +240,7 @@ filterVisibleNames importedMods allImportedNames ImportSpec{ispecQualification, 
                       pure $ SM.removeNames allImportedNames hiddenNames
   pure (ispecQualification, vilibleNames)
 
--- | Get names referre to by @EntryWithChildren@ given a @SymbolMap@
+-- | Get names referred to by @EntryWithChildren@ given a @SymbolMap@
 -- of names currently in scope.
 namesFromEntry
   :: (MonadError Doc m)

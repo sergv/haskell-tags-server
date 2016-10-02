@@ -366,7 +366,11 @@ testData = GroupTest "server tests"
             , "baz"
             , NotFound
             )
-          , ( "name imported through reexporting module"
+          , ( "import name exported via module that reexports itself"
+            , "test"
+            , Known "ModuleWithModuleReexport.hs" 20 "Function"
+            )
+          , ( "name imported through reexporting module #1"
             , "foo"
             , Known "ModuleWithExportList.hs" 16 "Function"
             )

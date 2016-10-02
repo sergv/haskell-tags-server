@@ -319,7 +319,7 @@ data ModuleExports = ModuleExports
     -- the header.
     meExportedEntries    :: KeyMap (EntryWithChildren SymbolName)
     -- | Module name here can refer to either real module or to a qualifier.
-  , meReexports          :: [ModuleName]
+  , meReexports          :: Set ModuleName
     -- | Whether this module exports some entities that export all children.
   , meHasWildcardExports :: Bool
   } deriving (Show, Eq, Ord)
@@ -328,7 +328,7 @@ instance Pretty ModuleExports where
   pretty exports =
     ppDict "ModuleExports"
       [ "ExportedEntries"    :-> ppList (toList $ meExportedEntries exports)
-      , "Reexports"          :-> ppList (meReexports exports)
+      , "Reexports"          :-> ppSet (meReexports exports)
       , "HasWildcardExports" :-> pretty (meHasWildcardExports exports)
       ]
 

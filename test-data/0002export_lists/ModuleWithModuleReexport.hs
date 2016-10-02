@@ -12,8 +12,10 @@
 ----------------------------------------------------------------------------
 
 module ModuleWithModuleReexport
-  ( module ModuleWithUnqualifiedReexport )
+  ( module ModuleWithUnqualifiedReexport, module ModuleWithModuleReexport )
 where
 
 import ModuleWithUnqualifiedReexport
 
+test :: a -> b -> a
+test x _ = x

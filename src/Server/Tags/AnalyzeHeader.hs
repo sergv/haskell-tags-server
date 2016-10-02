@@ -187,7 +187,7 @@ analyzeExports importQualifiers ts =
     -- - pattern PFoo
     -- - module Data.Foo.Bar
     go :: KeyMap (EntryWithChildren SymbolName)
-       -> [ModuleName]
+       -> Set ModuleName
        -> [Token]
        -> m ModuleExports
     go entries reexports = \case
@@ -204,11 +204,13 @@ analyzeExports importQualifiers ts =
           name'    = mkSymbolName name
           newEntry = mkEntryWithoutChildren name'
       PModule  : PName name : rest ->
-        consumeComma entries (newReexports ++ reexports) rest
+        consumeComma entries (newReexports <> reexports) rest
         where
           modName = mkModuleName name
+          newReexports :: Set ModuleName
           newReexports
-            = toList
+            = S.fromList
+            $ toList
             $ M.findWithDefault (modName :| []) (mkImportQualifier modName) importQualifiers
       toks                      ->
         throwError $ "Unrecognized export list structure:" <+> pretty (Tokens toks)
@@ -226,7 +228,7 @@ analyzeExports importQualifiers ts =
     -- Continue parsing by consuming comma delimiter.
     consumeComma
       :: KeyMap (EntryWithChildren SymbolName)
-      -> [ModuleName]
+      -> Set ModuleName
       -> [Token]
       -> m ModuleExports
     consumeComma entries reexports = go entries reexports . dropComma
