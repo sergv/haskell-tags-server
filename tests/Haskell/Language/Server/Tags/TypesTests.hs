@@ -14,7 +14,7 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
-module Server.Tags.TypesTests (tests) where
+module Haskell.Language.Server.Tags.TypesTests (tests) where
 
 import Control.Arrow (second)
 import Data.Text (Text)

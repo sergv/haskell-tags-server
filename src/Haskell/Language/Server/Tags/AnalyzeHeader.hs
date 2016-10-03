@@ -19,7 +19,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns        #-}
 
-module Server.Tags.AnalyzeHeader
+module Haskell.Language.Server.Tags.AnalyzeHeader
   ( analyzeHeader
   ) where
 
@@ -43,7 +43,7 @@ import Control.Monad.Logging
 import Data.KeyMap (KeyMap)
 import qualified Data.KeyMap as KM
 import Data.Symbols
-import Server.Tags.Types
+import Haskell.Language.Server.Tags.Types
 import Text.PrettyPrint.Leijen.Text.Utils
 
 analyzeHeader

@@ -14,7 +14,7 @@
 
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Server.Tags.SearchM
+module Haskell.Language.Server.Tags.SearchM
   ( SearchT
   , runSearchT
   ) where
@@ -26,7 +26,7 @@ import Text.PrettyPrint.Leijen.Text (Doc)
 
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging (MonadLog)
-import Server.Tags.Types
+import Haskell.Language.Server.Tags.Types
 
 -- | Monad for carrying out symbol search  operations.
 newtype SearchT m a = SearchM (ExceptT Doc (StateT TagsServerState (ReaderT TagsServerConf m)) a)

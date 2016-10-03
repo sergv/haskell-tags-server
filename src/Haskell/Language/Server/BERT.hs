@@ -19,7 +19,7 @@
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE TypeFamilies      #-}
 
-module Server.BERT
+module Haskell.Language.Server.BERT
   ( defaultPort
   , BertServer
   , stopBertServer
@@ -50,7 +50,7 @@ import Data.Symbols
 import Data.Condition
 import Data.CompiledRegex
 import qualified Data.Promise as Promise
-import Server.Tags.Types
+import Haskell.Language.Server.Tags.Types
 
 
 defaultPort :: PortNumber
@@ -116,7 +116,7 @@ runBertServer port reqHandler = do
             ]
         Right x -> pure x
     go :: String -> String -> [Term] -> ExceptT Doc IO BERT.DispatchResult
-    go "tags-server" "find-regexp" args =
+    go "haskell-tags-server" "find-regexp" args =
       case args of
         [BinaryTerm filename, BinaryTerm regexp] -> do
           request  <- FindSymbolByRegexp
@@ -126,7 +126,7 @@ runBertServer port reqHandler = do
           BERT.Success <$> either throwError (pure . responseToTerm) response
         _                                    ->
           throwError $ "Expected 2 arguments but got:" <+> showDoc args
-    go "tags-server" "find" args =
+    go "haskell-tags-server" "find" args =
       case args of
         [BinaryTerm filename, BinaryTerm symbol] -> do
           request  <- FindSymbol
@@ -136,8 +136,8 @@ runBertServer port reqHandler = do
           BERT.Success <$> either throwError (pure . responseToTerm) response
         _                                    ->
           throwError $ "Expected 2 arguments but got:" <+> showDoc args
-    go "tags-server" _ _ = return BERT.NoSuchFunction
-    go _             _ _ = return BERT.NoSuchModule
+    go "haskell-tags-server" _ _ = return BERT.NoSuchFunction
+    go _                     _ _ = return BERT.NoSuchModule
 
 responseToTerm :: Response -> Term
 responseToTerm = \case

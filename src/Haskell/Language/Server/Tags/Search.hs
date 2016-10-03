@@ -17,7 +17,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
 
-module Server.Tags.Search (findSymbol) where
+module Haskell.Language.Server.Tags.Search (findSymbol) where
 
 import Control.Monad.Except
 import Control.Monad.Reader
@@ -35,8 +35,8 @@ import Data.Foldable.Ext
 import qualified Data.KeyMap as KM
 import qualified Data.SymbolMap as SM
 import Data.Symbols
-import Server.Tags.LoadModule
-import Server.Tags.Types
+import Haskell.Language.Server.Tags.LoadModule
+import Haskell.Language.Server.Tags.Types
 
 findSymbol
   :: (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)

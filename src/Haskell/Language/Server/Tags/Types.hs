@@ -17,7 +17,7 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE TypeFamilies               #-}
 
-module Server.Tags.Types
+module Haskell.Language.Server.Tags.Types
   ( -- * API types
     Request(..)
   , Response(..)

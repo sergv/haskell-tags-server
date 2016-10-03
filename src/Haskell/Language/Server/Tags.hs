@@ -17,7 +17,7 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Server.Tags
+module Haskell.Language.Server.Tags
   ( startTagsServer
   , stopTagsServer
   , waitForTagsServerFinish
@@ -45,9 +45,9 @@ import qualified Data.Promise as Promise
 
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging
-import Server.Tags.Search
-import Server.Tags.SearchM
-import Server.Tags.Types
+import Haskell.Language.Server.Tags.Search
+import Haskell.Language.Server.Tags.SearchM
+import Haskell.Language.Server.Tags.Types
 
 data TagsServer = TagsServer
   { tsRequestHandler :: RequestHandler

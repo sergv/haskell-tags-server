@@ -18,7 +18,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
 
-module Server.Tags.LoadModule (loadModule) where
+module Haskell.Language.Server.Tags.LoadModule (loadModule) where
 
 import Control.Arrow (first)
 import Control.Monad.Except
@@ -50,8 +50,8 @@ import qualified Data.MonoidalMap as MM
 import Data.SymbolMap (SymbolMap)
 import qualified Data.SymbolMap as SM
 import Data.Symbols
-import Server.Tags.AnalyzeHeader
-import Server.Tags.Types
+import Haskell.Language.Server.Tags.AnalyzeHeader
+import Haskell.Language.Server.Tags.Types
 import Text.PrettyPrint.Leijen.Text.Utils
 
 recognizedExtensions :: [String]

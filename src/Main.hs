@@ -29,8 +29,8 @@ import System.IO
 
 import Control.Monad.Logging
 import Control.Monad.Logging.Simple
-import Server.BERT
-import Server.Tags
+import Haskell.Language.Server.BERT
+import Haskell.Language.Server.Tags
 import Text.PrettyPrint.Leijen.Text.Utils
 
 data ProgramConfig = ProgramConfig

@@ -16,7 +16,7 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Server.Tags.AnalyzeHeaderTests (tests) where
+module Haskell.Language.Server.Tags.AnalyzeHeaderTests (tests) where
 
 import Control.Monad.Except
 import Data.Functor.Identity
@@ -36,8 +36,8 @@ import Token (Token)
 import Control.Monad.Logging.DiscardLogs
 import qualified Data.KeyMap as KM
 import Data.Symbols
-import Server.Tags.AnalyzeHeader
-import Server.Tags.Types
+import Haskell.Language.Server.Tags.AnalyzeHeader
+import Haskell.Language.Server.Tags.Types
 import Text.PrettyPrint.Leijen.Text.Utils
 
 simpleHeaderTest :: TestTree

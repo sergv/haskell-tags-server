@@ -36,8 +36,8 @@ import Text.PrettyPrint.Leijen.Text (Doc)
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging
 import Control.Monad.Logging.Simple
-import Server.BERT
-import Server.Tags
+import Haskell.Language.Server.BERT
+import Haskell.Language.Server.Tags
 
 data LogCollectingServer = LogCollectingServer
   { lcsLogs       :: MVar [Doc]
@@ -72,4 +72,3 @@ waitUntilStart = waitForBertServerStart . lcsBertServer
 
 getLogs :: LogCollectingServer -> IO [Doc]
 getLogs serv = reverse . toList <$> readMVar (lcsLogs serv)
-

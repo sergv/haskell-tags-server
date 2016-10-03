@@ -15,8 +15,8 @@ module Main (main) where
 
 import Test.Tasty
 
-import qualified Server.Tags.AnalyzeHeaderTests as AnalyzeHeaderTests
-import qualified Server.Tags.TypesTests as TypesTests
+import qualified Haskell.Language.Server.Tags.AnalyzeHeaderTests as AnalyzeHeaderTests
+import qualified Haskell.Language.Server.Tags.TypesTests as TypesTests
 import qualified ServerTests
 
 main :: IO ()

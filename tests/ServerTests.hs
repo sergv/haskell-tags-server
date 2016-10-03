@@ -35,9 +35,9 @@ import Data.BERT
 import Network.BERT.Client
 import Network.BERT.Transport
 
+import Haskell.Language.Server.BERT
+import Haskell.Language.Server.Tags
 import PortPool
-import Server.BERT
-import Server.Tags
 import Text.PrettyPrint.Leijen.Text.Utils
 
 import ServerTests.LogCollectingServer
@@ -523,9 +523,9 @@ mkFindSymbolTest
 mkFindSymbolTest name getConn sym dir filename resp = testCase name $ do
   conn <- getConn
   f    <- UTF8.fromString <$> canonicalizePath (testDataDir </> dir </> filename)
-  r    <- call conn "tags-server" "find" [ BinaryTerm f
-                                         , BinaryTerm sym
-                                         ]
+  r    <- call conn "haskell-tags-server" "find" [ BinaryTerm f
+                                                 , BinaryTerm sym
+                                                 ]
   logs <- case conn of
             ExistingServer _   -> return mempty
             LocalServer serv _ -> do
