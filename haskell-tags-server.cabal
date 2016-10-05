@@ -77,7 +77,6 @@ library
     -fwarn-monomorphism-restriction
     -fno-warn-type-defaults
     -fno-warn-name-shadowing
-    -ferror-spans
   ghc-prof-options:
     -fprof-auto
 
@@ -102,7 +101,8 @@ executable haskell-tags-server
     -fwarn-monomorphism-restriction
     -fno-warn-type-defaults
     -fno-warn-name-shadowing
-    -ferror-spans -rtsopts
+    -rtsopts
+    -threaded
   ghc-prof-options:
     -fprof-auto
 
@@ -151,6 +151,7 @@ test-suite test-haskell-tags-server
     -fwarn-monomorphism-restriction
     -fno-warn-type-defaults
     -fno-warn-name-shadowing
-    -ferror-spans -rtsopts
+    -rtsopts
+    -threaded
   ghc-prof-options:
     -fprof-auto
