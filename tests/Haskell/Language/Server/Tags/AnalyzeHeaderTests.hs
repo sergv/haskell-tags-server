@@ -69,6 +69,25 @@ moduleWithUnqualifiedImportTest = doTest "Module with unqualified import"
         ]
     }
 
+moduleWithUnqualifiedImportWithSourceTest :: TestTree
+moduleWithUnqualifiedImportWithSourceTest = doTest "Module with unqualified import with {-# SOURCE #-}"
+  "module ModuleWithUnqualifiedImport where\n\
+  \import {-# SOURCE #-} Imported1"
+  ModuleHeader
+    { mhModName          = mkModuleName "ModuleWithUnqualifiedImport"
+    , mhExports          = Nothing
+    , mhImportQualifiers = mempty
+    , mhImports          = M.fromList
+        [ ( mkModuleName "Imported1"
+          , neSingleton ImportSpec
+              { ispecModuleName    = mkModuleName "Imported1"
+              , ispecQualification = Unqualified
+              , ispecImportList    = Nothing
+              }
+          )
+        ]
+    }
+
 moduleWithUnqualifiedImportAndEmptyImportListTest :: TestTree
 moduleWithUnqualifiedImportAndEmptyImportListTest = doTest "Module with unqualified import and empty import list"
   "module Test where\n\
@@ -360,6 +379,7 @@ tests = testGroup "Header analysis tests"
   [ simpleHeaderTest
   , testGroup "imports"
     [ moduleWithUnqualifiedImportTest
+    , moduleWithUnqualifiedImportWithSourceTest
     , moduleWithUnqualifiedImportAndEmptyImportListTest
     , moduleWithUnqualifiedImportAndEmptyHiddenImportListTest
     , moduleWithUnqualifiedImportAndSingletonImportListTest

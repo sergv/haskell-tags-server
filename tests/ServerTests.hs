@@ -442,18 +442,80 @@ testData = GroupTest "server tests"
         , NotFound
         )
       ]
+  , mkTests'
+      "typeclass export"
+      "0005import_cycle"
+      [ ( "type defined locally in A"
+        , "A.hs"
+        , "TA"
+        , Known "A.hs" 19 "Type"
+        )
+      , ( "function defined locally in A"
+        , "A.hs"
+        , "f"
+        , Known "A.hs" 21 "Function"
+        )
+      , ( "type name imported into A"
+        , "A.hs"
+        , "TB"
+        , Known "B.hs" 20 "Type"
+        )
+      , ( "function imported into A"
+        , "A.hs"
+        , "g"
+        , Known "B.hs" 22 "Function"
+        )
+      , ( "type defined locally in B"
+        , "B.hs"
+        , "TB"
+        , Known "B.hs" 20 "Type"
+        )
+      , ( "function defined locally in B"
+        , "B.hs"
+        , "g"
+        , Known "B.hs" 22 "Function"
+        )
+      , ( "type name imported into B"
+        , "B.hs"
+        , "TA"
+        , Known "A.hs" 19 "Type"
+        )
+      , ( "function imported into B"
+        , "B.hs"
+        , "f"
+        , NotFound
+        )
+      ]
   ]
 
 mkTests
   :: String
-  -> FilePath -- ^ Working directory under testDataDir
-  -> FilePath -- ^ Filepath within the working directory
-  -> [(String, UTF8.ByteString, BertResponse)]
+  -> FilePath            -- ^ Working directory under testDataDir
+  -> FilePath            -- ^ Filepath within the working directory
+  -> [ ( String          -- ^ Test name
+       , UTF8.ByteString -- ^ Symbol to seacrh for
+       , BertResponse    -- ^ Expected response
+       )
+     ]
   -> TestData
-mkTests groupName dir file requests = GroupTest groupName ts
+mkTests groupName dir file requests =
+  mkTests' groupName dir $
+  map (\(name, sym, response) -> (name, file, sym, response)) requests
+
+mkTests'
+  :: String
+  -> FilePath            -- ^ Working directory under testDataDir
+  -> [ ( String          -- ^ Test name
+       , FilePath        -- ^ Filepath within the working directory
+       , UTF8.ByteString -- ^ Symbol to seacrh for
+       , BertResponse    -- ^ Expected response
+       )
+     ]
+  -> TestData
+mkTests' groupName dir requests = GroupTest groupName ts
   where
     ts = [ AtomicTest name dir (sym, file) response
-         | (name, sym, response) <- requests
+         | (name, file, sym, response) <- requests
          ]
 
 tests :: TestTree

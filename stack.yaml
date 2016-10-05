@@ -9,8 +9,11 @@ packages:
 - '.'
 - location: /home/sergey/projects/haskell/projects/fast-tags/
   extra-dep: true
-# Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
-extra-deps:
-- bert-1.2.2.5
+- location: /home/sergey/projects/haskell/projects/thirdparty/bert/
+  extra-dep: true
+
+# # Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
+# extra-deps:
+# - bert-1.2.2.5
 
 # - fast-tags-1.2
