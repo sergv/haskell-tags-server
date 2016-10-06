@@ -120,11 +120,14 @@ instance HasKey ResolvedSymbol where
 
 instance Pretty ResolvedSymbol where
   pretty sym@(ResolvedSymbol _) =
-    ppDict "ResolvedSymbol"
+    ppDict "ResolvedSymbol" $
       [ "name"     :-> pretty (resolvedSymbolName sym)
       , "type"     :-> ppType (resolvedSymbolType sym)
-      , "parent"   :-> pretty (resolvedSymbolParent sym)
-      , "position" :-> ppSrcPos (resolvedSymbolPosition sym)
+      ] ++
+      [ "parent"   :-> pretty parent
+      | Just parent <- [resolvedSymbolParent sym]
+      ] ++
+      [ "position" :-> ppSrcPos (resolvedSymbolPosition sym)
       ]
     where
       ppType :: Type -> Doc

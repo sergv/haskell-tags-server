@@ -176,7 +176,7 @@ instance Pretty Module where
       , "File"          :-> pretty (modFile mod)
       , "Last modified" :-> showDoc (modLastModified mod)
       , "Header"        :-> pretty (modHeader mod)
-      , "Names"         :-> pretty (modAllSymbols mod)
+      , "AllSymbols"    :-> pretty (modAllSymbols mod)
       ]
 
 data ModuleHeader = ModuleHeader
@@ -193,15 +193,18 @@ data ModuleHeader = ModuleHeader
   } deriving (Show, Eq, Ord)
 
 instance Pretty ModuleHeader where
-  pretty header =
+  pretty ModuleHeader{mhModName, mhExports, mhImportQualifiers, mhImports} =
     ppDict "Module" $
-      [ "Name"             :-> pretty (mhModName header)
+      [ "Name"             :-> pretty mhModName
       ] ++
       [ "Exports"          :-> pretty exports
-      | Just exports <- [mhExports header]
+      | Just exports <- [mhExports]
       ] ++
-      [ "ImportQualifiers" :-> ppMap (ppNE <$> mhImportQualifiers header)
-      , "Imports"          :-> ppMap (ppNE <$> mhImports header)
+      [ "ImportQualifiers" :-> ppMap (ppNE <$> mhImportQualifiers)
+      | not $ M.null mhImportQualifiers
+      ] ++
+      [ "Imports"          :-> ppMap (ppNE <$> mhImports)
+      | not $ M.null mhImports
       ]
 
 -- | Find out which modules a given @ImportQualifier@ refers to.

@@ -97,7 +97,7 @@ ppList' :: forall a f. (Pretty a, Functor f, Foldable f) => Doc -> Doc -> f a ->
 ppList' left right xs =
   case toList xs of
     []   -> left <> right
-    [y]  -> left <> PP.pretty y <> right
+    [y]  -> left <+> PP.pretty y <+> right
     y:ys ->
       PP.align $
       PP.group $
@@ -121,7 +121,7 @@ ppDict header entries =
 ppListWithHeader :: (Pretty a) => Doc -> [a] -> Doc
 ppListWithHeader header entries =
   header PP.<$>
-  PP.indent 2 (PP.vsep (map (("-" PP.<+>) . pretty) entries))
+  PP.indent 2 (PP.vsep (map (("-" PP.<+>) . PP.align . pretty) entries))
 
 ppMap :: (Pretty a, Pretty b) => Map a b -> Doc
 ppMap = ppAlist' . M.toList
