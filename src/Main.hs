@@ -30,6 +30,7 @@ import System.IO
 
 import Control.Monad.Logging
 import Control.Monad.Logging.Simple
+import qualified Data.SubkeyMap as SubkeyMap
 import Haskell.Language.Server.BERT
 import Haskell.Language.Server.Tags
 import Text.PrettyPrint.Leijen.Text.Utils
@@ -107,7 +108,7 @@ main = do
                 , tsconfLazyTagging       = cfgLazyTagging
                 }
       state = TagsServerState
-                { tssLoadedModules = mempty
+                { tssLoadedModules = SubkeyMap.empty
                 }
   conf'  <- canonicalizeConfPaths =<< addRecursiveRootsToConf cfgDirTrees conf
   result <- runSimpleLoggerT (Just Stderr) cfgDebugVerbosity

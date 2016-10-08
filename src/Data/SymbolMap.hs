@@ -23,6 +23,7 @@ module Data.SymbolMap
   , lookup
   , lookupParent
   , lookupChildren
+  , member
   , fromList
   , leaveNames
   , removeNames
@@ -106,6 +107,9 @@ lookupParent sym = M.lookup sym . smParentMap
 
 lookupChildren :: UnqualifiedSymbolName -> SymbolMap -> Maybe (Set UnqualifiedSymbolName)
 lookupChildren sym = M.lookup sym . smChildrenMap
+
+member :: UnqualifiedSymbolName -> SymbolMap -> Bool
+member sym = M.member sym . smAllSymbols
 
 fromList :: [ResolvedSymbol] -> SymbolMap
 fromList syms = SymbolMap

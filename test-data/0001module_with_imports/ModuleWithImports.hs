@@ -11,10 +11,12 @@
 --
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE TypeOperators #-}
+
 module ModuleWithImports where
 
 import Imported1
-import Imported2 (foo2)
+import Imported2 (foo2, ($$*), (:$$*:)((:$$$*:)))
 
 baz :: a -> a
 baz x = x

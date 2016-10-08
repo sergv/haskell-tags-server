@@ -18,13 +18,18 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
 
-module Haskell.Language.Server.Tags.LoadModule (loadModule) where
+module Haskell.Language.Server.Tags.LoadModule
+  ( loadModule
+  , namesFromEntry
+  ) where
 
 import Control.Arrow (first)
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
+import qualified Control.Monad.State.Strict as SS
 import Data.Foldable
+import Data.Functor.Product (Product(..))
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -47,6 +52,8 @@ import Control.Monad.Logging
 import Data.Foldable.Ext
 import Data.MonoidalMap (MonoidalMap)
 import qualified Data.MonoidalMap as MM
+import Data.SubkeyMap (SubkeyMap)
+import qualified Data.SubkeyMap as SubkeyMap
 import Data.SymbolMap (SymbolMap)
 import qualified Data.SymbolMap as SM
 import Data.Symbols
@@ -54,32 +61,40 @@ import Haskell.Language.Server.Tags.AnalyzeHeader
 import Haskell.Language.Server.Tags.Types
 import Text.PrettyPrint.Leijen.Text.Utils
 
-recognizedExtensions :: [String]
-recognizedExtensions = ["hs", "lhs", "hsc", "chs"]
+vanillaExtensions :: [String]
+vanillaExtensions = ["hs", "lhs", "hsc", "chs"]
+
+hsBootExtensions :: [String]
+hsBootExtensions = ["hs-boot", "lhs-boot"]
 
 -- | Fetch module by it's name from cache or load it. Check modification time
 -- of module files and reload if anything changed
 loadModule
   :: forall m. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => ModuleName
-  -> m (NonEmpty Module)
-loadModule name = do
+  => ImportKey
+  -> m (NonEmpty ResolvedModule)
+loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
+  logDebug $ "[loadModule] loading" <+> pretty ikModuleName
   modules <- gets tssLoadedModules
-  mods    <- case M.lookup name modules of
-                Nothing   -> doLoad name
-                Just mods -> for mods reloadIfFileChanged
-  modify (\s -> s { tssLoadedModules = M.insert name mods $ tssLoadedModules s })
-  loadedMods <- gets (M.keys . tssLoadedModules)
+  mods    <- case SubkeyMap.lookup key modules of
+                Nothing   -> doLoad ikModuleName
+                Just mods -> for mods reloadIfNecessary
+  modify (\s -> s { tssLoadedModules = SubkeyMap.insert key mods $ tssLoadedModules s })
+  loadedMods <- gets (SubkeyMap.keys . tssLoadedModules)
   logDebug $ "[loadModule] loaded modules are:" <+> ppList loadedMods
   return mods
   where
-    doLoad :: ModuleName -> m (NonEmpty Module)
+    extensions :: [String]
+    extensions = case ikImportTarget of
+                   VanillaModule -> vanillaExtensions
+                   HsBootModule  -> hsBootExtensions
+    doLoad :: ModuleName -> m (NonEmpty ResolvedModule)
     doLoad name = do
       logInfo $ "[loadModule.doLoad] loading module" <+> showDoc name
       srcDirs <- asks tsconfSourceDirectories
       let possiblePaths = [ root </> filenamePart <.> ext
                           | root <- S.toList srcDirs
-                          , ext  <- recognizedExtensions
+                          , ext  <- extensions
                           ]
       actualPaths <- filterM MonadFS.doesFileExist possiblePaths
       case actualPaths of
@@ -93,15 +108,15 @@ loadModule name = do
                      $ T.map (\c -> if c == '.' then pathSeparator else c)
                      $ getModuleName name
 
-reloadIfFileChanged
+reloadIfNecessary
   :: (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => Module
-  -> m Module
-reloadIfFileChanged m = do
+  => ResolvedModule
+  -> m ResolvedModule
+reloadIfNecessary m = do
   (needsReloading, modifTime) <- moduleNeedsReloading m
   if needsReloading
   then do
-    logInfo $ "[reloadIfFileChanged] reloading module" <+> showDoc (mhModName $ modHeader m)
+    logInfo $ "[reloadIfNecessary] reloading module" <+> showDoc (mhModName $ modHeader m)
     loadModuleFromFile (mhModName (modHeader m)) (Just modifTime) $ modFile m
   else return m
 
@@ -112,7 +127,7 @@ loadModuleFromFile
   => ModuleName
   -> Maybe UTCTime
   -> FilePath
-  -> m Module
+  -> m ResolvedModule
 loadModuleFromFile moduleName modifTime filename = do
   logInfo $ "[loadModuleFromFile] loading file " <> showDoc filename
   source     <- MonadFS.readFile filename
@@ -126,7 +141,7 @@ makeModule
   -> UTCTime
   -> FilePath
   -> [Token]
-  -> m Module
+  -> m ResolvedModule
 makeModule moduleName modifTime filename tokens = do
   (header, tokens') <- analyzeHeader tokens
   let syms           :: [ResolvedSymbol]
@@ -147,104 +162,135 @@ makeModule moduleName modifTime filename tokens = do
           , "module name in file"  :-> pretty mhModName
           , "expected module name" :-> pretty moduleName
           ]
-  let moduleHeader = fromMaybe defaultHeader header
-  exportedNames <- resolveModuleExports moduleHeader allSymbols
-  let mod = Module
-        { modHeader          = moduleHeader
-        , modAllSymbols      = allSymbols
-        , modFile            = filename
-        , modLastModified    = modifTime
-        , meAllExportedNames = exportedNames
-        , meIsDirty          = False
+  let moduleHeader :: UnresolvedModuleHeader
+      moduleHeader = fromMaybe defaultHeader header
+      mod :: UnresolvedModule
+      mod = Module
+        { modHeader           = moduleHeader
+        , modAllSymbols       = allSymbols
+        , modFile             = filename
+        , modLastModified     = modifTime
+        , modAllExportedNames = ()
+        , modIsDirty          = False
         }
+  mod' <- resolveModuleExports mod
   logDebug $ "[loadModuleFromFile] loaded module" <+> pretty mod
-  return mod
+  return mod'
   where
-    defaultHeader  :: ModuleHeader
-    defaultHeader  = ModuleHeader
+    defaultHeader :: UnresolvedModuleHeader
+    defaultHeader = ModuleHeader
       { mhModName          = moduleName
-      , mhImports          = mempty
+      , mhImports          = SubkeyMap.empty
       , mhImportQualifiers = mempty
       , mhExports          = Nothing
       }
 
 resolveModuleExports
-  :: (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => ModuleHeader
-  -> SymbolMap
-  -> m SymbolMap
-resolveModuleExports header@ModuleHeader{mhImports} allLocalSymbols =
-  case mhExports header of
-    Nothing                                            ->
-      pure allLocalSymbols
-    Just ModuleExports{meExportedEntries, meReexports} -> do
-      imports <- M.traverseWithKey (\modName importSpecs -> (importSpecs,) <$> loadModule modName) mhImports
-      let (lt, reexportsItself, gt) = S.splitMember (mhModName header) meReexports
-      exports <- (<>)
-                   <$> foldMapA (fmap (foldMap meAllExportedNames) . loadModule) lt
-                   <*> foldMapA (fmap (foldMap meAllExportedNames) . loadModule) gt
-      (filteredNames :: [(ImportQualification, SymbolMap)]) <-
-        flip foldMapA imports $ \(importSpecs, modules) -> do
+  :: forall m a. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  => Module a
+  -> m ResolvedModule
+resolveModuleExports mod = do
+  let header = modHeader mod
+  logDebug $ "[resolveModuleExports] resolving exports of module" <+> pretty (mhModName header)
+  (imports, symbols) <- resolveSymbols mod
+  return $ mod
+    { modHeader           = header { mhImports = imports }
+    , modAllExportedNames = symbols
+    }
+  where
+    expandImportQualification :: forall a. (ImportQualification, a) -> [(Maybe ImportQualifier, a)]
+    expandImportQualification = \case
+      (Unqualified, x)                   -> [(Nothing, x)]
+      (Qualified q, x)                   -> [(Just q, x)]
+      (BothQualifiedAndUnqualified q, x) -> [(Just q, x), (Nothing, x)]
+
+    resolveImports
+      :: SubkeyMap ImportKey (NonEmpty (ImportSpec a))
+      -> m ( SubkeyMap ImportKey (NonEmpty ResolvedImportSpec)
+           , [(ImportQualification, SymbolMap)]
+           )
+    resolveImports imports =
+      SS.runStateT (SubkeyMap.traverseWithKey collect imports) []
+      where
+        collect
+          :: ImportKey
+          -> NonEmpty (ImportSpec a)
+          -> SS.StateT [(ImportQualification, SymbolMap)] m (NonEmpty ResolvedImportSpec)
+        collect importKey importSpecs = do
+          modules <- lift $ loadModule importKey
           let importedNames :: SymbolMap
-              importedNames = foldMap meAllExportedNames modules
-              importedMods :: [ModuleName]
-              importedMods = map (mhModName . modHeader) $ toList modules
-          traverse (filterVisibleNames importedMods importedNames) $ toList importSpecs
-      let namesByNamespace :: Map (Maybe ImportQualifier) SymbolMap
-          namesByNamespace = M.fromListWith (<>)
-                           $ (Nothing, allLocalSymbols)
-                           : concatMap expandImportQualification filteredNames
+              importedNames = foldMap modAllExportedNames modules
+              importedMods :: NonEmpty ModuleName
+              importedMods = mhModName . modHeader <$> modules
+          for importSpecs $ \spec -> do
+            (qual, symMap) <- filterVisibleNames importedMods importedNames spec
+            modify ((qual, symMap) :)
+            pure $ symMap <$ spec
 
-          modulesInScope :: [ModuleName]
-          modulesInScope = M.keys mhImports
+    resolveSymbols :: Module a -> m (SubkeyMap ImportKey (NonEmpty ResolvedImportSpec), SymbolMap)
+    resolveSymbols Module{modHeader = header@ModuleHeader{mhImports}, modAllSymbols} = do
+      (resolvedImports, filteredNames) <- resolveImports mhImports
+      case mhExports header of
+        Nothing                                            ->
+          pure (resolvedImports, modAllSymbols)
+        Just ModuleExports{meExportedEntries, meReexports} -> do
+          let lt, gt :: Set ModuleName
+              (lt, reexportsItself, gt) = S.splitMember (mhModName header) meReexports
+              namesByNamespace :: Map (Maybe ImportQualifier) SymbolMap
+              namesByNamespace = M.fromListWith (<>)
+                               $ (Nothing, modAllSymbols)
+                               : concatMap expandImportQualification filteredNames
+              modulesInScope :: [ModuleName]
+              modulesInScope = map ikModuleName $ SubkeyMap.keys mhImports
+          -- Names exported from current module, grouped by export qualifier.
+          (exportedNames :: MonoidalMap (Maybe ImportQualifier) (Set UnqualifiedSymbolName)) <-
+            flip foldMapA meExportedEntries $ \entry -> do
+              let (qualifier, name) = splitQualifiedPart $ entryName entry
+              case M.lookup qualifier namesByNamespace of
+                Nothing -> throwError $
+                  "Internal error: export qualifier" <+> showDoc qualifier <+>
+                  "has no corresponding qualified imports"
+                Just sm -> do
+                  names <- namesFromEntry modulesInScope sm $ entry { entryName = name }
+                  pure $ MM.singleton qualifier names
+          exports <- foldMapA
+                       (fmap (foldMap modAllExportedNames) . loadModule)
+                       (foldMap
+                          (\modName -> fromMaybe mempty $ SubkeyMap.lookupSubkeyKeys modName resolvedImports)
+                          (Pair lt gt))
+          let allSymbols = mconcat
+                [ if reexportsItself then modAllSymbols else mempty
+                , exports
+                , fold
+                $ M.intersectionWith SM.leaveNames namesByNamespace
+                $ MM.unMonoidalMap exportedNames
+                ]
+          pure (resolvedImports, allSymbols)
 
-      -- Names exported from current module, grouped by export qualifier.
-      (exportedNames :: MonoidalMap (Maybe ImportQualifier) (Set UnqualifiedSymbolName)) <-
-        flip foldMapA meExportedEntries $ \entry -> do
-          let (qualifier, name) = splitQualifiedPart $ entryName entry
-          case M.lookup qualifier namesByNamespace of
-            Nothing -> throwError $
-              "Internal error: export qualifier" <+> showDoc qualifier <+>
-              "has no corresponding qualified imports"
-            Just sm -> do
-              names <- namesFromEntry modulesInScope sm $ entry { entryName = name }
-              pure $ MM.singleton qualifier names
-      pure $ mconcat
-        [ if reexportsItself then allLocalSymbols else mempty
-        , exports
-        , fold
-        $ M.intersectionWith SM.leaveNames namesByNamespace
-        $ MM.unMonoidalMap exportedNames
-        ]
-    where
-      expandImportQualification :: (ImportQualification, a) -> [(Maybe ImportQualifier, a)]
-      expandImportQualification = \case
-        (Unqualified, x)                   -> [(Nothing, x)]
-        (Qualified q, x)                   -> [(Just q, x)]
-        (BothQualifiedAndUnqualified q, x) -> [(Just q, x), (Nothing, x)]
-
+-- | Find out which names and under qualification come out of an import spec.
 filterVisibleNames
-  :: (MonadError Doc m)
-  => [ModuleName]
-  -> SymbolMap  -- ^ All names from the set of imports.
-  -> ImportSpec -- ^ Import spec for this particular set of imports.
+  :: (MonadError Doc m, Foldable f)
+  => f ModuleName
+  -> SymbolMap    -- ^ All names from the set of imports.
+  -> ImportSpec a -- ^ Import spec for this particular set of imports.
   -> m (ImportQualification, SymbolMap)
 filterVisibleNames importedMods allImportedNames ImportSpec{ispecQualification, ispecImportList} = do
   vilibleNames <- case ispecImportList of
-                    Nothing                 -> pure allImportedNames
-                    Just (Imported entries) -> do
-                      importedNames <- foldMapA (namesFromEntry importedMods allImportedNames) entries
-                      pure $ SM.leaveNames allImportedNames importedNames
-                    Just (Hidden entries)   -> do
-                      hiddenNames <- foldMapA (namesFromEntry importedMods allImportedNames) entries
-                      pure $ SM.removeNames allImportedNames hiddenNames
+                    Nothing                                  ->
+                      pure allImportedNames
+                    Just ImportList{ilImportType, ilEntries} -> do
+                      let f = case ilImportType of
+                                Imported -> SM.leaveNames
+                                Hidden   -> SM.removeNames
+                      importedNames <- foldMapA (namesFromEntry importedMods allImportedNames) ilEntries
+                      pure $ f allImportedNames importedNames
   pure (ispecQualification, vilibleNames)
 
 -- | Get names referred to by @EntryWithChildren@ given a @SymbolMap@
 -- of names currently in scope.
 namesFromEntry
-  :: (MonadError Doc m)
-  => [ModuleName]
+  :: (MonadError Doc m, Foldable f)
+  => f ModuleName
   -> SymbolMap
   -> EntryWithChildren UnqualifiedSymbolName
   -> m (Set UnqualifiedSymbolName)
@@ -255,7 +301,7 @@ namesFromEntry importedMods allImportedNames (EntryWithChildren sym visibility) 
     Just VisibleAllChildren                 ->
       case SM.lookupChildren sym allImportedNames of
         Nothing       -> throwError $ "Imported parent" <+> pretty sym <+>
-          "not found in symbol map of modules" <+> ppList importedMods
+          "not found in symbol map of modules" <+> ppList (toList importedMods)
         Just children -> pure children
     Just (VisibleSpecificChildren children) -> pure children
 

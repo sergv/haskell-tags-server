@@ -57,6 +57,7 @@ library
     Data.KeyMap
     Data.MonoidalMap
     Data.Promise
+    Data.SubkeyMap
     Data.SymbolMap
     Data.Symbols
     Haskell.Language.Server.BERT

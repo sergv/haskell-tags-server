@@ -130,29 +130,59 @@ testData = GroupTest "server tests"
                 [ ("name #1"
                   , "foo"
                   , Just "Imported1.foo"
-                  , Known "Imported1.hs" 16 "Function"
+                  , Known "Imported1.hs" 18 "Function"
                   )
                 , ("name #2"
                   , "bar"
                   , Just "Imported1.bar"
-                  , Known "Imported1.hs" 19 "Function"
+                  , Known "Imported1.hs" 21 "Function"
+                  )
+                , ("operator"
+                  , "$$"
+                  , Just "Imported1.$$"
+                  , Known "Imported1.hs" 24 "Operator"
+                  )
+                , ("type name"
+                  , ":$$:"
+                  , Just "Imported1.:$$:"
+                  , Known "Imported1.hs" 27 "Type"
+                  )
+                , ("constructor name"
+                  , ":$$$:"
+                  , Just "Imported1.:$$$:"
+                  , Known "Imported1.hs" 28 "Constructor"
                   )
                 , ( "local def"
                   , "baz"
                   , Nothing
-                  , Known "ModuleWithImports.hs" 19 "Function"
+                  , Known "ModuleWithImports.hs" 21 "Function"
                   )
                 ]
             , GroupTest "explicit import list" $ map mkQualUnqualTest
                 [ ( "imported name"
                   , "foo2"
                   , Just "Imported2.foo2"
-                  , Known "Imported2.hs" 16 "Function"
+                  , Known "Imported2.hs" 18 "Function"
                   )
                 , ( "not imported name"
                   , "bar2"
                   , Just "Imported2.bar2"
                   , NotFound
+                  )
+                , ( "imported operator"
+                  , "$$*"
+                  , Just "Imported2.$$*"
+                  , Known "Imported2.hs" 24 "Operator"
+                  )
+                , ( "imported type name"
+                  , ":$$*:"
+                  , Just "Imported2.:$$*:"
+                  , Known "Imported2.hs" 27 "Type"
+                  )
+                , ( "imported constructor name"
+                  , ":$$$*:"
+                  , Just "Imported2.:$$$*:"
+                  , Known "Imported2.hs" 28 "Constructor"
                   )
                 ]
             ]
@@ -161,19 +191,19 @@ testData = GroupTest "server tests"
           group "multiline import list"
             [ ("import #1"
               , "foo"
-              , Known "Imported1.hs" 16 "Function"
+              , Known "Imported1.hs" 18 "Function"
               )
             , ("import #2"
               , "bar"
-              , Known "Imported1.hs" 19 "Function"
+              , Known "Imported1.hs" 21 "Function"
               )
             , ( "import #3"
               , "foo2"
-              , Known "Imported2.hs" 16 "Function"
+              , Known "Imported2.hs" 18 "Function"
               )
             , ( "import #4"
               , "bar2"
-              , Known "Imported2.hs" 19 "Function"
+              , Known "Imported2.hs" 21 "Function"
               )
             , ( "local def in presence of wildcard import"
               , "baz"
@@ -184,11 +214,11 @@ testData = GroupTest "server tests"
           group "qualified import with alias"
             [ ("Imp.foo"
               , "Imp.foo"
-              , Known "Imported1.hs" 16 "Function"
+              , Known "Imported1.hs" 18 "Function"
               )
             , ("Imp.bar"
               , "Imp.bar"
-              , Known "Imported1.hs" 19 "Function"
+              , Known "Imported1.hs" 21 "Function"
               )
             , ("foo - unqualified query"
               , "foo"
@@ -207,11 +237,11 @@ testData = GroupTest "server tests"
           group "qualified import without alias"
             [ ("Imported1.foo"
               , "Imported1.foo"
-              , Known "Imported1.hs" 16 "Function"
+              , Known "Imported1.hs" 18 "Function"
               )
             , ("Imported1.bar"
               , "Imported1.bar"
-              , Known "Imported1.hs" 19 "Function"
+              , Known "Imported1.hs" 21 "Function"
               )
             , ("foo - unqualified query"
               , "foo"
@@ -230,15 +260,15 @@ testData = GroupTest "server tests"
           group "hiding"
             [ ("wildcard import #1"
               , "foo"
-              , Known "Imported1.hs" 16 "Function"
+              , Known "Imported1.hs" 18 "Function"
               )
             , ("wildcard import #2"
               , "bar"
-              , Known "Imported1.hs" 19 "Function"
+              , Known "Imported1.hs" 21 "Function"
               )
             , ( "import list - not hidden name"
               , "foo2"
-              , Known "Imported2.hs" 16 "Function"
+              , Known "Imported2.hs" 18 "Function"
               )
             , ( "import list - hidden name"
               , "bar2"
@@ -261,7 +291,7 @@ testData = GroupTest "server tests"
               )
             , ( "import list - imported name"
               , "foo2"
-              , Known "Imported2.hs" 16 "Function"
+              , Known "Imported2.hs" 18 "Function"
               )
             , ( "import list - not imported name"
               , "bar2"
@@ -449,48 +479,93 @@ testData = GroupTest "server tests"
           )
         ]
   , withDir (Directory "0005import_cycle") $
-      group "typeclass export"
-        [ ( "type defined locally in A"
-          , "A.hs"
-          , "TA"
-          , Known "A.hs" 19 "Type"
-          )
-        , ( "function defined locally in A"
-          , "A.hs"
-          , "f"
-          , Known "A.hs" 21 "Function"
-          )
-        , ( "type name imported into A"
-          , "A.hs"
-          , "TB"
-          , Known "B.hs" 20 "Type"
-          )
-        , ( "function imported into A"
-          , "A.hs"
-          , "g"
-          , Known "B.hs" 22 "Function"
-          )
-        , ( "type defined locally in B"
-          , "B.hs"
-          , "TB"
-          , Known "B.hs" 20 "Type"
-          )
-        , ( "function defined locally in B"
-          , "B.hs"
-          , "g"
-          , Known "B.hs" 22 "Function"
-          )
-        , ( "type name imported into B"
-          , "B.hs"
-          , "TA"
-          , Known "A.hs" 19 "Type"
-          )
-        , ( "function imported into B"
-          , "B.hs"
-          , "f"
-          , NotFound
-          )
+      GroupTest "import cycle"
+        [ group "wildcard export lists"
+            [ ( "type defined locally in A"
+              , "A.hs"
+              , "TA"
+              , Known "A.hs" 19 "Type"
+              )
+            , ( "function defined locally in A"
+              , "A.hs"
+              , "f"
+              , Known "A.hs" 21 "Function"
+              )
+            , ( "type name imported into A"
+              , "A.hs"
+              , "TB"
+              , Known "B.hs" 20 "Type"
+              )
+            , ( "function imported into A"
+              , "A.hs"
+              , "g"
+              , Known "B.hs" 22 "Function"
+              )
+            , ( "type defined locally in B"
+              , "B.hs"
+              , "TB"
+              , Known "B.hs" 20 "Type"
+              )
+            , ( "function defined locally in B"
+              , "B.hs"
+              , "g"
+              , Known "B.hs" 22 "Function"
+              )
+            , ( "type name imported into B"
+              , "B.hs"
+              , "TA"
+              , Known "A.hs-boot" 4 "Type"
+              )
+            , ( "function imported into B"
+              , "B.hs"
+              , "f"
+              , NotFound
+              )
+            ]
+        , group "explicit export lists"
+            [ ( "type defined locally in AWithExportList"
+              , "AWithExportList.hs"
+              , "TA"
+              , Known "AWithExportList.hs" 19 "Type"
+              )
+            , ( "function defined locally in AWithExportList"
+              , "AWithExportList.hs"
+              , "f"
+              , Known "AWithExportList.hs" 21 "Function"
+              )
+            , ( "type name imported into AWithExportList"
+              , "AWithExportList.hs"
+              , "TB"
+              , Known "BWithExportList.hs" 20 "Type"
+              )
+            , ( "function imported into AWithExportList"
+              , "AWithExportList.hs"
+              , "g"
+              , Known "BWithExportList.hs" 22 "Function"
+              )
+            , ( "type defined locally in BWithExportList"
+              , "BWithExportList.hs"
+              , "TB"
+              , Known "BWithExportList.hs" 20 "Type"
+              )
+            , ( "function defined locally in BWithExportList"
+              , "BWithExportList.hs"
+              , "g"
+              , Known "BWithExportList.hs" 22 "Function"
+              )
+            , ( "type name imported into BWithExportList"
+              , "BWithExportList.hs"
+              , "TA"
+              , Known "AWithExportList.hs-boot" 4 "Type"
+              )
+            , ( "function imported into BWithExportList"
+              , "BWithExportList.hs"
+              , "f"
+              , NotFound
+              )
+            ]
         ]
+
   ]
 
 withDir

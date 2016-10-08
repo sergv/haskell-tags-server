@@ -37,6 +37,7 @@ module Text.PrettyPrint.Leijen.Text.Utils
   , ppListWithHeader
   , ppMap
   , ppKeyMap
+  , ppSubkeyMap
   , ppNE
   , ppSet
   , MapEntry(..)
@@ -44,6 +45,7 @@ module Text.PrettyPrint.Leijen.Text.Utils
   , Doc
   ) where
 
+import Control.Arrow (second)
 import Control.Monad.Base
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
 import Data.Foldable (toList)
@@ -62,6 +64,8 @@ import qualified Text.PrettyPrint.Leijen.Text as PP
 
 import Data.KeyMap (KeyMap)
 import qualified Data.KeyMap as KM
+import Data.SubkeyMap (SubkeyMap)
+import qualified Data.SubkeyMap as SubkeyMap
 
 putDocLn :: (MonadBase IO m) => Doc -> m ()
 putDocLn = liftBase . TLIO.putStrLn . displayDoc
@@ -128,6 +132,15 @@ ppMap = ppAlist' . M.toList
 
 ppKeyMap :: (KM.HasKey a, Pretty (KM.Key a), Pretty a) => KeyMap a -> Doc
 ppKeyMap = ppAlist' . KM.toList
+
+ppSubkeyMap
+  :: (SubkeyMap.HasSubkey k, Pretty k, Pretty (SubkeyMap.Subkey k), Pretty v)
+  => SubkeyMap k v
+  -> Doc
+ppSubkeyMap sm = ppDict "SubkeyMap"
+  [ "MainEntries" :-> ppAlist' (SubkeyMap.toList sm)
+  , "SubEntries"  :-> ppAlist' (map (second ppSet) $ SubkeyMap.toSubkeyKeyList sm)
+  ]
 
 ppAlist' :: (Pretty k, Pretty v) => [(k, v)] -> Doc
 ppAlist' = ppList' PP.lbrace PP.rbrace . map (uncurry (:->))

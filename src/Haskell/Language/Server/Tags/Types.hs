@@ -11,11 +11,14 @@
 --
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE NamedFieldPuns             #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE DeriveFoldable    #-}
+{-# LANGUAGE DeriveFunctor     #-}
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module Haskell.Language.Server.Tags.Types
   ( -- * API types
@@ -33,17 +36,28 @@ module Haskell.Language.Server.Tags.Types
     -- * Types for representing Haskell modules
   , isModuleNameConstituentChar
   , Module(..)
+  , UnresolvedModule
+  , ResolvedModule
   , moduleNeedsReloading
+  , ImportKey(..)
   , ModuleHeader(..)
+  , UnresolvedModuleHeader
+  , ResolvedModuleHeader
   , resolveQualifier
+  , ImportTarget(..)
   , ImportSpec(..)
+  , UnresolvedImportSpec
+  , ResolvedImportSpec
   , importBringsUnqualifiedNames
   , importBringQualifiedNames
   , importBringsNamesQualifiedWith
   , ImportQualification(..)
   , hasQualifier
   , getQualifier
+  , ImportType(..)
   , ImportList(..)
+  , UnresolvedImportList
+  , ResolvedImportList
   , ModuleExports(..)
   , EntryWithChildren(..)
   , mkEntryWithoutChildren
@@ -56,10 +70,11 @@ import Control.Monad.Base
 import Control.Monad.Except
 import Data.Char
 import Data.Foldable (toList)
-import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Monoid
+import Data.Semigroup (sconcat)
 import qualified Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
@@ -75,6 +90,8 @@ import qualified Control.Monad.Filesystem as MonadFS
 import Data.CompiledRegex
 import Data.KeyMap (KeyMap, HasKey(..))
 import Data.Promise (Promise)
+import Data.SubkeyMap (SubkeyMap, HasSubkey(..))
+import qualified Data.SubkeyMap as SubkeyMap
 import Data.SymbolMap (SymbolMap)
 import Data.Symbols
 
@@ -132,19 +149,19 @@ addRecursiveRootsToConf dirTrees conf = liftBase $ do
 -- | Server state that may change while processing request.
 data TagsServerState = TagsServerState
   { -- | Single module name can refer to multiple modules.
-    tssLoadedModules :: Map ModuleName (NonEmpty Module)
+    tssLoadedModules :: SubkeyMap ImportKey (NonEmpty ResolvedModule)
   } deriving (Show, Eq, Ord)
 
 emptyTagsServerState :: TagsServerState
-emptyTagsServerState = TagsServerState mempty
+emptyTagsServerState = TagsServerState SubkeyMap.empty
 
 isModuleNameConstituentChar :: Char -> Bool
 isModuleNameConstituentChar '\'' = True
 isModuleNameConstituentChar '_'  = True
 isModuleNameConstituentChar c    = isAlphaNum c
 
-data Module = Module
-  { modHeader           :: ModuleHeader
+data Module a = Module
+  { modHeader           :: ModuleHeader a
     -- -- | Map for tags that can influence other tags when exporting, e.g.
     -- -- keys are data types and values are their constructors and fields. Thus
     -- -- export list construction Foo(..) will export all constructors and fields
@@ -158,18 +175,23 @@ data Module = Module
     -- | Time as reported by getModificationTime.
   , modLastModified     :: UTCTime
     -- | All names that this module brings into scope
-  , meAllExportedNames  :: SymbolMap
+  , modAllExportedNames :: a
     -- | Whether some imports of this module were updated and thus revolved
     -- module exports are no longer valid.
-  , meIsDirty           :: Bool
-  } deriving (Show, Eq, Ord)
+  , modIsDirty          :: Bool
+  } deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
-moduleNeedsReloading :: (MonadFS m) => Module -> m (Bool, UTCTime)
+type UnresolvedModule = Module ()
+type ResolvedModule   = Module SymbolMap
+
+-- TODO: if module is dirty it is only needed to recompute its @modAllExportedName@
+-- field. There's no need
+moduleNeedsReloading :: (MonadFS m) => Module a -> m (Bool, UTCTime)
 moduleNeedsReloading m = do
   modifTime <- MonadFS.getModificationTime $ modFile m
-  pure (modLastModified m /= modifTime || meIsDirty m, modifTime)
+  pure (modLastModified m /= modifTime || modIsDirty m, modifTime)
 
-instance Pretty Module where
+instance (Pretty a) => Pretty (Module a) where
   pretty mod =
     ppDict "Module"
       [ "Name"          :-> pretty (mhModName (modHeader mod))
@@ -179,7 +201,23 @@ instance Pretty Module where
       , "AllSymbols"    :-> pretty (modAllSymbols mod)
       ]
 
-data ModuleHeader = ModuleHeader
+-- | Handle for when particular module enters another module's scope.
+data ImportKey = ImportKey
+  { -- | Whether this import statement is annotated with {-# SOURCE #-} pragma.
+    -- This means that it refers to .hs-boot file, rather than vanilla .hs file.
+    ikImportTarget :: ImportTarget
+    -- | Name of imported module
+  , ikModuleName   :: ModuleName
+  } deriving (Show, Eq, Ord)
+
+instance HasSubkey ImportKey where
+  type Subkey ImportKey = ModuleName
+  getSubkey = ikModuleName
+
+instance Pretty ImportKey where
+  pretty ik = "ImportKey" <+> pretty (ikImportTarget ik) <+> pretty (ikModuleName ik)
+
+data ModuleHeader a = ModuleHeader
   { mhModName          :: ModuleName
     -- | Exports of a module. Nothing - everything is exported
   , mhExports          :: Maybe ModuleExports
@@ -189,10 +227,13 @@ data ModuleHeader = ModuleHeader
     -- | All imports of a given module, including qualified ones.
     -- NB same module name may be present several times with different qualifications
     -- because it may be imported several times.
-  , mhImports          :: Map ModuleName (NonEmpty ImportSpec)
-  } deriving (Show, Eq, Ord)
+  , mhImports          :: SubkeyMap ImportKey (NonEmpty (ImportSpec a))
+  } deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
-instance Pretty ModuleHeader where
+type UnresolvedModuleHeader = ModuleHeader ()
+type ResolvedModuleHeader   = ModuleHeader SymbolMap
+
+instance (Pretty a) => Pretty (ModuleHeader a) where
   pretty ModuleHeader{mhModName, mhExports, mhImportQualifiers, mhImports} =
     ppDict "Module" $
       [ "Name"             :-> pretty mhModName
@@ -203,62 +244,75 @@ instance Pretty ModuleHeader where
       [ "ImportQualifiers" :-> ppMap (ppNE <$> mhImportQualifiers)
       | not $ M.null mhImportQualifiers
       ] ++
-      [ "Imports"          :-> ppMap (ppNE <$> mhImports)
-      | not $ M.null mhImports
+      [ "Imports"          :-> ppSubkeyMap (ppNE <$> mhImports)
+      | not $ SubkeyMap.null mhImports
       ]
 
 -- | Find out which modules a given @ImportQualifier@ refers to.
 resolveQualifier
   :: (MonadError Doc m)
   => ImportQualifier
-  -> ModuleHeader
-  -> m (Maybe (NonEmpty ImportSpec))
+  -> ModuleHeader a
+  -> m (Maybe (NonEmpty (ImportSpec a)))
 resolveQualifier qual ModuleHeader{mhImports, mhImportQualifiers} =
-  case M.lookup qual mhImportQualifiers of
-    Nothing    -> pure Nothing
-    Just names ->
-      fmap (Just . foldr1 (Semigroup.<>)) $ for names $ \modName ->
-        case M.lookup modName mhImports of
-          Nothing    ->
-            -- If module's not found then this is a violation of internal
-            -- invariant of ModuleHeader module header datastructure.
-            throwError $
-              "Internal error: module" <+> pretty modName <+>
-              "for qualifier" <+> pretty qual <+> "not found in the imports map"
-          Just specs -> return specs
+  case SubkeyMap.lookupSubkey qualifiedModName mhImports of
+    []     ->
+      case M.lookup qual mhImportQualifiers of
+        Nothing    -> pure Nothing
+        Just names ->
+          fmap (Just . foldr1 (Semigroup.<>)) $ for names $ \modName ->
+            case SubkeyMap.lookupSubkey modName mhImports of
+              []    ->
+                -- If module's not found then this is a violation of internal
+                -- invariant of ModuleHeader module header datastructure.
+                throwError $
+                  "Internal error: module" <+> pretty modName <+>
+                  "for qualifier" <+> pretty qual <+> "not found in the imports map"
+              s:ss -> return $ sconcat $ s :| ss
+    s : ss -> pure $ Just $ sconcat $ s :| ss
+  where
+    qualifiedModName = getImportQualifier qual
+
+data ImportTarget = VanillaModule | HsBootModule
+  deriving (Show, Eq, Ord, Enum, Bounded)
+
+instance Pretty ImportTarget where
+  pretty = showDoc
 
 -- | Information about import statement
-data ImportSpec = ImportSpec
-  { -- | Name of imported module
-    ispecModuleName    :: ModuleName
+data ImportSpec a = ImportSpec
+  { ispecImportKey     :: ImportKey
   , ispecQualification :: ImportQualification
-  , ispecImportList    :: Maybe ImportList
-  } deriving (Show, Eq, Ord)
+  , ispecImportList    :: Maybe (ImportList a)
+  } deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
-instance Pretty ImportSpec where
+type UnresolvedImportSpec = ImportSpec ()
+type ResolvedImportSpec   = ImportSpec SymbolMap
+
+instance (Pretty a) => Pretty (ImportSpec a) where
   pretty spec = ppDict "ImportSpec" $
-    [ "ModuleName"    :-> pretty (ispecModuleName spec)
+    [ "ModuleName"    :-> pretty (ikModuleName $ ispecImportKey spec)
     , "Qualification" :-> pretty (ispecQualification spec)
     ] ++
     [ "ImportList"    :-> pretty importList
     | Just importList <- [ispecImportList spec]
     ]
 
-importBringsUnqualifiedNames :: ImportSpec -> Bool
+importBringsUnqualifiedNames :: ImportSpec a -> Bool
 importBringsUnqualifiedNames ImportSpec{ispecQualification} =
   case ispecQualification of
     Qualified _                   -> False
     Unqualified                   -> True
     BothQualifiedAndUnqualified _ -> True
 
-importBringQualifiedNames :: ImportSpec -> Bool
+importBringQualifiedNames :: ImportSpec a -> Bool
 importBringQualifiedNames ImportSpec{ispecQualification} =
   case ispecQualification of
     Qualified _                   -> True
     Unqualified                   -> False
     BothQualifiedAndUnqualified _ -> True
 
-importBringsNamesQualifiedWith :: ImportSpec -> ImportQualifier -> Bool
+importBringsNamesQualifiedWith :: ImportSpec a -> ImportQualifier -> Bool
 importBringsNamesQualifiedWith ImportSpec{ispecQualification} q =
   getQualifier ispecQualification == Just q
 
@@ -295,27 +349,32 @@ getQualifier (Qualified q)                   = Just q
 getQualifier Unqualified                     = Nothing
 getQualifier (BothQualifiedAndUnqualified q) = Just q
 
--- | User-provided import/hiding list.
-data ImportList =
+data ImportType =
     -- | Explicit import list of an import statement, e.g.
     --
     -- import Foo (x, y, z(Baz))
     -- import Bar ()
-    Imported (KeyMap (EntryWithChildren UnqualifiedSymbolName))
-    -- | Hiding import list
+    Imported
+  | -- | Hiding import list
     --
     -- import Foo hiding (x, y(Bar), z)
     -- import Foo hiding ()
-  | Hidden (KeyMap (EntryWithChildren UnqualifiedSymbolName))
+    Hidden
   deriving (Show, Eq, Ord)
 
-instance Pretty ImportList where
-  pretty importList =
-    ppListWithHeader ("Import list[" <> descr <> "]") $ toList items
-    where
-      (descr, items) = case importList of
-        Imported items -> ("Imported", items)
-        Hidden   items -> ("Hidden",   items)
+-- | User-provided import/hiding list.
+data ImportList a = ImportList
+  { ilEntries       :: KeyMap (EntryWithChildren UnqualifiedSymbolName)
+  , ilImportType    :: ImportType
+  , ilImportedNames :: a
+  } deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
+
+type UnresolvedImportList = ImportList ()
+type ResolvedImportList   = ImportList SymbolMap
+
+instance (Pretty a) => Pretty (ImportList a) where
+  pretty ImportList{ilImportType, ilEntries} =
+    ppListWithHeader ("Import list[" <> showDoc ilImportType <> "]") $ toList ilEntries
 
 data ModuleExports = ModuleExports
   { -- | Toplevel names exported from this particular module as specified in

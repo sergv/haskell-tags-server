@@ -1,28 +1,22 @@
 ----------------------------------------------------------------------------
 -- |
--- Module      :  Imported2
--- Copyright   :  (c) Sergey Vinokurov 2015
+-- Module      :  AWithExportList
+-- Copyright   :  (c) Sergey Vinokurov 2016
 -- License     :  BSD3-style (see LICENSE)
 --
 -- Maintainer  :  serg.foo@gmail.com
+-- Created     :  Tuesday,  4 October 2016
 -- Stability   :
 -- Portability :
 --
 --
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE TypeOperators #-}
+module AWithExportList (TA(MkTA), f) where
 
-module Imported2 where
+import BWithExportList( TB(..), g )
 
-foo2 :: a -> a
-foo2 x = x
+newtype TA = MkTA Int
 
-bar2 :: a -> a
-bar2 x = x
-
-($$*) :: a -> a -> a
-x $$* _ = x
-
-data (:$$*:) a b =
-  (:$$$*:) a b
+f :: TB -> TA
+f (MkTB x) = MkTA x

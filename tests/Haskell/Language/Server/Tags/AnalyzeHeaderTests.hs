@@ -18,9 +18,11 @@
 
 module Haskell.Language.Server.Tags.AnalyzeHeaderTests (tests) where
 
+import Control.Arrow
 import Control.Monad.Except
 import Data.Functor.Identity
 import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 import Data.Maybe
 import qualified Data.Set as S
@@ -35,6 +37,7 @@ import Token (Token)
 
 import Control.Monad.Logging.DiscardLogs
 import qualified Data.KeyMap as KM
+import qualified Data.SubkeyMap as SubkeyMap
 import Data.Symbols
 import Haskell.Language.Server.Tags.AnalyzeHeader
 import Haskell.Language.Server.Tags.Types
@@ -47,7 +50,7 @@ simpleHeaderTest = doTest "Simple header"
     { mhModName          = mkModuleName "Foo"
     , mhExports          = Nothing
     , mhImportQualifiers = mempty
-    , mhImports          = mempty
+    , mhImports          = SubkeyMap.empty
     }
 
 moduleWithUnqualifiedImportTest :: TestTree
@@ -58,14 +61,15 @@ moduleWithUnqualifiedImportTest = doTest "Module with unqualified import"
     { mhModName          = mkModuleName "ModuleWithUnqualifiedImport"
     , mhExports          = Nothing
     , mhImportQualifiers = mempty
-    , mhImports          = M.fromList
-        [ ( mkModuleName "Imported1"
-          , neSingleton ImportSpec
-              { ispecModuleName    = mkModuleName "Imported1"
-              , ispecQualification = Unqualified
-              , ispecImportList    = Nothing
-              }
-          )
+    , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+        [ neSingleton ImportSpec
+            { ispecImportKey     = ImportKey
+                { ikImportTarget = VanillaModule
+                , ikModuleName   = mkModuleName "Imported1"
+                }
+            , ispecQualification = Unqualified
+            , ispecImportList    = Nothing
+            }
         ]
     }
 
@@ -77,14 +81,15 @@ moduleWithUnqualifiedImportWithSourceTest = doTest "Module with unqualified impo
     { mhModName          = mkModuleName "ModuleWithUnqualifiedImport"
     , mhExports          = Nothing
     , mhImportQualifiers = mempty
-    , mhImports          = M.fromList
-        [ ( mkModuleName "Imported1"
-          , neSingleton ImportSpec
-              { ispecModuleName    = mkModuleName "Imported1"
-              , ispecQualification = Unqualified
-              , ispecImportList    = Nothing
-              }
-          )
+    , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+        [ neSingleton ImportSpec
+            { ispecImportKey     = ImportKey
+                { ikImportTarget = HsBootModule
+                , ikModuleName   = mkModuleName "Imported1"
+                }
+            , ispecQualification = Unqualified
+            , ispecImportList    = Nothing
+            }
         ]
     }
 
@@ -96,14 +101,19 @@ moduleWithUnqualifiedImportAndEmptyImportListTest = doTest "Module with unqualif
     { mhModName          = mkModuleName "Test"
     , mhExports          = Nothing
     , mhImportQualifiers = mempty
-    , mhImports          = M.fromList
-        [ ( mkModuleName "Imported1"
-          , neSingleton ImportSpec
-              { ispecModuleName    = mkModuleName "Imported1"
-              , ispecQualification = Unqualified
-              , ispecImportList    = Just $ Imported mempty
-              }
-          )
+    , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+        [ neSingleton ImportSpec
+            { ispecImportKey     = ImportKey
+                { ikImportTarget = VanillaModule
+                , ikModuleName   = mkModuleName "Imported1"
+                }
+            , ispecQualification = Unqualified
+            , ispecImportList    = Just ImportList
+                { ilEntries       = mempty
+                , ilImportType    = Imported
+                , ilImportedNames = ()
+                }
+            }
         ]
     }
 
@@ -115,14 +125,19 @@ moduleWithUnqualifiedImportAndEmptyHiddenImportListTest = doTest "Module with un
     { mhModName          = mkModuleName "Test"
     , mhExports          = Nothing
     , mhImportQualifiers = mempty
-    , mhImports          = M.fromList
-        [ ( mkModuleName "Imported1"
-          , neSingleton ImportSpec
-              { ispecModuleName    = mkModuleName "Imported1"
-              , ispecQualification = Unqualified
-              , ispecImportList    = Just $ Hidden mempty
-              }
-          )
+    , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+        [ neSingleton ImportSpec
+            { ispecImportKey     = ImportKey
+                { ikImportTarget = VanillaModule
+                , ikModuleName   = mkModuleName "Imported1"
+                }
+            , ispecQualification = Unqualified
+            , ispecImportList    = Just ImportList
+                { ilEntries       = mempty
+                , ilImportType    = Hidden
+                , ilImportedNames = ()
+                }
+            }
         ]
     }
 
@@ -134,16 +149,21 @@ moduleWithUnqualifiedImportAndSingletonImportListTest = doTest "Module with unqu
     { mhModName          = mkModuleName "Test"
     , mhExports          = Nothing
     , mhImportQualifiers = mempty
-    , mhImports          = M.fromList
-        [ ( mkModuleName "Imported1"
-          , neSingleton ImportSpec
-              { ispecModuleName    = mkModuleName "Imported1"
-              , ispecQualification = Unqualified
-              , ispecImportList    = Just $ Imported $ KM.fromList
-                  [ EntryWithChildren (mkUnqualifiedSymbolName' "foo") Nothing
-                  ]
-              }
-          )
+    , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+        [ neSingleton ImportSpec
+            { ispecImportKey     = ImportKey
+                { ikImportTarget = VanillaModule
+                , ikModuleName   = mkModuleName "Imported1"
+                }
+            , ispecQualification = Unqualified
+            , ispecImportList    = Just ImportList
+                { ilEntries       = KM.fromList
+                    [ EntryWithChildren (mkUnqualSymName "foo") Nothing
+                    ]
+                , ilImportType    = Imported
+                , ilImportedNames = ()
+                }
+            }
         ]
     }
 
@@ -155,44 +175,60 @@ moduleWithUnqualifiedImportAndNonemptyImportListTest = doTest "Module with unqua
     { mhModName          = mkModuleName "Test"
     , mhExports          = Nothing
     , mhImportQualifiers = mempty
-    , mhImports          = M.fromList
-        [ ( mkModuleName "Imported1"
-          , neSingleton ImportSpec
-              { ispecModuleName    = mkModuleName "Imported1"
-              , ispecQualification = Unqualified
-              , ispecImportList    = Just $ Imported $ KM.fromList
-                  [ EntryWithChildren (mkUnqualifiedSymbolName' "foo") Nothing
-                  , EntryWithChildren (mkUnqualifiedSymbolName' "bar") Nothing
-                  , EntryWithChildren (mkUnqualifiedSymbolName' "baz") Nothing
-                  ]
-              }
-          )
+    , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+        [ neSingleton ImportSpec
+            { ispecImportKey     = ImportKey
+                { ikImportTarget = VanillaModule
+                , ikModuleName   = mkModuleName "Imported1"
+                }
+            , ispecQualification = Unqualified
+            , ispecImportList    = Just ImportList
+                { ilEntries       = KM.fromList
+                    [ EntryWithChildren (mkUnqualSymName "foo") Nothing
+                    , EntryWithChildren (mkUnqualSymName "bar") Nothing
+                    , EntryWithChildren (mkUnqualSymName "baz") Nothing
+                    ]
+                , ilImportType    = Imported
+                , ilImportedNames = ()
+                }
+            }
         ]
     }
 
 moduleWithUnqualifiedImportAndNonemptyImportListWithDifferentVisibilitiesTest :: TestTree
 moduleWithUnqualifiedImportAndNonemptyImportListWithDifferentVisibilitiesTest = doTest "Module with unqualified import and nonempty import list with different visibilities"
   "module Test where\n\
-  \import Imported1 (foo, Bar(..), Baz(Quux, Fizz))"
+  \import Imported1 (foo, Bar(..), Baz(Quux, Fizz), (:$:), (:$$:)(..), (:$$*:)((:$$$*:), (:$$$**:)))"
   ModuleHeader
     { mhModName          = mkModuleName "Test"
     , mhExports          = Nothing
     , mhImportQualifiers = mempty
-    , mhImports          = M.fromList
-        [ ( mkModuleName "Imported1"
-          , neSingleton ImportSpec
-              { ispecModuleName    = mkModuleName "Imported1"
-              , ispecQualification = Unqualified
-              , ispecImportList    = Just $ Imported $ KM.fromList
-                  [ EntryWithChildren (mkUnqualifiedSymbolName' "foo") Nothing
-                  , EntryWithChildren (mkUnqualifiedSymbolName' "Bar") $ Just VisibleAllChildren
-                  , EntryWithChildren (mkUnqualifiedSymbolName' "Baz") $ Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualifiedSymbolName' "Quux"
-                      , mkUnqualifiedSymbolName' "Fizz"
-                      ]
-                  ]
-              }
-          )
+    , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+        [ neSingleton ImportSpec
+            { ispecImportKey     = ImportKey
+                { ikImportTarget = VanillaModule
+                , ikModuleName   = mkModuleName "Imported1"
+                }
+            , ispecQualification = Unqualified
+            , ispecImportList    = Just ImportList
+                { ilEntries       = KM.fromList
+                    [ EntryWithChildren (mkUnqualSymName "foo") Nothing
+                    , EntryWithChildren (mkUnqualSymName "Bar") $ Just VisibleAllChildren
+                    , EntryWithChildren (mkUnqualSymName "Baz") $ Just $ VisibleSpecificChildren $ S.fromList
+                        [ mkUnqualSymName "Quux"
+                        , mkUnqualSymName "Fizz"
+                        ]
+                    , EntryWithChildren (mkUnqualSymName ":$:") Nothing
+                    , EntryWithChildren (mkUnqualSymName ":$$:") $ Just VisibleAllChildren
+                    , EntryWithChildren (mkUnqualSymName ":$$*:") $ Just $ VisibleSpecificChildren $ S.fromList
+                        [ mkUnqualSymName ":$$$*:"
+                        , mkUnqualSymName ":$$$**:"
+                        ]
+                    ]
+                , ilImportType    = Imported
+                , ilImportedNames = ()
+                }
+            }
         ]
     }
 
@@ -208,15 +244,16 @@ moduleWithQualifiedImportTest = doTest "Module with qualified import"
           , neSingleton $ mkModuleName "Imported1"
           )
         ]
-    , mhImports          = M.fromList
-        [ ( mkModuleName "Imported1"
-          , neSingleton ImportSpec
-              { ispecModuleName    = mkModuleName "Imported1"
-              , ispecQualification =
-                  Qualified $ mkImportQualifier $ mkModuleName "Imported1"
-              , ispecImportList    = Nothing
-              }
-          )
+    , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+        [ neSingleton ImportSpec
+            { ispecImportKey     = ImportKey
+                { ikImportTarget = VanillaModule
+                , ikModuleName   = mkModuleName "Imported1"
+                }
+            , ispecQualification =
+                Qualified $ mkImportQualifier $ mkModuleName "Imported1"
+            , ispecImportList    = Nothing
+            }
         ]
     }
 
@@ -232,15 +269,16 @@ moduleWithQualifiedImportAndAliasTest = doTest "Module with qualified import and
           , neSingleton $ mkModuleName "Imported1"
           )
         ]
-    , mhImports          = M.fromList
-        [ ( mkModuleName "Imported1"
-          , neSingleton ImportSpec
-              { ispecModuleName    = mkModuleName "Imported1"
-              , ispecQualification =
-                  Qualified $ mkImportQualifier $ mkModuleName "Imp"
-              , ispecImportList    = Nothing
-              }
-          )
+    , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+        [ neSingleton ImportSpec
+            { ispecImportKey     = ImportKey
+                { ikImportTarget = VanillaModule
+                , ikModuleName   = mkModuleName "Imported1"
+                }
+            , ispecQualification =
+                Qualified $ mkImportQualifier $ mkModuleName "Imp"
+            , ispecImportList    = Nothing
+            }
         ]
     }
 
@@ -256,15 +294,16 @@ moduleWithImportAndAliasTest = doTest "Module with import and alias"
           , neSingleton $ mkModuleName "Imported1"
           )
         ]
-    , mhImports          = M.fromList
-        [ ( mkModuleName "Imported1"
-          , neSingleton ImportSpec
-              { ispecModuleName    = mkModuleName "Imported1"
-              , ispecQualification =
-                  BothQualifiedAndUnqualified $ mkImportQualifier $ mkModuleName "Imp"
-              , ispecImportList    = Nothing
-              }
-          )
+    , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+        [ neSingleton ImportSpec
+            { ispecImportKey     = ImportKey
+                { ikImportTarget = VanillaModule
+                , ikModuleName   = mkModuleName "Imported1"
+                }
+            , ispecQualification =
+                BothQualifiedAndUnqualified $ mkImportQualifier $ mkModuleName "Imp"
+            , ispecImportList    = Nothing
+            }
         ]
     }
 
@@ -280,21 +319,26 @@ moduleWithImportAndAliasAndHidingImportListTest = doTest "Module with import, al
           , neSingleton $ mkModuleName "Imported1"
           )
         ]
-    , mhImports          = M.fromList
-        [ ( mkModuleName "Imported1"
-          , neSingleton ImportSpec
-              { ispecModuleName    = mkModuleName "Imported1"
-              , ispecQualification =
-                  BothQualifiedAndUnqualified $ mkImportQualifier $ mkModuleName "Imp"
-              , ispecImportList    = Just $ Hidden $ KM.fromList
-                  [ EntryWithChildren (mkUnqualifiedSymbolName' "Foo") $ Just VisibleAllChildren
-                  , EntryWithChildren (mkUnqualifiedSymbolName' "bar") Nothing
-                  , EntryWithChildren (mkUnqualifiedSymbolName' "Quux") $ Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualifiedSymbolName' "Baz"
-                      ]
-                  ]
-              }
-          )
+    , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+        [ neSingleton ImportSpec
+            { ispecImportKey     = ImportKey
+                { ikImportTarget = VanillaModule
+                , ikModuleName   = mkModuleName "Imported1"
+                }
+            , ispecQualification =
+                BothQualifiedAndUnqualified $ mkImportQualifier $ mkModuleName "Imp"
+            , ispecImportList    = Just ImportList
+                { ilEntries       = KM.fromList
+                    [ EntryWithChildren (mkUnqualSymName "Foo") $ Just VisibleAllChildren
+                    , EntryWithChildren (mkUnqualSymName "bar") Nothing
+                    , EntryWithChildren (mkUnqualSymName "Quux") $ Just $ VisibleSpecificChildren $ S.fromList
+                        [ mkUnqualSymName "Baz"
+                        ]
+                    ]
+                , ilImportType    = Hidden
+                , ilImportedNames = ()
+                }
+            }
         ]
     }
 
@@ -309,12 +353,12 @@ moduleWithEmptyExportsTest = doTest "Module with empty exports"
         , meHasWildcardExports = False
         }
     , mhImportQualifiers = mempty
-    , mhImports          = mempty
+    , mhImports          = SubkeyMap.empty
     }
 
 moduleWithExportsTest :: TestTree
 moduleWithExportsTest = doTest "Module exports"
-  "module ModuleWithExport (foo, Bar(..), Baz(Quux, Fizz), pattern Pat, module Frob) where"
+  "module ModuleWithExport (foo, Bar(..), Baz(Quux, Fizz), pattern Pat, module Frob, (:$:), (:$$:)(..), (:$$*:)((:$$$*:), (:$$$**:))) where"
   ModuleHeader
     { mhModName          = mkModuleName "ModuleWithExport"
     , mhExports          = Just ModuleExports
@@ -322,16 +366,22 @@ moduleWithExportsTest = doTest "Module exports"
             [ EntryWithChildren (mkSymbolName "foo") Nothing
             , EntryWithChildren (mkSymbolName "Bar") $ Just VisibleAllChildren
             , EntryWithChildren (mkSymbolName "Baz") $ Just $ VisibleSpecificChildren $ S.fromList
-                [ mkUnqualifiedSymbolName' "Quux"
-                , mkUnqualifiedSymbolName' "Fizz"
+                [ mkUnqualSymName "Quux"
+                , mkUnqualSymName "Fizz"
                 ]
             , EntryWithChildren (mkSymbolName "Pat") Nothing
+            , EntryWithChildren (mkSymbolName ":$:") Nothing
+            , EntryWithChildren (mkSymbolName ":$$:") $ Just VisibleAllChildren
+            , EntryWithChildren (mkSymbolName ":$$*:") $ Just $ VisibleSpecificChildren $ S.fromList
+                [ mkUnqualSymName ":$$$*:"
+                , mkUnqualSymName ":$$$**:"
+                ]
             ]
         , meReexports          = S.singleton $ mkModuleName "Frob"
         , meHasWildcardExports = True
         }
     , mhImportQualifiers = mempty
-    , mhImports          = mempty
+    , mhImports          = SubkeyMap.empty
     }
 
 moduleWithMultilineExportsTest :: TestTree
@@ -353,6 +403,15 @@ moduleWithMultilineExportsTest = doTest "Module with peculiarly indented export 
   \  , \n\
   \    module \n\
   \  Frob\n\
+  \     ,     \n\
+  \         (      :$:     )             , \n\
+  \      (   \n\
+  \   :$$:      \n\
+  \    )      (  ..    ) \n\
+  \      ,       (  \n\
+  \       :$$*:   )   (  \n\
+  \         (:$$$*:)  \n\
+  \ , (:$$$**:)   )        \n\
   \   ) \n\
   \   where"
   ModuleHeader
@@ -362,16 +421,22 @@ moduleWithMultilineExportsTest = doTest "Module with peculiarly indented export 
             [ EntryWithChildren (mkSymbolName "foo") Nothing
             , EntryWithChildren (mkSymbolName "Bar") $ Just VisibleAllChildren
             , EntryWithChildren (mkSymbolName "Baz") $ Just $ VisibleSpecificChildren $ S.fromList
-                [ mkUnqualifiedSymbolName' "Quux"
-                , mkUnqualifiedSymbolName' "Fizz"
+                [ mkUnqualSymName "Quux"
+                , mkUnqualSymName "Fizz"
                 ]
             , EntryWithChildren (mkSymbolName "Pat") Nothing
+            , EntryWithChildren (mkSymbolName ":$:") Nothing
+            , EntryWithChildren (mkSymbolName ":$$:") $ Just VisibleAllChildren
+            , EntryWithChildren (mkSymbolName ":$$*:") $ Just $ VisibleSpecificChildren $ S.fromList
+                [ mkUnqualSymName ":$$$*:"
+                , mkUnqualSymName ":$$$**:"
+                ]
             ]
         , meReexports          = S.singleton $ mkModuleName "Frob"
         , meHasWildcardExports = True
         }
     , mhImportQualifiers = mempty
-    , mhImports          = mempty
+    , mhImports          = SubkeyMap.empty
     }
 
 tests :: TestTree
@@ -397,7 +462,7 @@ tests = testGroup "Header analysis tests"
     ]
   ]
 
-doTest :: String -> T.Text -> ModuleHeader -> TestTree
+doTest :: String -> T.Text -> UnresolvedModuleHeader -> TestTree
 doTest name input expectedHeader =
   testCase name $
     case runIdentity $ runDiscardLogsT $ runExceptT $ analyzeHeader =<< tokens of
@@ -426,8 +491,8 @@ doTest name input expectedHeader =
                 )
               , ( "Imports"
                 , mhImports header /= mhImports expectedHeader
-                , ppMap $ ppNE <$> mhImports header
-                , ppMap $ ppNE <$> mhImports expectedHeader
+                , ppSubkeyMap $ ppNE <$> mhImports header
+                , ppSubkeyMap $ ppNE <$> mhImports expectedHeader
                 )
               ]
             , different
@@ -436,8 +501,8 @@ doTest name input expectedHeader =
     tokens :: forall m. (MonadError Doc m) => m [Token]
     tokens = either (throwError . docFromString) return $ tokenizeInput "test" False input
 
-mkUnqualifiedSymbolName' :: T.Text -> UnqualifiedSymbolName
-mkUnqualifiedSymbolName' name =
+mkUnqualSymName :: T.Text -> UnqualifiedSymbolName
+mkUnqualSymName name =
   fromMaybe err $ mkUnqualifiedSymbolName $ mkSymbolName name
   where
     err = error $ "invalid unqualified symbol name: " ++ show name

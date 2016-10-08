@@ -1,28 +1,23 @@
 ----------------------------------------------------------------------------
 -- |
--- Module      :  Imported2
--- Copyright   :  (c) Sergey Vinokurov 2015
+-- Module      :  BWithExportList
+-- Copyright   :  (c) Sergey Vinokurov 2016
 -- License     :  BSD3-style (see LICENSE)
 --
 -- Maintainer  :  serg.foo@gmail.com
+-- Created     :  Tuesday,  4 October 2016
 -- Stability   :
 -- Portability :
 --
 --
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE TypeOperators #-}
+module BWithExportList (TB(..), g) where
 
-module Imported2 where
+import {-# SOURCE #-} AWithExportList( TA(..) )
 
-foo2 :: a -> a
-foo2 x = x
 
-bar2 :: a -> a
-bar2 x = x
+data TB = MkTB !Int
 
-($$*) :: a -> a -> a
-x $$* _ = x
-
-data (:$$*:) a b =
-  (:$$$*:) a b
+g :: TA -> TB
+g (MkTA x) = MkTB x

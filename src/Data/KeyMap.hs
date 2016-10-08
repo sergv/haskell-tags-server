@@ -28,11 +28,14 @@ module Data.KeyMap
   , notMember
   , fromList
   , toList
+  , elems
+  , intersectAgainst
   ) where
 
 import Control.Arrow
 import Data.Coerce
 import qualified Data.Map as M
+import Data.Set (Set)
 import Prelude hiding (lookup)
 
 newtype KeyMap a = KeyMap { unKeyMap :: M.Map (Key a) a }
@@ -66,3 +69,10 @@ fromList = KeyMap . M.fromList . map (getKey &&& id)
 
 toList :: (HasKey a) => KeyMap a -> [(Key a, a)]
 toList = M.toList . unKeyMap
+
+elems :: KeyMap a -> [a]
+elems = M.elems . unKeyMap
+
+intersectAgainst :: (HasKey a) => KeyMap a -> Set (Key a) -> KeyMap a
+intersectAgainst (KeyMap m) keys =
+  KeyMap $ M.intersection m (M.fromSet (const ()) keys)

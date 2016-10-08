@@ -11,6 +11,8 @@
 --
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE TypeOperators #-}
+
 module Imported1 where
 
 foo :: a -> a
@@ -18,3 +20,9 @@ foo x = x
 
 bar :: a -> a
 bar x = x
+
+($$) :: a -> a -> a
+x $$ _ = x
+
+data (:$$:) a b =
+  (:$$$:) a b

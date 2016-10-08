@@ -32,7 +32,6 @@ import Text.PrettyPrint.Leijen.Text.Utils
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging
 import Data.Foldable.Ext
-import qualified Data.KeyMap as KM
 import qualified Data.SymbolMap as SM
 import Data.Symbols
 import Haskell.Language.Server.Tags.LoadModule
@@ -43,14 +42,15 @@ findSymbol
   => FilePath   -- ^ File name
   -> SymbolName -- ^ Symbol to find. Can be either qualified, unqualified, ascii name/utf name/operator
   -> m [ResolvedSymbol] -- ^ Found tags, may be empty when nothing was found.
-findSymbol filename sym =
-  foldMapA (findInModule sym) =<< loadModule =<< fileNameToModuleName filename
+findSymbol filename sym = do
+  modName <- fileNameToModuleName filename
+  foldMapA (findInModule sym) =<< loadModule (ImportKey VanillaModule modName)
 
 -- | Try to find out what @sym@ refers to in the context of module @mod@.
 findInModule
   :: forall m. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => SymbolName
-  -> Module
+  -> ResolvedModule
   -> m [ResolvedSymbol]
 findInModule sym mod =
   case qualifier of
@@ -74,33 +74,53 @@ findInModule sym mod =
     qualifier :: Maybe ImportQualifier
     sym'      :: UnqualifiedSymbolName
     (qualifier, sym') = splitQualifiedPart sym
-    header :: ModuleHeader
+    header :: ResolvedModuleHeader
     header = modHeader mod
 
 lookUpInImportedModules
-  :: forall m f. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m, Foldable f)
+  :: forall m f. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  => (Foldable f)
   => UnqualifiedSymbolName
-  -> f ImportSpec
+  -> f ResolvedImportSpec
   -> m [ResolvedSymbol]
-lookUpInImportedModules name specs =
-  flip foldMapA specs $ \ImportSpec{ispecModuleName, ispecImportList} -> do
+lookUpInImportedModules name specs = do
+  logDebug $ "[lookUpInImportedModules] searching for name" <+> pretty name <+>
+    "in modules" <+> pretty (map (ikModuleName . ispecImportKey) $ toList specs)
+  flip foldMapA specs $ \ImportSpec{ispecImportKey, ispecImportList} -> do
     let nameVisible =
           case ispecImportList of
-            Nothing               -> True
-            Just (Imported names) -> KM.member name names
-            Just (Hidden names)   -> KM.notMember name names
-    if not nameVisible
-    then pure mempty
-    else
-      foldMapA (lookUpInImportedModule name) =<< loadModule ispecModuleName
+            Nothing                          -> True
+            Just ImportList{ilImportedNames} -> SM.member name ilImportedNames
+    if nameVisible
+    then do
+      mods <- loadModule ispecImportKey
+      flip foldMapA mods $ \mod -> do
+        logDebug $ "[lookUpInImportedModules] searching for name" <+> pretty name <+> "in module" <+> pretty (ikModuleName ispecImportKey)
+        lookUpInImportedModule name mod
+    else pure mempty
+
+
+    -- -- foldMapA (lookUpInImportedModule name) =<< loadModule ispecModuleName
+    --
+    -- let nameVisible =
+    --       case ispecImportList of
+    --         Nothing               -> True
+    --         Just (Imported names) ->
+    --           KM.member name names
+    --         Just (Hidden names)   -> KM.notMember name names
+    -- if not nameVisible
+    -- then pure mempty
+    -- else do
+    --   logDebug $ "[lookUpInImportedModules] searching for name" <+> pretty name <+> "in module" <+> pretty ispecModuleName
+    --   loadModule ispecModuleName >>= foldMapA (lookUpInImportedModule name)
 
 lookUpInImportedModule
   :: forall m. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => UnqualifiedSymbolName
-  -> Module
+  -> ResolvedModule
   -> m [ResolvedSymbol]
 lookUpInImportedModule name importedMod =
-  case SM.lookup name $ meAllExportedNames importedMod of
+  case SM.lookup name $ modAllExportedNames importedMod of
     Nothing   -> pure []
     Just syms -> pure $ toList syms
   -- case mhExports $ modHeader importedMod of
@@ -176,15 +196,15 @@ lookUpInImportedModule name importedMod =
 fileNameToModuleName :: (MonadError Doc m) => FilePath -> m ModuleName
 fileNameToModuleName fname =
   case reverse $ splitDirectories fname of
-    []          -> throwError "Cannot convert empty file name to module name"
-    fname: dirs ->
+    []            -> throwError "Cannot convert empty file name to module name"
+    fname' : dirs ->
       pure $
       mkModuleName $
       T.pack $
       intercalate "." $
       reverse $
       takeWhile canBeModuleName $
-      dropExtension fname : dirs
+      dropExtension fname' : dirs
   where
     canBeModuleName :: FilePath -> Bool
     canBeModuleName []     = False
