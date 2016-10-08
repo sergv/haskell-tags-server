@@ -374,7 +374,7 @@ type ResolvedImportList   = ImportList SymbolMap
 
 instance (Pretty a) => Pretty (ImportList a) where
   pretty ImportList{ilImportType, ilEntries} =
-    ppListWithHeader ("Import list[" <> showDoc ilImportType <> "]") $ toList ilEntries
+    ppFoldableWithHeader ("Import list[" <> showDoc ilImportType <> "]") $ toList ilEntries
 
 data ModuleExports = ModuleExports
   { -- | Toplevel names exported from this particular module as specified in
@@ -432,7 +432,7 @@ instance Pretty ChildrenVisibility where
   pretty = \case
     VisibleAllChildren               -> "VisibleAllChildren"
     VisibleSpecificChildren children ->
-      ppListWithHeader "VisibleSpecificChildren" $ toList children
+      ppFoldableWithHeader "VisibleSpecificChildren" $ toList children
 
 isChildExported :: UnqualifiedSymbolName -> ChildrenVisibility -> Bool
 isChildExported _    VisibleAllChildren                 = True

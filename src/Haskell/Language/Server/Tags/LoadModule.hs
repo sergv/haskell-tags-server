@@ -150,7 +150,7 @@ makeModule moduleName modifTime filename tokens = do
       allSymbols     :: SymbolMap
       allSymbols     = SM.fromList syms
   unless (null errors) $
-    logError $ ppListWithHeader
+    logError $ ppFoldableWithHeader
       ("fast-tags errors while loading" <+> showDoc filename)
       (map docFromString errors)
   case header of

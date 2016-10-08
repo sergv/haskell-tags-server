@@ -34,7 +34,7 @@ module Text.PrettyPrint.Leijen.Text.Utils
   , ppList'
   , ppAlist
   , ppDict
-  , ppListWithHeader
+  , ppFoldableWithHeader
   , ppMap
   , ppKeyMap
   , ppSubkeyMap
@@ -122,10 +122,10 @@ ppDict header entries =
   header PP.<$>
   PP.indent 2 (ppAlist entries)
 
-ppListWithHeader :: (Pretty a) => Doc -> [a] -> Doc
-ppListWithHeader header entries =
+ppFoldableWithHeader :: (Pretty a, Foldable f) => Doc -> f a -> Doc
+ppFoldableWithHeader header entries =
   header PP.<$>
-  PP.indent 2 (PP.vsep (map (("-" PP.<+>) . PP.align . pretty) entries))
+  PP.indent 2 (PP.vsep (map (("-" PP.<+>) . PP.align . pretty) $ toList entries))
 
 ppMap :: (Pretty a, Pretty b) => Map a b -> Doc
 ppMap = ppAlist' . M.toList
