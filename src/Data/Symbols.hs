@@ -38,6 +38,7 @@ module Data.Symbols
   , resolvedSymbolPosition
   ) where
 
+import Data.Char (isUpper)
 import Data.Monoid
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -80,7 +81,6 @@ instance Pretty SymbolName where
 mkSymbolName :: Text -> SymbolName
 mkSymbolName = SymbolName
 
-
 -- | Name the @ResolvedSymbol@ refers to.
 newtype UnqualifiedSymbolName = UnqualifiedSymbolName { getUnqualifiedSymbolName :: SymbolName }
   deriving (Show, Eq, Ord)
@@ -89,12 +89,12 @@ instance Pretty UnqualifiedSymbolName where
   pretty = pretty . getUnqualifiedSymbolName
 
 mkUnqualifiedSymbolName :: SymbolName -> Maybe UnqualifiedSymbolName
-mkUnqualifiedSymbolName name
-  | isQualified name = Nothing
-  | otherwise        = Just $ UnqualifiedSymbolName name
-  where
-    isQualified :: SymbolName -> Bool
-    isQualified = T.any (== '.') . getSymbolName
+mkUnqualifiedSymbolName name =
+  case T.uncons $ getSymbolName name of
+    Nothing -> Nothing
+    Just (c, cs)
+      | isUpper c && T.any (== '.') cs -> Nothing
+      | otherwise                      -> Just $ UnqualifiedSymbolName name
 
 -- | Split qualified symbol name (e.g. Foo.Bar.baz) into
 -- qualified module part (Foo.Bar) and name part (baz). Return Nothing

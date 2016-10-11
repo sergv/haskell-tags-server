@@ -38,7 +38,7 @@ import Data.Text (Text)
 import qualified Text.PrettyPrint.Leijen.Text as PP
 
 import Token (Pos(..), TokenVal(..), Token, posFile, posLine, unLine, TokenVal, PragmaType(..))
-import FastTags (stripNewlines, UnstrippedTokens(..))
+import FastTags (stripNewlines, UnstrippedTokens(..), tokToName)
 
 import Control.Monad.Logging
 import Data.KeyMap (KeyMap)
@@ -118,39 +118,6 @@ analyzeImports imports qualifiers ts = do
   case res of
     Nothing                                 -> pure (imports, qualifiers, ts)
     Just (name, qualType, importTarget, ts) -> add name qualType importTarget ts
-
-  -- p <- case dropNLs ts of
-  --        -- Vanilla imports
-  --        PImport :                       (d ->                 PQualified : rest)   -> pure (rest, True, False)
-  --        PImport :                                                          rest    -> pure (rest, False, False)
-  --        PImport : (d -> PSourcePragma : (d ->                 PQualified : rest))  -> pure (rest, True, True)
-  --        PImport : (d -> PSourcePragma :                                    rest)   -> pure (rest, False, True)
-  --        -- Package-qualified imports
-  --        PImport :                       (d -> PString : (d -> PQualified : rest))  -> pure (rest, True, False)
-  --        PImport :                       (d -> PString :                    rest)   -> pure (rest, False, False)
-  --        PImport : (d -> PSourcePragma : (d -> PString : (d -> PQualified : rest))) -> pure (rest, True, True)
-  --        PImport : (d -> PSourcePragma : (d -> PString :                    rest))  -> pure (rest, False, True)
-  --        _                                                                          -> mzero
-  -- case p of
-  --   -- Imports ended
-  --   Nothing                                  -> pure (imports, qualifiers, ts)
-  --   Just (rest, isQualified, isHsBootImport) -> do
-  --     case dropNLs rest of
-  --       PName name : (d -> PAs : (d -> PName qualName : rest)) -> undefined
-  --       PName name : (d ->                              rest)  -> undefined
-
-  -- case dropNLs ts of
-  --   -- Vanilla imports
-  --   PImport : (d ->                 PQualified : (d -> PName name : (d -> PAs : (d -> PName qualName : rest))))  -> add name (Qualified $ mkQual qualName) rest
-  --   PImport : (d ->                 PQualified : (d -> PName name :                                    rest))    -> add name (Qualified $ mkQual name) rest
-  --   PImport : (d ->                                    PName name : (d -> PAs : (d -> PName qualName : rest)))   -> add name (BothQualifiedAndUnqualified $ mkQual qualName) rest
-  --   PImport : (d ->                                    PName name :                                    rest)     -> add name Unqualified rest
-  --   -- Package-qualified imports
-  --   PImport : (d -> PString : (d -> PQualified : (d -> PName name : (d -> PAs : (d -> PName qualName : rest))))) -> add name (Qualified $ mkQual qualName) rest
-  --   PImport : (d -> PString : (d -> PQualified : (d -> PName name :                                    rest)))   -> add name (Qualified $ mkQual name) rest
-  --   PImport : (d -> PString : (d ->                    PName name : (d -> PAs : (d -> PName qualName : rest))))  -> add name (BothQualifiedAndUnqualified $ mkQual qualName) rest
-  --   PImport : (d -> PString : (d ->                    PName name :                                    rest))    -> add name Unqualified rest
-  --   _ -> pure (imports, qualifiers, ts)
   where
     d      = dropNLs
     mkQual = mkImportQualifier . mkModuleName
@@ -212,6 +179,8 @@ analyzeImports imports qualifiers ts = do
             PRParen : rest -> pure (importList, rest)
             toks'          -> do
               (descr, name, rest) <- case toks' of
+                                       PLParen : Pos _ (tokToName -> Just name) : PRParen : rest ->
+                                         return ("operator in import list", name, rest)
                                        PLParen : PName name : PRParen : rest ->
                                          return ("operator in import list", name, rest)
                                        PName name : rest                     ->
@@ -261,14 +230,10 @@ analyzeExports importQualifiers ts =
     go entries reexports = \case
       []                                    -> pure exports
       [PRParen]                             -> pure exports
-      PLParen : PName name : PRParen : rest -> do
-        (children, rest') <- analyzeChildren "operator in export list" rest
-        let newEntry = EntryWithChildren (mkSymbolName name) children
-        consumeComma (KM.insert newEntry entries) reexports rest'
-      PName name : rest                     -> do
-        (children, rest') <- analyzeChildren "name in export list" rest
-        let newEntry = EntryWithChildren (mkSymbolName name) children
-        consumeComma (KM.insert newEntry entries) reexports rest'
+      PLParen : PName name : PRParen : rest -> handleChildren "operator in export list" name rest
+      PLParen : Pos _ (tokToName -> Just name) : PRParen : rest ->
+        handleChildren "operator in export list" name rest
+      PName name : rest                     -> handleChildren "name in export list" name rest
       PPattern : PName name : rest          ->
         consumeComma (KM.insert newEntry entries) reexports rest
         where
@@ -285,11 +250,18 @@ analyzeExports importQualifiers ts =
       toks                                  ->
         throwError $ "Unrecognized export list structure:" <+> pretty (Tokens toks)
       where
+        exports :: ModuleExports
         exports = ModuleExports
           { meExportedEntries    = entries
           , meReexports          = reexports
           , meHasWildcardExports = getAny $ foldMap exportsAllChildren entries
           }
+        handleChildren :: Doc -> Text -> [Token] -> m ModuleExports
+        handleChildren listType name rest = do
+          (children, rest') <- analyzeChildren listType rest
+          let newEntry = EntryWithChildren (mkSymbolName name) children
+          consumeComma (KM.insert newEntry entries) reexports rest'
+        exportsAllChildren :: EntryWithChildren a -> Any
         exportsAllChildren (EntryWithChildren _ visibility) =
           maybe mempty isExportAllChildren visibility
           where

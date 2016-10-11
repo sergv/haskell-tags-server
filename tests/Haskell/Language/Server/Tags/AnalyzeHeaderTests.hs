@@ -342,6 +342,38 @@ moduleWithImportAndAliasAndHidingImportListTest = doTest "Module with import, al
         ]
     }
 
+-- Operators with these names have standalone tokens for them after lexing,
+-- so it's important to account for them during header recognition.
+moduleWithImportOfSpeciallyNamedOperators :: TestTree
+moduleWithImportOfSpeciallyNamedOperators = doTest "Module with import of operators with special names"
+  "module ModuleWithImportOfSpeciallyNamedOperators where\n\
+  \import Imported1 ((.), (!), (~), (.+.))"
+  ModuleHeader
+    { mhModName          = mkModuleName "ModuleWithImportOfSpeciallyNamedOperators"
+    , mhExports          = Nothing
+    , mhImportQualifiers = mempty
+    , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+        [ neSingleton ImportSpec
+            { ispecImportKey     = ImportKey
+                { ikImportTarget = VanillaModule
+                , ikModuleName   = mkModuleName "Imported1"
+                }
+            , ispecQualification = Unqualified
+            , ispecImportList    = Just ImportList
+                { ilEntries       = KM.fromList
+                    [ EntryWithChildren (mkUnqualSymName ".") Nothing
+                    , EntryWithChildren (mkUnqualSymName "!") Nothing
+                    , EntryWithChildren (mkUnqualSymName "~") Nothing
+                    , EntryWithChildren (mkUnqualSymName ".+.") Nothing
+                    ]
+                , ilImportType    = Imported
+                , ilImportedNames = ()
+                }
+            }
+        ]
+    }
+
+
 moduleWithEmptyExportsTest :: TestTree
 moduleWithEmptyExportsTest = doTest "Module with empty exports"
   "module ModuleWithEmptyExport () where"
@@ -351,6 +383,23 @@ moduleWithEmptyExportsTest = doTest "Module with empty exports"
         { meExportedEntries    = mempty
         , meReexports          = mempty
         , meHasWildcardExports = False
+        }
+    , mhImportQualifiers = mempty
+    , mhImports          = SubkeyMap.empty
+    }
+
+moduleWithQuaifiedExportsTest :: TestTree
+moduleWithQuaifiedExportsTest = doTest "Module with qualified exports"
+  "module ModuleWithEmptyExport (Foo.bar, Baz.Quux(..)) where"
+  ModuleHeader
+    { mhModName          = mkModuleName "ModuleWithEmptyExport"
+    , mhExports          = Just ModuleExports
+        { meExportedEntries    = KM.fromList
+            [ EntryWithChildren (mkSymbolName "Foo.bar") Nothing
+            , EntryWithChildren (mkSymbolName "Baz.Quux") $ Just VisibleAllChildren
+            ]
+        , meReexports          = mempty
+        , meHasWildcardExports = True
         }
     , mhImportQualifiers = mempty
     , mhImports          = SubkeyMap.empty
@@ -439,6 +488,26 @@ moduleWithMultilineExportsTest = doTest "Module with peculiarly indented export 
     , mhImports          = SubkeyMap.empty
     }
 
+moduleWithExportsOfSpeciallyNamedOperators :: TestTree
+moduleWithExportsOfSpeciallyNamedOperators = doTest "Export of operators with special names"
+  "module ModuleWithExport ((.), (!), (~), (.+.), (Test..||.)) where"
+  ModuleHeader
+    { mhModName          = mkModuleName "ModuleWithExport"
+    , mhExports          = Just ModuleExports
+        { meExportedEntries    = KM.fromList
+            [ EntryWithChildren (mkSymbolName ".") Nothing
+            , EntryWithChildren (mkSymbolName "!") Nothing
+            , EntryWithChildren (mkSymbolName "~") Nothing
+            , EntryWithChildren (mkSymbolName ".+.") Nothing
+            , EntryWithChildren (mkSymbolName "Test..||.") Nothing
+            ]
+        , meReexports          = mempty
+        , meHasWildcardExports = False
+        }
+    , mhImportQualifiers = mempty
+    , mhImports          = SubkeyMap.empty
+    }
+
 tests :: TestTree
 tests = testGroup "Header analysis tests"
   [ simpleHeaderTest
@@ -454,11 +523,14 @@ tests = testGroup "Header analysis tests"
     , moduleWithQualifiedImportAndAliasTest
     , moduleWithImportAndAliasTest
     , moduleWithImportAndAliasAndHidingImportListTest
+    , moduleWithImportOfSpeciallyNamedOperators
     ]
   , testGroup "exports"
     [ moduleWithEmptyExportsTest
+    , moduleWithQuaifiedExportsTest
     , moduleWithExportsTest
     , moduleWithMultilineExportsTest
+    , moduleWithExportsOfSpeciallyNamedOperators
     ]
   ]
 

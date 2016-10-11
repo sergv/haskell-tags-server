@@ -116,7 +116,7 @@ mkQualUnqualTest (name, unqualSym, qualSym, response) =
 
 testData :: TestSet ServerTest
 testData = GroupTest "server tests"
-  [ AtomicTest $ ServerTest
+  [ AtomicTest ServerTest
       { stTestName         = "single module"
       , stWorkingDirectory = Directory "0000single_module"
       , stFile             = "SingleModule.hs"
