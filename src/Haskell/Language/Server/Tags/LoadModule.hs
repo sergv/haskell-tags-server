@@ -146,7 +146,7 @@ makeModule moduleName modifTime filename tokens = do
   (header, tokens') <- analyzeHeader tokens
   let syms           :: [ResolvedSymbol]
       errors         :: [String]
-      (syms, errors) = first (fmap mkSymbol) $ processTokens tokens'
+      (syms, errors) = first (fmap mkResolvedSymbol) $ processTokens tokens'
       allSymbols     :: SymbolMap
       allSymbols     = SM.fromList syms
   unless (null errors) $

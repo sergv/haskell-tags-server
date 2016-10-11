@@ -31,7 +31,7 @@ module Data.Symbols
   , mkUnqualifiedSymbolName
   , splitQualifiedPart
   , ResolvedSymbol
-  , mkSymbol
+  , mkResolvedSymbol
   , resolvedSymbolName
   , resolvedSymbolType
   , resolvedSymbolParent
@@ -136,8 +136,8 @@ instance Pretty ResolvedSymbol where
       ppSrcPos :: SrcPos -> Doc
       ppSrcPos (SrcPos file line _) = docFromString file <> ":" <> pretty (unLine line)
 
-mkSymbol :: Pos TagVal -> ResolvedSymbol
-mkSymbol = ResolvedSymbol
+mkResolvedSymbol :: Pos TagVal -> ResolvedSymbol
+mkResolvedSymbol = ResolvedSymbol
 
 resolvedSymbolName :: ResolvedSymbol -> UnqualifiedSymbolName
 resolvedSymbolName (ResolvedSymbol (Pos _ (TagVal name _ _))) =
