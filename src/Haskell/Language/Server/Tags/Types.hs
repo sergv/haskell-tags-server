@@ -168,12 +168,6 @@ isModuleNameConstituentChar c    = isAlphaNum c
 
 data Module a = Module
   { modHeader           :: ModuleHeader a
-    -- -- | Map for tags that can influence other tags when exporting, e.g.
-    -- -- keys are data types and values are their constructors and fields. Thus
-    -- -- export list construction Foo(..) will export all constructors and fields
-    -- -- for datatype Foo, and Foo will be a key in this map.
-  -- , modChildrenMap      :: Map SymbolName (NonEmpty SymbolName)
-
     -- | All symbols defined in this module.
   , modAllSymbols       :: SymbolMap
     -- | File the module was loaded from.

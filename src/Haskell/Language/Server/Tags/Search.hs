@@ -99,21 +99,6 @@ lookUpInImportedModules name specs = do
         lookUpInImportedModule name mod
     else pure mempty
 
-
-    -- -- foldMapA (lookUpInImportedModule name) =<< loadModule ispecModuleName
-    --
-    -- let nameVisible =
-    --       case ispecImportList of
-    --         Nothing               -> True
-    --         Just (Imported names) ->
-    --           KM.member name names
-    --         Just (Hidden names)   -> KM.notMember name names
-    -- if not nameVisible
-    -- then pure mempty
-    -- else do
-    --   logDebug $ "[lookUpInImportedModules] searching for name" <+> pretty name <+> "in module" <+> pretty ispecModuleName
-    --   loadModule ispecModuleName >>= foldMapA (lookUpInImportedModule name)
-
 lookUpInImportedModule
   :: forall m. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => UnqualifiedSymbolName
@@ -123,73 +108,6 @@ lookUpInImportedModule name importedMod =
   case SM.lookup name $ modAllExportedNames importedMod of
     Nothing   -> pure []
     Just syms -> pure $ toList syms
-  -- case mhExports $ modHeader importedMod of
-  --   -- No export list - only names from this module are reexported.
-  --   Nothing                                            ->
-  --     pure $ maybe [] toList $ SM.lookup name $ modAllSymbols importedMod
-  --   Just ModuleExports{meExportedEntries, meReexports, meHasWildcardExports} ->
-  --     -- NB: each name can be reexported from only one source. Thus, name
-  --     -- cannot be exported by module and at the same time be also present in
-  --     -- some of the reexported modules.
-  --     case KM.lookup (getUnqualifiedSymbolName name) meExportedEntries of
-  --       Nothing ->
-  --         -- It is enough to resolve parent only once, because exponting
-  --         -- everything from a grandparent does not automatically exports
-  --         -- children two levels deep.
-  --         case resolveParent importedMod name >>= \parents ->
-  --                error "TODO" $
-  --                KM.lookup (getUnqualifiedSymbolName name') meExportedEntries of
-  --           Just entry@(EntryWithChildren _ (Just children))
-  --             | isChildExported name children -> lookupExportedInCurrentModuleAndImports entry
-  --           _
-  --             | meHasWildcardExports ->
-  --               findInModule (getUnqualifiedSymbolName name) importedMod
-  --             | otherwise            ->
-  --               flip foldMapA meReexports $ \modName ->
-  --                 case M.lookup modName $ mhImports $ modHeader importedMod of
-  --                   Nothing    ->
-  --                     throwError $
-  --                       "Internal error: reexported module" <+> pretty modName <+>
-  --                         "not found in imports map"
-  --                   Just specs ->
-  --                     lookUpInImportedModules name $ toList specs
-  --       Just entry -> lookupExportedInCurrentModuleAndImports entry
-  -- where
-  --   lookupExportedInCurrentModuleAndImports = lookupExportedSymbolInModuleAndImports name importedMod
-  --
--- -- | Search for symbol in module given that the symbol is exported from module.
--- lookupExportedSymbolInModuleAndImports
---   :: forall m. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
---   => UnqualifiedSymbolName
---   -> Module
---   -> EntryWithChildren SymbolName
---   -> m [ResolvedSymbol]
--- lookupExportedSymbolInModuleAndImports
---   name
---   Module{modHeader, modAllSymbols}
---   (EntryWithChildren exportedName _) =
---   case fst $ splitQualifiedPart exportedName of
---     Nothing        ->
---       case SM.lookup name modAllSymbols of
---         Just syms -> pure $ toList syms
---         Nothing   ->
---           -- If name is exported but is not defined in current module
---           -- then it is either defined by template Haskell or preprocessor,
---           -- in which case we're out of luck, or it is just re-exported
---           -- and it it still possible to find it.
---           lookUpInImportedModules name
---             $ filter importBringsUnqualifiedNames
---             $ foldMap toList
---             $ mhImports modHeader
---     -- If export has qualifiers then it must be a reexport.
---     Just qualifier ->
---       lookUpInImportedModules name
---         $ filter (`importBringsNamesQualifiedWith` qualifier)
---         $ foldMap toList
---         $ mhImports modHeader
---
--- resolveParent :: Module -> UnqualifiedSymbolName -> Maybe (Set UnqualifiedSymbolName)
--- resolveParent Module{modAllSymbols} name = SM.lookupParent name modAllSymbols
 
 -- | Try to infer suitable module name from the file name. Tries to take
 -- as much directory names that start with the uppercase letter as possible.
