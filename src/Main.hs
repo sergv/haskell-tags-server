@@ -11,8 +11,9 @@
 --
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE LambdaCase     #-}
-{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Main (main) where
 
@@ -20,6 +21,7 @@ import Control.Applicative
 import Control.Monad
 import Control.Monad.Except
 import Data.Foldable (for_)
+import Data.Monoid
 import Data.Set (Set)
 import qualified Data.Set as S
 import Network.Socket (PortNumber)
@@ -110,17 +112,18 @@ main = do
       state = TagsServerState
                 { tssLoadedModules = SubkeyMap.empty
                 }
-  conf'  <- canonicalizeConfPaths =<< addRecursiveRootsToConf cfgDirTrees conf
-  result <- runSimpleLoggerT (Just Stderr) cfgDebugVerbosity
-          $ runExceptT
-          $ startTagsServer conf' state
-  case result of
-    Left err         -> putDocLn err
-    Right tagsServer -> do
-      bertServer <- runBertServer cfgPort $ tsRequestHandler tagsServer
-      waitForBertServerStart bertServer
-      -- Wait for tag server to finish
-      void $ waitForTagsServerFinish tagsServer
+  conf' <- canonicalizeConfPaths =<< addRecursiveRootsToConf cfgDirTrees conf
+  runSimpleLoggerT (Just Stderr) cfgDebugVerbosity $ do
+    logDebug $ ppFoldableWithHeader "Staring server with following directories" $
+      tsconfSourceDirectories conf'
+    result <- runExceptT $ startTagsServer conf' state
+    case result of
+      Left err         -> putDocLn err
+      Right tagsServer -> do
+        bertServer <- runBertServer cfgPort $ tsRequestHandler tagsServer
+        waitForBertServerStart bertServer
+        -- Wait for tag server to finish
+        void $ waitForTagsServerFinish tagsServer
 
 ensureDirExists :: FilePath -> IO ()
 ensureDirExists dir = do

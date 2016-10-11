@@ -50,10 +50,12 @@ mkLogCollectingServer
   => TagsServerConf -> PortNumber -> m LogCollectingServer
 mkLogCollectingServer conf port = do
   logOutputVar <- liftBase $ newMVar mempty
-  let log x = liftBase $ modifyMVar_ logOutputVar (pure . (x :))
-  tagsServer   <- runSimpleLoggerT (Just (Custom log)) Debug
-                $ startTagsServer conf emptyTagsServerState
-  bertServer <- liftBase $ runBertServer port $ tsRequestHandler tagsServer
+  let log x = modifyMVar_ logOutputVar (pure . (x :))
+  tagsServer <- runSimpleLoggerT (Just (Custom (liftBase . log))) Debug
+              $ startTagsServer conf emptyTagsServerState
+  bertServer <- liftBase
+                  $ runSimpleLoggerT (Just (Custom log)) Debug
+                  $ runBertServer port $ tsRequestHandler tagsServer
   pure LogCollectingServer
     { lcsLogs       = logOutputVar
     , lcsTagsServer = tagsServer

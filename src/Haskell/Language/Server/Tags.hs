@@ -38,12 +38,13 @@ import Control.Monad.Catch
 import Control.Monad.Except
 import Control.Monad.Trans.Control
 import Data.List.NonEmpty (NonEmpty(..))
-import Text.PrettyPrint.Leijen.Text (Doc)
+import Text.PrettyPrint.Leijen.Text (Doc, (<+>), pretty)
+import qualified Text.PrettyPrint.Leijen.Text as PP
 
 import Data.Promise (Promise)
 import qualified Data.Promise as Promise
 
-import Control.Monad.Filesystem (MonadFS)
+import Control.Monad.Filesystem (MonadFS(..))
 import Control.Monad.Logging
 import Haskell.Language.Server.Tags.Search
 import Haskell.Language.Server.Tags.SearchM
@@ -101,16 +102,24 @@ startTagsServer conf state = do
       -> m TagsServerState
     handleReq reqChan state = do
       (request, responsePromise) <- liftBase $ readChan reqChan
-      case request of
-        FindSymbol filename symbol -> do
-          (symbols, state') <- runSearchT conf state $ findSymbol filename symbol
-          Promise.putValue responsePromise $
+      logDebug $ "[startTagsServer.handleReq] got request:" <+> pretty request
+      (response, state') <- runSearchT conf state $
+        case request of
+          FindSymbol filename symbol -> do
+            ensureFileExists filename
+            symbols <- findSymbol filename symbol
             case symbols of
-              Left err     -> Left err
-              Right []     -> Right $ NotFound symbol
-              Right (s:ss) -> Right $ Found $ s :| ss
-          pure state'
-        FindSymbolByRegexp _ _ -> do
-          Promise.putValue responsePromise $ Left "Search by regexp is not implemented yet"
-          pure state
+              []   -> pure $ NotFound symbol
+              s:ss -> pure $ Found $ s :| ss
+          FindSymbolByRegexp filename _ -> do
+            ensureFileExists filename
+            throwError "Search by regexp is not implemented yet"
+      logDebug $ "[startTagsServer.handleReq] got response:" <+> either id pretty response
+      Promise.putValue responsePromise response
+      pure state'
 
+ensureFileExists :: (MonadFS m, MonadError Doc m) => FilePath -> m ()
+ensureFileExists path = do
+  exists <- doesFileExist path
+  unless exists $
+    throwError $ "Error: file" <+> PP.dquotes (pretty path) <+> "does not exist"

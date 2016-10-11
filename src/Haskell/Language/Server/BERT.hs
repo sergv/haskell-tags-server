@@ -12,12 +12,13 @@
 -- BERT frontend for tag server.
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE NamedFieldPuns    #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes        #-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 module Haskell.Language.Server.BERT
   ( defaultPort
@@ -30,6 +31,7 @@ module Haskell.Language.Server.BERT
 import Control.Concurrent
 import Control.Monad.Base
 import Control.Monad.Except
+import Control.Monad.Trans.Control
 import qualified Data.ByteString.Lazy.Char8 as C8
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
 import Data.Foldable (toList)
@@ -46,10 +48,11 @@ import FastTags (SrcPos(..), Type, Line(..))
 import qualified Network.BERT.Server as BERT
 import qualified Network.BERT.Transport as BERT
 
-import Data.Symbols
-import Data.Condition
+import Control.Monad.Logging
 import Data.CompiledRegex
+import Data.Condition
 import qualified Data.Promise as Promise
+import Data.Symbols
 import Haskell.Language.Server.Tags.Types
 
 
@@ -94,50 +97,56 @@ stopBertServer = liftBase . killThread . bsThreadId
 waitForBertServerStart :: (MonadBase IO m) => BertServer -> m ()
 waitForBertServerStart = waitForCondition . stStartedLock . bsTransport
 
-runBertServer :: PortNumber -> RequestHandler -> IO BertServer
+runBertServer
+  :: forall m. (MonadBase IO m, MonadBaseControl IO m, MonadLog m, StM m BERT.DispatchResult ~ BERT.DispatchResult)
+  => PortNumber
+  -> RequestHandler
+  -> m BertServer
 runBertServer port reqHandler = do
-  syncTransport <- SynchronizedTransport
-                     <$> BERT.tcpServer port
-                     <*> newUnsetCondition
-  tid  <- forkIO $ BERT.serve syncTransport go'
+  syncTransport <- liftBase $ SynchronizedTransport
+                                <$> BERT.tcpServer port
+                                <*> newUnsetCondition
+  tid  <- liftBaseWith $ \runInBase ->
+            forkIO $ BERT.serve syncTransport (\x y z -> runInBase $ go x y z)
   pure BertServer
     { bsThreadId  = tid
     , bsTransport = syncTransport
     }
   where
-    go' :: String -> String -> [Term] -> IO BERT.DispatchResult
-    go' mod func args = do
-      res <- runExceptT $ go mod func args
+    go :: String -> String -> [Term] -> m BERT.DispatchResult
+    go mod func args = do
+      logDebug $ "[runBertServer.go] got request" <+> pretty mod <> ":" <> pretty func
+      res <- runExceptT $ go' mod func args
       case res of
         Left err ->
-          return $ BERT.Success $ TupleTerm
+          pure $ BERT.Success $ TupleTerm
             [ AtomTerm "error"
             , BinaryTerm $ TLE.encodeUtf8 $ displayDoc err
             ]
         Right x -> pure x
-    go :: String -> String -> [Term] -> ExceptT Doc IO BERT.DispatchResult
-    go "haskell-tags-server" "find-regexp" args =
+    go' :: String -> String -> [Term] -> ExceptT Doc m BERT.DispatchResult
+    go' "haskell-tags-server" "find-regexp" args =
       case args of
         [BinaryTerm filename, BinaryTerm regexp] -> do
           request  <- FindSymbolByRegexp
                         <$> (T.unpack <$> decodeUtf8 "filename" filename)
                         <*> (compileRegex False . T.unpack =<< decodeUtf8 "regexp" regexp)
-          response <- liftIO $ Promise.getPromisedValue =<< reqHandler request
+          response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
           BERT.Success <$> either throwError (pure . responseToTerm) response
         _                                    ->
           throwError $ "Expected 2 arguments but got:" <+> showDoc args
-    go "haskell-tags-server" "find" args =
+    go' "haskell-tags-server" "find" args =
       case args of
         [BinaryTerm filename, BinaryTerm symbol] -> do
           request  <- FindSymbol
                         <$> (T.unpack <$> decodeUtf8 "filename" filename)
                         <*> (mkSymbolName <$> decodeUtf8 "symbol to find" symbol)
-          response <- liftIO $ Promise.getPromisedValue =<< reqHandler request
+          response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
           BERT.Success <$> either throwError (pure . responseToTerm) response
         _                                    ->
           throwError $ "Expected 2 arguments but got:" <+> showDoc args
-    go "haskell-tags-server" _ _ = return BERT.NoSuchFunction
-    go _                     _ _ = return BERT.NoSuchModule
+    go' "haskell-tags-server" _ _ = pure BERT.NoSuchFunction
+    go' _                     _ _ = pure BERT.NoSuchModule
 
 responseToTerm :: Response -> Term
 responseToTerm = \case

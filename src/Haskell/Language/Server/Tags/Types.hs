@@ -104,10 +104,16 @@ data Request =
   | FindSymbolByRegexp FilePath CompiledRegex
   deriving (Show, Eq, Ord)
 
+instance Pretty Request where
+  pretty = showDoc
+
 data Response =
     Found (NonEmpty ResolvedSymbol)
   | NotFound SymbolName
   deriving (Show, Eq, Ord)
+
+instance Pretty Response where
+  pretty = showDoc
 
 type RequestHandler = Request -> IO (Promise (Either Doc Response))
 
