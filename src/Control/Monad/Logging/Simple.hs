@@ -99,8 +99,8 @@ runSimpleLoggerT dest severity (SimpleLoggerT action) =
             Nothing    -> \_ -> pure ()
             Just dest' ->
               case dest' of
-                Stderr   -> liftBase . TLIO.hPutStrLn stderr . displayDoc
-                Stdout   -> liftBase . TLIO.hPutStrLn stdout . displayDoc
+                Stderr   -> \msg -> liftBase $ TLIO.hPutStrLn stderr (displayDoc msg) *> hFlush stderr
+                Stdout   -> \msg -> liftBase $ TLIO.hPutStrLn stdout (displayDoc msg) *> hFlush stdout
                 Custom f -> f
       , logSeverity = severity
       }
