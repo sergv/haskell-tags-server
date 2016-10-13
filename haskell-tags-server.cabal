@@ -31,6 +31,7 @@ library
     directory,
     dlist,
     exceptions >= 0.8,
+    extra >= 1.4.2,
     fast-tags >=1.2,
     filepath,
     haskell-src-exts >=1.16,

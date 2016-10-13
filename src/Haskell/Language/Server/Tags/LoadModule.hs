@@ -35,6 +35,7 @@ import Control.Monad.State
 import qualified Control.Monad.State.Strict as SS
 import Data.Foldable
 import Data.Functor.Product (Product(..))
+import Data.List.Extra (nubOrd)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -46,7 +47,6 @@ import qualified Data.Text as T
 import Data.Time.Clock (UTCTime)
 import Data.Traversable (for)
 import System.FilePath
-import qualified Text.PrettyPrint.Leijen.Text as PP
 
 import FastTags (tokenizeInput, processTokens)
 import Token (Token)
@@ -96,19 +96,27 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
     extensions = case ikImportTarget of
                    VanillaModule -> vanillaExtensions
                    HsBootModule  -> hsBootExtensions
+    isHaskellSource :: FilePath -> Maybe FilePath
+    isHaskellSource path
+      | takeExtension path `S.member` extensions = Just path
+      | otherwise                                = Nothing
     doLoad :: ModuleName -> m (NonEmpty ResolvedModule)
     doLoad name = do
       logInfo $ "[loadModule.doLoad] loading module" <+> showDoc name
       srcDirs <- asks tsconfSourceDirectories
-      let possiblePaths = [ root </> filenamePart <.> ext
-                          | root <- toList srcDirs
-                          , ext  <- toList extensions
-                          ]
-      actualPaths <- filterM MonadFS.doesFileExist possiblePaths
-      case actualPaths of
-        []     -> throwError $
-                  "Cannot load module " <> pretty name <> ": no attempted paths exist:" PP.<$>
-                    PP.nest 2 (pretty possiblePaths)
+      let possibleShallowPaths = [ root </> filenamePart <.> ext
+                                 | root <- toList srcDirs
+                                 , ext  <- toList extensions
+                                 ]
+      shallowPaths   <- filterM MonadFS.doesFileExist possibleShallowPaths
+      recursiveDirs  <- asks tsconfRecursiveSourceDirectories
+      recursivePaths <- foldMapA (MonadFS.findRec MonadFS.isNotIgnoredDir isHaskellSource) recursiveDirs
+
+      let allPaths = nubOrd $ shallowPaths ++ recursivePaths
+      case allPaths of
+        []     -> throwError $ ppFoldableWithHeader
+                    ("Cannot load module " <> pretty name <> ": no attempted paths exist:")
+                    allPaths
         p : ps -> traverse (loadModuleFromFile (Just name) Nothing) (p :| ps)
       where
         filenamePart :: FilePath

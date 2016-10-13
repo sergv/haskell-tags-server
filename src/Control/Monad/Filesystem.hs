@@ -18,6 +18,7 @@
 module Control.Monad.Filesystem
   ( MonadFS(..)
   , findRec
+  , isNotIgnoredDir
   ) where
 
 import Control.Monad.Except
@@ -28,6 +29,8 @@ import qualified Data.DList as DL
 import Data.Foldable
 import Data.Maybe
 import Data.Monoid
+import Data.Set (Set)
+import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text.IO
 import Data.Time.Clock (UTCTime)
@@ -100,3 +103,14 @@ isValidDirName :: FilePath -> Bool
 isValidDirName "."  = False
 isValidDirName ".." = False
 isValidDirName _    = True
+
+isNotIgnoredDir :: FilePath -> Bool
+isNotIgnoredDir = \dir -> takeFileName dir `S.notMember` ignoredDirs
+  where
+    ignoredDirs :: Set FilePath
+    ignoredDirs = S.fromList
+      [ ".git"
+      , "_darcs"
+      , ".hg"
+      , ".svn"
+      ]
