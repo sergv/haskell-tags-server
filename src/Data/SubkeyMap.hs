@@ -26,11 +26,13 @@ module Data.SubkeyMap
   , empty
   , null
   , insert
+  , insertWith
   , lookup
   , lookupSubkey
   , lookupSubkeyKeys
   , alter'
   , traverseWithKey
+  , fromMap
   , fromList
   , fromFoldable
   , toList
@@ -44,7 +46,7 @@ import Control.Monad.State.Strict
 import Data.Foldable (foldl')
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Monoid
+import Data.Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import Prelude hiding (lookup, null)
@@ -71,6 +73,16 @@ deriving instance (Show k, Show (Subkey k), Show v) => Show (SubkeyMap k v)
 deriving instance (Eq k,   Eq (Subkey k),   Eq v)   => Eq (SubkeyMap k v)
 deriving instance (Ord k,  Ord (Subkey k),  Ord v)  => Ord (SubkeyMap k v)
 
+instance (HasSubkey k, Semigroup v) => Semigroup (SubkeyMap k v) where
+  SubkeyMap m1 s1 <> SubkeyMap m2 s2 = SubkeyMap
+    { smMainMap = M.unionWith (<>) m1 m2
+    , smSubMap  = M.unionWith (<>) s1 s2
+    }
+
+instance (HasSubkey k, Semigroup v) => Monoid (SubkeyMap k v) where
+  mempty  = empty
+  mappend = (<>)
+
 empty :: SubkeyMap k v
 empty = SubkeyMap
   { smMainMap = M.empty
@@ -83,6 +95,12 @@ null = M.null . smMainMap
 insert :: (HasSubkey k) => k -> v -> SubkeyMap k v -> SubkeyMap k v
 insert k v SubkeyMap{smMainMap, smSubMap} = SubkeyMap
   { smMainMap = M.insert k v smMainMap
+  , smSubMap  = M.insertWith (<>) (getSubkey k) (S.singleton k) smSubMap
+  }
+
+insertWith :: (HasSubkey k) => (v -> v -> v) -> k -> v -> SubkeyMap k v -> SubkeyMap k v
+insertWith f k v SubkeyMap{smMainMap, smSubMap} = SubkeyMap
+  { smMainMap = M.insertWith f k v smMainMap
   , smSubMap  = M.insertWith (<>) (getSubkey k) (S.singleton k) smSubMap
   }
 
@@ -107,6 +125,12 @@ alter' f k SubkeyMap{smMainMap, smSubMap} = SubkeyMap
 traverseWithKey :: (Applicative f) => (k -> v -> f v') -> SubkeyMap k v -> f (SubkeyMap k v')
 traverseWithKey f sm@SubkeyMap{smMainMap} =
   (\smMainMap' -> sm { smMainMap = smMainMap' }) <$> M.traverseWithKey f smMainMap
+
+fromMap :: (HasSubkey k) => Map k v -> SubkeyMap k v
+fromMap m = SubkeyMap
+  { smMainMap = m
+  , smSubMap  = M.fromListWith (<>) $ map (getSubkey &&& S.singleton) $ M.keys m
+  }
 
 fromList :: (HasSubkey k) => [(k, v)] -> SubkeyMap k v
 fromList = fromFoldable

@@ -29,7 +29,6 @@ module Haskell.Language.Server.Tags.Types
   , TagsServerConf(..)
   , emptyTagsServerConf
   , canonicalizeConfPaths
-  , addRecursiveRootsToConf
   , TagsServerState(..)
   , emptyTagsServerState
 
@@ -65,7 +64,6 @@ module Haskell.Language.Server.Tags.Types
   , isChildExported
   ) where
 
-import Control.Monad
 import Control.Monad.Base
 import Control.Monad.Except
 import Data.Char
@@ -81,7 +79,6 @@ import qualified Data.Set as S
 import Data.Time.Clock (UTCTime(..))
 import Data.Traversable (for)
 import System.Directory
-import System.FilePath.Find (FileType(Directory), find, fileType, (==?), always)
 import Text.PrettyPrint.Leijen.Text.Utils
 
 
@@ -118,17 +115,22 @@ instance Pretty Response where
 type RequestHandler = Request -> IO (Promise (Either Doc Response))
 
 data TagsServerConf = TagsServerConf
-  { tsconfSourceDirectories :: Set FilePath -- ^ directories with haskell files to index
-  , tsconfCabalDirectories  :: Set FilePath -- ^ directories with cabal packages to index
-  , tsconfLazyTagging       :: Bool         -- ^ whether to read and compute tags lazily
-                                            -- or read them all at once on server start
+  { -- | Directories with haskell files. Haskell files will be looked up in
+    -- these directories but not in their children.
+    tsconfSourceDirectories          :: Set FilePath
+    -- | Directories where haskell files. Haskell files will be looked up in
+    -- both these directries and all of their children.
+  , tsconfRecursiveSourceDirectories :: Set FilePath
+    -- | Whether to read and compute tags lazily or read them all at once when
+    -- server starts.
+  , tsconfEagerTagging               :: Bool
   } deriving (Show, Eq, Ord)
 
 emptyTagsServerConf :: TagsServerConf
 emptyTagsServerConf = TagsServerConf
-  { tsconfSourceDirectories = mempty
-  , tsconfCabalDirectories  = mempty
-  , tsconfLazyTagging       = False
+  { tsconfSourceDirectories          = mempty
+  , tsconfRecursiveSourceDirectories = mempty
+  , tsconfEagerTagging               = False
   }
 
 forSet :: (Ord a, Ord b, Applicative f) => Set a -> (a -> f b) -> f (Set b)
@@ -136,20 +138,11 @@ forSet xs f = S.fromList <$> traverse f (S.toList xs)
 
 canonicalizeConfPaths :: (MonadBase IO m) => TagsServerConf -> m TagsServerConf
 canonicalizeConfPaths conf = liftBase $ do
-  tsconfSourceDirectories' <- forSet (tsconfSourceDirectories conf) canonicalizePath
-  tsconfCabalDirectories'  <- forSet (tsconfCabalDirectories conf) canonicalizePath
+  tsconfSourceDirectories'          <- forSet (tsconfSourceDirectories conf) canonicalizePath
+  tsconfRecursiveSourceDirectories' <- forSet (tsconfRecursiveSourceDirectories conf) canonicalizePath
   pure conf
-    { tsconfSourceDirectories = tsconfSourceDirectories'
-    , tsconfCabalDirectories  = tsconfCabalDirectories'
-    }
-
-addRecursiveRootsToConf :: (MonadBase IO m) => Set FilePath -> TagsServerConf -> m TagsServerConf
-addRecursiveRootsToConf dirTrees conf = liftBase $ do
-  dirs <- forSet dirTrees $
-            find always (fileType ==? Directory) <=< canonicalizePath
-  pure conf
-    { tsconfSourceDirectories =
-        foldMap S.fromList dirs <> tsconfSourceDirectories conf
+    { tsconfSourceDirectories          = tsconfSourceDirectories'
+    , tsconfRecursiveSourceDirectories = tsconfRecursiveSourceDirectories'
     }
 
 -- | Server state that may change while processing request.
@@ -159,7 +152,7 @@ data TagsServerState = TagsServerState
   } deriving (Show, Eq, Ord)
 
 emptyTagsServerState :: TagsServerState
-emptyTagsServerState = TagsServerState SubkeyMap.empty
+emptyTagsServerState = TagsServerState mempty
 
 isModuleNameConstituentChar :: Char -> Bool
 isModuleNameConstituentChar '\'' = True
@@ -167,18 +160,18 @@ isModuleNameConstituentChar '_'  = True
 isModuleNameConstituentChar c    = isAlphaNum c
 
 data Module a = Module
-  { modHeader           :: ModuleHeader a
+  { modHeader           :: !(ModuleHeader a)
     -- | All symbols defined in this module.
-  , modAllSymbols       :: SymbolMap
+  , modAllSymbols       :: !SymbolMap
     -- | File the module was loaded from.
-  , modFile             :: FilePath
+  , modFile             :: !FilePath
     -- | Time as reported by getModificationTime.
-  , modLastModified     :: UTCTime
+  , modLastModified     :: !UTCTime
     -- | All names that this module brings into scope
-  , modAllExportedNames :: a
+  , modAllExportedNames :: !a
     -- | Whether some imports of this module were updated and thus revolved
     -- module exports are no longer valid.
-  , modIsDirty          :: Bool
+  , modIsDirty          :: !Bool
   } deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
 type UnresolvedModule = Module ()
@@ -218,16 +211,16 @@ instance Pretty ImportKey where
   pretty ik = "ImportKey" <+> pretty (ikImportTarget ik) <+> pretty (ikModuleName ik)
 
 data ModuleHeader a = ModuleHeader
-  { mhModName          :: ModuleName
+  { mhModName          :: !ModuleName
     -- | Exports of a module. Nothing - everything is exported
-  , mhExports          :: Maybe ModuleExports
+  , mhExports          :: !(Maybe ModuleExports)
     -- | Mapping from qualifiers to original module names. Single qualifier
     -- may be used for several modules.
-  , mhImportQualifiers :: Map ImportQualifier (NonEmpty ModuleName)
+  , mhImportQualifiers :: !(Map ImportQualifier (NonEmpty ModuleName))
     -- | All imports of a given module, including qualified ones.
     -- NB same module name may be present several times with different qualifications
     -- because it may be imported several times.
-  , mhImports          :: SubkeyMap ImportKey (NonEmpty (ImportSpec a))
+  , mhImports          :: !(SubkeyMap ImportKey (NonEmpty (ImportSpec a)))
   } deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
 type UnresolvedModuleHeader = ModuleHeader ()

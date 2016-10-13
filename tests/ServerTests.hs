@@ -50,11 +50,12 @@ import ServerTests.LogCollectingServer
 testDataDir :: FilePath
 testDataDir = "test-data"
 
-testsConfig :: FilePath -> TagsServerConf
-testsConfig srcDir = emptyTagsServerConf
-  { tsconfSourceDirectories =
+mkTestsConfig :: FilePath -> Set FilePath -> TagsServerConf
+mkTestsConfig srcDir trees = TagsServerConf
+  { tsconfSourceDirectories          =
       S.insert srcDir' $ tsconfSourceDirectories emptyTagsServerConf
-  , tsconfLazyTagging       = True
+  , tsconfRecursiveSourceDirectories = trees
+  , tsconfEagerTagging               = False
   }
   where
     srcDir' :: FilePath
@@ -612,7 +613,7 @@ tests =
 
     makeTest :: IO PortPool -> ServerTest -> TestTree
     makeTest pool test@ServerTest{stWorkingDirectory} =
-      withResource (connect pool (unDirectory stWorkingDirectory) S.empty) closeConnection $ \getConn ->
+      withResource (connect pool (unDirectory stWorkingDirectory) mempty) closeConnection $ \getConn ->
         mkFindSymbolTest getConn test
 
 data ServerConnection =
@@ -640,7 +641,7 @@ connect pool sourceDir dirTree =
     startLocalServer = do
       pool' <- pool
       withPort pool' $ \port -> do
-        conf <- canonicalizeConfPaths =<< addRecursiveRootsToConf dirTree (testsConfig sourceDir)
+        conf <- canonicalizeConfPaths $ mkTestsConfig sourceDir dirTree
         serv <- runExceptT $ mkLogCollectingServer conf port
         case serv of
           Left err -> throwIO $ ErrorCall $

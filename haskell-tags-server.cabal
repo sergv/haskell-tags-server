@@ -29,9 +29,9 @@ library
     bytestring,
     containers,
     directory,
+    dlist,
     exceptions >= 0.8,
     fast-tags >=1.2,
-    filemanip,
     filepath,
     haskell-src-exts >=1.16,
     monad-control >=1.0,
@@ -48,6 +48,8 @@ library
     utf8-string >=0.3,
     wl-pprint-text >= 1.1.0.4
   exposed-modules:
+    Control.Arrow.Ext
+    Control.Monad.Ext
     Control.Monad.Filesystem
     Control.Monad.Logging
     Control.Monad.Logging.Simple
@@ -67,6 +69,7 @@ library
     Text.PrettyPrint.Leijen.Text.Utils
   other-modules:
     Haskell.Language.Server.Tags.LoadModule
+    Haskell.Language.Server.Tags.LoadFiles
     Haskell.Language.Server.Tags.Search
     Haskell.Language.Server.Tags.SearchM
   hs-source-dirs:

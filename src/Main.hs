@@ -32,18 +32,18 @@ import System.IO
 
 import Control.Monad.Logging
 import Control.Monad.Logging.Simple
-import qualified Data.SubkeyMap as SubkeyMap
 import Haskell.Language.Server.BERT
 import Haskell.Language.Server.Tags
 import Text.PrettyPrint.Leijen.Text.Utils
 
 data ProgramConfig = ProgramConfig
   { cfgSourceDirectories :: Set FilePath -- ^ Directories with haskell files to index
-  , cfgCabalDirectories  :: Set FilePath -- ^ Directories with cabal packages to index
   , cfgDirTrees          :: Set FilePath -- ^ Directories that should be searched recursively - i.e.
                                          -- all their subdirectories are added to cfgSourceDirectories
   , cfgPort              :: PortNumber
-  , cfgLazyTagging       :: Bool         -- ^ Whether to read and compute tags lazily
+    -- ^ Whether to eagerly read and resolve all tags at the start or to
+    -- lazily load only required modules on a per-request basis.|
+  , cfgEagerTagging      :: Bool
   , cfgDebugVerbosity    :: Severity
   } deriving (Show, Eq, Ord)
 
@@ -58,12 +58,6 @@ optsParser = ProgramConfig
   <*> (S.fromList <$>
          many
            (strOption
-              (long "package" <>
-               help "add directory with cabal package to index" <>
-               metavar "DIR")))
-  <*> (S.fromList <$>
-         many
-           (strOption
               (long "recursive" <>
                help "recursively add directory tree with haskell files to index" <>
                metavar "DIR")))
@@ -74,8 +68,8 @@ optsParser = ProgramConfig
          value defaultPort <>
          metavar "PORT")
   <*> switch
-        (long "lazy-tagging" <>
-         help "whether to compute tags lazily - only for files asked")
+        (long "eager-tagging" <>
+         help "whether to load all tags at application start")
   <*> option verbosityArg
         ( long "verbosity" <>
           value Error <>
@@ -96,23 +90,19 @@ progInfo = info
 
 main :: IO ()
 main = do
-  ProgramConfig{cfgSourceDirectories, cfgCabalDirectories, cfgDirTrees, cfgPort, cfgLazyTagging, cfgDebugVerbosity} <- execParser progInfo
+  ProgramConfig{cfgSourceDirectories, cfgDirTrees, cfgPort, cfgEagerTagging, cfgDebugVerbosity} <- execParser progInfo
   -- validate that specified directories actually exist
   for_ cfgSourceDirectories ensureDirExists
-  unless (S.null cfgCabalDirectories) $ do
-    hPutStrLn stderr "NOT IMPLEMENTED YET: analysis of cabal packages"
-    exitFailure
-  for_ cfgCabalDirectories ensureDirExists
   for_ cfgDirTrees ensureDirExists
   let conf  = TagsServerConf
-                { tsconfSourceDirectories = cfgSourceDirectories
-                , tsconfCabalDirectories  = cfgCabalDirectories
-                , tsconfLazyTagging       = cfgLazyTagging
+                { tsconfSourceDirectories          = cfgSourceDirectories
+                , tsconfRecursiveSourceDirectories = cfgDirTrees
+                , tsconfEagerTagging               = cfgEagerTagging
                 }
       state = TagsServerState
-                { tssLoadedModules = SubkeyMap.empty
+                { tssLoadedModules = mempty
                 }
-  conf' <- canonicalizeConfPaths =<< addRecursiveRootsToConf cfgDirTrees conf
+  conf' <- canonicalizeConfPaths conf
   runSimpleLoggerT (Just Stderr) cfgDebugVerbosity $ do
     logDebug $ ppFoldableWithHeader "Staring server with following directories" $
       tsconfSourceDirectories conf'

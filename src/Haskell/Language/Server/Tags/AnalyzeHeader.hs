@@ -28,10 +28,10 @@ import Control.Monad.Except
 import Control.Monad.Trans.Maybe
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Monoid
+import qualified Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Text (Text)
@@ -59,7 +59,7 @@ analyzeHeader ts =
     Pos _ KWModule :
       (dropNLs -> Pos _ (T modName) :
         (break ((== KWWhere) . valOf) . dropNLs -> (exportList, Pos _ KWWhere : body))) -> do
-      (importSpecs, importQualifiers, body') <- analyzeImports SubkeyMap.empty mempty body
+      (importSpecs, importQualifiers, body') <- analyzeImports mempty mempty body
       exports                                <- analyzeExports importQualifiers exportList
       let header = ModuleHeader
             { mhModName          = mkModuleName modName
@@ -133,14 +133,18 @@ analyzeImports imports qualifiers ts = do
     add name qual importTarget toks = do
       (importList, toks') <- analyzeImportList toks
       let spec     = mkNewSpec importList
-          imports' = SubkeyMap.alter' (upd spec) (ImportKey importTarget modName) imports
+          imports' = SubkeyMap.insertWith
+                       (Semigroup.<>)
+                       (ImportKey importTarget modName)
+                       (spec :| [])
+                       imports
       analyzeImports imports' qualifiers' toks'
       where
         modName :: ModuleName
         modName = mkModuleName name
         qualifiers' :: Map ImportQualifier (NonEmpty ModuleName)
         qualifiers' = case getQualifier qual of
-                        Just q  -> M.alter (Just . upd modName) q qualifiers
+                        Just q  -> M.insertWith (Semigroup.<>) q (modName :| []) qualifiers
                         Nothing -> qualifiers
         mkNewSpec :: Maybe UnresolvedImportList -> UnresolvedImportSpec
         mkNewSpec importList = ImportSpec
@@ -151,11 +155,6 @@ analyzeImports imports qualifiers ts = do
           , ispecQualification = qual
           , ispecImportList    = importList
           }
-        upd :: forall a. a -> Maybe (NonEmpty a) -> NonEmpty a
-        upd x prev =
-          case prev of
-            Nothing    -> x :| []
-            Just specs -> NE.cons x specs
     -- Analyze comma-separated list of entries like
     -- - Foo
     -- - Foo(Bar, Baz)

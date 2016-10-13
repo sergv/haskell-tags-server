@@ -50,7 +50,7 @@ simpleHeaderTest = doTest "Simple header"
     { mhModName          = mkModuleName "Foo"
     , mhExports          = Nothing
     , mhImportQualifiers = mempty
-    , mhImports          = SubkeyMap.empty
+    , mhImports          = mempty
     }
 
 moduleWithUnqualifiedImportTest :: TestTree
@@ -385,7 +385,7 @@ moduleWithEmptyExportsTest = doTest "Module with empty exports"
         , meHasWildcardExports = False
         }
     , mhImportQualifiers = mempty
-    , mhImports          = SubkeyMap.empty
+    , mhImports          = mempty
     }
 
 moduleWithQuaifiedExportsTest :: TestTree
@@ -402,7 +402,7 @@ moduleWithQuaifiedExportsTest = doTest "Module with qualified exports"
         , meHasWildcardExports = True
         }
     , mhImportQualifiers = mempty
-    , mhImports          = SubkeyMap.empty
+    , mhImports          = mempty
     }
 
 moduleWithExportsTest :: TestTree
@@ -430,7 +430,7 @@ moduleWithExportsTest = doTest "Module exports"
         , meHasWildcardExports = True
         }
     , mhImportQualifiers = mempty
-    , mhImports          = SubkeyMap.empty
+    , mhImports          = mempty
     }
 
 moduleWithMultilineExportsTest :: TestTree
@@ -505,7 +505,7 @@ moduleWithExportsOfSpeciallyNamedOperators = doTest "Export of operators with sp
         , meHasWildcardExports = False
         }
     , mhImportQualifiers = mempty
-    , mhImports          = SubkeyMap.empty
+    , mhImports          = mempty
     }
 
 tests :: TestTree

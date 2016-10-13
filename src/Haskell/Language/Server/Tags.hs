@@ -26,7 +26,6 @@ module Haskell.Language.Server.Tags
   , TagsServerConf(..)
   , emptyTagsServerConf
   , canonicalizeConfPaths
-  , addRecursiveRootsToConf
   , TagsServerState(..)
   , emptyTagsServerState
   ) where
@@ -38,6 +37,7 @@ import Control.Monad.Catch
 import Control.Monad.Except
 import Control.Monad.Trans.Control
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.Semigroup
 import Text.PrettyPrint.Leijen.Text (Doc, (<+>), pretty)
 import qualified Text.PrettyPrint.Leijen.Text as PP
 
@@ -46,6 +46,8 @@ import qualified Data.Promise as Promise
 
 import Control.Monad.Filesystem (MonadFS(..))
 import Control.Monad.Logging
+import qualified Data.SubkeyMap as SubkeyMap
+import Haskell.Language.Server.Tags.LoadFiles
 import Haskell.Language.Server.Tags.Search
 import Haskell.Language.Server.Tags.SearchM
 import Haskell.Language.Server.Tags.Types
@@ -73,11 +75,14 @@ startTagsServer
   -> TagsServerState
   -> m TagsServer
 startTagsServer conf state = do
-  unless (tsconfLazyTagging conf) $
-    throwError "NOT IMPLEMENTED YET: eager tags collection"
+  state' <- if tsconfEagerTagging conf
+            then do
+              modules <- loadAllFilesIntoState conf
+              pure $ state { tssLoadedModules = SubkeyMap.fromMap modules <> tssLoadedModules state }
+            else pure state
   reqChan <- liftBase newChan
   lock    <- liftBase newEmptyMVar
-  tid     <- liftBaseDiscard forkIO $ handleRequests lock reqChan state
+  tid     <- liftBaseDiscard forkIO $ handleRequests lock reqChan state'
   let requestHandler req = do
         respPromise <- Promise.newPromise
         writeChan reqChan (req, respPromise)

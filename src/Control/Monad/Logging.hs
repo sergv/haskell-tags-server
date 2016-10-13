@@ -28,6 +28,7 @@ module Control.Monad.Logging
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
+import qualified Control.Monad.State.Strict as SS
 import Text.PrettyPrint.Leijen.Text (Doc)
 
 data Severity = Debug | Info | Warning | Error
@@ -55,4 +56,7 @@ instance (MonadLog m) => MonadLog (ReaderT r m) where
   logDoc s msg = lift $ logDoc s msg
 
 instance (MonadLog m) => MonadLog (StateT s m) where
+  logDoc s msg = lift $ logDoc s msg
+
+instance (MonadLog m) => MonadLog (SS.StateT s m) where
   logDoc s msg = lift $ logDoc s msg

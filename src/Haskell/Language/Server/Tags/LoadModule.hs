@@ -20,7 +20,12 @@
 
 module Haskell.Language.Server.Tags.LoadModule
   ( loadModule
+  , loadModuleFromSource
   , namesFromEntry
+  , resolveModuleExports
+  -- * Utils
+  , vanillaExtensions
+  , hsBootExtensions
   ) where
 
 import Control.Arrow (first)
@@ -61,11 +66,14 @@ import Haskell.Language.Server.Tags.AnalyzeHeader
 import Haskell.Language.Server.Tags.Types
 import Text.PrettyPrint.Leijen.Text.Utils
 
-vanillaExtensions :: [String]
-vanillaExtensions = ["hs", "lhs", "hsc", "chs"]
+vanillaExtensions :: Set String
+vanillaExtensions = S.fromList ["hs", "lhs", "hsc", "chs"]
 
-hsBootExtensions :: [String]
-hsBootExtensions = ["hs-boot", "lhs-boot"]
+hsBootExtensions :: Set String
+hsBootExtensions = S.fromList ["hs-boot", "lhs-boot"]
+
+defaultModuleName :: ModuleName
+defaultModuleName = mkModuleName "Main"
 
 -- | Fetch module by it's name from cache or load it. Check modification time
 -- of module files and reload if anything changed
@@ -84,7 +92,7 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
   logDebug $ "[loadModule] loaded modules are:" <+> ppList loadedMods
   return mods
   where
-    extensions :: [String]
+    extensions :: Set String
     extensions = case ikImportTarget of
                    VanillaModule -> vanillaExtensions
                    HsBootModule  -> hsBootExtensions
@@ -93,15 +101,15 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
       logInfo $ "[loadModule.doLoad] loading module" <+> showDoc name
       srcDirs <- asks tsconfSourceDirectories
       let possiblePaths = [ root </> filenamePart <.> ext
-                          | root <- S.toList srcDirs
-                          , ext  <- extensions
+                          | root <- toList srcDirs
+                          , ext  <- toList extensions
                           ]
       actualPaths <- filterM MonadFS.doesFileExist possiblePaths
       case actualPaths of
         []     -> throwError $
                   "Cannot load module " <> pretty name <> ": no attempted paths exist:" PP.<$>
                     PP.nest 2 (pretty possiblePaths)
-        p : ps -> traverse (loadModuleFromFile name Nothing) (p :| ps)
+        p : ps -> traverse (loadModuleFromFile (Just name) Nothing) (p :| ps)
       where
         filenamePart :: FilePath
         filenamePart = T.unpack
@@ -117,32 +125,43 @@ reloadIfNecessary m = do
   if needsReloading
   then do
     logInfo $ "[reloadIfNecessary] reloading module" <+> showDoc (mhModName $ modHeader m)
-    loadModuleFromFile (mhModName (modHeader m)) (Just modifTime) $ modFile m
+    loadModuleFromFile (Just (mhModName (modHeader m))) (Just modifTime) (modFile m)
   else return m
 
--- | Recursively load module from file - load given filename, then load all its
--- imports.
 loadModuleFromFile
   :: (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => ModuleName
+  => Maybe ModuleName
   -> Maybe UTCTime
   -> FilePath
   -> m ResolvedModule
-loadModuleFromFile moduleName modifTime filename = do
+loadModuleFromFile suggestedModuleName modifTime filename = do
   logInfo $ "[loadModuleFromFile] loading file " <> showDoc filename
-  source     <- MonadFS.readFile filename
-  modifTime' <- maybe (MonadFS.getModificationTime filename) return modifTime
-  tokens     <- either (throwError . docFromString) return $ tokenizeInput filename False source
-  makeModule moduleName modifTime' filename tokens
+  modifTime'    <- maybe (MonadFS.getModificationTime filename) return modifTime
+  source        <- MonadFS.readFile filename
+  unresolvedMod <- loadModuleFromSource suggestedModuleName modifTime' filename source
+  resolveModuleExports loadModule unresolvedMod
+
+-- | Load single module from the given file. Does not load any imports or exports.
+-- Names in the loaded module are not resolved.
+loadModuleFromSource
+  :: (MonadError Doc m, MonadLog m)
+  => Maybe ModuleName
+  -> UTCTime
+  -> FilePath
+  -> T.Text
+  -> m UnresolvedModule
+loadModuleFromSource suggestedModuleName modifTime filename source = do
+  tokens <- either (throwError . docFromString) return $ tokenizeInput filename False source
+  makeModule suggestedModuleName modifTime filename tokens
 
 makeModule
-  :: (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => ModuleName
+  :: (MonadError Doc m, MonadLog m)
+  => Maybe ModuleName -- ^ Suggested module name, will be used if source does not define it's own name.
   -> UTCTime
   -> FilePath
   -> [Token]
-  -> m ResolvedModule
-makeModule moduleName modifTime filename tokens = do
+  -> m UnresolvedModule
+makeModule suggestedModuleName modifTime filename tokens = do
   (header, tokens') <- analyzeHeader tokens
   let syms           :: [ResolvedSymbol]
       errors         :: [String]
@@ -153,15 +172,15 @@ makeModule moduleName modifTime filename tokens = do
     logError $ ppFoldableWithHeader
       ("fast-tags errors while loading" <+> showDoc filename)
       (map docFromString errors)
-  case header of
-    Nothing                      -> return ()
-    Just ModuleHeader{mhModName} ->
-      unless (moduleName == mhModName) $
-        throwError $ ppDict "Module name in file differst from the expected module name"
+  case (suggestedModuleName, header) of
+    (Just name, Just ModuleHeader{mhModName}) ->
+      unless (name == mhModName) $
+        throwError $ ppDict "Module name in file differs from the expected module name"
           [ "file"                 :-> pretty filename
           , "module name in file"  :-> pretty mhModName
-          , "expected module name" :-> pretty moduleName
+          , "expected module name" :-> pretty name
           ]
+    _ -> pure ()
   let moduleHeader :: UnresolvedModuleHeader
       moduleHeader = fromMaybe defaultHeader header
       mod :: UnresolvedModule
@@ -173,23 +192,23 @@ makeModule moduleName modifTime filename tokens = do
         , modAllExportedNames = ()
         , modIsDirty          = False
         }
-  mod' <- resolveModuleExports mod
-  logDebug $ "[loadModuleFromFile] loaded module" <+> pretty mod
-  return mod'
+  logDebug $ "[makeModule] created module" <+> pretty mod
+  pure mod
   where
     defaultHeader :: UnresolvedModuleHeader
     defaultHeader = ModuleHeader
-      { mhModName          = moduleName
-      , mhImports          = SubkeyMap.empty
+      { mhModName          = fromMaybe defaultModuleName suggestedModuleName
+      , mhImports          = mempty
       , mhImportQualifiers = mempty
       , mhExports          = Nothing
       }
 
 resolveModuleExports
-  :: forall m a. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => Module a
+  :: forall m. (MonadError Doc m, MonadLog m)
+  => (ImportKey -> m (NonEmpty ResolvedModule))
+  -> UnresolvedModule
   -> m ResolvedModule
-resolveModuleExports mod = do
+resolveModuleExports loadMod mod = do
   let header = modHeader mod
   logDebug $ "[resolveModuleExports] resolving exports of module" <+> pretty (mhModName header)
   (imports, symbols) <- resolveSymbols mod
@@ -205,7 +224,7 @@ resolveModuleExports mod = do
       (BothQualifiedAndUnqualified q, x) -> [(Just q, x), (Nothing, x)]
 
     resolveImports
-      :: SubkeyMap ImportKey (NonEmpty (ImportSpec a))
+      :: SubkeyMap ImportKey (NonEmpty UnresolvedImportSpec)
       -> m ( SubkeyMap ImportKey (NonEmpty ResolvedImportSpec)
            , [(ImportQualification, SymbolMap)]
            )
@@ -214,10 +233,10 @@ resolveModuleExports mod = do
       where
         collect
           :: ImportKey
-          -> NonEmpty (ImportSpec a)
+          -> NonEmpty UnresolvedImportSpec
           -> SS.StateT [(ImportQualification, SymbolMap)] m (NonEmpty ResolvedImportSpec)
         collect importKey importSpecs = do
-          modules <- lift $ loadModule importKey
+          modules <- lift $ loadMod importKey
           let importedNames :: SymbolMap
               importedNames = foldMap modAllExportedNames modules
               importedMods :: NonEmpty ModuleName
@@ -227,7 +246,7 @@ resolveModuleExports mod = do
             modify ((qual, symMap) :)
             pure $ symMap <$ spec
 
-    resolveSymbols :: Module a -> m (SubkeyMap ImportKey (NonEmpty ResolvedImportSpec), SymbolMap)
+    resolveSymbols :: UnresolvedModule -> m (SubkeyMap ImportKey (NonEmpty ResolvedImportSpec), SymbolMap)
     resolveSymbols Module{modHeader = header@ModuleHeader{mhImports}, modAllSymbols} = do
       (resolvedImports, filteredNames) <- resolveImports mhImports
       case mhExports header of
@@ -254,7 +273,7 @@ resolveModuleExports mod = do
                   names <- namesFromEntry modulesInScope sm $ entry { entryName = name }
                   pure $ MM.singleton qualifier names
           exports <- foldMapA
-                       (fmap (foldMap modAllExportedNames) . loadModule)
+                       (fmap (foldMap modAllExportedNames) . loadMod)
                        (foldMap
                           (\modName -> fromMaybe mempty $ SubkeyMap.lookupSubkeyKeys modName resolvedImports)
                           (Pair lt gt))
