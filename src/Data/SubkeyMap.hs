@@ -92,11 +92,8 @@ empty = SubkeyMap
 null :: SubkeyMap k v -> Bool
 null = M.null . smMainMap
 
-insert :: (HasSubkey k) => k -> v -> SubkeyMap k v -> SubkeyMap k v
-insert k v SubkeyMap{smMainMap, smSubMap} = SubkeyMap
-  { smMainMap = M.insert k v smMainMap
-  , smSubMap  = M.insertWith (<>) (getSubkey k) (S.singleton k) smSubMap
-  }
+insert :: (HasSubkey k, Semigroup v) => k -> v -> SubkeyMap k v -> SubkeyMap k v
+insert = insertWith (<>)
 
 insertWith :: (HasSubkey k) => (v -> v -> v) -> k -> v -> SubkeyMap k v -> SubkeyMap k v
 insertWith f k v SubkeyMap{smMainMap, smSubMap} = SubkeyMap
@@ -132,10 +129,10 @@ fromMap m = SubkeyMap
   , smSubMap  = M.fromListWith (<>) $ map (getSubkey &&& S.singleton) $ M.keys m
   }
 
-fromList :: (HasSubkey k) => [(k, v)] -> SubkeyMap k v
+fromList :: (HasSubkey k, Semigroup v) => [(k, v)] -> SubkeyMap k v
 fromList = fromFoldable
 
-fromFoldable :: (Foldable f, HasSubkey k) => f (k, v) -> SubkeyMap k v
+fromFoldable :: (Foldable f, HasSubkey k, Semigroup v) => f (k, v) -> SubkeyMap k v
 fromFoldable = foldl' (\acc (k, v) -> insert k v acc) empty
 
 toList :: SubkeyMap k v -> [(k, v)]

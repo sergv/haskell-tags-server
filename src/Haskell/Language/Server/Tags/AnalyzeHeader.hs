@@ -189,7 +189,7 @@ analyzeImports imports qualifiers ts = do
               (children, rest')   <- analyzeChildren descr $ dropNLs rest
               name'               <- mkUnqualName name
               let newEntry = EntryWithChildren name' children
-              findImportListEntries importType (KM.insert newEntry acc) $ dropComma rest'
+              findImportListEntries importType (KM.insert newEntry acc) $ dropComma $ dropNLs rest'
           where
             importList :: ImportList ()
             importList = ImportList

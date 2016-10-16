@@ -123,10 +123,12 @@ test-suite test-haskell-tags-server
   other-modules:
     Control.Monad.Logging.DiscardLogs
     Haskell.Language.Server.Tags.AnalyzeHeaderTests
+    Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions
     Haskell.Language.Server.Tags.TypesTests
     PortPool
     ServerTests
     ServerTests.LogCollectingServer
+    TestUtils
   build-depends:
     base,
     bert,
@@ -139,6 +141,7 @@ test-suite test-haskell-tags-server
     monad-control,
     mtl,
     network,
+    raw-strings-qq,
     regex-tdfa,
     regex-tdfa-text,
     semigroups,
