@@ -96,19 +96,19 @@ analyzeImports
 analyzeImports imports qualifiers ts = do
   res <- runMaybeT $ do
     (ts', importTarget)      <- case dropNLs ts of
-                                  PImport : (d -> PSourcePragma : rest) -> pure (rest, HsBootModule)
-                                  PImport :                       rest  -> pure (rest, VanillaModule)
-                                  _                                     -> mzero
+      PImport : (d -> PSourcePragma : rest) -> pure (rest, HsBootModule)
+      PImport :                       rest  -> pure (rest, VanillaModule)
+      _                                     -> mzero
     ts''                     <- case dropNLs ts' of
-                                  PString : rest -> pure rest
-                                  rest           -> pure rest
+      PString : rest -> pure rest
+      rest           -> pure rest
     (ts''', isQualified)     <- case dropNLs ts'' of
-                                  PQualified : rest -> pure (rest, True)
-                                  rest              -> pure (rest, False)
+      PQualified : rest -> pure (rest, True)
+      rest              -> pure (rest, False)
     (ts'''', name, qualName) <- case dropNLs ts''' of
-                                  PName name : (d -> PAs : (d -> PName qualName : rest)) -> pure (rest, name, Just qualName)
-                                  PName name :                                    rest   -> pure (rest, name, Nothing)
-                                  _                                                      -> mzero
+      PName name : (d -> PAs : (d -> PName qualName : rest)) -> pure (rest, name, Just qualName)
+      PName name :                                    rest   -> pure (rest, name, Nothing)
+      _                                                      -> mzero
     let qualType = case (isQualified, qualName) of
                      (True,  Nothing)        -> Qualified $ mkQual name
                      (True,  Just qualName') -> Qualified $ mkQual qualName'
@@ -178,14 +178,14 @@ analyzeImports imports qualifiers ts = do
             PRParen : rest -> pure (importList, rest)
             toks'          -> do
               (descr, name, rest) <- case toks' of
-                                       PLParen : Pos _ (tokToName -> Just name) : PRParen : rest ->
-                                         return ("operator in import list", name, rest)
-                                       PLParen : PName name : PRParen : rest ->
-                                         return ("operator in import list", name, rest)
-                                       PName name : rest                     ->
-                                         return ("name in import list", name, rest)
-                                       rest                                  ->
-                                         throwError $ "Unrecognized shape of import list:" <+> pretty (Tokens rest)
+                PLParen : Pos _ (tokToName -> Just name) : PRParen : rest ->
+                  return ("operator in import list", name, rest)
+                PLParen : PName name : PRParen : rest ->
+                  return ("operator in import list", name, rest)
+                PName name : rest                     ->
+                  return ("name in import list", name, rest)
+                rest                                  ->
+                  throwError $ "Unrecognized shape of import list:" <+> pretty (Tokens rest)
               (children, rest')   <- analyzeChildren descr $ dropNLs rest
               name'               <- mkUnqualName name
               let newEntry = EntryWithChildren name' children
@@ -318,7 +318,7 @@ instance Pretty Tokens where
   pretty (Tokens ts@(t : _)) =
     ppDict "Tokens"
       [ "file"   :-> showDoc (posFile $ posOf t)
-      , "tokens" :-> ppList (map ppTokenVal ts)
+      , "tokens" :-> ppList (take 16 $ map ppTokenVal ts)
       ]
     where
       ppTokenVal :: Pos TokenVal -> Doc
