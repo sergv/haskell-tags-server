@@ -67,10 +67,10 @@ import Haskell.Language.Server.Tags.Types
 import Text.PrettyPrint.Leijen.Text.Utils
 
 vanillaExtensions :: Set String
-vanillaExtensions = S.fromList ["hs", "lhs", "hsc", "chs"]
+vanillaExtensions = S.fromList [".hs", ".lhs", ".hsc", ".chs"]
 
 hsBootExtensions :: Set String
-hsBootExtensions = S.fromList ["hs-boot", "lhs-boot"]
+hsBootExtensions = S.fromList [".hs-boot", ".lhs-boot"]
 
 defaultModuleName :: ModuleName
 defaultModuleName = mkModuleName "Main"
@@ -104,7 +104,7 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
     doLoad name = do
       logInfo $ "[loadModule.doLoad] loading module" <+> showDoc name
       srcDirs <- asks tsconfSourceDirectories
-      let possibleShallowPaths = [ root </> filenamePart <.> ext
+      let possibleShallowPaths = [ root </> filenamePart <> ext
                                  | root <- toList srcDirs
                                  , ext  <- toList extensions
                                  ]
