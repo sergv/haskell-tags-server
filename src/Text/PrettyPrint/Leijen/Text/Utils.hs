@@ -43,6 +43,7 @@ module Text.PrettyPrint.Leijen.Text.Utils
   , MapEntry(..)
   , Pretty(..)
   , Doc
+  , ppTrace
   ) where
 
 import Control.Arrow (second)
@@ -66,6 +67,8 @@ import Data.KeyMap (KeyMap)
 import qualified Data.KeyMap as KM
 import Data.SubkeyMap (SubkeyMap)
 import qualified Data.SubkeyMap as SubkeyMap
+
+import Debug.Trace
 
 putDocLn :: (MonadBase IO m) => Doc -> m ()
 putDocLn = liftBase . TLIO.putStrLn . displayDoc
@@ -159,3 +162,8 @@ data MapEntry k v = k :-> v
 instance (Pretty k, Pretty v) => Pretty (MapEntry k v) where
   pretty (x :-> y) =
     PP.group $ pretty x <+> PP.nest 4 ("->" PP.<$> PP.align (pretty y))
+
+
+ppTrace :: Bool -> Doc -> a -> a
+ppTrace False _   = id
+ppTrace True  msg = trace (displayDocString msg)
