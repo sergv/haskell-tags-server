@@ -727,7 +727,7 @@ moduleWithExportsTest :: Test
 moduleWithExportsTest = TestCase
   { testName       = "Module exports"
   , input          =
-      "module ModuleWithExport (foo, Bar(..), Baz(Quux, Fizz), pattern Pat, module Frob, (:$:), (:$$:)(..), (:$$*:)((:$$$*:), (:$$$**:))) where"
+      "module ModuleWithExport (foo, Bar(..), Baz(Quux, Fizz), pattern Pat, pattern (!), pattern (:!:), module Frob, (:$:), (:$$:)(..), (:$$*:)((:$$$*:), (:$$$**:))) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
       , mhExports          = Just ModuleExports
@@ -749,6 +749,14 @@ moduleWithExportsTest = TestCase
                   }
               , EntryWithChildren
                   { entryName               = mkSymbolName "Pat"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "!"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName ":!:"
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
@@ -793,6 +801,10 @@ moduleWithMultilineExportsTest = TestCase
       \    ,\n\
       \  pattern\n\
       \     Pat\n\
+      \\n\
+      \  , pattern     (!)       , \n\
+      \             pattern      \n\
+      \        (:!:)   \n\
       \  , \n\
       \    module \n\
       \  Frob\n\
@@ -828,6 +840,14 @@ moduleWithMultilineExportsTest = TestCase
                   }
               , EntryWithChildren
                   { entryName               = mkSymbolName "Pat"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "!"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName ":!:"
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
@@ -896,7 +916,7 @@ moduleWithExportListWithoutCommas :: Test
 moduleWithExportListWithoutCommas = TestCase
   { testName       = "Module with export list without commas"
   , input          =
-      "module ModuleWithExport (foo Bar(..) Baz(Quux, Fizz) pattern Pat module Frob (:$:) (:$$:)(..) (:$$*:)((:$$$*:), (:$$$**:))) where"
+      "module ModuleWithExport (foo Bar(..) Baz(Quux, Fizz) pattern Pat pattern (!) pattern (:!:) module Frob (:$:) (:$$:)(..) (:$$*:)((:$$$*:), (:$$$**:))) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
       , mhExports          = Just ModuleExports
@@ -918,6 +938,14 @@ moduleWithExportListWithoutCommas = TestCase
                   }
               , EntryWithChildren
                   { entryName               = mkSymbolName "Pat"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "!"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName ":!:"
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren

@@ -244,17 +244,25 @@ analyzeExports importQualifiers ts =
        -> [Token]
        -> m ModuleExports
     go entries reexports = \case
-      []                                    -> pure exports
-      [PRParen]                             -> pure exports
-      PLParen : PName name : PRParen : rest -> handleChildren "operator in export list" name rest
-      PLParen : Pos _ (tokToName -> Just name) : PRParen : rest ->
+      []                                                                   ->
+        pure exports
+      [PRParen]                                                            ->
+        pure exports
+      PLParen : PName name : PRParen : rest                                ->
         handleChildren "operator in export list" name rest
-      PName name : rest                     -> handleChildren "name in export list" name rest
-      PPattern : PName name : rest          ->
+      PLParen : Pos _ (tokToName -> Just name) : PRParen : rest            ->
+        handleChildren "operator in export list" name rest
+      PName name : rest                                                    ->
+        handleChildren "name in export list" name rest
+      PPattern : PName name : rest                                         ->
         consumeComma (KM.insert newEntry entries) reexports rest
         where
           newEntry = mkEntryWithoutChildren $ mkSymbolName name
-      PModule  : PName name : rest          ->
+      PPattern : PLParen : Pos _ (tokToName -> Just name) : PRParen : rest ->
+        consumeComma (KM.insert newEntry entries) reexports rest
+        where
+          newEntry = mkEntryWithoutChildren $ mkSymbolName name
+      PModule  : PName name : rest                                         ->
         consumeComma entries (newReexports <> reexports) rest
         where
           modName = mkModuleName name
@@ -308,7 +316,7 @@ analyzeChildren listType toks = do
         (children, rest') <- extractChildren mempty rest
         pure (Just $ VisibleSpecificChildren children, rest')
       | otherwise        -> pure (Nothing, toks)
-    PLParen : rest@(PLParen : Pos _ (tokToOpName -> Just name) : PRParen : _)
+    PLParen : rest@(PLParen : Pos _ (tokToName -> Just name) : PRParen : _)
       | isAsciiName name ->
         pure (Nothing, toks)
       | otherwise        -> do
@@ -327,7 +335,7 @@ analyzeChildren listType toks = do
       PName name : rest
         | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
           extractChildren (S.insert name' names) $ dropCommas rest
-      PLParen : Pos _ (tokToOpName -> Just name) : PRParen : rest
+      PLParen : Pos _ (tokToName -> Just name) : PRParen : rest
         | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
           extractChildren (S.insert name' names) $ dropCommas rest
       toks           ->
