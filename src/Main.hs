@@ -104,8 +104,10 @@ main = do
                 }
   conf' <- canonicalizeConfPaths conf
   runSimpleLoggerT (Just Stderr) cfgDebugVerbosity $ do
-    logDebug $ ppFoldableWithHeader "Staring server with following directories" $
-      tsconfSourceDirectories conf'
+    logDebug $ ppDict "Staring server with directories"
+      [ "Shallow"   :-> ppSet (tsconfSourceDirectories conf')
+      , "Recursive" :-> ppSet (tsconfRecursiveSourceDirectories conf')
+      ]
     result <- runExceptT $ startTagsServer conf' state
     case result of
       Left err         -> putDocLn err
