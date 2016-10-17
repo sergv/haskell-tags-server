@@ -15,6 +15,7 @@
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE InstanceSigs               #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
@@ -26,6 +27,7 @@
 
 module Control.Monad.Logging.Simple
   ( SimpleLoggerT
+  , Severity(..)
   , Destination(..)
   , runSimpleLoggerT
   ) where
@@ -81,10 +83,13 @@ instance (Monad m) => MonadLog (SimpleLoggerT m) where
     when (severity >= logSeverity) $
       lift $ logSink msg
 
-data Destination m = Stderr | Stdout | Custom (Doc -> m ())
+data Destination m where
+  Stderr :: (MonadBase IO m) =>                  Destination m
+  Stdout :: (MonadBase IO m) =>                  Destination m
+  Custom ::                     (Doc -> m ()) -> Destination m
 
 runSimpleLoggerT
-  :: forall m a. (MonadBase IO m)
+  :: forall m a. (Applicative m)
   => Maybe (Destination m)
   -> Severity
   -> SimpleLoggerT m a

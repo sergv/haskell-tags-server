@@ -26,6 +26,7 @@ module Haskell.Language.Server.Tags.AnalyzeHeader
 import Control.Arrow (first)
 import Control.Monad.Except
 import Control.Monad.Trans.Maybe
+import Data.Char
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
@@ -35,6 +36,7 @@ import qualified Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Text (Text)
+import qualified Data.Text as T
 import qualified Text.PrettyPrint.Leijen.Text as PP
 
 import Token (Pos(..), TokenVal(..), Token, posFile, posLine, unLine, TokenVal, PragmaType(..))
@@ -53,8 +55,8 @@ analyzeHeader
   :: (MonadError Doc m, MonadLog m)
   => [Token]
   -> m (Maybe UnresolvedModuleHeader, [Token])
-analyzeHeader ts =
-  -- logDebug $ "[analyzeHeader] ts =" <+> pretty (Tokens ts)
+analyzeHeader ts = do
+  logDebug $ "[analyzeHeader] ts =" <+> ppTokens ts
   case dropWhile ((/= KWModule) . valOf) ts of
     Pos _ KWModule :
       (dropNLs -> Pos _ (T modName) :
@@ -94,6 +96,7 @@ analyzeImports
        , [Token]
        )
 analyzeImports imports qualifiers ts = do
+  logDebug $ "[analyzeImpotrs] ts =" <+> ppTokens ts
   res <- runMaybeT $ do
     (ts', importTarget)      <- case dropNLs ts of
       PImport : (d -> PSourcePragma : rest) -> pure (rest, HsBootModule)
@@ -155,12 +158,14 @@ analyzeImports imports qualifiers ts = do
           , ispecQualification = qual
           , ispecImportList    = importList
           }
-    -- Analyze comma-separated list of entries like
-    -- - Foo
-    -- - Foo(Bar, Baz)
-    -- - Quux(..)
+    -- Analyze comma-separated list of entries, starting at _|_:
+    -- - Foo_|_
+    -- - Foo_|_(Bar, Baz)
+    -- - Foo_|_ hiding (Bar, Baz)
+    -- - Quux_|_(..)
     analyzeImportList :: [Token] -> m (Maybe (ImportList ()), [Token])
-    analyzeImportList toks =
+    analyzeImportList toks = do
+      logDebug $ "[analyzeImpotrList] toks =" <+> ppTokens toks
       case dropNLs toks of
         []                                    -> pure (Nothing, toks)
         PHiding : (dropNLs -> PLParen : rest) -> first Just <$> findImportListEntries Hidden mempty (dropNLs rest)
@@ -172,7 +177,8 @@ analyzeImports imports qualifiers ts = do
           -> KeyMap (EntryWithChildren UnqualifiedSymbolName)
           -> [Token]
           -> m (ImportList (), [Token])
-        findImportListEntries importType acc toks =
+        findImportListEntries importType acc toks = do
+          logDebug $ "[findImportListEntries] toks =" <+> ppTokens toks
           case dropNLs toks of
             []             -> pure (importList, [])
             PRParen : rest -> pure (importList, rest)
@@ -189,7 +195,7 @@ analyzeImports imports qualifiers ts = do
               (children, rest')   <- analyzeChildren descr $ dropNLs rest
               name'               <- mkUnqualName name
               let newEntry = EntryWithChildren name' children
-              findImportListEntries importType (KM.insert newEntry acc) $ dropComma $ dropNLs rest'
+              findImportListEntries importType (KM.insert newEntry acc) $ dropCommas $ dropNLs rest'
           where
             importList :: ImportList ()
             importList = ImportList
@@ -272,28 +278,33 @@ analyzeExports importQualifiers ts =
       -> Set ModuleName
       -> [Token]
       -> m ModuleExports
-    consumeComma entries reexports = go entries reexports . dropComma
+    consumeComma entries reexports = go entries reexports . dropCommas
 
 analyzeChildren
   :: forall m. (MonadError Doc m, MonadLog m)
   => Doc -> [Token] -> m (Maybe ChildrenVisibility, [Token])
-analyzeChildren listType = \case
-  []                                     ->           pure (Nothing, [])
-  toks@(PComma : _)                                -> pure (Nothing, toks)
-  toks@(PRParen : _)                               -> pure (Nothing, toks)
-  -- PLParen : PDot : PDot : PRParen : rest -> pure (Just VisibleAllChildren, rest)
-  PLParen : PName ".." : PRParen : rest            -> pure (Just VisibleAllChildren, rest)
-  PLParen : PRParen : rest                         -> pure (Nothing, rest)
-  PLParen : rest@(PName _ : _)                     -> do
-    -- (children, rest') <- analyzeCommaSeparatedNameList rest
-    (children, rest') <- extractChildren mempty rest
-    pure (Just $ VisibleSpecificChildren children, rest')
-  PLParen : rest@(PLParen : PName _ : PRParen : _) -> do
-    -- (children, rest') <- analyzeCommaSeparatedNameList rest
-    (children, rest') <- extractChildren mempty rest
-    pure (Just $ VisibleSpecificChildren children, rest')
-  toks ->
-    throwError $ "Cannot handle children of" <+> listType <+> ":" <+> pretty (Tokens toks)
+analyzeChildren listType toks = do
+  logDebug $ "[analyzeChildren] toks =" <+> ppTokens toks
+  case toks of
+    []                                               -> pure (Nothing, [])
+    toks@(PComma : _)                                -> pure (Nothing, toks)
+    toks@(PRParen : _)                               -> pure (Nothing, toks)
+    toks@(PName _ : _)                               -> pure (Nothing, toks)
+    PLParen : PName ".." : PRParen : rest            -> pure (Just VisibleAllChildren, rest)
+    PLParen : PRParen : rest                         -> pure (Nothing, rest)
+    PLParen : rest@(PName name : _)
+      | isAsciiName name -> do
+        (children, rest') <- extractChildren mempty rest
+        pure (Just $ VisibleSpecificChildren children, rest')
+      | otherwise        -> pure (Nothing, toks)
+    PLParen : rest@(PLParen : Pos _ (tokToOpName -> Just name) : PRParen : _)
+      | isAsciiName name ->
+        pure (Nothing, toks)
+      | otherwise        -> do
+        (children, rest') <- extractChildren mempty rest
+        pure (Just $ VisibleSpecificChildren children, rest')
+    toks ->
+      throwError $ "Cannot handle children of" <+> listType <> ":" <+> pretty (Tokens toks)
   where
     extractChildren
       :: Set UnqualifiedSymbolName
@@ -304,12 +315,15 @@ analyzeChildren listType = \case
       PRParen : rest -> pure (names, rest)
       PName name : rest
         | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
-          extractChildren (S.insert name' names) $ dropComma rest
-      PLParen : PName name : PRParen : rest
+          extractChildren (S.insert name' names) $ dropCommas rest
+      PLParen : Pos _ (tokToOpName -> Just name) : PRParen : rest
         | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
-          extractChildren (S.insert name' names) $ dropComma rest
+          extractChildren (S.insert name' names) $ dropCommas rest
       toks           ->
         throwError $ "Unrecognized children list structure:" <+> pretty (Tokens toks)
+
+isAsciiName :: Text -> Bool
+isAsciiName = T.all (\c -> isAlphaNum c || c == '\'' || c == '_' || c == '#')
 
 newtype Tokens = Tokens [Token]
 
@@ -318,18 +332,21 @@ instance Pretty Tokens where
   pretty (Tokens ts@(t : _)) =
     ppDict "Tokens"
       [ "file"   :-> showDoc (posFile $ posOf t)
-      , "tokens" :-> ppList (take 16 $ map ppTokenVal ts)
+      , "tokens" :-> ppList (map ppTokenVal ts)
       ]
     where
       ppTokenVal :: Pos TokenVal -> Doc
       ppTokenVal (Pos pos tag) =
         pretty (unLine (posLine pos)) <> PP.colon <> showDoc tag
 
+ppTokens :: [Token] -> Doc
+ppTokens = pretty . Tokens . take 16
+
 -- | Drop prefix of newlines.
 dropNLs :: [Token] -> [Token]
 dropNLs (Pos _ (Newline _) : ts) = dropNLs ts
 dropNLs ts                       = ts
 
-dropComma :: [Token] -> [Token]
-dropComma (Pos _ Comma : ts) = ts
-dropComma ts                 = ts
+dropCommas :: [Token] -> [Token]
+dropCommas (Pos _ Comma : ts) = dropCommas ts
+dropCommas ts                 = ts

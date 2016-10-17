@@ -13,6 +13,7 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE GADTs               #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -21,7 +22,7 @@ module Haskell.Language.Server.Tags.AnalyzeHeaderTests (tests) where
 
 import Control.Arrow
 import Control.Monad.Except
-import Data.Functor.Identity
+import Control.Monad.Writer
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -33,7 +34,7 @@ import qualified Text.PrettyPrint.Leijen.Text as PP
 import FastTags (tokenizeInput)
 import Token (Token)
 
-import Control.Monad.Logging.DiscardLogs
+import Control.Monad.Logging.Simple
 import qualified Data.KeyMap as KM
 import qualified Data.SubkeyMap as SubkeyMap
 import Data.Symbols
@@ -467,6 +468,166 @@ moduleWithImportOfSpeciallyNamedOperators = TestCase
       }
   }
 
+moduleWithAmbigousImportList :: Test
+moduleWithAmbigousImportList = TestCase
+  { testName = "Module with ambigous import list"
+  , input =
+      "module Test where\n\
+      \import Imported1 (Foo (:$$:)(..) Bar (:$$$:)(X) Baz (:?:) (:+:)((:++:)))"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = Nothing
+      , mhImportQualifiers = mempty
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Imported1"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = Just ImportList
+                  { ilEntries       = KM.fromList
+                      [ EntryWithChildren
+                          { entryName               = mkUnqualSymName "Foo"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName ":$$:"
+                          , entryChildrenVisibility = Just VisibleAllChildren
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName "Bar"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName ":$$$:"
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                              [ mkUnqualSymName "X"
+                              ]
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName "Baz"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName ":?:"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName ":+:"
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                              [ mkUnqualSymName ":++:"
+                              ]
+                          }
+                      ]
+                  , ilImportType    = Imported
+                  , ilImportedNames = ()
+                  }
+              }
+          ]
+      }
+  }
+
+moduleWithImportListWithoutCommas :: Test
+moduleWithImportListWithoutCommas = TestCase
+  { testName = "Module with import list without commas"
+  , input          =
+      "module Test where\n\
+      \import Imported1 (foo Bar(..) Baz(Quux, Fizz) (:$:) (:$$:)(..) (:$$*:)((:$$$*:), (:$$$**:)))"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = Nothing
+      , mhImportQualifiers = mempty
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Imported1"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = Just ImportList
+                  { ilEntries       = KM.fromList
+                      [ EntryWithChildren
+                          { entryName               = mkUnqualSymName "foo"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName "Bar"
+                          , entryChildrenVisibility = Just VisibleAllChildren
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName "Baz"
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                              [ mkUnqualSymName "Quux"
+                              , mkUnqualSymName "Fizz"
+                              ]
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName ":$:"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName ":$$:"
+                          , entryChildrenVisibility = Just VisibleAllChildren
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName ":$$*:"
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                              [ mkUnqualSymName ":$$$*:"
+                              , mkUnqualSymName ":$$$**:"
+                              ]
+                          }
+                      ]
+                  , ilImportType    = Imported
+                  , ilImportedNames = ()
+                  }
+              }
+          ]
+      }
+  }
+
+moduleWithImportsThatHaveChildrenListWithoutCommas :: Test
+moduleWithImportsThatHaveChildrenListWithoutCommas = TestCase
+  { testName = "Module with children list without commas"
+  , input          =
+      "module Test where\n\
+      \import Imported1 (Baz(Quux, Fizz), (:$$*:)((:$$$*:) (:$$$**:)))"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = Nothing
+      , mhImportQualifiers = mempty
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Imported1"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = Just ImportList
+                  { ilEntries       = KM.fromList
+                      [ EntryWithChildren
+                          { entryName               = mkUnqualSymName "Baz"
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                              [ mkUnqualSymName "Quux"
+                              , mkUnqualSymName "Fizz"
+                              ]
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName ":$$*:"
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                              [ mkUnqualSymName ":$$$*:"
+                              , mkUnqualSymName ":$$$**:"
+                              ]
+                          }
+                      ]
+                  , ilImportType    = Imported
+                  , ilImportedNames = ()
+                  }
+              }
+          ]
+      }
+  }
+
 moduleWithEmptyExportsTest :: Test
 moduleWithEmptyExportsTest = TestCase
   { testName       = "Module with empty exports"
@@ -679,6 +840,99 @@ moduleWithExportsOfSpeciallyNamedOperators = TestCase
       }
   }
 
+moduleWithExportListWithoutCommas :: Test
+moduleWithExportListWithoutCommas = TestCase
+  { testName       = "Module with export list without commas"
+  , input          =
+      "module ModuleWithExport (foo Bar(..) Baz(Quux, Fizz) pattern Pat module Frob (:$:) (:$$:)(..) (:$$*:)((:$$$*:), (:$$$**:))) where"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "ModuleWithExport"
+      , mhExports          = Just ModuleExports
+          { meExportedEntries    = KM.fromList
+              [ EntryWithChildren
+                  { entryName               = mkSymbolName "foo"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Bar"
+                  , entryChildrenVisibility = Just VisibleAllChildren
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Baz"
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                      [ mkUnqualSymName "Quux"
+                      , mkUnqualSymName "Fizz"
+                      ]
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Pat"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName ":$:"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName ":$$:"
+                  , entryChildrenVisibility = Just VisibleAllChildren
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName ":$$*:"
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                      [ mkUnqualSymName ":$$$*:"
+                      , mkUnqualSymName ":$$$**:"
+                      ]
+                  }
+              ]
+          , meReexports          = S.singleton $ mkModuleName "Frob"
+          , meHasWildcardExports = True
+          }
+      , mhImportQualifiers = mempty
+      , mhImports          = mempty
+      }
+  }
+
+moduleWithExportsThatHaveChildrenListWithoutCommas :: Test
+moduleWithExportsThatHaveChildrenListWithoutCommas = TestCase
+  { testName       = "Module with exports that have children list without commas"
+  , input          =
+      "module ModuleWithExport (Bar(..), Baz(Quux Fizz), (:$:), (:$$*:)((:$$$*:) (:$$$**:))) where"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "ModuleWithExport"
+      , mhExports          = Just ModuleExports
+          { meExportedEntries    = KM.fromList
+              [ EntryWithChildren
+                  { entryName               = mkSymbolName "Bar"
+                  , entryChildrenVisibility = Just VisibleAllChildren
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Baz"
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                      [ mkUnqualSymName "Quux"
+                      , mkUnqualSymName "Fizz"
+                      ]
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName ":$:"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName ":$$*:"
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                      [ mkUnqualSymName ":$$$*:"
+                      , mkUnqualSymName ":$$$**:"
+                      ]
+                  }
+              ]
+          , meReexports          = mempty
+          , meHasWildcardExports = True
+          }
+      , mhImportQualifiers = mempty
+      , mhImports          = mempty
+      }
+  }
+
+
 importRegressionTests :: TestTree
 importRegressionTests = testGroup "tests that caused problems before"
   [ doTest aesonHeaderTest
@@ -700,6 +954,11 @@ tests = testGroup "Header analysis tests"
     , doTest moduleWithImportAndAliasTest
     , doTest moduleWithImportAndAliasAndHidingImportListTest
     , doTest moduleWithImportOfSpeciallyNamedOperators
+    , testGroup "malformed import lists"
+        [ doTest moduleWithAmbigousImportList
+        , doTest moduleWithImportListWithoutCommas
+        , doTest moduleWithImportsThatHaveChildrenListWithoutCommas
+        ]
     , importRegressionTests
     ]
   , testGroup "exports"
@@ -708,44 +967,51 @@ tests = testGroup "Header analysis tests"
     , doTest moduleWithExportsTest
     , doTest moduleWithMultilineExportsTest
     , doTest moduleWithExportsOfSpeciallyNamedOperators
+    , testGroup "malformed export lists"
+        [ doTest moduleWithExportListWithoutCommas
+        , doTest moduleWithExportsThatHaveChildrenListWithoutCommas
+        ]
     ]
   ]
 
 doTest :: Test -> TestTree
 doTest TestCase{testName, input, expectedResult} =
-  testCase testName $
-    case runIdentity $ runDiscardLogsT $ runExceptT $ analyzeHeader =<< tokens of
-      Left msg               -> assertFailure $ displayDocString msg
+  testCase testName $ do
+    let (res, logs) = runWriter $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runExceptT $ analyzeHeader =<< tokens
+        logsDoc     = "Logs:" PP.<$> PP.indent 2 (PP.vcat logs)
+    case res of
+      Left msg               -> assertFailure $ displayDocString $ msg PP.<$> logsDoc
       Right (Nothing, _)     -> assertFailure $ displayDocString $
-        "No header detected, but was expecting header" PP.<$> pretty expectedResult
-      Right (Just header, _) ->
-        unless (header == expectedResult) $
-          assertFailure $ displayDocString $ ppDict "Headers are different"
-            [ name :-> ppAlist ["Actual" :-> x, "Expected" :-> y]
-            | (name, different, x, y) <-
-              [ ( "ModuleName"
-                , mhModName header /= mhModName expectedResult
-                , pretty $ mhModName header
-                , pretty $ mhModName expectedResult
-                )
-              , ( "Exports"
-                , mhExports header /= mhExports expectedResult
-                , pretty $ mhExports header
-                , pretty $ mhExports expectedResult
-                )
-              , ( "ImportQualifiers"
-                , mhImportQualifiers header /= mhImportQualifiers expectedResult
-                , ppMap $ ppNE <$> mhImportQualifiers header
-                , ppMap $ ppNE <$> mhImportQualifiers expectedResult
-                )
-              , ( "Imports"
-                , mhImports header /= mhImports expectedResult
-                , ppSubkeyMap $ ppNE <$> mhImports header
-                , ppSubkeyMap $ ppNE <$> mhImports expectedResult
-                )
+        "No header detected, but was expecting header" PP.<$> pretty expectedResult PP.<$> logsDoc
+      Right (Just header, _) -> do
+        let msg = ppDict "Headers are different"
+              [ name :-> ppAlist ["Actual" :-> x, "Expected" :-> y]
+              | (name, different, x, y) <-
+                [ ( "ModuleName"
+                  , mhModName header /= mhModName expectedResult
+                  , pretty $ mhModName header
+                  , pretty $ mhModName expectedResult
+                  )
+                , ( "Exports"
+                  , mhExports header /= mhExports expectedResult
+                  , pretty $ mhExports header
+                  , pretty $ mhExports expectedResult
+                  )
+                , ( "ImportQualifiers"
+                  , mhImportQualifiers header /= mhImportQualifiers expectedResult
+                  , ppMap $ ppNE <$> mhImportQualifiers header
+                  , ppMap $ ppNE <$> mhImportQualifiers expectedResult
+                  )
+                , ( "Imports"
+                  , mhImports header /= mhImports expectedResult
+                  , ppSubkeyMap $ ppNE <$> mhImports header
+                  , ppSubkeyMap $ ppNE <$> mhImports expectedResult
+                  )
+                ]
+              , different
               ]
-            , different
-            ]
+        unless (header == expectedResult) $
+          assertFailure $ displayDocString $ msg PP.<$> logsDoc
   where
     tokens :: forall m. (MonadError Doc m) => m [Token]
     tokens = either (throwError . docFromString) return $ tokenizeInput "test" False input
