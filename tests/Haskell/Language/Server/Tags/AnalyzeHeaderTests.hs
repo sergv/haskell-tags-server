@@ -106,6 +106,29 @@ moduleWithUnqualifiedImportWithSourceTest = TestCase
       }
   }
 
+moduleWithUnqualifiedSafeImportTest :: Test
+moduleWithUnqualifiedSafeImportTest = TestCase
+  { testName       = "Module with unqualified safe import"
+  , input          =
+      "module ModuleWithUnqualifiedImport where\n\
+      \import safe Imported1"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "ModuleWithUnqualifiedImport"
+      , mhExports          = Nothing
+      , mhImportQualifiers = mempty
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Imported1"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = Nothing
+              }
+          ]
+      }
+  }
+
 moduleWithUnqualifiedImportAndEmptyImportListTest :: Test
 moduleWithUnqualifiedImportAndEmptyImportListTest = TestCase
   { testName       = "Module with unqualified import and empty import list"
@@ -297,6 +320,35 @@ moduleWithQualifiedImportTest = TestCase
   , input          =
       "module ModuleWithQualifiedImport where\n\
       \import qualified Imported1"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "ModuleWithQualifiedImport"
+      , mhExports          = Nothing
+      , mhImportQualifiers = M.fromList
+          [ ( mkImportQualifier $ mkModuleName "Imported1"
+            , neSingleton $ mkModuleName "Imported1"
+            )
+          ]
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Imported1"
+                  }
+              , ispecQualification =
+                  Qualified $ mkImportQualifier $ mkModuleName "Imported1"
+              , ispecImportList    = Nothing
+              }
+          ]
+      }
+  }
+
+
+moduleWithQualifiedSafeAndPackageImportTest :: Test
+moduleWithQualifiedSafeAndPackageImportTest = TestCase
+  { testName       = "Module with qualified safe import with package import"
+  , input          =
+      "module ModuleWithQualifiedImport where\n\
+      \import safe qualified \"foobar\" Imported1"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithQualifiedImport"
       , mhExports          = Nothing
@@ -944,12 +996,14 @@ tests = testGroup "Header analysis tests"
   , testGroup "imports"
     [ doTest moduleWithUnqualifiedImportTest
     , doTest moduleWithUnqualifiedImportWithSourceTest
+    , doTest moduleWithUnqualifiedSafeImportTest
     , doTest moduleWithUnqualifiedImportAndEmptyImportListTest
     , doTest moduleWithUnqualifiedImportAndEmptyHiddenImportListTest
     , doTest moduleWithUnqualifiedImportAndSingletonImportListTest
     , doTest moduleWithUnqualifiedImportAndNonemptyImportListTest
     , doTest moduleWithUnqualifiedImportAndNonemptyImportListWithDifferentVisibilitiesTest
     , doTest moduleWithQualifiedImportTest
+    , doTest moduleWithQualifiedSafeAndPackageImportTest
     , doTest moduleWithQualifiedImportAndAliasTest
     , doTest moduleWithImportAndAliasTest
     , doTest moduleWithImportAndAliasAndHidingImportListTest

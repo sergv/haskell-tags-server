@@ -24,6 +24,7 @@ module Haskell.Language.Server.Tags.AnalyzeHeader
   ) where
 
 import Control.Arrow (first)
+import Control.Category ((>>>))
 import Control.Monad.Except
 import Control.Monad.Trans.Maybe
 import Data.Char
@@ -98,26 +99,36 @@ analyzeImports
 analyzeImports imports qualifiers ts = do
   logDebug $ "[analyzeImpotrs] ts =" <+> ppTokens ts
   res <- runMaybeT $ do
-    (ts', importTarget)      <- case dropNLs ts of
+    -- Drop initial "import" keyword and {-# SOURCE #-} pragma, if any
+    (ts, importTarget)   <- case dropNLs ts of
       PImport : (d -> PSourcePragma : rest) -> pure (rest, HsBootModule)
       PImport :                       rest  -> pure (rest, VanillaModule)
       _                                     -> mzero
-    ts''                     <- case dropNLs ts' of
-      PString : rest -> pure rest
-      rest           -> pure rest
-    (ts''', isQualified)     <- case dropNLs ts'' of
-      PQualified : rest -> pure (rest, True)
-      rest              -> pure (rest, False)
-    (ts'''', name, qualName) <- case dropNLs ts''' of
+    let dropSafeImport = \case
+          PName "safe" : rest -> rest
+          rest                -> rest
+        dropPackageImport = \case
+          PString : rest      -> rest
+          rest                -> rest
+        extractQualified = \case
+          PQualified : rest -> (rest, True)
+          rest              -> (rest, False)
+
+        (ts', isQualified) = dropNLs >>> dropSafeImport >>>
+                             dropNLs >>> extractQualified >>>
+                             first (dropNLs >>> dropPackageImport) $ ts
+    -- Extract import name and renaming alias, if any
+    (ts'', name, qualName) <- case dropNLs ts' of
       PName name : (d -> PAs : (d -> PName qualName : rest)) -> pure (rest, name, Just qualName)
       PName name :                                    rest   -> pure (rest, name, Nothing)
       _                                                      -> mzero
+    -- Make sence of the data collected before
     let qualType = case (isQualified, qualName) of
                      (True,  Nothing)        -> Qualified $ mkQual name
                      (True,  Just qualName') -> Qualified $ mkQual qualName'
                      (False, Nothing)        -> Unqualified
                      (False, Just qualName') -> BothQualifiedAndUnqualified $ mkQual qualName'
-    pure (name, qualType, importTarget, ts'''')
+    pure (name, qualType, importTarget, ts'')
   case res of
     Nothing                                 -> pure (imports, qualifiers, ts)
     Just (name, qualType, importTarget, ts) -> add name qualType importTarget ts
