@@ -261,7 +261,7 @@ moduleWithUnqualifiedImportAndNonemptyImportListWithDifferentVisibilitiesTest = 
       "Module with unqualified import and nonempty import list with different visibilities"
   , input          =
       "module Test where\n\
-      \import Imported1 (foo, Bar(..), Baz(Quux, Fizz), (:$:), (:$$:)(..), (:$$*:)((:$$$*:), (:$$$**:)))"
+      \import Imported1 (foo, Bar(..), Baz(Quux, Fizz), type Typ, type (++), (:$:), (:$$:)(..), (:$$*:)((:$$$*:), (:$$$**:)))"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = Nothing
@@ -289,6 +289,14 @@ moduleWithUnqualifiedImportAndNonemptyImportListWithDifferentVisibilitiesTest = 
                               [ mkUnqualSymName "Quux"
                               , mkUnqualSymName "Fizz"
                               ]
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName "Typ"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName "++"
+                          , entryChildrenVisibility = Nothing
                           }
                       , EntryWithChildren
                           { entryName               = mkUnqualSymName ":$:"
@@ -727,7 +735,7 @@ moduleWithExportsTest :: Test
 moduleWithExportsTest = TestCase
   { testName       = "Module exports"
   , input          =
-      "module ModuleWithExport (foo, Bar(..), Baz(Quux, Fizz), pattern Pat, pattern (!), pattern (:!:), module Frob, (:$:), (:$$:)(..), (:$$*:)((:$$$*:), (:$$$**:))) where"
+      "module ModuleWithExport (foo, Bar(..), Baz(Quux, Fizz), pattern Pat, pattern (!), pattern (:!:), module Frob, type Typ, type (++), (:$:), (:$$:)(..), (:$$*:)((:$$$*:), (:$$$**:))) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
       , mhExports          = Just ModuleExports
@@ -757,6 +765,14 @@ moduleWithExportsTest = TestCase
                   }
               , EntryWithChildren
                   { entryName               = mkSymbolName ":!:"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Typ"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "++"
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren

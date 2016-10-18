@@ -76,6 +76,7 @@ analyzeHeader ts = do
 
 pattern PImport       <- Pos _ KWImport
 pattern PPattern      <- Pos _ (T "pattern")
+pattern PType         <- Pos _ KWType
 pattern PModule       <- Pos _ KWModule
 pattern PString       <- Pos _ String
 pattern PQualified    <- Pos _ (T "qualified")
@@ -174,7 +175,7 @@ analyzeImports imports qualifiers ts = do
     -- - Foo_|_(Bar, Baz)
     -- - Foo_|_ hiding (Bar, Baz)
     -- - Quux_|_(..)
-    analyzeImportList :: [Token] -> m (Maybe (ImportList ()), [Token])
+    analyzeImportList :: [Token] -> m (Maybe (UnresolvedImportList), [Token])
     analyzeImportList toks = do
       logDebug $ "[analyzeImpotrList] toks =" <+> ppTokens toks
       case dropNLs toks of
@@ -187,33 +188,44 @@ analyzeImports imports qualifiers ts = do
           :: ImportType
           -> KeyMap (EntryWithChildren UnqualifiedSymbolName)
           -> [Token]
-          -> m (ImportList (), [Token])
+          -> m (UnresolvedImportList, [Token])
         findImportListEntries importType acc toks = do
           logDebug $ "[findImportListEntries] toks =" <+> ppTokens toks
           case dropNLs toks of
-            []             -> pure (importList, [])
-            PRParen : rest -> pure (importList, rest)
-            toks'          -> do
-              (descr, name, rest) <- case toks' of
-                PLParen : Pos _ (tokToName -> Just name) : PRParen : rest ->
-                  return ("operator in import list", name, rest)
-                PLParen : PName name : PRParen : rest ->
-                  return ("operator in import list", name, rest)
-                PName name : rest                     ->
-                  return ("name in import list", name, rest)
-                rest                                  ->
-                  throwError $ "Unrecognized shape of import list:" <+> pretty (Tokens rest)
-              (children, rest')   <- analyzeChildren descr $ dropNLs rest
-              name'               <- mkUnqualName name
-              let newEntry = EntryWithChildren name' children
-              findImportListEntries importType (KM.insert newEntry acc) $ dropCommas $ dropNLs rest'
+            []                                                                ->
+              pure (importList, [])
+            PRParen : rest                                                    ->
+              pure (importList, rest)
+            PLParen : Pos _ (tokToName -> Just name) : PRParen : rest         ->
+              entryWithChildren "operator in import list" name rest
+            PLParen : PName name : PRParen : rest                             ->
+              entryWithChildren "operator in import list" name rest
+            PName name : rest                                                 ->
+              entryWithChildren "name in import list" name rest
+            PType : PName name : rest                                         ->
+              entryWithoutChildren name rest
+            PType : PLParen : Pos _ (tokToName -> Just name) : PRParen : rest ->
+              entryWithoutChildren name rest
+            rest                                                              ->
+              throwError $ "Unrecognized shape of import list:" <+> pretty (Tokens rest)
           where
-            importList :: ImportList ()
+            importList :: UnresolvedImportList
             importList = ImportList
               { ilEntries       = acc
               , ilImportType    = importType
               , ilImportedNames = ()
               }
+            entryWithChildren :: Doc -> Text -> [Token] -> m (UnresolvedImportList, [Token])
+            entryWithChildren descr name rest = do
+              (children, rest') <- analyzeChildren descr $ dropNLs rest
+              name'             <- mkUnqualName name
+              let newEntry = EntryWithChildren name' children
+              findImportListEntries importType (KM.insert newEntry acc) $ dropCommas $ dropNLs rest'
+            entryWithoutChildren :: Text -> [Token] -> m (UnresolvedImportList, [Token])
+            entryWithoutChildren name rest = do
+              name' <- mkUnqualName name
+              let newEntry = mkEntryWithoutChildren name'
+              findImportListEntries importType (KM.insert newEntry acc) $ dropCommas $ dropNLs rest
         mkUnqualName :: Text -> m UnqualifiedSymbolName
         mkUnqualName name =
           case mkUnqualifiedSymbolName (mkSymbolName name) of
@@ -249,19 +261,19 @@ analyzeExports importQualifiers ts =
       [PRParen]                                                            ->
         pure exports
       PLParen : PName name : PRParen : rest                                ->
-        handleChildren "operator in export list" name rest
+        entryWithChildren "operator in export list" name rest
       PLParen : Pos _ (tokToName -> Just name) : PRParen : rest            ->
-        handleChildren "operator in export list" name rest
+        entryWithChildren "operator in export list" name rest
       PName name : rest                                                    ->
-        handleChildren "name in export list" name rest
+        entryWithChildren "name in export list" name rest
       PPattern : PName name : rest                                         ->
-        consumeComma (KM.insert newEntry entries) reexports rest
-        where
-          newEntry = mkEntryWithoutChildren $ mkSymbolName name
+        entryWithoutChidren name rest
       PPattern : PLParen : Pos _ (tokToName -> Just name) : PRParen : rest ->
-        consumeComma (KM.insert newEntry entries) reexports rest
-        where
-          newEntry = mkEntryWithoutChildren $ mkSymbolName name
+        entryWithoutChidren name rest
+      PType : PName name : rest                                            ->
+        entryWithoutChidren name rest
+      PType : PLParen : Pos _ (tokToName -> Just name) : PRParen : rest    ->
+        entryWithoutChidren name rest
       PModule  : PName name : rest                                         ->
         consumeComma entries (newReexports <> reexports) rest
         where
@@ -280,11 +292,15 @@ analyzeExports importQualifiers ts =
           , meReexports          = reexports
           , meHasWildcardExports = getAny $ foldMap exportsAllChildren entries
           }
-        handleChildren :: Doc -> Text -> [Token] -> m ModuleExports
-        handleChildren listType name rest = do
+        entryWithChildren :: Doc -> Text -> [Token] -> m ModuleExports
+        entryWithChildren listType name rest = do
           (children, rest') <- analyzeChildren listType rest
           let newEntry = EntryWithChildren (mkSymbolName name) children
           consumeComma (KM.insert newEntry entries) reexports rest'
+        entryWithoutChidren :: Text -> [Token] -> m ModuleExports
+        entryWithoutChidren name rest = do
+          let newEntry = mkEntryWithoutChildren $ mkSymbolName name
+          consumeComma (KM.insert newEntry entries) reexports rest
         exportsAllChildren :: EntryWithChildren a -> Any
         exportsAllChildren (EntryWithChildren _ visibility) =
           maybe mempty isExportAllChildren visibility
