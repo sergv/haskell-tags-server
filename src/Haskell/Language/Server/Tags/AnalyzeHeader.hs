@@ -207,7 +207,7 @@ analyzeImports imports qualifiers ts = do
             PType : PLParen : Pos _ (tokToName -> Just name) : PRParen : rest ->
               entryWithoutChildren name rest
             rest                                                              ->
-              throwError $ "Unrecognized shape of import list:" <+> pretty (Tokens rest)
+              throwError $ "Unrecognized shape of import list:" <+> ppTokens rest
           where
             importList :: UnresolvedImportList
             importList = ImportList
@@ -243,7 +243,7 @@ analyzeExports importQualifiers ts =
     []            -> pure Nothing
     PLParen : rest -> Just <$> go mempty mempty rest
     toks          ->
-      throwError $ "Unrecognized shape of export list:" <+> pretty (Tokens toks)
+      throwError $ "Unrecognized shape of export list:" <+> ppTokens toks
   where
     -- Analyze comma-separated list of entries like
     -- - Foo
@@ -283,8 +283,8 @@ analyzeExports importQualifiers ts =
             = S.fromList
             $ toList
             $ M.findWithDefault (modName :| []) (mkImportQualifier modName) importQualifiers
-      toks                                  ->
-        throwError $ "Unrecognized export list structure:" <+> pretty (Tokens toks)
+      toks                                                                   ->
+        throwError $ "Unrecognized export list structure:" <+> ppTokens toks
       where
         exports :: ModuleExports
         exports = ModuleExports
@@ -339,7 +339,7 @@ analyzeChildren listType toks = do
         (children, rest') <- extractChildren mempty rest
         pure (Just $ VisibleSpecificChildren children, rest')
     toks ->
-      throwError $ "Cannot handle children of" <+> listType <> ":" <+> pretty (Tokens toks)
+      throwError $ "Cannot handle children of" <+> listType <> ":" <+> ppTokens toks
   where
     extractChildren
       :: Set UnqualifiedSymbolName
@@ -355,7 +355,7 @@ analyzeChildren listType toks = do
         | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
           extractChildren (S.insert name' names) $ dropCommas rest
       toks           ->
-        throwError $ "Unrecognized children list structure:" <+> pretty (Tokens toks)
+        throwError $ "Unrecognized children list structure:" <+> ppTokens toks
 
 isAsciiName :: Text -> Bool
 isAsciiName = T.all (\c -> isAlphaNum c || c == '\'' || c == '_' || c == '#')
