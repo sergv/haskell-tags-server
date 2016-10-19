@@ -274,7 +274,7 @@ analyzeExports importQualifiers ts =
         entryWithoutChidren name rest
       PType : PLParen : Pos _ (tokToName -> Just name) : PRParen : rest    ->
         entryWithoutChidren name rest
-      PModule  : PName name : rest                                         ->
+      PModule : PName name : rest                                          ->
         consumeComma entries (newReexports <> reexports) rest
         where
           modName = mkModuleName name
@@ -325,6 +325,9 @@ analyzeChildren listType toks = do
     toks@(PComma : _)                                -> pure (Nothing, toks)
     toks@(PRParen : _)                               -> pure (Nothing, toks)
     toks@(PName _ : _)                               -> pure (Nothing, toks)
+    toks@(PModule : _)                               -> pure (Nothing, toks)
+    toks@(PPattern : _)                              -> pure (Nothing, toks)
+    toks@(PType : _)                                 -> pure (Nothing, toks)
     PLParen : PName ".." : PRParen : rest            -> pure (Just VisibleAllChildren, rest)
     PLParen : PRParen : rest                         -> pure (Nothing, rest)
     PLParen : rest@(PName name : _)

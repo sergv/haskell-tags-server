@@ -932,7 +932,7 @@ moduleWithExportListWithoutCommas :: Test
 moduleWithExportListWithoutCommas = TestCase
   { testName       = "Module with export list without commas"
   , input          =
-      "module ModuleWithExport (foo Bar(..) Baz(Quux, Fizz) pattern Pat pattern (!) pattern (:!:) module Frob (:$:) (:$$:)(..) (:$$*:)((:$$$*:), (:$$$**:))) where"
+      "module ModuleWithExport (foo Bar(..) Baz(Quux, Fizz) pattern Pat pattern (!) pattern (:!:) module Frob (:$:) (:$$:)(..) module Bazzz (:$$*:)((:$$$*:), (:$$$**:)) module Quuxxx) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
       , mhExports          = Just ModuleExports
@@ -980,8 +980,62 @@ moduleWithExportListWithoutCommas = TestCase
                       ]
                   }
               ]
-          , meReexports          = S.singleton $ mkModuleName "Frob"
+          , meReexports          = S.fromList
+              [ mkModuleName "Frob"
+              , mkModuleName "Bazzz"
+              , mkModuleName "Quuxxx"
+              ]
           , meHasWildcardExports = True
+          }
+      , mhImportQualifiers = mempty
+      , mhImports          = mempty
+      }
+  }
+
+moduleWithExportListWithoutCommasAndStructuresAfterNameWithoutChildrenTest :: Test
+moduleWithExportListWithoutCommasAndStructuresAfterNameWithoutChildrenTest = TestCase
+  { testName       = "Module with export list without commas and structures after name without children"
+  , input          =
+      "module ModuleWithExport (foo module Foo (++) module Bar baz pattern Baz quux type Quux pattern Pat module Patterns) where"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "ModuleWithExport"
+      , mhExports          = Just ModuleExports
+          { meExportedEntries    = KM.fromList
+              [ EntryWithChildren
+                  { entryName               = mkSymbolName "foo"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "++"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "baz"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Baz"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "quux"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Quux"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Pat"
+                  , entryChildrenVisibility = Nothing
+                  }
+              ]
+          , meReexports          = S.fromList
+              [ mkModuleName "Foo"
+              , mkModuleName "Bar"
+              , mkModuleName "Patterns"
+              ]
+          , meHasWildcardExports = False
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -1032,6 +1086,7 @@ moduleWithExportsThatHaveChildrenListWithoutCommas = TestCase
 importRegressionTests :: TestTree
 importRegressionTests = testGroup "tests that caused problems before"
   [ doTest aesonHeaderTest
+  , doTest unixCompatHeaderTest
   ]
 
 tests :: TestTree
@@ -1068,6 +1123,7 @@ tests = testGroup "Header analysis tests"
     , testGroup "malformed export lists"
         [ doTest moduleWithExportListWithoutCommas
         , doTest moduleWithExportsThatHaveChildrenListWithoutCommas
+        , doTest moduleWithExportListWithoutCommasAndStructuresAfterNameWithoutChildrenTest
         ]
     ]
   ]

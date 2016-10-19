@@ -18,6 +18,7 @@
 
 module Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions
   ( aesonHeaderTest
+  , unixCompatHeaderTest
   ) where
 
 import Control.Arrow ((&&&))
@@ -386,6 +387,56 @@ aesonHeaderTest = TestCase
       }
   }
 
+unixCompatHeaderTest :: Test
+unixCompatHeaderTest = TestCase
+  { testName       = "System.PosixCompat.Types"
+  , input          = unixCompatHeader
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "System.PosixCompat.Types"
+      , mhExports          = Just ModuleExports
+          { meExportedEntries    = KM.fromList $
+              [ EntryWithChildren
+                  { entryName               = mkSymbolName name
+                  , entryChildrenVisibility = Nothing
+                  }
+              | name <- ["FileID", "UserID", "GroupID", "LinkCount"]
+              ]
+          , meReexports          = S.fromList
+              [ mkModuleName "System.Posix.Types"
+              ]
+          , meHasWildcardExports = False
+          }
+      , mhImportQualifiers = M.fromList
+          [ (mkImportQualifier (mkModuleName short), mkModuleName <$> long)
+          | (short, long) <-
+              [ ("AllPosixTypesButFileID", neSingleton "System.Posix.Types")
+              ]
+          ]
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "System.Posix.Types"
+                  }
+              , ispecQualification =
+                  BothQualifiedAndUnqualified $
+                  mkImportQualifier $
+                  mkModuleName "AllPosixTypesButFileID"
+              , ispecImportList    = Just $ ImportList
+                  { ilEntries       = KM.fromList
+                      [ EntryWithChildren
+                          { entryName               = mkUnqualSymName "FileID"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      ]
+                  , ilImportType    = Hidden
+                  , ilImportedNames = ()
+                  }
+              }
+          ]
+      }
+  }
+
 -- Raw headers
 
 aesonHeader :: T.Text
@@ -483,4 +534,34 @@ import qualified Data.Set as Set ( Set, empty, singleton, size, union, unions )
 import qualified Data.Text as T ( Text, pack, unpack )
 import qualified Data.Vector as V ( unsafeIndex, null, length, create, fromList )
 import qualified Data.Vector.Mutable as VM ( unsafeNew, unsafeWrite )
+|]
+
+unixCompatHeader :: T.Text
+unixCompatHeader = [QQ.r|
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
+{-|
+This module re-exports the types from @System.Posix.Types@ on all platforms.
+
+On Windows 'UserID', 'GroupID' and 'LinkCount' are missing, so they are
+redefined by this module.
+-}
+module System.PosixCompat.Types (
+#ifdef mingw32_HOST_OS
+     module AllPosixTypesButFileID
+    , FileID
+    , UserID
+    , GroupID
+    , LinkCount
+#else
+     module System.Posix.Types
+#endif
+    ) where
+
+#ifdef mingw32_HOST_OS
+-- Since CIno (FileID's underlying type) reflects <sys/type.h> ino_t,
+-- which mingw defines as short int (int16), it must be overriden to
+-- match the size of windows fileIndex (word64).
+import System.Posix.Types as AllPosixTypesButFileID hiding (FileID)
 |]
