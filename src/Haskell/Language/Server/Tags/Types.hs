@@ -61,7 +61,6 @@ module Haskell.Language.Server.Tags.Types
   , EntryWithChildren(..)
   , mkEntryWithoutChildren
   , ChildrenVisibility(..)
-  , isChildExported
   ) where
 
 import Control.Monad.Base
@@ -80,7 +79,6 @@ import Data.Time.Clock (UTCTime(..))
 import Data.Traversable (for)
 import System.Directory
 import Text.PrettyPrint.Leijen.Text.Utils
-
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
@@ -426,7 +424,5 @@ instance Pretty ChildrenVisibility where
     VisibleAllChildren               -> "VisibleAllChildren"
     VisibleSpecificChildren children ->
       ppFoldableWithHeader "VisibleSpecificChildren" $ toList children
-
-isChildExported :: UnqualifiedSymbolName -> ChildrenVisibility -> Bool
-isChildExported _    VisibleAllChildren                 = True
-isChildExported name (VisibleSpecificChildren exported) = S.member name exported
+    VisibleAllChidlrenPlusSome children ->
+      ppFoldableWithHeader "VisibleAllChildrenPlusSome" $ toList children
