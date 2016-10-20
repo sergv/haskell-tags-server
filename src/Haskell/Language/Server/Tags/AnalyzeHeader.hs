@@ -23,7 +23,7 @@ module Haskell.Language.Server.Tags.AnalyzeHeader
   ( analyzeHeader
   ) where
 
-import Control.Arrow (first)
+import Control.Arrow (first, second)
 import Control.Category ((>>>))
 import Control.Monad.Except
 import Control.Monad.Trans.Maybe
@@ -98,7 +98,7 @@ analyzeImports
        , [Token]
        )
 analyzeImports imports qualifiers ts = do
-  logDebug $ "[analyzeImpotrs] ts =" <+> ppTokens ts
+  logDebug $ "[analyzeImports] ts =" <+> ppTokens ts
   res <- runMaybeT $ do
     -- Drop initial "import" keyword and {-# SOURCE #-} pragma, if any
     (ts, importTarget)   <- case dropNLs ts of
@@ -125,10 +125,10 @@ analyzeImports imports qualifiers ts = do
       _                                                      -> mzero
     -- Make sence of the data collected before
     let qualType = case (isQualified, qualName) of
-                     (True,  Nothing)        -> Qualified $ mkQual name
-                     (True,  Just qualName') -> Qualified $ mkQual qualName'
-                     (False, Nothing)        -> Unqualified
-                     (False, Just qualName') -> BothQualifiedAndUnqualified $ mkQual qualName'
+          (True,  Nothing)        -> Qualified $ mkQual name
+          (True,  Just qualName') -> Qualified $ mkQual qualName'
+          (False, Nothing)        -> Unqualified
+          (False, Just qualName') -> BothQualifiedAndUnqualified $ mkQual qualName'
     pure (name, qualType, importTarget, ts'')
   case res of
     Nothing                                 -> pure (imports, qualifiers, ts)
@@ -196,16 +196,31 @@ analyzeImports imports qualifiers ts = do
               pure (importList, [])
             PRParen : rest                                                    ->
               pure (importList, rest)
+            -- Type import
+            PType : PName name : rest                                         ->
+              entryWithoutChildren name rest
+            PType : PLParen : Pos _ (tokToName -> Just name) : PRParen : rest ->
+              entryWithoutChildren name rest
+            -- Pattern import
+            PPattern : restWithName@(PName name : rest)
+              | isVanillaTypeName name
+              , not $ isChildrenList rest ->
+                entryWithoutChildren name rest
+              | otherwise                 ->
+                entryWithoutChildren "pattern" restWithName
+            PPattern : restWithName@(PLParen : Pos _ (tokToName -> Just name) : PRParen : rest)
+              | isOpTypeName name
+              , not $ isChildrenList rest ->
+                entryWithoutChildren name rest
+              | otherwise                 ->
+                entryWithoutChildren "pattern" restWithName
+            -- Vanilla function/operator/consturtor/type import
             PLParen : Pos _ (tokToName -> Just name) : PRParen : rest         ->
               entryWithChildren "operator in import list" name rest
             PLParen : PName name : PRParen : rest                             ->
               entryWithChildren "operator in import list" name rest
             PName name : rest                                                 ->
               entryWithChildren "name in import list" name rest
-            PType : PName name : rest                                         ->
-              entryWithoutChildren name rest
-            PType : PLParen : Pos _ (tokToName -> Just name) : PRParen : rest ->
-              entryWithoutChildren name rest
             rest                                                              ->
               throwError $ "Unrecognized shape of import list:" <+> ppTokens rest
           where
@@ -217,7 +232,7 @@ analyzeImports imports qualifiers ts = do
               }
             entryWithChildren :: Doc -> Text -> [Token] -> m (UnresolvedImportList, [Token])
             entryWithChildren descr name rest = do
-              (children, rest') <- analyzeChildren descr $ dropNLs rest
+              (children, rest') <- snd $ analyzeChildren descr $ dropNLs rest
               name'             <- mkUnqualName name
               let newEntry = EntryWithChildren name' children
               findImportListEntries importType (KM.insert newEntry acc) $ dropCommas $ dropNLs rest'
@@ -238,7 +253,8 @@ analyzeExports
   => Map ImportQualifier (NonEmpty ModuleName)
   -> [Token]
   -> m (Maybe ModuleExports)
-analyzeExports importQualifiers ts =
+analyzeExports importQualifiers ts = do
+  logDebug $ "[analyzeExports] ts =" <+> ppTokens ts
   case stripNewlines $ UnstrippedTokens ts of
     []            -> pure Nothing
     PLParen : rest -> Just <$> go mempty mempty rest
@@ -255,36 +271,50 @@ analyzeExports importQualifiers ts =
        -> Set ModuleName
        -> [Token]
        -> m ModuleExports
-    go entries reexports = \case
-      []                                                                   ->
-        pure exports
-      [PRParen]                                                            ->
-        pure exports
-      PLParen : PName name : PRParen : rest                                ->
-        entryWithChildren "operator in export list" name rest
-      PLParen : Pos _ (tokToName -> Just name) : PRParen : rest            ->
-        entryWithChildren "operator in export list" name rest
-      PName name : rest                                                    ->
-        entryWithChildren "name in export list" name rest
-      PPattern : PName name : rest                                         ->
-        entryWithoutChidren name rest
-      PPattern : PLParen : Pos _ (tokToName -> Just name) : PRParen : rest ->
-        entryWithoutChidren name rest
-      PType : PName name : rest                                            ->
-        entryWithoutChidren name rest
-      PType : PLParen : Pos _ (tokToName -> Just name) : PRParen : rest    ->
-        entryWithoutChidren name rest
-      PModule : PName name : rest                                          ->
-        consumeComma entries (newReexports <> reexports) rest
-        where
-          modName = mkModuleName name
-          newReexports :: Set ModuleName
-          newReexports
-            = S.fromList
-            $ toList
-            $ M.findWithDefault (modName :| []) (mkImportQualifier modName) importQualifiers
-      toks                                                                   ->
-        throwError $ "Unrecognized export list structure:" <+> ppTokens toks
+    go entries reexports toks = do
+      logDebug $ "[analyzeExports.go] toks =" <+> ppTokens toks
+      case toks of
+        []                                                                ->
+          pure exports
+        PRParen : _                                                       ->
+          pure exports
+        -- Pattern export
+        PPattern : restWithName@(PName name : rest)
+          | isVanillaTypeName name
+          , not $ isChildrenList rest ->
+            entryWithoutChildren name rest
+          | otherwise                 ->
+            entryWithoutChildren "pattern" restWithName
+        PPattern : restWithName@(PLParen : Pos _ (tokToName -> Just name) : PRParen : rest)
+          | isOpTypeName name
+          , not $ isChildrenList rest ->
+            entryWithoutChildren name rest
+          | otherwise                 ->
+            entryWithoutChildren "pattern" restWithName
+        -- Type export
+        PType : PName name : rest                                         ->
+          entryWithoutChildren name rest
+        PType : PLParen : Pos _ (tokToName -> Just name) : PRParen : rest ->
+          entryWithoutChildren name rest
+        -- Module reexport
+        PModule : PName name : rest                                       ->
+          consumeComma entries (newReexports <> reexports) rest
+          where
+            modName = mkModuleName name
+            newReexports :: Set ModuleName
+            newReexports
+              = S.fromList
+              $ toList
+              $ M.findWithDefault (modName :| []) (mkImportQualifier modName) importQualifiers
+        -- Vanilla function/operator/consturtor/type expotr
+        PLParen : PName name : PRParen : rest                             ->
+          entryWithChildren "operator in export list" name rest
+        PLParen : Pos _ (tokToName -> Just name) : PRParen : rest         ->
+          entryWithChildren "operator in export list" name rest
+        PName name : rest                                                 ->
+          entryWithChildren "name in export list" name rest
+        toks                                                              ->
+          throwError $ "Unrecognized export list structure:" <+> ppTokens toks
       where
         exports :: ModuleExports
         exports = ModuleExports
@@ -294,11 +324,13 @@ analyzeExports importQualifiers ts =
           }
         entryWithChildren :: Doc -> Text -> [Token] -> m ModuleExports
         entryWithChildren listType name rest = do
-          (children, rest') <- analyzeChildren listType rest
+          logDebug $ "[analyzeExports.entryWithChildren] rest =" <+> ppTokens rest
+          (children, rest') <- snd $ analyzeChildren listType rest
           let newEntry = EntryWithChildren (mkSymbolName name) children
           consumeComma (KM.insert newEntry entries) reexports rest'
-        entryWithoutChidren :: Text -> [Token] -> m ModuleExports
-        entryWithoutChidren name rest = do
+        entryWithoutChildren :: Text -> [Token] -> m ModuleExports
+        entryWithoutChildren name rest = do
+          logDebug $ "[analyzeExports.entryWithoutChildren] rest =" <+> ppTokens rest
           let newEntry = mkEntryWithoutChildren $ mkSymbolName name
           consumeComma (KM.insert newEntry entries) reexports rest
         exportsAllChildren :: EntryWithChildren a -> Any
@@ -315,50 +347,61 @@ analyzeExports importQualifiers ts =
       -> m ModuleExports
     consumeComma entries reexports = go entries reexports . dropCommas
 
+isChildrenList :: [Token] -> Bool
+isChildrenList toks =
+  case fst (analyzeChildren mempty toks :: (ChildrenPresence, Either Doc (Maybe ChildrenVisibility, [Token]))) of
+    ChildrenPresent -> True
+    ChildrenAbsent  -> False
+
+data ChildrenPresence = ChildrenPresent | ChildrenAbsent
+
 analyzeChildren
-  :: forall m. (MonadError Doc m, MonadLog m)
-  => Doc -> [Token] -> m (Maybe ChildrenVisibility, [Token])
-analyzeChildren listType toks = do
-  logDebug $ "[analyzeChildren] toks =" <+> ppTokens toks
+  :: forall m. (MonadError Doc m)
+  => Doc -> [Token] -> (ChildrenPresence, m (Maybe ChildrenVisibility, [Token]))
+analyzeChildren listType toks =
   case toks of
-    []                                               -> pure (Nothing, [])
-    toks@(PComma : _)                                -> pure (Nothing, toks)
-    toks@(PRParen : _)                               -> pure (Nothing, toks)
-    toks@(PName _ : _)                               -> pure (Nothing, toks)
-    toks@(PModule : _)                               -> pure (Nothing, toks)
-    toks@(PPattern : _)                              -> pure (Nothing, toks)
-    toks@(PType : _)                                 -> pure (Nothing, toks)
-    PLParen : PName ".." : PRParen : rest            -> pure (Just VisibleAllChildren, rest)
-    PLParen : PRParen : rest                         -> pure (Nothing, rest)
+    []                                               -> (ChildrenAbsent, pure (Nothing, []))
+    toks@(PComma : _)                                -> (ChildrenAbsent, pure (Nothing, toks))
+    toks@(PRParen : _)                               -> (ChildrenAbsent, pure (Nothing, toks))
+    toks@(PName _ : _)                               -> (ChildrenAbsent, pure (Nothing, toks))
+    toks@(PModule : _)                               -> (ChildrenAbsent, pure (Nothing, toks))
+    toks@(PPattern : _)                              -> (ChildrenAbsent, pure (Nothing, toks))
+    toks@(PType : _)                                 -> (ChildrenAbsent, pure (Nothing, toks))
+    PLParen : PName ".." : PRParen : rest            -> (ChildrenPresent, pure (Just VisibleAllChildren, rest))
+    PLParen : PRParen : rest                         -> (ChildrenAbsent, pure (Nothing, rest))
     PLParen : rest@(PName name : _)
-      | isAsciiName name -> do
-        (children, rest') <- extractChildren mempty rest
-        pure (Just $ VisibleSpecificChildren children, rest')
-      | otherwise        -> pure (Nothing, toks)
+      | isAsciiName name -> extractChildren rest
+      | otherwise        -> (ChildrenAbsent, pure (Nothing, toks))
     PLParen : rest@(PLParen : Pos _ (tokToName -> Just name) : PRParen : _)
-      | isAsciiName name ->
-        pure (Nothing, toks)
-      | otherwise        -> do
-        (children, rest') <- extractChildren mempty rest
-        pure (Just $ VisibleSpecificChildren children, rest')
+      | isAsciiName name -> (ChildrenAbsent, pure (Nothing, toks))
+      | otherwise        -> extractChildren rest
     toks ->
-      throwError $ "Cannot handle children of" <+> listType <> ":" <+> ppTokens toks
+      (ChildrenAbsent, throwError $ "Cannot handle children of" <+> listType <> ":" <+> ppTokens toks)
   where
     extractChildren
-      :: Set UnqualifiedSymbolName
-      -> [Token]
-      -> m (Set UnqualifiedSymbolName, [Token])
-    extractChildren names = \case
-      []             -> pure (names, [])
-      PRParen : rest -> pure (names, rest)
-      PName name : rest
-        | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
-          extractChildren (S.insert name' names) $ dropCommas rest
-      PLParen : Pos _ (tokToName -> Just name) : PRParen : rest
-        | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
-          extractChildren (S.insert name' names) $ dropCommas rest
-      toks           ->
-        throwError $ "Unrecognized children list structure:" <+> ppTokens toks
+      :: [Token]
+      -> (ChildrenPresence, m (Maybe ChildrenVisibility, [Token]))
+    extractChildren =
+      second (fmap (first (Just . VisibleSpecificChildren))) . go mempty
+      where
+        go :: Set UnqualifiedSymbolName
+           -> [Token]
+           -> (ChildrenPresence, m (Set UnqualifiedSymbolName, [Token]))
+        go names = \case
+          []             -> (childrenPresence, pure (names, []))
+          PRParen : rest -> (childrenPresence, pure (names, rest))
+          PName name : rest
+            | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
+              go (S.insert name' names) $ dropCommas rest
+          PLParen : Pos _ (tokToName -> Just name) : PRParen : rest
+            | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
+              go (S.insert name' names) $ dropCommas rest
+          toks           ->
+            (ChildrenAbsent, throwError $ "Unrecognized children list structure:" <+> ppTokens toks)
+          where
+            childrenPresence
+              | S.null names = ChildrenAbsent
+              | otherwise    = ChildrenPresent
 
 isAsciiName :: Text -> Bool
 isAsciiName = T.all (\c -> isAlphaNum c || c == '\'' || c == '_' || c == '#')
@@ -388,3 +431,10 @@ dropNLs ts                       = ts
 dropCommas :: [Token] -> [Token]
 dropCommas (Pos _ Comma : ts) = dropCommas ts
 dropCommas ts                 = ts
+
+isVanillaTypeName  :: Text -> Bool
+isVanillaTypeName = maybe False (isUpper . fst) . T.uncons
+
+isOpTypeName :: Text -> Bool
+isOpTypeName = maybe False ((== ':') . fst) . T.uncons
+
