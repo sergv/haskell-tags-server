@@ -39,6 +39,7 @@ import qualified Data.Set as S
 import Data.Traversable
 import System.FilePath
 import Text.PrettyPrint.Leijen.Text (Doc, (<+>), pretty)
+import qualified Text.PrettyPrint.Leijen.Text as PP
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
@@ -69,6 +70,7 @@ loadAllFilesIntoState conf = do
   unresolvedModules <- for allFiles $ \(importType, filename) -> do
     modTime       <- MonadFS.getModificationTime filename
     source        <- MonadFS.readFile filename
+    logInfo $ "[loadAllFilesIntoState] Loading" <+> PP.dquotes (pretty filename)
     unresolvedMod <- loadModuleFromSource Nothing modTime filename source
     unresolvedMod `seq` pure (importType, unresolvedMod)
   let mkImportKey :: (ImportTarget, UnresolvedModule) -> ImportKey
@@ -89,16 +91,17 @@ loadAllFilesIntoState conf = do
         => ImportKey
         -> m (NonEmpty ResolvedModule)
       doResolve k = do
+        logInfo $ "[loadAllFilesIntoState.doResolve] Resolving" <+> PP.dquotes (pretty (ikModuleName k))
         currentlyLoading <- gets rsLoadingModules
         if S.member k currentlyLoading
         then
-          throwError $ "[loadAllFilesIntoState.doResolve] found import loop: module" <+> pretty k <+>
+          throwError $ "[loadAllFilesIntoState.doResolve] found import loop: module" <+> PP.dquotes (pretty k) <+>
             "was required while being loaded"
         else do
           modify $ \s -> s { rsLoadingModules = S.insert k $ rsLoadingModules s }
           case M.lookup k unresolvedModulesMap of
             Nothing         ->
-              throwError $ "[loadAllFilesIntoState.doResolve] imported module" <+> pretty k <+> "not found"
+              throwError $ "[loadAllFilesIntoState.doResolve] imported module" <+> PP.dquotes (pretty k) <+> "not found"
             Just unresolved -> do
               resolved <- traverse (resolveModuleExports doResolve) unresolved
               modify $ \s -> s
