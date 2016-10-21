@@ -115,6 +115,52 @@ mkQualUnqualTest (name, unqualSym, qualSym, response) =
         , AtomicTest ("qualified", qualSym', response)
         ]
 
+withDir
+  :: Directory            -- ^ Working directory under testDataDir
+  -> TestSet
+       ( String          -- ^ Test name
+       , FilePath        -- ^ Filepath within the working directory
+       , UTF8.ByteString -- ^ Symbol to seacrh for
+       , BertResponse    -- ^ Expected response
+       )
+  -> TestSet ServerTest
+withDir dir =
+  fmap $ \(name, file, sym, response) -> ServerTest
+    { stTestName         = name
+    , stWorkingDirectory = dir
+    , stFile             = file
+    , stSymbol           = sym
+    , stExpectedResponse = response
+    }
+
+withFile
+  :: FilePath            -- ^ Filepath within the working directory
+  -> TestSet
+       ( String          -- ^ Test name
+       , UTF8.ByteString -- ^ Symbol to seacrh for
+       , BertResponse    -- ^ Expected response
+       )
+  -> TestSet
+       ( String          -- ^ Test name
+       , FilePath        -- ^ Filepath within the working directory
+       , UTF8.ByteString -- ^ Symbol to seacrh for
+       , BertResponse    -- ^ Expected response
+       )
+withFile file =
+  fmap (\(name, sym, response) -> (name, file, sym, response))
+
+withDirAndFile
+  :: Directory           -- ^ Working directory under testDataDir
+  -> FilePath            -- ^ Filepath within the working directory
+  -> TestSet
+       ( String          -- ^ Test name
+       , UTF8.ByteString -- ^ Symbol to seacrh for
+       , BertResponse    -- ^ Expected response
+       )
+  -> TestSet ServerTest
+withDirAndFile dir file =
+  withDir dir . fmap (\(name, sym, response) -> (name, file, sym, response))
+
 testData :: TestSet ServerTest
 testData = GroupTest "server tests"
   [ AtomicTest ServerTest
@@ -481,124 +527,123 @@ testData = GroupTest "server tests"
         ]
   , withDir (Directory "0005import_cycle") $
       GroupTest "import cycle"
-        [ group "wildcard export lists"
-            [ ( "type defined locally in A"
-              , "A.hs"
-              , "TA"
-              , Known "A.hs" 19 "Type"
-              )
-            , ( "function defined locally in A"
-              , "A.hs"
-              , "f"
-              , Known "A.hs" 21 "Function"
-              )
-            , ( "type name imported into A"
-              , "A.hs"
-              , "TB"
-              , Known "B.hs" 20 "Type"
-              )
-            , ( "function imported into A"
-              , "A.hs"
-              , "g"
-              , Known "B.hs" 22 "Function"
-              )
-            , ( "type defined locally in B"
-              , "B.hs"
-              , "TB"
-              , Known "B.hs" 20 "Type"
-              )
-            , ( "function defined locally in B"
-              , "B.hs"
-              , "g"
-              , Known "B.hs" 22 "Function"
-              )
-            , ( "type name imported into B"
-              , "B.hs"
-              , "TA"
-              , Known "A.hs-boot" 4 "Type"
-              )
-            , ( "function imported into B"
-              , "B.hs"
-              , "f"
-              , NotFound
-              )
+        [ GroupTest "wildcard export lists"
+            [ withFile "A.hs" $
+                group "A.hs"
+                  [ ( "type defined locally in A"
+                    , "TA"
+                    , Known "A.hs" 19 "Type"
+                    )
+                  , ( "function defined locally in A"
+                    , "f"
+                    , Known "A.hs" 21 "Function"
+                    )
+                  , ( "type name imported into A"
+                    , "TB"
+                    , Known "B.hs" 20 "Type"
+                    )
+                  , ( "function imported into A"
+                    , "g"
+                    , Known "B.hs" 22 "Function"
+                    )
+                  ]
+            , withFile "B.hs" $
+                group "B.hs"
+                  [ ( "type defined locally in B"
+                    , "TB"
+                    , Known "B.hs" 20 "Type"
+                    )
+                  , ( "function defined locally in B"
+                    , "g"
+                    , Known "B.hs" 22 "Function"
+                    )
+                  , ( "type name imported into B"
+                    , "TA"
+                    , Known "A.hs-boot" 4 "Type"
+                    )
+                  , ( "function imported into B"
+                    , "f"
+                    , NotFound
+                    )
+                  ]
             ]
-        , group "explicit export lists"
-            [ ( "type defined locally in AWithExportList"
-              , "AWithExportList.hs"
-              , "TA"
-              , Known "AWithExportList.hs" 19 "Type"
-              )
-            , ( "function defined locally in AWithExportList"
-              , "AWithExportList.hs"
-              , "f"
-              , Known "AWithExportList.hs" 21 "Function"
-              )
-            , ( "type name imported into AWithExportList"
-              , "AWithExportList.hs"
-              , "TB"
-              , Known "BWithExportList.hs" 20 "Type"
-              )
-            , ( "function imported into AWithExportList"
-              , "AWithExportList.hs"
-              , "g"
-              , Known "BWithExportList.hs" 22 "Function"
-              )
-            , ( "type defined locally in BWithExportList"
-              , "BWithExportList.hs"
-              , "TB"
-              , Known "BWithExportList.hs" 20 "Type"
-              )
-            , ( "function defined locally in BWithExportList"
-              , "BWithExportList.hs"
-              , "g"
-              , Known "BWithExportList.hs" 22 "Function"
-              )
-            , ( "type name imported into BWithExportList"
-              , "BWithExportList.hs"
-              , "TA"
-              , Known "AWithExportList.hs-boot" 4 "Type"
-              )
-            , ( "function imported into BWithExportList"
-              , "BWithExportList.hs"
-              , "f"
-              , NotFound
-              )
+        , GroupTest "explicit export lists"
+            [ withFile "AWithExportList.hs" $
+                group "AWithExportList.hs"
+                  [ ( "type defined locally in AWithExportList"
+                    , "TA"
+                    , Known "AWithExportList.hs" 19 "Type"
+                    )
+                  , ( "function defined locally in AWithExportList"
+                    , "f"
+                    , Known "AWithExportList.hs" 21 "Function"
+                    )
+                  , ( "type name imported into AWithExportList"
+                    , "TB"
+                    , Known "BWithExportList.hs" 20 "Type"
+                    )
+                  , ( "function imported into AWithExportList"
+                    , "g"
+                    , Known "BWithExportList.hs" 22 "Function"
+                    )
+                  ]
+            , withFile "BWithExportList.hs" $
+                group "BWithExportList.hs"
+                  [ ( "type defined locally in BWithExportList"
+                    , "TB"
+                    , Known "BWithExportList.hs" 20 "Type"
+                    )
+                  , ( "function defined locally in BWithExportList"
+                    , "g"
+                    , Known "BWithExportList.hs" 22 "Function"
+                    )
+                  , ( "type name imported into BWithExportList"
+                    , "TA"
+                    , Known "AWithExportList.hs-boot" 4 "Type"
+                    )
+                  , ( "function imported into BWithExportList"
+                    , "f"
+                    , NotFound
+                    )
+                  ]
             ]
         ]
-
+  , withDir (Directory "0006export_pattern_with_type_ghc8.0") $
+      GroupTest "export pattern along with type"
+        [ withFile file $
+            group groupName
+              [ ( "Exported type"
+                , "FooTyp"
+                , Known "ModuleThatExportsPattern.hs" 19 "Type"
+                )
+              , ( "Exported constructor 1"
+                , "Foo"
+                , Known "ModuleThatExportsPattern.hs" 20 "Constructor"
+                )
+              , ( "Exported constructor 2"
+                , "Bar"
+                , Known "ModuleThatExportsPattern.hs" 21 "Constructor"
+                )
+              , ( "Non-existent constructor"
+                , "Baz"
+                , NotFound
+                )
+              , ( "Exported pattern 1"
+                , "Foo'"
+                , Known "ModuleThatExportsPattern.hs" 23 "Pattern"
+                )
+              , ( "Exported pattern 2"
+                , "Baz'"
+                , Known "ModuleThatExportsPattern.hs" 24 "Pattern"
+                )
+              ]
+        | (file, groupName) <-
+            [ ("ModuleWithoutImportList.hs", "import without import list")
+            , ("ModuleWithWildcardImportList.hs", "import with wildcard import list")
+            , ("ModuleWithSpecificImportList.hs", "import with specific import list")
+            ]
+        ]
   ]
-
-withDir
-  :: Directory            -- ^ Working directory under testDataDir
-  -> TestSet
-       ( String          -- ^ Test name
-       , FilePath        -- ^ Filepath within the working directory
-       , UTF8.ByteString -- ^ Symbol to seacrh for
-       , BertResponse    -- ^ Expected response
-       )
-  -> TestSet ServerTest
-withDir dir =
-  fmap $ \(name, file, sym, response) -> ServerTest
-    { stTestName         = name
-    , stWorkingDirectory = dir
-    , stFile             = file
-    , stSymbol           = sym
-    , stExpectedResponse = response
-    }
-
-
-withDirAndFile
-  :: Directory           -- ^ Working directory under testDataDir
-  -> FilePath            -- ^ Filepath within the working directory
-  -> TestSet
-       ( String          -- ^ Test name
-       , UTF8.ByteString -- ^ Symbol to seacrh for
-       , BertResponse    -- ^ Expected response
-       )
-  -> TestSet ServerTest
-withDirAndFile dir file =
-  withDir dir . fmap (\(name, sym, response) -> (name, file, sym, response))
 
 tests :: TestTree
 tests =
@@ -677,7 +722,7 @@ mkFindSymbolTest getConn ServerTest{stTestName, stWorkingDirectory, stFile, stSy
               ExistingServer _   -> return mempty
               LocalServer serv _ -> do
                 logs <- getLogs serv
-                pure $ "Logs:" PP.</> PP.indent 2 (PP.vcat logs)
+                pure $ "Logs:" PP.<$> PP.indent 2 (PP.vcat logs)
     case r of
       Left err  ->
         assertFailure $ displayDocString $ showDoc err PP.<$> logs

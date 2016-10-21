@@ -1036,7 +1036,7 @@ moduleWithExportsTest :: Test
 moduleWithExportsTest = TestCase
   { testName       = "Module exports"
   , input          =
-      "module ModuleWithExport (foo, Bar(..), Baz(Quux, Fizz), pattern Pat, pattern (:!:), module Frob, type Typ, type (++), (:$:), (:$$:)(..), (:$$*:)((:$$$*:), (:$$$**:))) where"
+      "module ModuleWithExport (foo, Bar(..), Baz(Quux, Fizz), Frob(.., Frob', Frob''), pattern Pat, pattern (:!:), module Frob, type Typ, type (++), (:$:), (:$$:)(..), (:$$*:)((:$$$*:), (:$$$**:))) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
       , mhExports          = Just ModuleExports
@@ -1054,6 +1054,13 @@ moduleWithExportsTest = TestCase
                   , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
                       [ mkUnqualSymName "Quux"
                       , mkUnqualSymName "Fizz"
+                      ]
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Frob"
+                  , entryChildrenVisibility = Just $ VisibleAllChildrenPlusSome $ S.fromList
+                      [ mkUnqualSymName "Frob'"
+                      , mkUnqualSymName "Frob''"
                       ]
                   }
               , EntryWithChildren
@@ -1112,6 +1119,17 @@ moduleWithMultilineExportsTest = TestCase
       \   Fizz \n\
       \  )\n\
       \    ,\n\
+      \\n\
+      \                   Frob         \n\
+      \                     (       \n\
+      \                ..  \n\
+      \             ,                \n\
+      \       Frob'      \n\
+      \             ,                  \n\
+      \        Frob''            \n\
+      \    )                                       \n\
+      \              , \n\
+      \\n\
       \  pattern\n\
       \     Pat\n\
       \\n\
@@ -1148,6 +1166,13 @@ moduleWithMultilineExportsTest = TestCase
                   , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
                       [ mkUnqualSymName "Quux"
                       , mkUnqualSymName "Fizz"
+                      ]
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Frob"
+                  , entryChildrenVisibility = Just $ VisibleAllChildrenPlusSome $ S.fromList
+                      [ mkUnqualSymName "Frob'"
+                      , mkUnqualSymName "Frob''"
                       ]
                   }
               , EntryWithChildren

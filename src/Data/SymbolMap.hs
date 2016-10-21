@@ -20,8 +20,8 @@
 module Data.SymbolMap
   ( SymbolMap
   , insert
+  , registerChildren
   , lookup
-  , lookupParent
   , lookupChildren
   , member
   , fromList
@@ -30,6 +30,7 @@ module Data.SymbolMap
   ) where
 
 import Control.Arrow ((&&&), second)
+import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
@@ -99,11 +100,33 @@ insert sym m = SymbolMap
       Nothing -> Just $ S.singleton x
       Just xs -> Just $ S.insert x xs
 
+registerChildren
+  :: Map UnqualifiedSymbolName (Set UnqualifiedSymbolName) -- ^ Map from parents to children
+  -> SymbolMap
+  -> SymbolMap
+registerChildren extraChildrenMap SymbolMap{smParentMap, smChildrenMap, smAllSymbols} = SymbolMap
+  { smParentMap   = M.unionWith (<>) smParentMap extraParents
+  , smChildrenMap = M.unionWith (<>) smChildrenMap extraChildrenMap'
+  , smAllSymbols  = smAllSymbols
+  }
+  where
+    extraChildrenMap' :: Map UnqualifiedSymbolName (Set UnqualifiedSymbolName)
+    extraChildrenMap' =
+      (`S.intersection` smAllSymbolsKeys) <$> (extraChildrenMap `M.intersection` smAllSymbols)
+    extraParents :: Map UnqualifiedSymbolName (Set UnqualifiedSymbolName)
+    extraParents
+      = M.fromListWith (<>)
+      $ concatMap (\(parent, children) -> map (\c -> (c, S.singleton parent)) $ toList children)
+      $ M.toList extraChildrenMap'
+    smAllSymbolsKeys :: Set UnqualifiedSymbolName
+    smAllSymbolsKeys = M.keysSet smAllSymbols
+
 lookup :: UnqualifiedSymbolName -> SymbolMap -> Maybe (NonEmpty ResolvedSymbol)
 lookup sym = M.lookup sym . smAllSymbols
 
-lookupParent :: UnqualifiedSymbolName -> SymbolMap -> Maybe (Set UnqualifiedSymbolName)
-lookupParent sym = M.lookup sym . smParentMap
+-- Noone uses it yet, so it's hidden here in case it will be needed later.
+_lookupParent :: UnqualifiedSymbolName -> SymbolMap -> Maybe (Set UnqualifiedSymbolName)
+_lookupParent sym = M.lookup sym . smParentMap
 
 lookupChildren :: UnqualifiedSymbolName -> SymbolMap -> Maybe (Set UnqualifiedSymbolName)
 lookupChildren sym = M.lookup sym . smChildrenMap

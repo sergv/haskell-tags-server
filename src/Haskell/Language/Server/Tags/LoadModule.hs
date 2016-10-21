@@ -21,7 +21,6 @@
 module Haskell.Language.Server.Tags.LoadModule
   ( loadModule
   , loadModuleFromSource
-  , namesFromEntry
   , resolveModuleExports
   -- * Utils
   , vanillaExtensions
@@ -237,13 +236,13 @@ resolveModuleExports loadMod mod = do
            , [(ImportQualification, SymbolMap)]
            )
     resolveImports imports =
-      SS.runStateT (SubkeyMap.traverseWithKey collect imports) []
+      SS.runStateT (SubkeyMap.traverseWithKey resolveAndCollect imports) []
       where
-        collect
+        resolveAndCollect
           :: ImportKey
           -> NonEmpty UnresolvedImportSpec
           -> SS.StateT [(ImportQualification, SymbolMap)] m (NonEmpty ResolvedImportSpec)
-        collect importKey importSpecs = do
+        resolveAndCollect importKey importSpecs = do
           modules <- lift $ loadMod importKey
           let importedNames :: SymbolMap
               importedNames = foldMap modAllExportedNames modules
@@ -285,33 +284,60 @@ resolveModuleExports loadMod mod = do
                        (foldMap
                           (\modName -> fromMaybe mempty $ SubkeyMap.lookupSubkeyKeys modName resolvedImports)
                           (Pair lt gt))
-          let allSymbols = mconcat
+          let allSymbols  = mconcat
                 [ if reexportsItself then modAllSymbols else mempty
                 , exports
                 , fold
                 $ M.intersectionWith SM.leaveNames namesByNamespace
                 $ MM.unMonoidalMap exportedNames
                 ]
-          pure (resolvedImports, allSymbols)
+              extra       = inferExtraParents header
+              allSymbols' = SM.registerChildren extra allSymbols
+          logDebug $ "[resolveModuleExports] extra parents =" <+> ppMap (ppSet <$> extra)
+          logDebug $ "[resolveModuleExports] allSymbols' =" <+> pretty allSymbols'
+          pure (resolvedImports, allSymbols')
+
+-- | Some tags should get extra children-parent relationships, that were not
+-- evident by looking at tag definitions alone.
+--
+-- For instance, in ghc 8.0 exports can be of the form "module Mod(FooType(.., Foo', Bar,)) where",
+-- which means that additional pattern synonyms Foo' and Bar' are associated with
+-- FooType from now on.
+--
+-- However, this effect should only be visible in module exports. Within module,
+-- there should be no such link between extra children and a parent.
+inferExtraParents :: UnresolvedModuleHeader -> Map UnqualifiedSymbolName (Set UnqualifiedSymbolName)
+inferExtraParents ModuleHeader{mhExports} = M.fromListWith (<>) entries
+  where
+    entries :: [(UnqualifiedSymbolName, Set UnqualifiedSymbolName)]
+    entries =
+      flip foldMap mhExports $ \ModuleExports{meExportedEntries} ->
+        flip foldMap meExportedEntries $ \EntryWithChildren{entryName, entryChildrenVisibility} ->
+          case entryChildrenVisibility of
+            Just VisibleAllChildren                         -> mempty
+            Just (VisibleSpecificChildren _)                -> mempty
+            Just (VisibleAllChildrenPlusSome extraChildren) ->
+              [(snd $ splitQualifiedPart entryName, extraChildren)]
+            Nothing                                         -> mempty
 
 -- | Find out which names and under qualification come out of an import spec.
 filterVisibleNames
   :: (MonadError Doc m, Foldable f)
   => f ModuleName
-  -> SymbolMap    -- ^ All names from the set of imports.
-  -> ImportSpec a -- ^ Import spec for this particular set of imports.
+  -> SymbolMap            -- ^ All names from the set of imports.
+  -> UnresolvedImportSpec -- ^ Import spec for this particular set of imports.
   -> m (ImportQualification, SymbolMap)
 filterVisibleNames importedMods allImportedNames ImportSpec{ispecQualification, ispecImportList} = do
-  vilibleNames <- case ispecImportList of
-                    Nothing                                  ->
-                      pure allImportedNames
-                    Just ImportList{ilImportType, ilEntries} -> do
-                      let f = case ilImportType of
-                                Imported -> SM.leaveNames
-                                Hidden   -> SM.removeNames
-                      importedNames <- foldMapA (namesFromEntry importedMods allImportedNames) ilEntries
-                      pure $ f allImportedNames importedNames
-  pure (ispecQualification, vilibleNames)
+  visibleNames <- case ispecImportList of
+    Nothing                                  ->
+      pure allImportedNames
+    Just ImportList{ilImportType, ilEntries} -> do
+      let f = case ilImportType of
+                Imported -> SM.leaveNames
+                Hidden   -> SM.removeNames
+      importedNames <- foldMapA (namesFromEntry importedMods allImportedNames) ilEntries
+      pure $ f allImportedNames importedNames
+  pure (ispecQualification, visibleNames)
 
 -- | Get names referred to by @EntryWithChildren@ given a @SymbolMap@
 -- of names currently in scope.
@@ -324,11 +350,15 @@ namesFromEntry
 namesFromEntry importedMods allImportedNames (EntryWithChildren sym visibility) =
   S.insert sym <$>
   case visibility of
-    Nothing                                 -> pure mempty
-    Just VisibleAllChildren                 ->
+    Nothing                                         -> pure mempty
+    Just VisibleAllChildren                         -> childrenSymbols
+    Just (VisibleSpecificChildren children)         -> pure children
+    Just (VisibleAllChildrenPlusSome extraChildren) ->
+      (extraChildren <>) <$> childrenSymbols
+  where
+    childrenSymbols =
       case SM.lookupChildren sym allImportedNames of
         Nothing       -> throwError $ "Imported parent" <+> pretty sym <+>
           "not found in symbol map of modules" <+> ppList (toList importedMods)
         Just children -> pure children
-    Just (VisibleSpecificChildren children) -> pure children
 

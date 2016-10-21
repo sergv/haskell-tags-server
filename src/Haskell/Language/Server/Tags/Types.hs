@@ -159,7 +159,8 @@ isModuleNameConstituentChar c    = isAlphaNum c
 
 data Module a = Module
   { modHeader           :: !(ModuleHeader a)
-    -- | All symbols defined in this module.
+    -- | All symbols defined in this module. SymbolMap tracks all children-parent
+    -- relationships.
   , modAllSymbols       :: !SymbolMap
     -- | File the module was loaded from.
   , modFile             :: !FilePath
@@ -417,12 +418,16 @@ data ChildrenVisibility =
     -- | Import/export with explicit list of children, e.g. Foo(Bar, Baz), Quux(foo, bar).
     -- Set is always non-empty.
   | VisibleSpecificChildren (Set UnqualifiedSymbolName)
+    -- | Wildcard export with some things added in, so they'll be visible on
+    -- wildcard import, e.g.
+    -- ErrorCall(..,ErrorCall)
+  | VisibleAllChildrenPlusSome (Set UnqualifiedSymbolName)
   deriving (Show, Eq, Ord)
 
 instance Pretty ChildrenVisibility where
   pretty = \case
-    VisibleAllChildren               -> "VisibleAllChildren"
-    VisibleSpecificChildren children ->
+    VisibleAllChildren                  -> "VisibleAllChildren"
+    VisibleSpecificChildren children    ->
       ppFoldableWithHeader "VisibleSpecificChildren" $ toList children
-    VisibleAllChidlrenPlusSome children ->
+    VisibleAllChildrenPlusSome children ->
       ppFoldableWithHeader "VisibleAllChildrenPlusSome" $ toList children

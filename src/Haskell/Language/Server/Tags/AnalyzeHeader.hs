@@ -175,7 +175,7 @@ analyzeImports imports qualifiers ts = do
     -- - Foo_|_(Bar, Baz)
     -- - Foo_|_ hiding (Bar, Baz)
     -- - Quux_|_(..)
-    analyzeImportList :: [Token] -> m (Maybe (UnresolvedImportList), [Token])
+    analyzeImportList :: [Token] -> m (Maybe UnresolvedImportList, [Token])
     analyzeImportList toks = do
       logDebug $ "[analyzeImpotrList] toks =" <+> ppTokens toks
       case dropNLs toks of
@@ -337,8 +337,10 @@ analyzeExports importQualifiers ts = do
         exportsAllChildren (EntryWithChildren _ visibility) =
           maybe mempty isExportAllChildren visibility
           where
-            isExportAllChildren VisibleAllChildren          = Any True
-            isExportAllChildren (VisibleSpecificChildren _) = mempty
+            isExportAllChildren VisibleAllChildren             = Any True
+            isExportAllChildren (VisibleSpecificChildren _)    = mempty
+            isExportAllChildren (VisibleAllChildrenPlusSome _) = Any True
+
     -- Continue parsing by consuming comma delimiter.
     consumeComma
       :: KeyMap (EntryWithChildren SymbolName)
@@ -355,6 +357,14 @@ isChildrenList toks =
 
 data ChildrenPresence = ChildrenPresent | ChildrenAbsent
 
+data WildcardPresence = WildcardPresent | WildcardAbsent
+
+instance Monoid WildcardPresence where
+  mempty = WildcardAbsent
+  mappend WildcardAbsent y              = y
+  mappend x              WildcardAbsent = x
+  mappend _              _              = WildcardPresent
+
 analyzeChildren
   :: forall m. (MonadError Doc m)
   => Doc -> [Token] -> (ChildrenPresence, m (Maybe ChildrenVisibility, [Token]))
@@ -367,44 +377,74 @@ analyzeChildren listType toks =
     toks@(PModule : _)                               -> (ChildrenAbsent, pure (Nothing, toks))
     toks@(PPattern : _)                              -> (ChildrenAbsent, pure (Nothing, toks))
     toks@(PType : _)                                 -> (ChildrenAbsent, pure (Nothing, toks))
-    PLParen : PName ".." : PRParen : rest            -> (ChildrenPresent, pure (Just VisibleAllChildren, rest))
+    -- PLParen : PName ".." : PRParen : rest            -> (ChildrenPresent, pure (Just VisibleAllChildren, rest))
     PLParen : PRParen : rest                         -> (ChildrenAbsent, pure (Nothing, rest))
     PLParen : rest@(PName name : _)
-      | isAsciiName name -> extractChildren rest
+      | isAsciiName name -> analyzeList rest
       | otherwise        -> (ChildrenAbsent, pure (Nothing, toks))
     PLParen : rest@(PLParen : Pos _ (tokToName -> Just name) : PRParen : _)
       | isAsciiName name -> (ChildrenAbsent, pure (Nothing, toks))
-      | otherwise        -> extractChildren rest
+      | otherwise        -> analyzeList rest
     toks ->
       (ChildrenAbsent, throwError $ "Cannot handle children of" <+> listType <> ":" <+> ppTokens toks)
   where
-    extractChildren
+    analyzeList
       :: [Token]
       -> (ChildrenPresence, m (Maybe ChildrenVisibility, [Token]))
-    extractChildren =
-      second (fmap (first (Just . VisibleSpecificChildren))) . go mempty
+    analyzeList = second (fmap mkVisibility) . extractChildren mempty mempty
       where
-        go :: Set UnqualifiedSymbolName
-           -> [Token]
-           -> (ChildrenPresence, m (Set UnqualifiedSymbolName, [Token]))
-        go names = \case
-          []             -> (childrenPresence, pure (names, []))
-          PRParen : rest -> (childrenPresence, pure (names, rest))
-          PName name : rest
-            | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
-              go (S.insert name' names) $ dropCommas rest
-          PLParen : Pos _ (tokToName -> Just name) : PRParen : rest
-            | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
-              go (S.insert name' names) $ dropCommas rest
-          toks           ->
-            (ChildrenAbsent, throwError $ "Unrecognized children list structure:" <+> ppTokens toks)
+        mkVisibility
+          :: (Set UnqualifiedSymbolName, WildcardPresence, t)
+          -> (Maybe ChildrenVisibility, t)
+        mkVisibility (children, wildcard, toks) = (visibility, toks)
           where
-            childrenPresence
-              | S.null names = ChildrenAbsent
-              | otherwise    = ChildrenPresent
+            visibility
+              | S.null children =
+                case wildcard of
+                  WildcardPresent -> Just VisibleAllChildren
+                  WildcardAbsent  -> Just $ VisibleSpecificChildren children
+              | otherwise       =
+                case wildcard of
+                  WildcardPresent -> Just $ VisibleAllChildrenPlusSome children
+                  WildcardAbsent  -> Just $ VisibleSpecificChildren children
+
+    extractChildren
+      :: WildcardPresence
+      -> Set UnqualifiedSymbolName
+      -> [Token]
+      -> (ChildrenPresence, m (Set UnqualifiedSymbolName, WildcardPresence, [Token]))
+    extractChildren wildcardPresence names = \case
+      []                ->
+        (childrenPresence, pure (names, wildcardPresence, []))
+      PRParen : rest    ->
+        (childrenPresence, pure (names, wildcardPresence, rest))
+      PName ".." : rest ->
+        extractChildren (wildcardPresence <> WildcardPresent) names $ dropCommas rest
+      PName name : rest
+        | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
+          extractChildren wildcardPresence (S.insert name' names) $ dropCommas rest
+      PLParen : Pos _ (tokToName -> Just name) : PRParen : rest
+        | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
+          extractChildren wildcardPresence (S.insert name' names) $ dropCommas rest
+      toks           ->
+        (ChildrenAbsent, throwError $ "Unrecognized children list structure:" <+> ppTokens toks)
+      where
+        childrenPresence
+          | S.null names =
+            case wildcardPresence of
+              WildcardPresent -> ChildrenPresent
+              WildcardAbsent  -> ChildrenAbsent
+          | otherwise    = ChildrenPresent
 
 isAsciiName :: Text -> Bool
-isAsciiName = T.all (\c -> isAlphaNum c || c == '\'' || c == '_' || c == '#')
+isAsciiName = T.all pred
+  where
+    pred :: Char -> Bool
+    pred '\'' = True
+    pred '_'  = True
+    pred '#'  = True
+    pred '.'  = True
+    pred c    = isAlphaNum c
 
 newtype Tokens = Tokens [Token]
 
