@@ -1245,6 +1245,29 @@ moduleWithExportsOfSpeciallyNamedOperatorsTest = TestCase
       }
   }
 
+moduleStarExports :: Test
+moduleStarExports = TestCase
+  { testName       = "Star exports"
+  , input          =
+      "module Data.Kind ( Type, Constraint, type (*), type (★) ) where"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Data.Kind"
+      , mhExports          = Just ModuleExports
+          { meExportedEntries    = KM.fromList
+              [ EntryWithChildren
+                  { entryName               = mkSymbolName name
+                  , entryChildrenVisibility = Nothing
+                  }
+              | name <- ["Type", "Constraint", "*", "★"]
+              ]
+          , meReexports          = mempty
+          , meHasWildcardExports = False
+          }
+      , mhImportQualifiers = mempty
+      , mhImports          = mempty
+      }
+  }
+
 moduleWithExportOfPatternFuncTest :: Test
 moduleWithExportOfPatternFuncTest = TestCase
   { testName       = "Export of \"pattern\" function"
@@ -1590,7 +1613,6 @@ moduleWithExportsThatHaveChildrenListWithoutCommasTest = TestCase
       }
   }
 
-
 importRegressionTests :: TestTree
 importRegressionTests = testGroup "tests that caused problems before"
   [ doTest aesonHeaderTest
@@ -1637,6 +1659,7 @@ tests = testGroup "Header analysis tests"
     , doTest moduleWithExportsTest
     , doTest moduleWithMultilineExportsTest
     , doTest moduleWithExportsOfSpeciallyNamedOperatorsTest
+    , doTest moduleStarExports
     , testGroup "pattern as a function name"
         [ doTest moduleWithExportOfPatternFuncTest
         , doTest moduleWithExportOfManyFuncsAndPatternFuncTest
