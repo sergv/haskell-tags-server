@@ -34,28 +34,36 @@ module Data.KeyMap
 
 import Control.Arrow
 import Data.Coerce
+import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map as M
+import Data.Semigroup
 import Data.Set (Set)
 import Prelude hiding (lookup)
 
-newtype KeyMap a = KeyMap { unKeyMap :: M.Map (Key a) a }
+newtype KeyMap a = KeyMap { unKeyMap :: M.Map (Key a) (NonEmpty a) }
 
 deriving instance (Eq a, Eq (Key a))     => Eq (KeyMap a)
 deriving instance (Ord a, Ord (Key a))   => Ord (KeyMap a)
 deriving instance (Show a, Show (Key a)) => Show (KeyMap a)
-deriving instance (Ord (Key a))          => Monoid (KeyMap a)
+
+instance (Ord (Key a)) => Semigroup (KeyMap a) where
+  KeyMap m <> KeyMap m' = KeyMap $ M.unionWith (<>) m m'
+
+instance (Ord (Key a)) => Monoid (KeyMap a) where
+  mempty = KeyMap mempty
+  mappend = (<>)
 
 instance Foldable KeyMap where
-  foldMap f = foldMap f . unKeyMap
+  foldMap f = foldMap (foldMap f) . unKeyMap
 
 class (Ord (Key a)) => HasKey a where
   type Key a :: *
   getKey :: a -> Key a
 
 insert :: (HasKey a) => a -> KeyMap a -> KeyMap a
-insert x = coerce $ M.insert (getKey x) x
+insert x = coerce $ M.insertWith (<>) (getKey x) (x :| [])
 
-lookup :: (HasKey a) => Key a -> KeyMap a -> Maybe a
+lookup :: (HasKey a) => Key a -> KeyMap a -> Maybe (NonEmpty a)
 lookup k = M.lookup k . unKeyMap
 
 member :: (HasKey a) => Key a -> KeyMap a -> Bool
@@ -65,12 +73,12 @@ notMember :: (HasKey a) => Key a -> KeyMap a -> Bool
 notMember k = M.notMember k . unKeyMap
 
 fromList :: (HasKey a) => [a] -> KeyMap a
-fromList = KeyMap . M.fromList . map (getKey &&& id)
+fromList = KeyMap . M.fromListWith (<>) . map (getKey &&& (:| []))
 
-toList :: (HasKey a) => KeyMap a -> [(Key a, a)]
+toList :: (HasKey a) => KeyMap a -> [(Key a, NonEmpty a)]
 toList = M.toList . unKeyMap
 
-elems :: KeyMap a -> [a]
+elems :: KeyMap a -> [NonEmpty a]
 elems = M.elems . unKeyMap
 
 intersectAgainst :: (HasKey a) => KeyMap a -> Set (Key a) -> KeyMap a

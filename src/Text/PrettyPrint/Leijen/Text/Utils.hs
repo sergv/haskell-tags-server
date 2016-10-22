@@ -134,7 +134,7 @@ ppMap :: (Pretty a, Pretty b) => Map a b -> Doc
 ppMap = ppAlist' . M.toList
 
 ppKeyMap :: (KM.HasKey a, Pretty (KM.Key a), Pretty a) => KeyMap a -> Doc
-ppKeyMap = ppAlist' . KM.toList
+ppKeyMap = ppAlist' . map (second ppNE) . KM.toList
 
 ppSubkeyMap
   :: (SubkeyMap.HasSubkey k, Pretty k, Pretty (SubkeyMap.Subkey k), Pretty v)

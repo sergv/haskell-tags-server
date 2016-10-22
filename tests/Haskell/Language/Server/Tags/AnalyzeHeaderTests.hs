@@ -989,6 +989,107 @@ moduleWithImportsThatHaveChildrenListWithoutCommas = TestCase
       }
   }
 
+moduleWithUnbalancedParensInImportList :: Test
+moduleWithUnbalancedParensInImportList = TestCase
+  { testName       = "Module with unbalanced parens in import list"
+  , input          =
+      "module Test where \n\
+      \import Mod\n\
+      \#if FOO\n\
+      \  ( Foo(X, Y)\n\
+      \#else\n\
+      \  ( Foo\n\
+      \#endif\n\
+      \  , Bar\n\
+      \  )"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = Nothing
+      , mhImportQualifiers = mempty
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Mod"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = Just ImportList
+                  { ilEntries       = KM.fromList
+                      [ EntryWithChildren
+                          { entryName               = mkUnqualSymName "Foo"
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                              [ mkUnqualSymName "X"
+                              , mkUnqualSymName "Y"
+                              ]
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName "Foo"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName "Bar"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      ]
+                  , ilImportType    = Imported
+                  , ilImportedNames = ()
+                  }
+              }
+          ]
+      }
+  }
+
+moduleWithUnbalancedParensInImportChildrenList :: Test
+moduleWithUnbalancedParensInImportChildrenList = TestCase
+  { testName       = "Module with unbalanced parens in import children list"
+  , input          =
+      "module Test where \n\
+      \import Mod\n\
+      \  ( Foo\n\
+      \#if FOO\n\
+      \    ( X\n\
+      \#else\n\
+      \    ( Z\n\
+      \#endif\n\
+      \    , Y\n\
+      \    )\n\
+      \  , Bar\n\
+      \  )"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = Nothing
+      , mhImportQualifiers = mempty
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Mod"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = Just ImportList
+                  { ilEntries       = KM.fromList
+                      [ EntryWithChildren
+                          { entryName               = mkUnqualSymName "Foo"
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                              [ mkUnqualSymName "X"
+                              , mkUnqualSymName "Y"
+                              , mkUnqualSymName "Z"
+                              ]
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName "Bar"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      ]
+                  , ilImportType    = Imported
+                  , ilImportedNames = ()
+                  }
+              }
+          ]
+      }
+  }
+
+
 moduleWithEmptyExportsTest :: Test
 moduleWithEmptyExportsTest = TestCase
   { testName       = "Empty exports"
@@ -1512,9 +1613,8 @@ moduleWithExportListWithoutCommasTest = TestCase
                   }
               ]
           , meReexports          = S.fromList
-              [ mkModuleName "Frob"
-              , mkModuleName "Bazzz"
-              , mkModuleName "Quuxxx"
+              [ mkModuleName name
+              | name <- ["Frob", "Bazzz", "Quuxxx"]
               ]
           , meHasWildcardExports = True
           }
@@ -1533,38 +1633,14 @@ moduleWithExportListWithoutCommasAndStructuresAfterNameWithoutChildrenTest = Tes
       , mhExports          = Just ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "foo"
+                  { entryName               = mkSymbolName name
                   , entryChildrenVisibility = Nothing
                   }
-              , EntryWithChildren
-                  { entryName               = mkSymbolName "++"
-                  , entryChildrenVisibility = Nothing
-                  }
-              , EntryWithChildren
-                  { entryName               = mkSymbolName "baz"
-                  , entryChildrenVisibility = Nothing
-                  }
-              , EntryWithChildren
-                  { entryName               = mkSymbolName "Baz"
-                  , entryChildrenVisibility = Nothing
-                  }
-              , EntryWithChildren
-                  { entryName               = mkSymbolName "quux"
-                  , entryChildrenVisibility = Nothing
-                  }
-              , EntryWithChildren
-                  { entryName               = mkSymbolName "Quux"
-                  , entryChildrenVisibility = Nothing
-                  }
-              , EntryWithChildren
-                  { entryName               = mkSymbolName "Pat"
-                  , entryChildrenVisibility = Nothing
-                  }
+              | name <- ["foo", "++", "baz", "Baz", "quux", "Quux", "Pat"]
               ]
           , meReexports          = S.fromList
-              [ mkModuleName "Foo"
-              , mkModuleName "Bar"
-              , mkModuleName "Patterns"
+              [ mkModuleName name
+              | name <- ["Foo", "Bar", "Patterns"]
               ]
           , meHasWildcardExports = False
           }
@@ -1572,6 +1648,87 @@ moduleWithExportListWithoutCommasAndStructuresAfterNameWithoutChildrenTest = Tes
       , mhImports          = mempty
       }
   }
+
+moduleWithUnbalancedParensInExportList :: Test
+moduleWithUnbalancedParensInExportList = TestCase
+  { testName       = "Module with unbalanced parens in export list"
+  , input          =
+      "module Test\n\
+      \#if FOO\n\
+      \  ( Foo(X, Y)\n\
+      \#else\n\
+      \  ( Foo\n\
+      \#endif\n\
+      \  , Bar\n\
+      \  ) where"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = Just ModuleExports
+          { meExportedEntries    = KM.fromList
+              [ EntryWithChildren
+                  { entryName               = mkSymbolName "Foo"
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                      [ mkUnqualSymName "X"
+                      , mkUnqualSymName "Y"
+                      ]
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Foo"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Bar"
+                  , entryChildrenVisibility = Nothing
+                  }
+              ]
+          , meReexports          = mempty
+          , meHasWildcardExports = False
+          }
+      , mhImportQualifiers = mempty
+      , mhImports          = mempty
+      }
+  }
+
+moduleWithUnbalancedParensInExportChildrenList :: Test
+moduleWithUnbalancedParensInExportChildrenList = TestCase
+  { testName       = "Module with unbalanced parens in export children list"
+  , input          =
+      "module Test\n\
+      \  ( Foo\n\
+      \#if FOO\n\
+      \      ( X\n\
+      \#else\n\
+      \      ( Z\n\
+      \#endif\n\
+      \      , Y\n\
+      \      )\n\
+      \  , Bar\n\
+      \  ) where"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = Just ModuleExports
+          { meExportedEntries    = KM.fromList
+              [ EntryWithChildren
+                  { entryName               = mkSymbolName "Foo"
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                      [ mkUnqualSymName "X"
+                      , mkUnqualSymName "Y"
+                      , mkUnqualSymName "Z"
+                      ]
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Bar"
+                  , entryChildrenVisibility = Nothing
+                  }
+              ]
+          , meReexports          = mempty
+          , meHasWildcardExports = False
+          }
+      , mhImportQualifiers = mempty
+      , mhImports          = mempty
+      }
+  }
+
 
 moduleWithExportsThatHaveChildrenListWithoutCommasTest :: Test
 moduleWithExportsThatHaveChildrenListWithoutCommasTest = TestCase
@@ -1650,6 +1807,8 @@ tests = testGroup "Header analysis tests"
         [ doTest moduleWithAmbigousImportList
         , doTest moduleWithImportListWithoutCommas
         , doTest moduleWithImportsThatHaveChildrenListWithoutCommas
+        , doTest moduleWithUnbalancedParensInImportList
+        , doTest moduleWithUnbalancedParensInImportChildrenList
         ]
     , importRegressionTests
     ]
@@ -1672,6 +1831,8 @@ tests = testGroup "Header analysis tests"
         [ doTest moduleWithExportListWithoutCommasTest
         , doTest moduleWithExportsThatHaveChildrenListWithoutCommasTest
         , doTest moduleWithExportListWithoutCommasAndStructuresAfterNameWithoutChildrenTest
+        , doTest moduleWithUnbalancedParensInExportList
+        , doTest moduleWithUnbalancedParensInExportChildrenList
         ]
     ]
   ]

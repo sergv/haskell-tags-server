@@ -221,6 +221,8 @@ analyzeImports imports qualifiers ts = do
               entryWithChildren "operator in import list" name rest
             PName name : rest                                                 ->
               entryWithChildren "name in import list" name rest
+            PLParen : rest                                                    ->
+              findImportListEntries importType acc rest
             rest                                                              ->
               throwError $ "Unrecognized shape of import list:" <+> ppTokens rest
           where
@@ -235,12 +237,12 @@ analyzeImports imports qualifiers ts = do
               (children, rest') <- snd $ analyzeChildren descr $ dropNLs rest
               name'             <- mkUnqualName name
               let newEntry = EntryWithChildren name' children
-              findImportListEntries importType (KM.insert newEntry acc) $ dropCommas $ dropNLs rest'
+              findImportListEntries importType (KM.insert newEntry acc) $ dropCommas rest'
             entryWithoutChildren :: Text -> [Token] -> m (UnresolvedImportList, [Token])
             entryWithoutChildren name rest = do
               name' <- mkUnqualName name
               let newEntry = mkEntryWithoutChildren name'
-              findImportListEntries importType (KM.insert newEntry acc) $ dropCommas $ dropNLs rest
+              findImportListEntries importType (KM.insert newEntry acc) $ dropCommas rest
         mkUnqualName :: Text -> m UnqualifiedSymbolName
         mkUnqualName name =
           case mkUnqualifiedSymbolName (mkSymbolName name) of
@@ -313,6 +315,8 @@ analyzeExports importQualifiers ts = do
           entryWithChildren "operator in export list" name rest
         PName name : rest                                                 ->
           entryWithChildren "name in export list" name rest
+        PLParen : rest                                                    ->
+          go entries reexports rest
         toks                                                              ->
           throwError $ "Unrecognized export list structure:" <+> ppTokens toks
       where
@@ -369,7 +373,7 @@ analyzeChildren
   :: forall m. (MonadError Doc m)
   => Doc -> [Token] -> (ChildrenPresence, m (Maybe ChildrenVisibility, [Token]))
 analyzeChildren listType toks =
-  case toks of
+  case dropNLs toks of
     []                                               -> (ChildrenAbsent, pure (Nothing, []))
     toks@(PComma : _)                                -> (ChildrenAbsent, pure (Nothing, toks))
     toks@(PRParen : _)                               -> (ChildrenAbsent, pure (Nothing, toks))
@@ -385,13 +389,13 @@ analyzeChildren listType toks =
     PLParen : rest@(PLParen : Pos _ (tokToName -> Just name) : PRParen : _)
       | isAsciiName name -> (ChildrenAbsent, pure (Nothing, toks))
       | otherwise        -> analyzeList rest
-    toks ->
+    toks                                             ->
       (ChildrenAbsent, throwError $ "Cannot handle children of" <+> listType <> ":" <+> ppTokens toks)
   where
     analyzeList
       :: [Token]
       -> (ChildrenPresence, m (Maybe ChildrenVisibility, [Token]))
-    analyzeList = second (fmap mkVisibility) . extractChildren mempty mempty
+    analyzeList = second (fmap mkVisibility) . extractChildren mempty mempty . dropNLs
       where
         mkVisibility
           :: (Set UnqualifiedSymbolName, WildcardPresence, t)
@@ -426,6 +430,7 @@ analyzeChildren listType toks =
       PLParen : Pos _ (tokToName -> Just name) : PRParen : rest
         | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
           extractChildren wildcardPresence (S.insert name' names) $ dropCommas rest
+      PLParen : rest -> extractChildren wildcardPresence names $ dropNLs rest
       toks           ->
         (ChildrenAbsent, throwError $ "Unrecognized children list structure:" <+> ppTokens toks)
       where
@@ -469,8 +474,10 @@ dropNLs (Pos _ (Newline _) : ts) = dropNLs ts
 dropNLs ts                       = ts
 
 dropCommas :: [Token] -> [Token]
-dropCommas (Pos _ Comma : ts) = dropCommas ts
-dropCommas ts                 = ts
+dropCommas = go . dropNLs
+  where
+    go (Pos _ Comma : ts) = dropCommas ts
+    go ts                 = ts
 
 isVanillaTypeName  :: Text -> Bool
 isVanillaTypeName = maybe False (isUpper . fst) . T.uncons
