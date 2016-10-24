@@ -19,6 +19,8 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Text.PrettyPrint.Leijen.Text.Utils
   ( putDocLn
   , displayDoc
@@ -40,6 +42,7 @@ module Text.PrettyPrint.Leijen.Text.Utils
   , ppSubkeyMap
   , ppNE
   , ppSet
+  , ppNEMap
   , MapEntry(..)
   , Pretty(..)
   , Doc
@@ -53,7 +56,7 @@ import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Monoid
+import Data.Semigroup
 import Data.Set (Set)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding.Error as TEE
@@ -65,10 +68,15 @@ import qualified Text.PrettyPrint.Leijen.Text as PP
 
 import Data.KeyMap (KeyMap)
 import qualified Data.KeyMap as KM
+import Data.Map.NonEmpty (NonEmptyMap)
+import qualified Data.Map.NonEmpty as NEMap
 import Data.SubkeyMap (SubkeyMap)
 import qualified Data.SubkeyMap as SubkeyMap
 
 import Debug.Trace
+
+instance Semigroup Doc where
+  (<>) = mappend
 
 putDocLn :: (MonadBase IO m) => Doc -> m ()
 putDocLn = liftBase . TLIO.putStrLn . displayDoc
@@ -153,6 +161,9 @@ ppNE = ppList' PP.lbracket PP.rbracket . toList
 
 ppSet :: (Pretty a) => Set a -> Doc
 ppSet = ppList' PP.lbrace PP.rbrace . toList
+
+ppNEMap :: (Pretty k, Pretty v) => NonEmptyMap k v -> Doc
+ppNEMap = ppAlist' . toList . NEMap.toNonEmpty
 
 infix 0 :->
 

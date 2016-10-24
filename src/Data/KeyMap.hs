@@ -30,6 +30,7 @@ module Data.KeyMap
   , toList
   , elems
   , intersectAgainst
+  , keysSet
   ) where
 
 import Control.Arrow
@@ -84,3 +85,6 @@ elems = M.elems . unKeyMap
 intersectAgainst :: (HasKey a) => KeyMap a -> Set (Key a) -> KeyMap a
 intersectAgainst (KeyMap m) keys =
   KeyMap $ M.intersection m (M.fromSet (const ()) keys)
+
+keysSet :: (HasKey a) => KeyMap a -> Set (Key a)
+keysSet = M.keysSet . unKeyMap

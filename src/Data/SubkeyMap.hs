@@ -110,6 +110,7 @@ lookupSubkey k SubkeyMap{smMainMap, smSubMap} =
     Nothing   -> []
     Just idxs -> smMainMap `indexBySet` idxs
 
+-- | Find out which keys correspond to the given subkey.
 lookupSubkeyKeys :: (HasSubkey k) => Subkey k -> SubkeyMap k v -> Maybe (Set k)
 lookupSubkeyKeys k = M.lookup k . smSubMap
 

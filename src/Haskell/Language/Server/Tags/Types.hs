@@ -55,8 +55,6 @@ module Haskell.Language.Server.Tags.Types
   , getQualifier
   , ImportType(..)
   , ImportList(..)
-  , UnresolvedImportList
-  , ResolvedImportList
   , ModuleExports(..)
   , EntryWithChildren(..)
   , mkEntryWithoutChildren
@@ -84,6 +82,7 @@ import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
 import Data.CompiledRegex
 import Data.KeyMap (KeyMap, HasKey(..))
+import Data.Map.NonEmpty (NonEmptyMap)
 import Data.Promise (Promise)
 import Data.SubkeyMap (SubkeyMap, HasSubkey(..))
 import qualified Data.SubkeyMap as SubkeyMap
@@ -146,11 +145,14 @@ canonicalizeConfPaths conf = liftBase $ do
 -- | Server state that may change while processing request.
 data TagsServerState = TagsServerState
   { -- | Single module name can refer to multiple modules.
-    tssLoadedModules :: SubkeyMap ImportKey (NonEmpty ResolvedModule)
+    tssLoadedModules   :: !(SubkeyMap ImportKey (NonEmpty ResolvedModule))
+    -- | Set of modules we started loading. Used mainly for detecting import
+    -- cycles.
+  , tssLoadsInProgress :: !(Map ImportKey (NonEmptyMap FilePath UnresolvedModule))
   } deriving (Show, Eq, Ord)
 
 emptyTagsServerState :: TagsServerState
-emptyTagsServerState = TagsServerState mempty
+emptyTagsServerState = TagsServerState mempty mempty
 
 isModuleNameConstituentChar :: Char -> Bool
 isModuleNameConstituentChar '\'' = True
@@ -275,7 +277,8 @@ instance Pretty ImportTarget where
 data ImportSpec a = ImportSpec
   { ispecImportKey     :: ImportKey
   , ispecQualification :: ImportQualification
-  , ispecImportList    :: Maybe (ImportList a)
+  , ispecImportList    :: Maybe ImportList
+  , ispecImportedNames :: a
   } deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
 type UnresolvedImportSpec = ImportSpec ()
@@ -355,16 +358,12 @@ data ImportType =
   deriving (Show, Eq, Ord)
 
 -- | User-provided import/hiding list.
-data ImportList a = ImportList
-  { ilEntries       :: KeyMap (EntryWithChildren UnqualifiedSymbolName)
-  , ilImportType    :: ImportType
-  , ilImportedNames :: a
-  } deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
+data ImportList = ImportList
+  { ilEntries    :: KeyMap (EntryWithChildren UnqualifiedSymbolName)
+  , ilImportType :: ImportType
+  } deriving (Show, Eq, Ord)
 
-type UnresolvedImportList = ImportList ()
-type ResolvedImportList   = ImportList SymbolMap
-
-instance (Pretty a) => Pretty (ImportList a) where
+instance Pretty ImportList where
   pretty ImportList{ilImportType, ilEntries} =
     ppFoldableWithHeader ("Import list[" <> showDoc ilImportType <> "]") $ toList ilEntries
 

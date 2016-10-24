@@ -161,7 +161,7 @@ analyzeImports imports qualifiers ts = do
         qualifiers' = case getQualifier qual of
                         Just q  -> M.insertWith (Semigroup.<>) q (modName :| []) qualifiers
                         Nothing -> qualifiers
-        mkNewSpec :: Maybe UnresolvedImportList -> UnresolvedImportSpec
+        mkNewSpec :: Maybe ImportList -> UnresolvedImportSpec
         mkNewSpec importList = ImportSpec
           { ispecImportKey     = ImportKey
               { ikModuleName   = modName
@@ -169,13 +169,14 @@ analyzeImports imports qualifiers ts = do
               }
           , ispecQualification = qual
           , ispecImportList    = importList
+          , ispecImportedNames = ()
           }
     -- Analyze comma-separated list of entries, starting at _|_:
     -- - Foo_|_
     -- - Foo_|_(Bar, Baz)
     -- - Foo_|_ hiding (Bar, Baz)
     -- - Quux_|_(..)
-    analyzeImportList :: [Token] -> m (Maybe UnresolvedImportList, [Token])
+    analyzeImportList :: [Token] -> m (Maybe ImportList, [Token])
     analyzeImportList toks = do
       logDebug $ "[analyzeImpotrList] toks =" <+> ppTokens toks
       case dropNLs toks of
@@ -188,7 +189,7 @@ analyzeImports imports qualifiers ts = do
           :: ImportType
           -> KeyMap (EntryWithChildren UnqualifiedSymbolName)
           -> [Token]
-          -> m (UnresolvedImportList, [Token])
+          -> m (ImportList, [Token])
         findImportListEntries importType acc toks = do
           logDebug $ "[findImportListEntries] toks =" <+> ppTokens toks
           case dropNLs toks of
@@ -226,19 +227,18 @@ analyzeImports imports qualifiers ts = do
             rest                                                              ->
               throwError $ "Unrecognized shape of import list:" <+> ppTokens rest
           where
-            importList :: UnresolvedImportList
+            importList :: ImportList
             importList = ImportList
-              { ilEntries       = acc
-              , ilImportType    = importType
-              , ilImportedNames = ()
+              { ilEntries    = acc
+              , ilImportType = importType
               }
-            entryWithChildren :: Doc -> Text -> [Token] -> m (UnresolvedImportList, [Token])
+            entryWithChildren :: Doc -> Text -> [Token] -> m (ImportList, [Token])
             entryWithChildren descr name rest = do
               (children, rest') <- snd $ analyzeChildren descr $ dropNLs rest
               name'             <- mkUnqualName name
               let newEntry = EntryWithChildren name' children
               findImportListEntries importType (KM.insert newEntry acc) $ dropCommas rest'
-            entryWithoutChildren :: Text -> [Token] -> m (UnresolvedImportList, [Token])
+            entryWithoutChildren :: Text -> [Token] -> m (ImportList, [Token])
             entryWithoutChildren name rest = do
               name' <- mkUnqualName name
               let newEntry = mkEntryWithoutChildren name'

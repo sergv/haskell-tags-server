@@ -58,6 +58,7 @@ library
     Data.Condition
     Data.Foldable.Ext
     Data.KeyMap
+    Data.Map.NonEmpty
     Data.MonoidalMap
     Data.Promise
     Data.SubkeyMap

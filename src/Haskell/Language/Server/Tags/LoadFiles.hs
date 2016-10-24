@@ -34,16 +34,17 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Monoid
 import qualified Data.Semigroup as Semigroup
-import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Traversable
 import System.FilePath
-import Text.PrettyPrint.Leijen.Text (Doc, (<+>), pretty)
 import qualified Text.PrettyPrint.Leijen.Text as PP
+import Text.PrettyPrint.Leijen.Text.Utils
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
 import Control.Monad.Logging
+import Data.Map.NonEmpty (NonEmptyMap)
+import qualified Data.Map.NonEmpty as NEMap
 import Haskell.Language.Server.Tags.LoadModule (loadModuleFromSource, resolveModuleExports, vanillaExtensions, hsBootExtensions)
 import Haskell.Language.Server.Tags.Types
 
@@ -56,7 +57,7 @@ classifyPath path
     ext = takeExtension path
 
 data ResolveState = ResolveState
-  { rsLoadingModules :: !(Set ImportKey)
+  { rsLoadingModules :: !(Map ImportKey (NonEmptyMap FilePath UnresolvedModule))
   , rsLoadedModules  :: !(Map ImportKey (NonEmpty ResolvedModule))
   }
 
@@ -86,30 +87,41 @@ loadAllFilesIntoState conf = do
         { rsLoadingModules = mempty
         , rsLoadedModules  = mempty
         }
+      checkLoadingModules
+        :: forall m. (MonadState ResolveState m)
+        => ImportKey
+        -> m (Maybe (NonEmpty UnresolvedModule))
+      checkLoadingModules key = do
+        s <- get
+        pure $ NEMap.elemsNE <$> M.lookup key (rsLoadingModules s)
+
       doResolve
         :: forall m. (MonadState ResolveState m, MonadError Doc m, MonadLog m)
         => ImportKey
         -> m (NonEmpty ResolvedModule)
-      doResolve k = do
-        logInfo $ "[loadAllFilesIntoState.doResolve] Resolving" <+> PP.dquotes (pretty (ikModuleName k))
+      doResolve key = do
+        logInfo $ "[loadAllFilesIntoState.doResolve] Resolving" <+> PP.dquotes (pretty (ikModuleName key))
         currentlyLoading <- gets rsLoadingModules
-        if S.member k currentlyLoading
+        if M.member key currentlyLoading
         then
-          throwError $ "[loadAllFilesIntoState.doResolve] found import loop: module" <+> PP.dquotes (pretty k) <+>
+          throwError $ "[loadAllFilesIntoState.doResolve] found import loop: module" <+> PP.dquotes (pretty key) <+>
             "was required while being loaded"
-        else do
-          modify $ \s -> s { rsLoadingModules = S.insert k $ rsLoadingModules s }
-          case M.lookup k unresolvedModulesMap of
+        else
+          case M.lookup key unresolvedModulesMap of
             Nothing         ->
-              throwError $ "[loadAllFilesIntoState.doResolve] imported module" <+> PP.dquotes (pretty k) <+> "not found"
+              throwError $ "[loadAllFilesIntoState.doResolve] imported module" <+> PP.dquotes (pretty key) <+> "not found"
             Just unresolved -> do
-              resolved <- traverse (resolveModuleExports doResolve) unresolved
+              modify $ \s ->
+                let unresolvedMap = NEMap.fromNonEmpty $ (modFile &&& id) <$> unresolved in
+                s { rsLoadingModules = M.insert key unresolvedMap $ rsLoadingModules s }
+              logInfo $ "[loadAllFilesIntoState.doResolve] files: " <+> ppNE (modFile <$> unresolved)
+              resolved <- traverse (resolveModuleExports checkLoadingModules doResolve) unresolved
               modify $ \s -> s
-                 { rsLoadingModules =
-                     S.delete k $ rsLoadingModules s
-                 , rsLoadedModules  =
-                     M.insertWith (Semigroup.<>) k resolved $ rsLoadedModules s
-                 }
+                { rsLoadingModules =
+                    M.delete key $ rsLoadingModules s
+                , rsLoadedModules  =
+                    M.insertWith (Semigroup.<>) key resolved $ rsLoadedModules s
+                }
               pure resolved
 
   flip evalStateT initState $

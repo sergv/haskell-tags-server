@@ -27,6 +27,8 @@ module Data.SymbolMap
   , fromList
   , leaveNames
   , removeNames
+  , intersectAgainst
+  , keysSet
   ) where
 
 import Control.Arrow ((&&&), second)
@@ -36,8 +38,7 @@ import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe
-import Data.Monoid
-import qualified Data.Semigroup as Semigroup
+import Data.Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import Prelude hiding (lookup)
@@ -61,13 +62,16 @@ data SymbolMap = SymbolMap
   , smAllSymbols  :: Map UnqualifiedSymbolName (NonEmpty ResolvedSymbol)
   } deriving (Show, Eq, Ord)
 
-instance Monoid SymbolMap where
-  mempty = SymbolMap mempty mempty mempty
-  mappend (SymbolMap x y z) (SymbolMap x' y' z') = SymbolMap
+instance Semigroup SymbolMap where
+  SymbolMap x y z <> SymbolMap x' y' z' = SymbolMap
     { smParentMap   = M.unionWith (<>) x x'
     , smChildrenMap = M.unionWith (<>) y y'
-    , smAllSymbols  = M.unionWith (Semigroup.<>) z z'
+    , smAllSymbols  = M.unionWith (<>) z z'
     }
+
+instance Monoid SymbolMap where
+  mempty  = SymbolMap mempty mempty mempty
+  mappend = (<>)
 
 instance Pretty SymbolMap where
   pretty SymbolMap{smParentMap, smChildrenMap, smAllSymbols} = ppDict "SymbolMap"
@@ -140,7 +144,7 @@ fromList syms = SymbolMap
       map (second S.singleton) symbolsWithParents
   , smChildrenMap = M.fromListWith (<>) $
       map (\(child, parent) -> (parent, S.singleton child)) symbolsWithParents
-  , smAllSymbols  = M.fromListWith (Semigroup.<>) $
+  , smAllSymbols  = M.fromListWith (<>) $
       map (resolvedSymbolName &&& (:| [])) syms
   }
   where
@@ -168,3 +172,16 @@ removeNames SymbolMap{smParentMap, smChildrenMap, smAllSymbols} syms =
   where
     syms' :: Map UnqualifiedSymbolName ()
     syms' = M.fromSet (const ()) syms
+
+intersectAgainst :: SymbolMap -> Set UnqualifiedSymbolName -> SymbolMap
+intersectAgainst SymbolMap{smParentMap, smChildrenMap, smAllSymbols} names = SymbolMap
+  { smParentMap   = (`S.difference` names) <$> (smParentMap `M.difference` namesMap)
+  , smChildrenMap = (`S.difference` names) <$> (smChildrenMap `M.difference` namesMap)
+  , smAllSymbols  = smAllSymbols `M.difference` namesMap
+  }
+  where
+    namesMap :: Map UnqualifiedSymbolName ()
+    namesMap = M.fromSet (const ()) names
+
+keysSet :: SymbolMap -> Set UnqualifiedSymbolName
+keysSet = M.keysSet . smAllSymbols

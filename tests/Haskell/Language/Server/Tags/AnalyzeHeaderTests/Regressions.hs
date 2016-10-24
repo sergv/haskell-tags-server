@@ -86,8 +86,8 @@ aesonHeaderTest = TestCase
               , ispecImportList    = flip fmap imported $ \entries -> ImportList
                   { ilEntries       = KM.fromList entries
                   , ilImportType    = Imported
-                  , ilImportedNames = ()
                   }
+              , ispecImportedNames = ()
               }
           | (modName, qual, imported) <-
               [ ( "Control.Applicative"
@@ -423,15 +423,15 @@ unixCompatHeaderTest = TestCase
                   mkImportQualifier $
                   mkModuleName "AllPosixTypesButFileID"
               , ispecImportList    = Just $ ImportList
-                  { ilEntries       = KM.fromList
+                  { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "FileID"
                           , entryChildrenVisibility = Nothing
                           }
                       ]
-                  , ilImportType    = Hidden
-                  , ilImportedNames = ()
+                  , ilImportType = Hidden
                   }
+              , ispecImportedNames = ()
               }
           ]
       }

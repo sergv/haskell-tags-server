@@ -643,6 +643,324 @@ testData = GroupTest "server tests"
             , ("ModuleWithSpecificImportList.hs", "import with specific import list")
             ]
         ]
+  , withDir (Directory "0007resolvable_import_cycle") $
+      GroupTest "Resolvable import cycle"
+        [ withFile "A.hs" $
+          group "A imports B with import list"
+            [ ( "Local function 1"
+              , "foo"
+              , Known "A.hs" 19 "Function"
+              )
+            , ( "Local function 2"
+              , "bar"
+              , Known "A.hs" 22 "Function"
+              )
+            , ( "Local function 3"
+              , "baz"
+              , Known "A.hs" 25 "Function"
+              )
+             , ( "Imported visible type 1"
+              , "FooTyp"
+              , Known "B.hs" 19 "Type"
+              )
+            , ( "Imported visible constructor"
+              , "Foo"
+              , Known "B.hs" 19 "Constructor"
+              )
+            , ( "Imported visible type 2"
+              , "BarTyp"
+              , Known "B.hs" 21 "Type"
+              )
+            , ( "Imported hidden constructor"
+              , "Bar"
+              , NotFound
+              )
+            , ( "Non-imported type"
+              , "BazTyp"
+              , NotFound
+              )
+            , ( "Constructor of non-imported type"
+              , "Baz"
+              , NotFound
+              )
+            ]
+        , withFile "B.hs" $
+          group "B imports A with import list"
+            [ ( "Local type 1"
+              , "FooTyp"
+              , Known "B.hs" 19 "Type"
+              )
+            , ( "Local constructor 1"
+              , "Foo"
+              , Known "B.hs" 19 "Constructor"
+              )
+            , ( "Local type 2"
+              , "BarTyp"
+              , Known "B.hs" 21 "Type"
+              )
+            , ( "Local constructor 2"
+              , "Bar"
+              , Known "B.hs" 21 "Constructor"
+              )
+            , ( "Local type 3"
+              , "BazTyp"
+              , Known "B.hs" 23 "Type"
+              )
+            , ( "Local constructor 3"
+              , "Baz"
+              , Known "B.hs" 23 "Constructor"
+              )
+            , ( "Imported function 1"
+              , "foo"
+              , Known "A.hs" 19 "Function"
+              )
+            , ( "Imported function 2"
+              , "bar"
+              , Known "A.hs" 22 "Function"
+              )
+            , ( "Not imported function"
+              , "baz"
+              , NotFound
+              )
+            ]
+        , withFile "C.hs" $
+          group "C imports D with import list"
+            [ ( "Local function 1"
+              , "foo"
+              , Known "C.hs" 19 "Function"
+              )
+            , ( "Local function 2"
+              , "bar"
+              , Known "C.hs" 22 "Function"
+              )
+            , ( "Local function 3"
+              , "baz"
+              , Known "C.hs" 25 "Function"
+              )
+             , ( "Imported visible type 1"
+              , "FooTyp"
+              , Known "D.hs" 19 "Type"
+              )
+            , ( "Imported visible constructor"
+              , "Foo"
+              , Known "D.hs" 19 "Constructor"
+              )
+            , ( "Imported visible type 2"
+              , "BarTyp"
+              , Known "D.hs" 21 "Type"
+              )
+            , ( "Imported hidden constructor"
+              , "Bar"
+              , NotFound
+              )
+            , ( "Non-imported type"
+              , "BazTyp"
+              , NotFound
+              )
+            , ( "Constructor of non-imported type"
+              , "Baz"
+              , NotFound
+              )
+            ]
+        , withFile "D.hs" $
+          group "D imports C without import list"
+            [ ( "Local type 1"
+              , "FooTyp"
+              , Known "D.hs" 19 "Type"
+              )
+            , ( "Local constructor 1"
+              , "Foo"
+              , Known "D.hs" 19 "Constructor"
+              )
+            , ( "Local type 2"
+              , "BarTyp"
+              , Known "D.hs" 21 "Type"
+              )
+            , ( "Local constructor 2"
+              , "Bar"
+              , Known "D.hs" 21 "Constructor"
+              )
+            , ( "Local type 3"
+              , "BazTyp"
+              , Known "D.hs" 23 "Type"
+              )
+            , ( "Local constructor 3"
+              , "Baz"
+              , Known "D.hs" 23 "Constructor"
+              )
+            , ( "Imported function 1"
+              , "foo"
+              , Known "C.hs" 19 "Function"
+              )
+            , ( "Imported function 2"
+              , "bar"
+              , Known "C.hs" 22 "Function"
+              )
+            , ( "Imported function 3"
+              , "baz"
+              , Known "C.hs" 25 "Function"
+              )
+            ]
+
+        , withFile "E.hs" $
+          group "E without export list imports F with import list"
+            [ ( "Local function 1"
+              , "foo"
+              , Known "E.hs" 19 "Function"
+              )
+            , ( "Local function 2"
+              , "bar"
+              , Known "E.hs" 22 "Function"
+              )
+            , ( "Local function 3"
+              , "baz"
+              , Known "E.hs" 25 "Function"
+              )
+             , ( "Imported visible type 1"
+              , "FooTyp"
+              , Known "F.hs" 19 "Type"
+              )
+            , ( "Imported visible constructor"
+              , "Foo"
+              , Known "F.hs" 19 "Constructor"
+              )
+            , ( "Imported visible type 2"
+              , "BarTyp"
+              , Known "F.hs" 21 "Type"
+              )
+            , ( "Imported hidden constructor"
+              , "Bar"
+              , NotFound
+              )
+            , ( "Non-imported type"
+              , "BazTyp"
+              , NotFound
+              )
+            , ( "Constructor of non-imported type"
+              , "Baz"
+              , NotFound
+              )
+            ]
+        , withFile "F.hs" $
+          group "F imports E without import list"
+            [ ( "Local type 1"
+              , "FooTyp"
+              , Known "F.hs" 19 "Type"
+              )
+            , ( "Local constructor 1"
+              , "Foo"
+              , Known "F.hs" 19 "Constructor"
+              )
+            , ( "Local type 2"
+              , "BarTyp"
+              , Known "F.hs" 21 "Type"
+              )
+            , ( "Local constructor 2"
+              , "Bar"
+              , Known "F.hs" 21 "Constructor"
+              )
+            , ( "Local type 3"
+              , "BazTyp"
+              , Known "F.hs" 23 "Type"
+              )
+            , ( "Local constructor 3"
+              , "Baz"
+              , Known "F.hs" 23 "Constructor"
+              )
+            , ( "Imported function 1"
+              , "foo"
+              , Known "E.hs" 19 "Function"
+              )
+            , ( "Imported function 2"
+              , "bar"
+              , Known "E.hs" 22 "Function"
+              )
+            , ( "Imported function 3"
+              , "baz"
+              , Known "E.hs" 25 "Function"
+              )
+            ]
+
+        , withFile "G.hs" $
+          group "G without export list imports H with import list"
+            [ ( "Local function 1"
+              , "foo"
+              , Known "G.hs" 19 "Function"
+              )
+            , ( "Local function 2"
+              , "bar"
+              , Known "G.hs" 22 "Function"
+              )
+            , ( "Local function 3"
+              , "baz"
+              , Known "G.hs" 25 "Function"
+              )
+             , ( "Imported visible type 1"
+              , "FooTyp"
+              , Known "H.hs" 19 "Type"
+              )
+            , ( "Imported visible constructor 1"
+              , "Foo"
+              , Known "H.hs" 19 "Constructor"
+              )
+            , ( "Imported visible type 2"
+              , "BarTyp"
+              , Known "H.hs" 21 "Type"
+              )
+            , ( "Imported visible constructor 2"
+              , "Bar"
+              , Known "H.hs" 21 "Constructor"
+              )
+            , ( "Non-imported type"
+              , "BazTyp"
+              , NotFound
+              )
+            , ( "Constructor of non-imported type"
+              , "Baz"
+              , NotFound
+              )
+            ]
+        , withFile "H.hs" $
+          group "H imports G with import list"
+            [ ( "Local type 1"
+              , "FooTyp"
+              , Known "H.hs" 19 "Type"
+              )
+            , ( "Local constructor 1"
+              , "Foo"
+              , Known "H.hs" 19 "Constructor"
+              )
+            , ( "Local type 2"
+              , "BarTyp"
+              , Known "H.hs" 21 "Type"
+              )
+            , ( "Local constructor 2"
+              , "Bar"
+              , Known "H.hs" 21 "Constructor"
+              )
+            , ( "Local type 3"
+              , "BazTyp"
+              , Known "H.hs" 23 "Type"
+              )
+            , ( "Local constructor 3"
+              , "Baz"
+              , Known "H.hs" 23 "Constructor"
+              )
+            , ( "Imported function 1"
+              , "foo"
+              , Known "G.hs" 19 "Function"
+              )
+            , ( "Imported function 2"
+              , "bar"
+              , Known "G.hs" 22 "Function"
+              )
+            , ( "Not imported function"
+              , "baz"
+              , NotFound
+              )
+            ]
+        ]
+
   ]
 
 tests :: TestTree

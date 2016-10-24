@@ -86,11 +86,8 @@ lookUpInImportedModules
 lookUpInImportedModules name specs = do
   logDebug $ "[lookUpInImportedModules] searching for name" <+> pretty name <+>
     "in modules" <+> pretty (map (ikModuleName . ispecImportKey) $ toList specs)
-  flip foldMapA specs $ \ImportSpec{ispecImportKey, ispecImportList} -> do
-    let nameVisible =
-          case ispecImportList of
-            Nothing                          -> True
-            Just ImportList{ilImportedNames} -> SM.member name ilImportedNames
+  flip foldMapA specs $ \ImportSpec{ispecImportKey, ispecImportedNames} -> do
+    let nameVisible = SM.member name ispecImportedNames
     if nameVisible
     then do
       mods <- loadModule ispecImportKey

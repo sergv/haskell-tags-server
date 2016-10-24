@@ -79,6 +79,7 @@ moduleWithUnqualifiedImportTest = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Nothing
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -102,6 +103,7 @@ moduleWithUnqualifiedSourceImportTest = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Nothing
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -125,6 +127,7 @@ moduleWithUnqualifiedSafeImportTest = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Nothing
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -148,15 +151,15 @@ moduleWithPatternImportTest = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Just ImportList
-                  { ilEntries       = KM.fromList
+                  { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Pat"
                           , entryChildrenVisibility = Nothing
                           }
                       ]
-                  , ilImportType    = Imported
-                  , ilImportedNames = ()
+                  , ilImportType = Imported
                   }
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -180,10 +183,10 @@ moduleWithUnqualifiedImportAndEmptyImportListTest = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Just ImportList
-                  { ilEntries       = mempty
-                  , ilImportType    = Imported
-                  , ilImportedNames = ()
+                  { ilEntries    = mempty
+                  , ilImportType = Imported
                   }
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -207,10 +210,10 @@ moduleWithUnqualifiedImportAndEmptyHiddenImportListTest = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Just ImportList
-                  { ilEntries       = mempty
-                  , ilImportType    = Hidden
-                  , ilImportedNames = ()
+                  { ilEntries    = mempty
+                  , ilImportType = Hidden
                   }
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -234,15 +237,15 @@ moduleWithUnqualifiedImportAndSingletonImportListTest = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Just ImportList
-                  { ilEntries       = KM.fromList
+                  { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "foo"
                           , entryChildrenVisibility = Nothing
                           }
                       ]
-                  , ilImportType    = Imported
-                  , ilImportedNames = ()
+                  , ilImportType = Imported
                   }
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -266,7 +269,7 @@ moduleWithUnqualifiedImportAndNonemptyImportListTest = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Just ImportList
-                  { ilEntries       = KM.fromList
+                  { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "foo"
                           , entryChildrenVisibility = Nothing
@@ -280,9 +283,9 @@ moduleWithUnqualifiedImportAndNonemptyImportListTest = TestCase
                           , entryChildrenVisibility = Nothing
                           }
                       ]
-                  , ilImportType    = Imported
-                  , ilImportedNames = ()
+                  , ilImportType = Imported
                   }
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -307,7 +310,7 @@ moduleWithUnqualifiedImportAndNonemptyImportListWithDifferentVisibilitiesTest = 
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Just ImportList
-                  { ilEntries       = KM.fromList
+                  { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "foo"
                           , entryChildrenVisibility = Nothing
@@ -355,9 +358,9 @@ moduleWithUnqualifiedImportAndNonemptyImportListWithDifferentVisibilitiesTest = 
                               ]
                           }
                       ]
-                  , ilImportType    = Imported
-                  , ilImportedNames = ()
+                  , ilImportType = Imported
                   }
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -386,6 +389,7 @@ moduleWithQualifiedImportTest = TestCase
               , ispecQualification =
                   Qualified $ mkImportQualifier $ mkModuleName "Imported1"
               , ispecImportList    = Nothing
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -415,6 +419,7 @@ moduleWithQualifiedSafeAndPackageImportTest = TestCase
               , ispecQualification =
                   Qualified $ mkImportQualifier $ mkModuleName "Imported1"
               , ispecImportList    = Nothing
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -443,6 +448,7 @@ moduleWithQualifiedImportAndAliasTest = TestCase
               , ispecQualification =
                   Qualified $ mkImportQualifier $ mkModuleName "Imp"
               , ispecImportList    = Nothing
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -471,6 +477,7 @@ moduleWithImportAndAliasTest = TestCase
               , ispecQualification =
                   BothQualifiedAndUnqualified $ mkImportQualifier $ mkModuleName "Imp"
               , ispecImportList    = Nothing
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -499,7 +506,7 @@ moduleWithImportAndAliasAndHidingImportListTest = TestCase
               , ispecQualification =
                   BothQualifiedAndUnqualified $ mkImportQualifier $ mkModuleName "Imp"
               , ispecImportList    = Just ImportList
-                  { ilEntries       = KM.fromList
+                  { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Foo"
                           , entryChildrenVisibility = Just VisibleAllChildren
@@ -515,9 +522,9 @@ moduleWithImportAndAliasAndHidingImportListTest = TestCase
                               ]
                           }
                       ]
-                  , ilImportType    = Hidden
-                  , ilImportedNames = ()
+                  , ilImportType = Hidden
                   }
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -543,7 +550,7 @@ moduleWithImportOfSpeciallyNamedOperatorsTest = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Just ImportList
-                  { ilEntries       = KM.fromList
+                  { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "."
                           , entryChildrenVisibility = Nothing
@@ -561,9 +568,9 @@ moduleWithImportOfSpeciallyNamedOperatorsTest = TestCase
                           , entryChildrenVisibility = Nothing
                           }
                       ]
-                  , ilImportType    = Imported
-                  , ilImportedNames = ()
+                  , ilImportType = Imported
                   }
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -587,15 +594,15 @@ moduleWithImportOfPatternFuncTest = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Just ImportList
-                  { ilEntries       = KM.fromList
+                  { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "pattern"
                           , entryChildrenVisibility = Nothing
                           }
                       ]
-                  , ilImportType    = Imported
-                  , ilImportedNames = ()
+                  , ilImportType = Imported
                   }
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -619,7 +626,7 @@ moduleWithImportOfManyFuncsAndPatternFuncTest = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Just ImportList
-                  { ilEntries       = KM.fromList
+                  { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Foo"
                           , entryChildrenVisibility = Just VisibleAllChildren
@@ -637,9 +644,9 @@ moduleWithImportOfManyFuncsAndPatternFuncTest = TestCase
                           , entryChildrenVisibility = Nothing
                           }
                       ]
-                  , ilImportType    = Imported
-                  , ilImportedNames = ()
+                  , ilImportType = Imported
                   }
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -663,7 +670,7 @@ moduleWithoutCommasAndPatternFuncImportBeforeOperator = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Just ImportList
-                  { ilEntries       = KM.fromList
+                  { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Foo"
                           , entryChildrenVisibility = Just VisibleAllChildren
@@ -681,9 +688,9 @@ moduleWithoutCommasAndPatternFuncImportBeforeOperator = TestCase
                           , entryChildrenVisibility = Nothing
                           }
                       ]
-                  , ilImportType    = Imported
-                  , ilImportedNames = ()
+                  , ilImportType = Imported
                   }
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -707,7 +714,7 @@ moduleWithoutCommasAndPatternFuncImportBeforeConstructorWithChildren = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Just ImportList
-                  { ilEntries       = KM.fromList
+                  { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Foo"
                           , entryChildrenVisibility = Just VisibleAllChildren
@@ -725,9 +732,9 @@ moduleWithoutCommasAndPatternFuncImportBeforeConstructorWithChildren = TestCase
                           , entryChildrenVisibility = Nothing
                           }
                       ]
-                  , ilImportType    = Imported
-                  , ilImportedNames = ()
+                  , ilImportType = Imported
                   }
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -751,7 +758,7 @@ moduleWithoutCommasAndPatternFuncImportBeforeOperatorConstructorWithChildren = T
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Just ImportList
-                  { ilEntries       = KM.fromList
+                  { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName ":++"
                           , entryChildrenVisibility = Just VisibleAllChildren
@@ -769,9 +776,9 @@ moduleWithoutCommasAndPatternFuncImportBeforeOperatorConstructorWithChildren = T
                           , entryChildrenVisibility = Nothing
                           }
                       ]
-                  , ilImportType    = Imported
-                  , ilImportedNames = ()
+                  , ilImportType = Imported
                   }
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -795,7 +802,7 @@ moduleWithoutCommasAndSeveralPatternImports = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Just ImportList
-                  { ilEntries       = KM.fromList
+                  { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Foo"
                           , entryChildrenVisibility = Just VisibleAllChildren
@@ -813,9 +820,9 @@ moduleWithoutCommasAndSeveralPatternImports = TestCase
                           , entryChildrenVisibility = Nothing
                           }
                       ]
-                  , ilImportType    = Imported
-                  , ilImportedNames = ()
+                  , ilImportType = Imported
                   }
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -839,7 +846,7 @@ moduleWithAmbigousImportList = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Just ImportList
-                  { ilEntries       = KM.fromList
+                  { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Foo"
                           , entryChildrenVisibility = Nothing
@@ -873,9 +880,9 @@ moduleWithAmbigousImportList = TestCase
                               ]
                           }
                       ]
-                  , ilImportType    = Imported
-                  , ilImportedNames = ()
+                  , ilImportType = Imported
                   }
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -899,7 +906,7 @@ moduleWithImportListWithoutCommas = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Just ImportList
-                  { ilEntries       = KM.fromList
+                  { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "foo"
                           , entryChildrenVisibility = Nothing
@@ -939,9 +946,9 @@ moduleWithImportListWithoutCommas = TestCase
                           , entryChildrenVisibility = Nothing
                           }
                       ]
-                  , ilImportType    = Imported
-                  , ilImportedNames = ()
+                  , ilImportType = Imported
                   }
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -965,7 +972,7 @@ moduleWithImportsThatHaveChildrenListWithoutCommas = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Just ImportList
-                  { ilEntries       = KM.fromList
+                  { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Baz"
                           , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
@@ -981,9 +988,9 @@ moduleWithImportsThatHaveChildrenListWithoutCommas = TestCase
                               ]
                           }
                       ]
-                  , ilImportType    = Imported
-                  , ilImportedNames = ()
+                  , ilImportType = Imported
                   }
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -1014,7 +1021,7 @@ moduleWithUnbalancedParensInImportList = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Just ImportList
-                  { ilEntries       = KM.fromList
+                  { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Foo"
                           , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
@@ -1031,9 +1038,9 @@ moduleWithUnbalancedParensInImportList = TestCase
                           , entryChildrenVisibility = Nothing
                           }
                       ]
-                  , ilImportType    = Imported
-                  , ilImportedNames = ()
+                  , ilImportType = Imported
                   }
+              , ispecImportedNames = ()
               }
           ]
       }
@@ -1067,7 +1074,7 @@ moduleWithUnbalancedParensInImportChildrenList = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = Just ImportList
-                  { ilEntries       = KM.fromList
+                  { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Foo"
                           , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
@@ -1081,9 +1088,9 @@ moduleWithUnbalancedParensInImportChildrenList = TestCase
                           , entryChildrenVisibility = Nothing
                           }
                       ]
-                  , ilImportType    = Imported
-                  , ilImportedNames = ()
+                  , ilImportType = Imported
                   }
+              , ispecImportedNames = ()
               }
           ]
       }

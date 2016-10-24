@@ -100,7 +100,8 @@ main = do
                 , tsconfEagerTagging               = cfgEagerTagging
                 }
       state = TagsServerState
-                { tssLoadedModules = mempty
+                { tssLoadedModules   = mempty
+                , tssLoadsInProgress = mempty
                 }
   conf' <- canonicalizeConfPaths conf
   runSimpleLoggerT (Just Stderr) cfgDebugVerbosity $ do
