@@ -22,7 +22,7 @@
 module Haskell.Language.Server.Tags.LoadModule
   ( loadModule
   , loadModuleFromSource
-  , resolveModuleExports
+  , resolveModule
   -- * Utils
   , vanillaExtensions
   , hsBootExtensions
@@ -159,7 +159,7 @@ loadModuleFromFile key@ImportKey{ikModuleName} modifTime filename = do
   unresolvedMod <- loadModuleFromSource (Just ikModuleName) modifTime' filename source
   modify $ \s -> s
     { tssLoadsInProgress = M.insertWith NEMap.union key (NEMap.singleton filename unresolvedMod) $ tssLoadsInProgress s }
-  resolved      <- resolveModuleExports checkLoadingModules loadModule unresolvedMod
+  resolved      <- resolveModule checkLoadingModules loadModule unresolvedMod
   modify $ \s -> s
     { tssLoadsInProgress = M.update f key $ tssLoadsInProgress s }
   pure resolved
@@ -248,14 +248,14 @@ makeModule suggestedModuleName modifTime filename tokens = do
       , mhExports          = Nothing
       }
 
-resolveModuleExports
+resolveModule
   :: forall m. (MonadError Doc m, MonadLog m)
   => (ImportKey -> m (Maybe (NonEmpty UnresolvedModule)))
   -> (ImportKey -> m (NonEmpty ResolvedModule))
   -> UnresolvedModule
   -> m ResolvedModule
-resolveModuleExports checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
-  logDebug $ "[resolveModuleExports] resolving exports of module" <+> pretty (mhModName header)
+resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
+  logDebug $ "[resolveModule] resolving names of module" <+> pretty (mhModName header)
   (imports, symbols) <- resolveSymbols mod
   pure $ mod
     { modHeader           = header { mhImports = imports }
@@ -276,7 +276,7 @@ resolveModuleExports checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
            , [(ImportQualification, SymbolMap)]
            )
     resolveImports imports = do
-      logDebug $ "[resolveModuleExports.resolveImports] analyzing imports of module" <+> pretty (mhModName header)
+      logDebug $ "[resolveModule.resolveImports] analyzing imports of module" <+> pretty (mhModName header)
       SS.runStateT (SubkeyMap.traverseWithKey resolveImport imports) []
       where
         resolveImport
@@ -284,7 +284,7 @@ resolveModuleExports checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
           -> NonEmpty UnresolvedImportSpec
           -> SS.StateT [(ImportQualification, SymbolMap)] m (NonEmpty ResolvedImportSpec)
         resolveImport key importSpecs = do
-          logDebug $ "[resolveModuleExports.resolveImports.resolveImport] resolving import" <+> pretty key
+          logDebug $ "[resolveModule.resolveImports.resolveImport] resolving import" <+> pretty key
           isBeingLoaded <- lift $ checkIfModuleIsAlreadyBeingLoaded key
           case isBeingLoaded of
             -- Standard code path: imported modules are already loaded and
@@ -311,7 +311,7 @@ resolveModuleExports checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
     resolveSymbols :: UnresolvedModule -> m (SubkeyMap ImportKey (NonEmpty ResolvedImportSpec), SymbolMap)
     resolveSymbols Module{modHeader = header@ModuleHeader{mhImports, mhModName}, modAllSymbols} = do
       (resolvedImports, filteredNames) <- resolveImports mhImports
-      logDebug $ "[resolveModuleExports.resolveImports] analyzing export list of module" <+> pretty mhModName
+      logDebug $ "[resolveModule.resolveImports] analyzing export list of module" <+> pretty mhModName
       case mhExports header of
         Nothing                                            ->
           pure (resolvedImports, modAllSymbols)
@@ -336,7 +336,8 @@ resolveModuleExports checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
               let (qualifier, name) = splitQualifiedPart $ entryName entry
               case M.lookup qualifier namesByNamespace of
                 Nothing -> throwError $
-                  "Internal error: export qualifier" <+> showDoc qualifier <+>
+                  "Internal error: export qualifier" <+> PP.dquotes (showDoc qualifier) <+>
+                  "of entry" <+> PP.dquotes (pretty entry) <+>
                   "has no corresponding qualified imports"
                 Just sm -> do
                   names <- namesFromEntry modulesInScope sm $ entry { entryName = name }
@@ -354,8 +355,8 @@ resolveModuleExports checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
               extra       = inferExtraParents header
               allSymbols' :: SymbolMap
               allSymbols' = SM.registerChildren extra allSymbols
-          logDebug $ "[resolveModuleExports] extra parents =" <+> ppMap (ppSet <$> extra)
-          logDebug $ "[resolveModuleExports] allSymbols' =" <+> pretty allSymbols'
+          logDebug $ "[resolveModule] extra parents =" <+> ppMap (ppSet <$> extra)
+          logDebug $ "[resolveModule] allSymbols' =" <+> pretty allSymbols'
           pure (resolvedImports, allSymbols')
 
 -- | Take modules we're currently loading and try to infer names they're exporting

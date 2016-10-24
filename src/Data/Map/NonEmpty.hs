@@ -26,6 +26,7 @@ module Data.Map.NonEmpty
   , delete
   , fromNonEmpty
   , toNonEmpty
+  , keysNE
   , elemsNE
   , union
   , unionWith
@@ -82,6 +83,9 @@ fromNonEmpty ((k, v) :| xs) = NonEmptyMap k v $ M.fromList xs
 
 toNonEmpty :: NonEmptyMap k v -> NonEmpty (k, v)
 toNonEmpty (NonEmptyMap k v m) = (k, v) :| M.toList m
+
+keysNE :: NonEmptyMap k v -> NonEmpty k
+keysNE (NonEmptyMap k _ m) = k :| M.keys m
 
 elemsNE :: NonEmptyMap k v -> NonEmpty v
 elemsNE (NonEmptyMap _ v m) = v :| M.elems m
