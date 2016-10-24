@@ -18,6 +18,7 @@ module Haskell.Language.Server.Tags.TypesTests (tests) where
 
 import Control.Arrow (second)
 import Data.Text (Text)
+import qualified Data.Text as T
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -30,49 +31,38 @@ tests = testGroup "Type tests"
 
 splitQualifiedPartTests :: TestTree
 splitQualifiedPartTests = testGroup "splitting of qualified part of symbol"
-  [ mkQualifierTest
-      "variable name, no qualification"
-      "foo"
-      (Nothing, mkSymbolName "foo")
-  , mkQualifierTest
-      "type name, no qualification"
-      "Typ"
-      (Nothing, mkSymbolName "Typ")
-  , mkQualifierTest
-      "operator, no qualification"
-      "++"
-      (Nothing, mkSymbolName "++")
-  , mkQualifierTest
-      "operator in paretheses, no qualification"
-      "(++)"
-      (Nothing, mkSymbolName "(++)")
-  , mkQualifierTest
-      "variable name, qualified"
-      "Foo.Bar.foo"
-      (fooBarQual, mkSymbolName "foo")
-  , mkQualifierTest
-      "type name, qualified"
-      "Foo.Bar.Typ"
-      (fooBarQual, mkSymbolName "Typ")
-  , mkQualifierTest
-      "operator, qualified"
-      "Foo.Bar.++"
-      (fooBarQual, mkSymbolName "++")
-  , mkQualifierTest
-      "operator in paretheses, qualified"
-      "Foo.Bar.(++)"
-      (fooBarQual, mkSymbolName "(++)")
+  [ testGroup "unqualified"
+      [ "foo" ==> (Nothing, mkSymbolName "foo")
+      , "Typ" ==> (Nothing, mkSymbolName "Typ")
+      , "++"  ==> (Nothing, mkSymbolName "++")
+      , "."   ==> (Nothing, mkSymbolName ".")
+      , ".+." ==> (Nothing, mkSymbolName ".+.")
+      , "+.+" ==> (Nothing, mkSymbolName "+.+")
+      , "+.+" ==> (Nothing, mkSymbolName "+.+")
+      , "★"   ==> (Nothing, mkSymbolName "★")
+      ]
+  , testGroup "qualified"
+      [ "Foo.Bar.foo" ==> (fooBarQual,         mkSymbolName "foo")
+      , "Foo.Bar.Typ" ==> (fooBarQual,         mkSymbolName "Typ")
+      , "Foo.Bar.++"  ==> (fooBarQual,         mkSymbolName "++")
+      , "Foo.Bar.."   ==> (fooBarQual,         mkSymbolName ".")
+      , "Foo.Bar..+." ==> (fooBarQual,         mkSymbolName ".+.")
+      , "Foo.Bar.+.+" ==> (fooBarQual,         mkSymbolName "+.+")
+      , "Foo.Bar.★"   ==> (fooBarQual,         mkSymbolName "★")
+      , "Foo_.Bar_.★" ==> (mkQual "Foo_.Bar_", mkSymbolName "★")
+      ]
   ]
   where
+    (==>) = mkQualifierTest
     fooBarQual :: Maybe ImportQualifier
-    fooBarQual = Just $ mkImportQualifier (mkModuleName "Foo.Bar")
+    fooBarQual = mkQual "Foo.Bar"
+    mkQual = Just . mkImportQualifier . mkModuleName
 
 mkQualifierTest
-  :: String
-  -> Text
+  :: Text
   -> (Maybe ImportQualifier, SymbolName)
   -> TestTree
-mkQualifierTest name input expected =
-  testCase name $ actual @?= expected
+mkQualifierTest input expected =
+  testCase (T.unpack input) $ actual @?= expected
   where
     actual = second getUnqualifiedSymbolName (splitQualifiedPart (mkSymbolName input))

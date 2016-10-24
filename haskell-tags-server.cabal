@@ -22,7 +22,7 @@ cabal-version:
 
 library
   build-depends:
-    attoparsec >= 0.13.0.2,
+    attoparsec >= 0.13.1.0,
     array,
     base >=4,
     bert >=1.2.2.5,

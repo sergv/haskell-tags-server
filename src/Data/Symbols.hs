@@ -39,6 +39,9 @@ module Data.Symbols
   , resolvedSymbolPosition
   ) where
 
+import Control.Applicative
+import Data.Attoparsec.Text
+import qualified Data.Attoparsec.Text as Attoparsec
 import Data.Char (isUpper)
 import Data.Monoid
 import Data.Text (Text)
@@ -108,12 +111,19 @@ splitQualifiedPart
   :: SymbolName
   -> (Maybe ImportQualifier, UnqualifiedSymbolName)
 splitQualifiedPart sym =
-  case reverse $ T.split (=='.') $ getSymbolName sym of
-    []             -> (Nothing, UnqualifiedSymbolName sym)
-    [sym']         -> (Nothing, UnqualifiedSymbolName $ SymbolName sym')
-    sym' : modPart -> (Just qual, UnqualifiedSymbolName $ SymbolName sym')
-      where
-        qual = mkImportQualifier $ mkModuleName $ T.intercalate "." $ reverse modPart
+  case parseOnly pQualifiedName (getSymbolName sym) of
+    Left err -> error err -- (Nothing, UnqualifiedSymbolName sym)
+    Right x  -> x
+  where
+    pQualifiedName :: Parser (Maybe ImportQualifier, UnqualifiedSymbolName)
+    pQualifiedName = (,)
+      <$> optional pQualifier
+      <*> (UnqualifiedSymbolName . mkSymbolName <$> Attoparsec.takeWhile (const True))
+      <*  endOfInput
+    pQualifier :: Parser ImportQualifier
+    pQualifier = mkImportQualifier . mkModuleName . T.intercalate "." <$> many1 (pModuleName <* char '.')
+    pModuleName :: Parser Text
+    pModuleName = T.cons <$> satisfy isUpper <*> takeTill (== '.')
 
 -- | A symbolic name that identifier some Haskell entity. Has position,
 -- entity type and possibly a parent.
