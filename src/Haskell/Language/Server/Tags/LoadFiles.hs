@@ -66,7 +66,7 @@ loadAllFilesIntoState
   => TagsServerConf
   -> m (Map ImportKey (NonEmpty ResolvedModule))
 loadAllFilesIntoState conf = do
-  allFiles <- flip foldMapA (tsconfRecursiveSourceDirectories conf <> tsconfSourceDirectories conf) $
+  allFiles <- foldForA (tsconfRecursiveSourceDirectories conf <> tsconfSourceDirectories conf) $
     traverse (secondM MonadFS.canonicalizePath) <=< MonadFS.findRec MonadFS.isNotIgnoredDir classifyPath
   unresolvedModules <- for allFiles $ \(importType, filename) -> do
     modTime       <- MonadFS.getModificationTime filename

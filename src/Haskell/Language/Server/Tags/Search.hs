@@ -23,7 +23,7 @@ import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Char
-import Data.Foldable (toList)
+import Data.Foldable.Ext (toList, foldMapA, foldForA)
 import Data.List
 import qualified Data.Text as T
 import System.FilePath
@@ -31,7 +31,6 @@ import Text.PrettyPrint.Leijen.Text.Utils
 
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging
-import Data.Foldable.Ext
 import qualified Data.SymbolMap as SM
 import Data.Symbols
 import Haskell.Language.Server.Tags.LoadModule
@@ -86,12 +85,12 @@ lookUpInImportedModules
 lookUpInImportedModules name specs = do
   logDebug $ "[lookUpInImportedModules] searching for name" <+> pretty name <+>
     "in modules" <+> pretty (map (ikModuleName . ispecImportKey) $ toList specs)
-  flip foldMapA specs $ \ImportSpec{ispecImportKey, ispecImportedNames} -> do
+  foldForA specs $ \ImportSpec{ispecImportKey, ispecImportedNames} -> do
     let nameVisible = SM.member name ispecImportedNames
     if nameVisible
     then do
       mods <- loadModule ispecImportKey
-      flip foldMapA mods $ \mod -> do
+      foldForA mods $ \mod -> do
         logDebug $ "[lookUpInImportedModules] searching for name" <+> pretty name <+> "in module" <+> pretty (ikModuleName ispecImportKey)
         lookUpInImportedModule name mod
     else pure mempty

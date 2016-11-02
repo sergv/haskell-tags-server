@@ -33,7 +33,7 @@ import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
 import qualified Control.Monad.State.Strict as SS
-import Data.Foldable
+import Data.Foldable.Ext
 import Data.Functor.Product (Product(..))
 import Data.List.Extra (nubOrd)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -56,7 +56,6 @@ import Token (Token)
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
 import Control.Monad.Logging
-import Data.Foldable.Ext
 import qualified Data.KeyMap as KM
 import Data.Map.NonEmpty (NonEmptyMap)
 import qualified Data.Map.NonEmpty as NEMap
@@ -296,7 +295,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
                   importedMods :: NonEmpty ModuleName
                   importedMods = mhModName . modHeader <$> modules
               for importSpecs $ \spec -> do
-                (qual, symMap) <- filterVisibleNames importedMods importedNames spec
+                (qual, symMap) <- filterVisibleNames (mhModName header) importedMods importedNames spec
                 -- Record which names enter current module's scope under certain
                 -- qualification from import spec we're currently analyzing.
                 modify ((qual, symMap) :)
@@ -321,9 +320,10 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
               -- Names exported via module reexports.
               reexports :: SymbolMap
               reexports =
-                foldMap
-                  (\modName -> foldMap (foldMap ispecImportedNames) $ SubkeyMap.lookupSubkey modName resolvedImports)
-                  (Pair lt gt)
+                foldFor (Pair lt gt) $ \modName ->
+                  foldFor (SubkeyMap.lookupSubkey modName resolvedImports) $ \imports ->
+                    foldFor imports $ \ImportSpec{ispecImportedNames} ->
+                      ispecImportedNames
               namesByNamespace :: Map (Maybe ImportQualifier) SymbolMap
               namesByNamespace = M.fromListWith (<>)
                                $ (Nothing, modAllSymbols)
@@ -332,7 +332,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
               modulesInScope = map ikModuleName $ SubkeyMap.keys mhImports
           -- Names exported from current module, grouped by export qualifier.
           (exportedNames :: MonoidalMap (Maybe ImportQualifier) (Set UnqualifiedSymbolName)) <-
-            flip foldMapA meExportedEntries $ \entry -> do
+            foldForA meExportedEntries $ \entry -> do
               let (qualifier, name) = splitQualifiedPart $ entryName entry
               case M.lookup qualifier namesByNamespace of
                 Nothing -> throwError $
@@ -387,7 +387,7 @@ quasiResolveImportSpecWithLoadsInProgress mainModuleName key modules importSpecs
       -- 2. There's an export list but it exports *only* names
       -- defined locally.
       Nothing ->
-        flip foldMapA modules' $ \(Module{modHeader = ModuleHeader{mhExports, mhModName}, modAllSymbols}, localSymbolsNames) ->
+        foldForA modules' $ \(Module{modHeader = ModuleHeader{mhExports, mhModName}, modAllSymbols}, localSymbolsNames) ->
           case mhExports of
             Nothing -> pure modAllSymbols
             Just ModuleExports{meExportedEntries}
@@ -442,8 +442,8 @@ inferExtraParents ModuleHeader{mhExports} = M.fromListWith (<>) entries
   where
     entries :: [(UnqualifiedSymbolName, Set UnqualifiedSymbolName)]
     entries =
-      flip foldMap mhExports $ \ModuleExports{meExportedEntries} ->
-        flip foldMap meExportedEntries $ \EntryWithChildren{entryName, entryChildrenVisibility} ->
+      foldFor mhExports $ \ModuleExports{meExportedEntries} ->
+        foldFor meExportedEntries $ \EntryWithChildren{entryName, entryChildrenVisibility} ->
           case entryChildrenVisibility of
             Just VisibleAllChildren                         -> mempty
             Just (VisibleSpecificChildren _)                -> mempty

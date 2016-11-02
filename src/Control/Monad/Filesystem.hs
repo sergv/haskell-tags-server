@@ -22,11 +22,12 @@ module Control.Monad.Filesystem
   ) where
 
 import Control.Monad.Except
+import Control.Monad.Ext
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.DList (DList)
 import qualified Data.DList as DL
-import Data.Foldable
+import Data.Foldable.Ext
 import Data.Maybe
 import Data.Monoid
 import Data.Set (Set)
@@ -38,9 +39,6 @@ import qualified System.Directory
 import System.FilePath
 
 import Prelude hiding (readFile)
-
-import Control.Monad.Ext
-import Data.Foldable.Ext
 
 -- | Monad for interaction with filesystem.
 class (Monad m) => MonadFS m where

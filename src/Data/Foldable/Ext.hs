@@ -14,7 +14,12 @@
 
 module Data.Foldable.Ext
   ( foldMapA
+  , foldForA
+  , foldFor
+  , module Data.Foldable
   ) where
+
+import Data.Foldable
 
 newtype MonoidalLift f a = MonoidalLift { unMonoidalLift :: f a }
 
@@ -24,3 +29,11 @@ instance (Applicative f, Monoid a) => Monoid (MonoidalLift f a) where
 
 foldMapA :: (Applicative f, Monoid a, Foldable t) => (b -> f a) -> t b -> f a
 foldMapA f = unMonoidalLift . foldMap (MonoidalLift . f)
+
+{-# INLINE foldForA #-}
+foldForA :: (Applicative f, Monoid a, Foldable t) => t b -> (b -> f a) -> f a
+foldForA = flip foldMapA
+
+{-# INLINE foldFor #-}
+foldFor :: (Foldable f, Monoid b) => f a -> (a -> b) -> b
+foldFor = flip foldMap
