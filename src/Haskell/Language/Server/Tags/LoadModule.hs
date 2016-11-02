@@ -340,7 +340,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
                   "of entry" <+> PP.dquotes (pretty entry) <+>
                   "has no corresponding qualified imports"
                 Just sm -> do
-                  names <- namesFromEntry modulesInScope sm $ entry { entryName = name }
+                  names <- namesFromEntry mhModName modulesInScope sm $ entry { entryName = name }
                   pure $ MM.singleton qualifier names
 
           let allSymbols  :: SymbolMap
@@ -454,11 +454,12 @@ inferExtraParents ModuleHeader{mhExports} = M.fromListWith (<>) entries
 -- | Find out which names and under qualification come out of an import spec.
 filterVisibleNames
   :: (MonadError Doc m, Foldable f)
-  => f ModuleName
+  => ModuleName
+  -> f ModuleName
   -> SymbolMap            -- ^ All names from the set of imports.
   -> UnresolvedImportSpec -- ^ Import spec for this particular set of imports.
   -> m (ImportQualification, SymbolMap)
-filterVisibleNames importedMods allImportedNames ImportSpec{ispecQualification, ispecImportList} = do
+filterVisibleNames moduleName importedMods allImportedNames ImportSpec{ispecQualification, ispecImportList} = do
   visibleNames <- case ispecImportList of
     Nothing                                  ->
       pure allImportedNames
@@ -466,19 +467,20 @@ filterVisibleNames importedMods allImportedNames ImportSpec{ispecQualification, 
       let f = case ilImportType of
                 Imported -> SM.leaveNames
                 Hidden   -> SM.removeNames
-      importedNames <- foldMapA (namesFromEntry importedMods allImportedNames) ilEntries
+      importedNames <- foldMapA (namesFromEntry moduleName importedMods allImportedNames) ilEntries
       pure $ f allImportedNames importedNames
   pure (ispecQualification, visibleNames)
 
 -- | Get names referred to by @EntryWithChildren@ given a @SymbolMap@
 -- of names currently in scope.
 namesFromEntry
-  :: (MonadError Doc m, Foldable f)
-  => f ModuleName
+  :: forall m f. (MonadError Doc m, Foldable f)
+  => ModuleName
+  -> f ModuleName
   -> SymbolMap
   -> EntryWithChildren UnqualifiedSymbolName
   -> m (Set UnqualifiedSymbolName)
-namesFromEntry importedMods allImportedNames (EntryWithChildren sym visibility) =
+namesFromEntry moduleName importedMods allImportedNames (EntryWithChildren sym visibility) =
   S.insert sym <$>
   case visibility of
     Nothing                                         -> pure mempty
@@ -487,9 +489,11 @@ namesFromEntry importedMods allImportedNames (EntryWithChildren sym visibility) 
     Just (VisibleAllChildrenPlusSome extraChildren) ->
       (extraChildren <>) <$> childrenSymbols
   where
+    childrenSymbols :: m (Set UnqualifiedSymbolName)
     childrenSymbols =
       case SM.lookupChildren sym allImportedNames of
-        Nothing       -> throwError $ "Imported parent" <+> pretty sym <+>
-          "not found in symbol map of modules" <+> ppList (toList importedMods)
+        Nothing       -> throwError $ ppFoldableWithHeader
+          ("Imported parent" <+> pretty sym <+> "not found in symbol map of imports of module" <+> pretty moduleName <> ":")
+          importedMods
         Just children -> pure children
 
