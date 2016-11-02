@@ -447,37 +447,6 @@ testData = GroupTest "server tests"
               , Known "ModuleWithMultilineExportList.hs" 23 "Function"
               )
             ]
-      , withDirAndFile (Directory "0002export_lists") "ModuleWithImportsThatHaveModuleReexports.hs" $
-          group "module reexport"
-            [ ( "import non-exported & non-reexported name"
-              , "baz"
-              , NotFound
-              )
-            , ( "import name exported via module that reexports itself"
-              , "test"
-              , Known "ModuleWithModuleReexport.hs" 20 "Function"
-              )
-            , ( "name imported through reexporting module #1"
-              , "foo"
-              , Known "ModuleWithExportList.hs" 16 "Function"
-              )
-            , ( "name imported through reexporting module #2"
-              , "bar"
-              , Known "ModuleWithExportList.hs" 19 "Function"
-              )
-            , ( "name imported through module reexporting with a qualifier #1"
-              , "foo2"
-              , Known "ModuleWithMultilineExportList.hs" 20 "Function"
-              )
-            , ( "name imported through module reexporting with a qualifier #2"
-              , "bar2"
-              , Known "ModuleWithMultilineExportList.hs" 23 "Function"
-              )
-            , ( "name imported through module reexporting with a qualifier #3"
-              , "baz2"
-              , NotFound
-              )
-            ]
       ]
   , withDirAndFile (Directory "0003module_header_detection") "ModuleWithCommentsResemblingModuleHeader.hs" $
       group "module header detection"
@@ -960,7 +929,45 @@ testData = GroupTest "server tests"
               )
             ]
         ]
-
+  , withDirAndFile (Directory "0008module_reexport") "ModuleWithImportsThatHaveModuleReexports.hs" $
+      group "Module reexport"
+        [ ( "Import non-exported & non-reexported name"
+          , "baz"
+          , NotFound
+          )
+        , ( "Import name exported via module that reexports itself"
+          , "test"
+          , Known "ModuleWithModuleReexport.hs" 20 "Function"
+          )
+        , ( "Name imported through module with vanilla module reexport #1"
+          , "foo"
+          , Known "Module1.hs" 17 "Function"
+          )
+        , ( "Name imported through module with vanilla module reexport #2"
+          , "bar"
+          , Known "Module1.hs" 21 "Function"
+          )
+        , ( "Name imported through module reexporting with alias #1"
+          , "foo2"
+          , Known "Module2.hs" 18 "Function"
+          )
+        , ( "Name imported through module reexporting with alias #2"
+          , "bar2"
+          , Known "Module2.hs" 23 "Function"
+          )
+        , ( "Private non-exported name"
+          , "baz2"
+          , NotFound
+          )
+        , ( "Name imported through qualiifed module reexporting #1"
+          , "foo3"
+          , NotFound
+          )
+        , ( "Name imported through qualiifed module reexporting #2"
+          , "bar3"
+          , NotFound
+          )
+        ]
   ]
 
 tests :: TestTree

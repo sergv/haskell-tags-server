@@ -299,7 +299,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
                 -- Record which names enter current module's scope under certain
                 -- qualification from import spec we're currently analyzing.
                 modify ((qual, symMap) :)
-                pure $ spec { ispecImportedNames = symMap}
+                pure $ spec { ispecImportedNames = symMap }
             -- Non-standard code path for breaking import cycles: imported module
             -- is already being loaded. In order to break infinite loop, we must
             -- analyze it here and get all the names we interested in, whithout
@@ -311,19 +311,17 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
     resolveSymbols Module{modHeader = header@ModuleHeader{mhImports, mhModName}, modAllSymbols} = do
       (resolvedImports, filteredNames) <- resolveImports mhImports
       logDebug $ "[resolveModule.resolveImports] analyzing export list of module" <+> pretty mhModName
+      logDebug $ "[resolveModule.resolveImports] resolved imports" PP.<$> pretty (ppSubkeyMap (ppNE <$> resolvedImports))
       case mhExports header of
         Nothing                                            ->
           pure (resolvedImports, modAllSymbols)
         Just ModuleExports{meExportedEntries, meReexports} -> do
+          logDebug $ "[resolveModule.resolveImports] meReexports =" <+> pretty (ppSet meReexports)
           let lt, gt :: Set ModuleName
               (lt, reexportsItself, gt) = S.splitMember mhModName meReexports
               -- Names exported via module reexports.
               reexports :: SymbolMap
-              reexports =
-                foldFor (Pair lt gt) $ \modName ->
-                  foldFor (SubkeyMap.lookupSubkey modName resolvedImports) $ \imports ->
-                    foldFor imports $ \ImportSpec{ispecImportedNames} ->
-                      ispecImportedNames
+              reexports = resolveeReexports resolvedImports $ Pair lt gt
               namesByNamespace :: Map (Maybe ImportQualifier) SymbolMap
               namesByNamespace = M.fromListWith (<>)
                                $ (Nothing, modAllSymbols)
@@ -358,6 +356,24 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
           logDebug $ "[resolveModule] extra parents =" <+> ppMap (ppSet <$> extra)
           logDebug $ "[resolveModule] allSymbols' =" <+> pretty allSymbols'
           pure (resolvedImports, allSymbols')
+
+resolveeReexports
+  :: (Foldable f, Foldable g)
+  => SubkeyMap ImportKey (f ResolvedImportSpec)
+  -> g ModuleName
+  -> SymbolMap
+resolveeReexports resolvedImports modNames =
+  foldFor modNames $ \modName ->
+    foldFor (SubkeyMap.lookupSubkey modName resolvedImports) $ \imports ->
+      foldFor imports $ \ImportSpec{ispecImportedNames, ispecQualification} ->
+        case ispecQualification of
+          -- See https://ro-che.info/articles/2012-12-25-haskell-module-system-p1 for details.
+          -- Excerpt from Haskell Report:
+          -- “The form module M names the set of all entities that are in scope
+          --  with both an unqualified name e and a qualified name M.e”.
+          Qualified _                   -> mempty
+          Unqualified                   -> ispecImportedNames
+          BothQualifiedAndUnqualified _ -> ispecImportedNames
 
 -- | Take modules we're currently loading and try to infer names they're exporting
 -- without fully resolving them. This is needed to break import cycles in simple

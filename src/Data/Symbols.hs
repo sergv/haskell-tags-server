@@ -54,7 +54,8 @@ import FastTags (Pos(..), TagVal(..), Type(..), SrcPos(..), Line(..))
 import Data.KeyMap (HasKey(..))
 import Text.PrettyPrint.Leijen.Text.Utils
 
--- e.g. Foo, Foo.Bar
+-- | e.g. Foo, Foo.Bar. Assume that this is not an import qualifier.
+-- Import qualifiers should be labeled as 'ImportQualifer'.
 newtype ModuleName = ModuleName { getModuleName :: Text }
   deriving (Show, Eq, Ord)
 

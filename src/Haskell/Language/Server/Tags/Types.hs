@@ -371,7 +371,7 @@ data ModuleExports = ModuleExports
   { -- | Toplevel names exported from this particular module as specified in
     -- the header.
     meExportedEntries    :: KeyMap (EntryWithChildren SymbolName)
-    -- | Module name here can refer to either real module or to a qualifier.
+    -- | Module name here refer to real modules only.
   , meReexports          :: Set ModuleName
     -- | Whether this module exports some entities that export all children.
   , meHasWildcardExports :: Bool

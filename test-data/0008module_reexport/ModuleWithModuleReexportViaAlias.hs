@@ -1,21 +1,17 @@
 ----------------------------------------------------------------------------
 -- |
--- Module      :  ModuleWithModuleReexport
--- Copyright   :  (c) Sergey Vinokurov 2015
+-- Module      :  ModuleWithModuleReexportViaAlias
+-- Copyright   :  (c) Sergey Vinokurov 2016
 -- License     :  BSD3-style (see LICENSE)
 --
 -- Maintainer  :  serg.foo@gmail.com
+-- Created     :  Wednesday,  2 November 2016
 -- Stability   :
 -- Portability :
 --
 --
 ----------------------------------------------------------------------------
 
-module ModuleWithModuleReexport
-  ( module ModuleWithUnqualifiedReexport, module ModuleWithModuleReexport )
-where
+module ModuleWithModuleReexportViaAlias (module Mod) where
 
-import ModuleWithUnqualifiedReexport
-
-test :: a -> b -> a
-test x _ = x
+import Module2 as Mod

@@ -1,19 +1,30 @@
 ----------------------------------------------------------------------------
 -- |
--- Module      :  ModuleWithQualifiedModuleReexport
--- Copyright   :  (c) Sergey Vinokurov 2015
+-- Module      :  Module2
+-- Copyright   :  (c) Sergey Vinokurov 2016
 -- License     :  BSD3-style (see LICENSE)
 --
 -- Maintainer  :  serg.foo@gmail.com
+-- Created     :  Wednesday,  2 November 2016
 -- Stability   :
 -- Portability :
 --
 --
 ----------------------------------------------------------------------------
 
-module ModuleWithQualifiedModuleReexport
-  ( module MyModule )
-where
+module Module2 (foo2, bar2) where
 
-import qualified ModuleWithQualifiedReexport as MyModule
 
+foo2 :: a -> a
+foo2 x =
+  x
+
+
+bar2 :: Int -> Int -> Int
+bar2 x y =
+  x - y
+
+
+baz2 :: Int -> Int -> Int
+baz2 x y =
+  x `mod` y
