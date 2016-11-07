@@ -58,4 +58,4 @@ instance (MonadBaseControl b m) => MonadBaseControl b (DiscardLogsT m) where
   restoreM     = defaultRestoreM
 
 instance (Monad m) => MonadLog (DiscardLogsT m) where
-  logDoc _ _ = return ()
+  logDoc _ _ = pure ()

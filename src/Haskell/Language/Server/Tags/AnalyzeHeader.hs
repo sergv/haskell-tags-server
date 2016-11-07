@@ -57,7 +57,7 @@ analyzeHeader
   => [Token]
   -> m (Maybe UnresolvedModuleHeader, [Token])
 analyzeHeader ts = do
-  logDebug $ "[analyzeHeader] ts =" <+> ppTokens ts
+  -- logDebug $ "[analyzeHeader] ts =" <+> ppTokens ts
   case dropWhile ((/= KWModule) . valOf) ts of
     Pos _ KWModule :
       (dropNLs -> Pos _ (T modName) :
@@ -98,7 +98,7 @@ analyzeImports
        , [Token]
        )
 analyzeImports imports qualifiers ts = do
-  logDebug $ "[analyzeImports] ts =" <+> ppTokens ts
+  -- logDebug $ "[analyzeImports] ts =" <+> ppTokens ts
   res <- runMaybeT $ do
     -- Drop initial "import" keyword and {-# SOURCE #-} pragma, if any
     (ts, importTarget)   <- case dropNLs ts of
@@ -178,7 +178,7 @@ analyzeImports imports qualifiers ts = do
     -- - Quux_|_(..)
     analyzeImportList :: [Token] -> m (Maybe ImportList, [Token])
     analyzeImportList toks = do
-      logDebug $ "[analyzeImpotrList] toks =" <+> ppTokens toks
+      -- logDebug $ "[analyzeImpotrList] toks =" <+> ppTokens toks
       case dropNLs toks of
         []                                    -> pure (Nothing, toks)
         PHiding : (dropNLs -> PLParen : rest) -> first Just <$> findImportListEntries Hidden mempty (dropNLs rest)
@@ -191,7 +191,7 @@ analyzeImports imports qualifiers ts = do
           -> [Token]
           -> m (ImportList, [Token])
         findImportListEntries importType acc toks = do
-          logDebug $ "[findImportListEntries] toks =" <+> ppTokens toks
+          -- logDebug $ "[findImportListEntries] toks =" <+> ppTokens toks
           case dropNLs toks of
             []                                                                ->
               pure (importList, [])
@@ -248,7 +248,7 @@ analyzeImports imports qualifiers ts = do
           case mkUnqualifiedSymbolName (mkSymbolName name) of
             Nothing    ->
               throwError $ "Invalid qualified entry on import list:" <+> docFromText name
-            Just name' -> return name'
+            Just name' -> pure name'
 
 analyzeExports
   :: forall m. (MonadError Doc m, MonadLog m)
@@ -256,7 +256,7 @@ analyzeExports
   -> [Token]
   -> m (Maybe ModuleExports)
 analyzeExports importQualifiers ts = do
-  logDebug $ "[analyzeExports] ts =" <+> ppTokens ts
+  -- logDebug $ "[analyzeExports] ts =" <+> ppTokens ts
   case stripNewlines $ UnstrippedTokens ts of
     []            -> pure Nothing
     PLParen : rest -> Just <$> go mempty mempty rest
@@ -274,7 +274,7 @@ analyzeExports importQualifiers ts = do
        -> [Token]
        -> m ModuleExports
     go entries reexports toks = do
-      logDebug $ "[analyzeExports.go] toks =" <+> ppTokens toks
+      -- logDebug $ "[analyzeExports.go] toks =" <+> ppTokens toks
       case toks of
         []                                                                ->
           pure exports
@@ -328,13 +328,13 @@ analyzeExports importQualifiers ts = do
           }
         entryWithChildren :: Doc -> Text -> [Token] -> m ModuleExports
         entryWithChildren listType name rest = do
-          logDebug $ "[analyzeExports.entryWithChildren] rest =" <+> ppTokens rest
+          -- logDebug $ "[analyzeExports.entryWithChildren] rest =" <+> ppTokens rest
           (children, rest') <- snd $ analyzeChildren listType rest
           let newEntry = EntryWithChildren (mkSymbolName name) children
           consumeComma (KM.insert newEntry entries) reexports rest'
         entryWithoutChildren :: Text -> [Token] -> m ModuleExports
         entryWithoutChildren name rest = do
-          logDebug $ "[analyzeExports.entryWithoutChildren] rest =" <+> ppTokens rest
+          -- logDebug $ "[analyzeExports.entryWithoutChildren] rest =" <+> ppTokens rest
           let newEntry = mkEntryWithoutChildren $ mkSymbolName name
           consumeComma (KM.insert newEntry entries) reexports rest
         exportsAllChildren :: EntryWithChildren a -> Any

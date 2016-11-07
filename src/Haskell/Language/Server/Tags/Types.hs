@@ -262,7 +262,7 @@ resolveQualifier qual ModuleHeader{mhImports, mhImportQualifiers} =
                 throwError $
                   "Internal error: module" <+> pretty modName <+>
                   "for qualifier" <+> pretty qual <+> "not found in the imports map"
-              s:ss -> return $ sconcat $ s :| ss
+              s:ss -> pure $ sconcat $ s :| ss
     s : ss -> pure $ Just $ sconcat $ s :| ss
   where
     qualifiedModName = getImportQualifier qual

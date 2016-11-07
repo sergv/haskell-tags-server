@@ -50,7 +50,8 @@ import System.FilePath
 import qualified Text.PrettyPrint.Leijen.Text as PP
 import Text.PrettyPrint.Leijen.Text.Utils
 
-import FastTags (tokenizeInput, processTokens)
+import Haskell.Language.Lexer (tokenize')
+import FastTags (processTokens)
 import Token (Token)
 
 import Control.Monad.Filesystem (MonadFS)
@@ -195,7 +196,7 @@ loadModuleFromSource
   -> T.Text
   -> m UnresolvedModule
 loadModuleFromSource suggestedModuleName modifTime filename source = do
-  tokens <- either (throwError . docFromString) pure $ tokenizeInput filename False source
+  tokens <- either throwError pure $ tokenize' filename source
   makeModule suggestedModuleName modifTime filename tokens
 
 makeModule

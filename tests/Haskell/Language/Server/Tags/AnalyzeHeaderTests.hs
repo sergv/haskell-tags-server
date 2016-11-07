@@ -32,7 +32,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import qualified Text.PrettyPrint.Leijen.Text as PP
 
-import FastTags (tokenizeInput)
+import Haskell.Language.Lexer (tokenize')
 import Token (Token)
 
 import Control.Monad.Logging.Simple
@@ -1885,4 +1885,4 @@ doTest TestCase{testName, input, expectedResult} =
           assertFailure $ displayDocString $ msg PP.<$> logsDoc
   where
     tokens :: forall m. (MonadError Doc m) => m [Token]
-    tokens = either (throwError . docFromString) return $ tokenizeInput "test" False input
+    tokens = either throwError pure $ tokenize' "test.hs" input

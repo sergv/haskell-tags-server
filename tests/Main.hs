@@ -15,6 +15,7 @@ module Main (main) where
 
 import Test.Tasty
 
+import qualified Haskell.Language.Lexer.Tests as LexerTests
 import qualified Haskell.Language.Server.Tags.AnalyzeHeaderTests as AnalyzeHeaderTests
 import qualified Haskell.Language.Server.Tags.TypesTests as TypesTests
 import qualified ServerTests
@@ -27,4 +28,5 @@ main = do
     [ ServerTests.tests
     , TypesTests.tests
     , AnalyzeHeaderTests.tests
+    , LexerTests.tests
     ]

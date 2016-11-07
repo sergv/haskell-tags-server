@@ -64,6 +64,9 @@ library
     Data.SubkeyMap
     Data.SymbolMap
     Data.Symbols
+    Haskell.Language.Lexer
+    Haskell.Language.Lexer.LexerTypes
+    Haskell.Language.Lexer.Lexer
     Haskell.Language.Server.BERT
     Haskell.Language.Server.Tags
     Haskell.Language.Server.Tags.AnalyzeHeader
@@ -80,11 +83,14 @@ library
     Haskell2010
   ghc-options:
     -Wall
+    -Werror
     -fwarn-monomorphism-restriction
     -fno-warn-type-defaults
     -fno-warn-name-shadowing
   ghc-prof-options:
     -fprof-auto
+  build-tools:
+    alex >= 3.1.7
 
 executable haskell-tags-server
   main-is:
@@ -123,6 +129,7 @@ test-suite test-haskell-tags-server
     Main.hs
   other-modules:
     Control.Monad.Logging.DiscardLogs
+    Haskell.Language.Lexer.Tests
     Haskell.Language.Server.Tags.AnalyzeHeaderTests
     Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions
     Haskell.Language.Server.Tags.TypesTests

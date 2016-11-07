@@ -974,7 +974,7 @@ tests :: TestTree
 tests =
   withResource
     (getNumCapabilities >>= \caps -> newPortPool caps (defaultPort + 1))
-    (const (return ()))
+    (const (pure ()))
     (\pool -> makeTestTree pool testData)
   where
     makeTestTree :: IO PortPool -> TestSet ServerTest -> TestTree
@@ -1005,7 +1005,7 @@ connect :: IO PortPool -> FilePath -> Set FilePath -> IO ServerConnection
 connect pool sourceDir dirTree =
   -- Try to connect to server. If attempt succeeds then server is running
   -- and there's no need to run server ourselves.
-  tryConnect defaultPort >>= either (const startLocalServer) (return . ExistingServer)
+  tryConnect defaultPort >>= either (const startLocalServer) (pure . ExistingServer)
   where
     startLocalServer :: IO ServerConnection
     startLocalServer = do
@@ -1023,7 +1023,7 @@ connect pool sourceDir dirTree =
               Left err    -> reportErr $
                 "Failed to connect to locally started server\n" ++ show err
               Right conn' ->
-                return $ LocalServer serv' conn'
+                pure $ LocalServer serv' conn'
 
     tryConnect :: PortNumber -> IO (Either IOException TCP)
     tryConnect port =
@@ -1044,7 +1044,7 @@ mkFindSymbolTest getConn ServerTest{stTestName, stWorkingDirectory, stFile, stSy
                                                    , BinaryTerm stSymbol
                                                    ]
     logs <- case conn of
-              ExistingServer _   -> return mempty
+              ExistingServer _   -> pure mempty
               LocalServer serv _ -> do
                 logs <- getLogs serv
                 pure $ "Logs:" PP.<$> PP.indent 2 (PP.vcat logs)
