@@ -12,7 +12,11 @@
 --
 ----------------------------------------------------------------------------
 
-module Haskell.Language.Lexer (tokenize, tokenize') where
+module Haskell.Language.Lexer
+  ( tokenize
+  , tokenize'
+  , LiterateMode(..)
+  ) where
 
 import Data.Text (Text)
 import System.FilePath

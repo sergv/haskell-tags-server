@@ -12,10 +12,11 @@
 --
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE ConstraintKinds   #-}
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE NamedFieldPuns    #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE NamedFieldPuns             #-}
+{-# LANGUAGE OverloadedStrings          #-}
 
 module Haskell.Language.Lexer.LexerTypes
   ( AlexInput(..)
@@ -25,8 +26,12 @@ module Haskell.Language.Lexer.LexerTypes
   , LiterateMode(..)
   , AlexEnv(..)
   , mkAlexEnv
+  , AlexCode(..)
   , AlexState(..)
   , mkAlexState
+  , alexEnterBirdLiterateEnv
+  , alexEnterLatexCodeEnv
+  , alexExitLiterateEnv
   , pushContext
   , popContext
   , modifyCommentDepth
@@ -35,7 +40,13 @@ module Haskell.Language.Lexer.LexerTypes
   , AlexM
   , runAlexM
   , alexSetInput
-  , alexSetStartCode
+  , alexSetCode
+  , AlexAction
+  , AlexPred
+  , isLiterate
+  , isInBirdEnv
+  , isInLatexCodeEnv
+  , (.&&&.)
     -- * Interface for alex
   , alexInputPrevChar
   , alexGetByte
@@ -51,7 +62,7 @@ import Data.Maybe
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Word (Word8)
-import Text.PrettyPrint.Leijen.Text (Doc)
+import Text.PrettyPrint.Leijen.Text (Pretty, Doc)
 
 import Control.Monad.EitherK
 import Token
@@ -122,24 +133,42 @@ mkAlexEnv filename mode = AlexEnv
   , aeLiterateMode = mode
   }
 
+newtype AlexCode = AlexCode { unAlexCode :: Int }
+  deriving (Show, Eq, Ord, Pretty)
+
+data LiterateStyle = Bird | Latex
+  deriving (Show, Eq, Ord, Enum, Bounded)
+
 data AlexState = AlexState
   { asInput            :: AlexInput
   -- | Current Alex state the lexer is in. E.g. comments, string, TH quasiquoter
   -- or vanilla toplevel mode.
-  , asCode             :: {-# UNPACK #-} !Int
+  , asCode             :: {-# UNPACK #-} !AlexCode
   , asCommentDepth     :: {-# UNPACK #-} !Int
   , asQuasiquoterDepth :: {-# UNPACK #-} !Int
+  -- | Whether we're in bird-style or latex-style literate environment
+  , asLiterateStyle    :: !(Maybe LiterateStyle)
   , asContextStack     :: [Context]
   } deriving (Show, Eq, Ord)
 
-mkAlexState :: AlexInput -> AlexState
-mkAlexState input = AlexState
+mkAlexState :: AlexInput -> AlexCode -> AlexState
+mkAlexState input code = AlexState
   { asInput            = input
-  , asCode             = 0
+  , asCode             = code
   , asCommentDepth     = 0
   , asQuasiquoterDepth = 0
+  , asLiterateStyle    = Nothing
   , asContextStack     = []
   }
+
+alexEnterBirdLiterateEnv :: AlexM ()
+alexEnterBirdLiterateEnv = modify $ \s -> s { asLiterateStyle = Just Bird }
+
+alexEnterLatexCodeEnv :: AlexM ()
+alexEnterLatexCodeEnv = modify $ \s -> s { asLiterateStyle = Just Latex }
+
+alexExitLiterateEnv :: AlexM ()
+alexExitLiterateEnv = modify $ \s -> s { asLiterateStyle = Nothing }
 
 pushContext :: MonadState AlexState m => Context -> m ()
 pushContext ctx = modify (\s -> s { asContextStack = ctx : asContextStack s })
@@ -172,22 +201,45 @@ retrieveToken AlexInput{aiInput} len = T.take len aiInput
 
 type AlexM = EitherKT Doc (ReaderT AlexEnv (State AlexState))
 
-runAlexM :: FilePath -> LiterateMode -> Text -> AlexM a -> Either Doc a
-runAlexM filename mode input action =
+runAlexM :: FilePath -> LiterateMode -> AlexCode -> Text -> AlexM a -> Either Doc a
+runAlexM filename mode code input action =
   flip evalState s $
   flip runReaderT env $
   runEitherKT action (pure . Left) (pure . Right)
   where
     s :: AlexState
-    s   = mkAlexState $ mkAlexInput input
+    s   = mkAlexState (mkAlexInput input) code
     env :: AlexEnv
     env = mkAlexEnv filename mode
 
 alexSetInput :: MonadState AlexState m => AlexInput -> m ()
 alexSetInput input = modify $ \s -> s { asInput = input }
 
-alexSetStartCode :: MonadState AlexState m => Int -> m ()
-alexSetStartCode code = modify $ \s -> s { asCode = code }
+alexSetCode :: MonadState AlexState m => AlexCode -> m ()
+alexSetCode code = modify $ \s -> s { asCode = code }
+
+type AlexAction m = AlexInput -> Int -> m TokenVal
+type AlexPred a = a -> AlexInput -> Int -> AlexInput -> Bool
+
+isLiterate :: AlexPred (AlexEnv, b)
+isLiterate (env, _) _ _ _ = case aeLiterateMode env of
+  Literate -> True
+  Vanilla  -> False
+
+isInBirdEnv :: AlexPred (a, AlexState)
+isInBirdEnv (_, state) _ _ _ = case asLiterateStyle state of
+  Nothing    -> False
+  Just Latex -> False
+  Just Bird  -> True
+
+isInLatexCodeEnv :: AlexPred (a, AlexState)
+isInLatexCodeEnv (_, state) _ _ _ = case asLiterateStyle state of
+  Nothing    -> False
+  Just Latex -> True
+  Just Bird  -> False
+
+(.&&&.) :: AlexPred a -> AlexPred a -> AlexPred a
+(.&&&.) f g x y z w = f x y z w && g x y z w
 
 -- Alex interface
 alexInputPrevChar :: AlexInput -> Char

@@ -19,7 +19,6 @@ module Haskell.Language.Lexer.Tests (tests) where
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import qualified Haskell.Language.Lexer as Lexer
 import Control.Arrow (first)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -27,6 +26,9 @@ import qualified Data.Text as T
 import qualified FastTags (unstrippedTokensOf, stripNewlines, breakBlocks, processTokens, processAll)
 import FastTags (TagVal(..), Pos(..), UnstrippedTokens(..), Type(..))
 import Token (SrcPos(..), PragmaType(..), Token, TokenVal(..))
+
+import Haskell.Language.Lexer (LiterateMode(..))
+import qualified Haskell.Language.Lexer as Lexer
 
 tests :: TestTree
 tests = testGroup "tests"
@@ -132,7 +134,7 @@ testTokenize = testGroup "tokenize"
       . map valOf
       . FastTags.unstrippedTokensOf
       . UnstrippedTokens
-      . tokenize' filename
+      . tokenize' filename Vanilla
 
     tokenizeSplices = testGroup "tokenize splices"
       [ "$(foo)"                              ==>
@@ -149,22 +151,96 @@ testTokenizeWithNewlines :: TestTree
 testTokenizeWithNewlines = testGroup "tokenize with newlines"
   [ "1\n2\n"     ==> [Newline 0, T "1", Newline 0, T "2", Newline 0]
   , " 11\n 11\n" ==> [Newline 1, T "11", Newline 1, T "11", Newline 0]
+  , "foo bar baz"
+    |=>
+    []
+  , "foo bar baz\nquux fizz buzz"
+    |=>
+    []
+  , "> foo = 1"
+    |=>
+    [T "foo", Equals, T "1", Newline 0]
   , "This is a factorial function\n\
     \\n\
     \> factorial :: Integer -> Integer\n\
     \> factorial 0 = 1\n\
-    \> factorial n = n * (factorial $ n - 1)\n\
+    \> factorial n = \n\
+    \>   n * (factorial $ n - 1)\n\
     \\n\
     \And that's it !"
-    ==>
-    [Newline 0,  T "factorial", DoubleColon, T "Integer"]
+    |=>
+    -- TODO: maybe keep track of minimal newline indent across whole file
+    -- and subtract it from all newlines at the end?
+    [ T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 1
+    , T "factorial", T "0", Equals, T "1", Newline 1
+    , T "factorial", T "n", Equals, Newline 3
+    , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", T "1", RParen, Newline 0
+    ]
+  , "This is a factorial function\n\
+    \\n\
+    \> factorial :: Integer -> Integer\n\
+    \> factorial 0 = 1\n\
+    \> factorial n = \n\
+    \>   n * (factorial $ n - 1)\n\
+    \\n\
+    \And another function:\n\
+    \\n\
+    \> foo :: a -> a\n\
+    \> foo x = x"
+    |=>
+    -- TODO: maybe keep track of minimal newline indent across whole file
+    -- and subtract it from all newlines at the end?
+    [ T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 1
+    , T "factorial", T "0", Equals, T "1", Newline 1
+    , T "factorial", T "n", Equals, Newline 3
+    , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", T "1", RParen, Newline 0
+    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 1
+    , T "foo", T "x", Equals, T "x", Newline 0
+    ]
+  , "This is a factorial function\n\
+    \\\begin{code}\n\
+    \factorial :: Integer -> Integer\n\
+    \factorial 0 = 1\n\
+    \factorial n = \n\
+    \  n * (factorial $ n - 1)\n\
+    \\\end{code}\n\
+    \And that's it !"
+    |=>
+    [ T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 0
+    , T "factorial", T "0", Equals, T "1", Newline 0
+    , T "factorial", T "n", Equals, Newline 2
+    , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", T "1", RParen, Newline 0
+    ]
+  , "This is a factorial function\n\
+    \\\begin{code}\n\
+    \factorial :: Integer -> Integer\n\
+    \factorial 0 = 1\n\
+    \factorial n = \n\
+    \  n * (factorial $ n - 1)\n\
+    \\\end{code}\n\
+    \But that's not it yet! Here's another function:\n\
+    \\\begin{code}\n\
+    \foo :: a -> a\n\
+    \foo x = x\n\
+    \\\end{code}\n\
+    \And that's it !"
+    |=>
+    [ T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 0
+    , T "factorial", T "0", Equals, T "1", Newline 0
+    , T "factorial", T "n", Equals, Newline 2
+    , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", T "1", RParen, Newline 0
+    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+    , T "foo", T "x", Equals, T "x", Newline 0
+    ]
   ]
   where
-    (==>) = test f
-    f = map valOf
+    (==>) = test (f Vanilla)
+    (|=>) = test (f Literate)
+    f mode =
+        map valOf
       . FastTags.unstrippedTokensOf
       . UnstrippedTokens
-      . tokenize' filename
+      . tokenize' filename mode
 
 testStripComments :: TestTree
 testStripComments = testGroup "stripComments"
@@ -182,7 +258,7 @@ testStripComments = testGroup "stripComments"
   ]
   where
     (==>) = test f
-    f = extractTokens . UnstrippedTokens . tokenize' filename
+    f = extractTokens . UnstrippedTokens . tokenize' filename Vanilla
 
 testBreakBlocks :: TestTree
 testBreakBlocks = testGroup "breakBlocks"
@@ -201,7 +277,7 @@ testBreakBlocks = testGroup "breakBlocks"
     f = map (extractTokens . UnstrippedTokens . FastTags.stripNewlines)
       . FastTags.breakBlocks
       . UnstrippedTokens
-      . tokenize' filename
+      . tokenize' filename Vanilla
 
 testProcessAll :: TestTree
 testProcessAll = testGroup "processAll"
@@ -230,7 +306,7 @@ testProcessAll = testGroup "processAll"
     (==>) = test f
     f = map showTag
       . FastTags.processAll
-      . map (\(i, t) -> fst $ FastTags.processTokens $ tokenize' ("fn" ++ show i) t)
+      . map (\(i, t) -> fst $ FastTags.processTokens $ tokenize' ("fn" ++ show i) Vanilla t)
       . zip [0..]
     showTag (Pos p (TagVal text typ _)) =
       unwords [show p, T.unpack text, show typ]
@@ -313,7 +389,7 @@ testPrefixes = testGroup "prefix tracking"
     ]
   ]
   where
-    (==>) = testFullTagsWithoutPrefixes fn
+    (==>) = testFullTagsWithoutPrefixes fn Vanilla
     fn = filename
 
 testData :: TestTree
@@ -501,7 +577,7 @@ testData = testGroup "data"
     ["Bar", "Foo", "Test"]
   ]
   where
-    (==>) = testTagNames filename
+    (==>) = testTagNames filename Vanilla
 
 testGADT :: TestTree
 testGADT = testGroup "gadt"
@@ -553,7 +629,7 @@ testGADT = testGroup "gadt"
     ["C", "D", "Rec", "bar", "bar", "baz", "foo"]
   ]
   where
-    (==>) = testTagNames filename
+    (==>) = testTagNames filename Vanilla
 
 testFamilies :: TestTree
 testFamilies = testGroup "families"
@@ -584,7 +660,7 @@ testFamilies = testGroup "families"
   , "class C where\n\tdata X y ∷ *\n"  ==> ["C", "X"]
   ]
   where
-    (==>) = testTagNames filename
+    (==>) = testTagNames filename Vanilla
 
 testFunctions :: TestTree
 testFunctions = testGroup "functions"
@@ -607,7 +683,7 @@ testFunctions = testGroup "functions"
   , toplevelFunctionsWithoutSignatures
   ]
   where
-    (==>) = testTagNames filename
+    (==>) = testTagNames filename Vanilla
 
     toplevelFunctionsWithoutSignatures = testGroup "toplevel functions without signatures"
       [ "infix 5 |+|"  ==> []
@@ -784,7 +860,7 @@ testClass = testGroup "class"
     ["!"]
   ]
   where
-    (==>) = testTagNames filename
+    (==>) = testTagNames filename Vanilla
 
 testInstance :: TestTree
 testInstance = testGroup "instance"
@@ -840,20 +916,25 @@ testInstance = testGroup "instance"
     ["StMJournal", "unStMJournal"]
   ]
   where
-    (==>) = testTagNames filename
+    (==>) = testTagNames filename Vanilla
 
 testLiterate :: TestTree
 testLiterate = testGroup "literate"
   [ "> class (X x) => C a b where\n>\tm :: a->b\n>\tn :: c\n"
     ==>
     ["C", "m", "n"]
-  , "Test\n\\begin{code}\nclass (X x) => C a b where\n\tm :: a->b\n\tn :: c\n\\end{code}"
+  , "Test\n\
+    \\\begin{code}\n\
+    \class (X x) => C a b where\n\
+    \\tm :: a->b\n\
+    \\tn :: c\n\
+    \\\end{code}"
     ==>
     ["C", "m", "n"]
   ]
   where
     (==>) = test f
-    f = map untag . fst . FastTags.processTokens . tokenize' "fn.lhs"
+    f = map untag . fst . FastTags.processTokens . tokenize' "fn.lhs" Literate
 
 testPatterns :: TestTree
 testPatterns = testGroup "patterns"
@@ -885,7 +966,7 @@ testPatterns = testGroup "patterns"
     [":>"]
   ]
   where
-    (==>) = testTagNames filename
+    (==>) = testTagNames filename Vanilla
 
 testFFI :: TestTree
 testFFI = testGroup "ffi"
@@ -895,7 +976,7 @@ testFFI = testGroup "ffi"
   , "foreign import safe stdcall pattern :: Double -> IO Double" ==> ["pattern"]
   ]
   where
-    (==>) = testTagNames filename
+    (==>) = testTagNames filename Vanilla
 
 test :: (Show a, ExtendedEq b, Show b) => (a -> b) -> a -> b -> TestTree
 test f x expected =
@@ -907,22 +988,22 @@ test f x expected =
 filename :: FilePath
 filename = "fn.hs"
 
-testFullTagsWithoutPrefixes :: FilePath -> Text -> [Pos TagVal] -> TestTree
-testFullTagsWithoutPrefixes fn = \source tags ->
-  test (FastTags.processTokens . tokenize' fn) source (tags, warnings)
+testFullTagsWithoutPrefixes :: FilePath -> LiterateMode -> Text -> [Pos TagVal] -> TestTree
+testFullTagsWithoutPrefixes fn mode = \source tags ->
+  test (FastTags.processTokens . tokenize' fn mode) source (tags, warnings)
   where
     warnings :: [String]
     warnings = []
 
-testTagNames :: FilePath -> Text -> [String] -> TestTree
-testTagNames fn source tags =
+testTagNames :: FilePath -> LiterateMode -> Text -> [String] -> TestTree
+testTagNames fn mode source tags =
   test process source (tags, warnings)
   where
     warnings :: [String]
     warnings = []
 
     process :: Text -> ([String], [String])
-    process = first (map untag) . FastTags.processTokens . tokenize' fn
+    process = first (map untag) . FastTags.processTokens . tokenize' fn mode
 
 untag :: Pos TagVal -> String
 untag (Pos _ (TagVal name _ _)) = T.unpack name
@@ -936,5 +1017,5 @@ extractTokens = map tokenName . FastTags.unstrippedTokensOf
         Newline n -> T.pack ("nl " ++ show n)
         t         -> T.pack $ show t
 
-tokenize' :: FilePath -> Text -> [Token]
-tokenize' fn = either (error . show) id . Lexer.tokenize' fn
+tokenize' :: FilePath -> LiterateMode -> Text -> [Token]
+tokenize' fn mode = either (error . show) id . Lexer.tokenize fn mode

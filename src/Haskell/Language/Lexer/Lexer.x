@@ -73,29 +73,40 @@ $hexdigit   = [0-9a-fA-F]
 
 -- Can skip whitespace everywhere since it does not affect meaning in any
 -- state.
-<0, comment, qq> $ws+ ;
+<0, comment, qq, literate> $ws+ ;
+
+-- Literate stuff
+<literate> ^ > $ws*             / { isLiterate }           { \_ _   -> startNonLiterateBird }
+<literate> ^ "\begin{code}" $nl / { isLiterate }           { \_ _   -> startNonLiterateLatex }
+<literate> (. | $nl)                                       ;
+
+
+<0> $nl > $space*  / { isLiterate }                        { \_ len -> pure $! Newline $! len - 2 }
+<0> $nl [^>]       / { isLiterate .&&&. isInBirdEnv }      { \_ _   -> endNonLiterate }
+<0> ^ "\end{code}" / { isLiterate .&&&. isInLatexCodeEnv } { \_ _   -> endNonLiterate }
 
 <0> {
 
-$nl $space*             { \_ len -> pure $ Newline $ len - 1 }
+$nl $space*             { \_ len -> pure $! Newline $! len - 1 }
+
 [\-][\-]+ ~[$symbol $nl] .* ;
 [\-][\-]+ / $nl         ;
 
-}
-
 -- Pragmas
-<0> "{-#" $ws* @source_pragma $ws* "#-}" { kw $ Pragma SourcePragma }
+"{-#" $ws* @source_pragma $ws* "#-}" { kw $ Pragma SourcePragma }
+
+}
 
 
 -- Comments
 <0, comment> "{-"       { \_ _ -> startComment }
-<comment> "-}"          { \_ _ -> endComment 0 }
+<comment> "-}"          { \_ _ -> endComment }
 <comment> (. | $nl)     ;
 <0> "-}"                { \_ _ -> errorAtLine "Unmatched -}" }
 
 -- Strings
 <0> [\"]                { \_ _ -> startString }
-<string> [\"]           { \_ _ -> endString 0 }
+<string> [\"]           { \_ _ -> endString }
 <string> [\\] $nl ( $ws+ [\\] )? ;
 <string> ( $ws+ | [^\"\\$nl] | [\\] . )+ ;
 
@@ -103,7 +114,7 @@ $nl $space*             { \_ len -> pure $ Newline $ len - 1 }
 <0> [\"]                { \_ _ -> startString }
 <string> [\\] [\"\\]    ;
 <string> [\\] $nl ($ws+ [\\])? ;
-<string> [\"]           { \_ _ -> endString 0 }
+<string> [\"]           { \_ _ -> endString }
 <string> (. | $nl)      ;
 
 -- Characters
@@ -113,7 +124,7 @@ $nl $space*             { \_ len -> pure $ Newline $ len - 1 }
 
 <0> "[" $ident* "|"     { \_ _ -> startQuasiquoter }
 <qq> "$("               { \_ _ -> startSplice CtxQuasiquoter }
-<qq> "|]"               { \_ _ -> endQuasiquoter 0 }
+<qq> "|]"               { \_ _ -> endQuasiquoter }
 <qq> (. | $nl)          ;
 
 <0> "$("                { \_ _ -> startSplice CtxHaskell }
@@ -174,19 +185,15 @@ $nl $space*             { \_ len -> pure $ Newline $ len - 1 }
 
 {
 
-type AlexAction m = AlexInput -> Int -> m TokenVal
-type AlexPred a = a -> AlexInput -> Int -> AlexInput -> Bool
-
-isLiterateEnabled :: AlexPred AlexEnv
-isLiterateEnabled env _ _ _ = case aeLiterateMode env of
-  Literate -> True
-  Vanilla  -> False
-
 kw :: Applicative m => TokenVal -> AlexAction m
 kw tok = \_ _ -> pure tok
 
 tokenize :: FilePath -> LiterateMode -> Text -> Either Doc [Token]
-tokenize filename mode input = runAlexM filename mode input scanTokens
+tokenize filename mode input = runAlexM filename mode code input scanTokens
+  where
+    code = case mode of
+      Vanilla  -> startCode
+      Literate -> literateStartCode
 
 scanTokens :: AlexM [Token]
 scanTokens = do
@@ -204,57 +211,59 @@ alexMonadScan = do
 
 alexScanTokenVal :: AlexM TokenVal
 alexScanTokenVal = do
-  env                        <- ask
-  AlexState{asInput, asCode} <- get
-  case alexScanUser env asInput asCode of
+  env                              <- ask
+  state@AlexState{asInput, asCode} <- get
+  case alexScanUser (env, state) asInput (unAlexCode asCode) of
     AlexEOF                              ->
       pure EOF
     AlexError AlexInput{aiLine, aiInput} -> do
       AlexState{asCode} <- get
-      throwError $ "lexical error while in state" <> pretty asCode <+> "at line" <+>
+      throwError $ "lexical error while in state" <+> pretty asCode <+> "at line" <+>
         pretty (unLine aiLine) <> ":" <+> pretty (TL.fromStrict (T.take 40 aiInput))
-    AlexSkip input _                     ->
-      alexSetInput input >> alexScanTokenVal
-    AlexToken input tokLen action        ->
-      alexSetInput input *> action asInput tokLen
+    AlexSkip input _                     -> do
+      alexSetInput input
+      alexScanTokenVal
+    AlexToken input tokLen action        -> do
+      alexSetInput input
+      action asInput tokLen
 
 startComment :: AlexM TokenVal
 startComment = do
   void $ modifyCommentDepth (+1)
-  alexSetStartCode comment
+  alexSetCode commentCode
   alexScanTokenVal
 
-endComment :: Int -> AlexM TokenVal
-endComment nextStartCode = do
+endComment :: AlexM TokenVal
+endComment = do
   newDepth <- modifyCommentDepth (\x -> x - 1)
   when (newDepth == 0) $
-    alexSetStartCode nextStartCode
+    alexSetCode startCode
   alexScanTokenVal
 
 startString :: AlexM TokenVal
 startString = do
-  alexSetStartCode string
+  alexSetCode stringCode
   alexScanTokenVal
 
-endString :: Int -> AlexM TokenVal
-endString nextStartCode = do
-  alexSetStartCode nextStartCode
+endString :: AlexM TokenVal
+endString = do
+  alexSetCode startCode
   pure String
 
 startQuasiquoter :: AlexM TokenVal
 startQuasiquoter = do
-  alexSetStartCode qq
+  alexSetCode qqCode
   pure QuasiquoterStart
 
 startSplice :: Context -> AlexM TokenVal
 startSplice ctx = do
-  alexSetStartCode 0
+  alexSetCode startCode
   pushContext ctx
   pure SpliceStart
 
-endQuasiquoter :: Int -> AlexM TokenVal
-endQuasiquoter nextStartCode = do
-  alexSetStartCode nextStartCode
+endQuasiquoter :: AlexM TokenVal
+endQuasiquoter = do
+  alexSetCode startCode
   pure QuasiquoterEnd
 
 pushLParen :: AlexAction AlexM
@@ -268,13 +277,51 @@ popRParen _ _ = (tryRestoringContext *> pure RParen) <|> pure RParen
 tryRestoringContext :: AlexM ()
 tryRestoringContext = do
   ctx <- popContext
-  alexSetStartCode $ case ctx of
-    CtxHaskell     -> 0
-    CtxQuasiquoter -> qq
+  alexSetCode $ case ctx of
+    CtxHaskell     -> startCode
+    CtxQuasiquoter -> qqCode
 
 errorAtLine :: (MonadError Doc m, MonadState AlexState m) => Doc -> m a
 errorAtLine msg = do
   line <- gets (unLine . aiLine . asInput)
   throwError $ pretty line <> ":" <+> msg
+
+startNonLiterateBird :: AlexM TokenVal
+startNonLiterateBird = do
+  alexSetCode startCode
+  alexEnterBirdLiterateEnv
+  alexScanTokenVal
+
+startNonLiterateLatex :: AlexM TokenVal
+startNonLiterateLatex = do
+  alexSetCode startCode
+  alexEnterLatexCodeEnv
+  alexScanTokenVal
+
+endNonLiterate :: AlexM TokenVal
+endNonLiterate = do
+  alexSetCode literateCode
+  alexExitLiterateEnv
+  alexScanTokenVal
+
+-- Alex codes
+
+startCode :: AlexCode
+startCode = AlexCode 0
+
+literateStartCode :: AlexCode
+literateStartCode = literateCode
+
+literateCode :: AlexCode
+literateCode = AlexCode literate
+
+commentCode :: AlexCode
+commentCode = AlexCode comment
+
+qqCode :: AlexCode
+qqCode = AlexCode qq
+
+stringCode :: AlexCode
+stringCode = AlexCode string
 
 }
