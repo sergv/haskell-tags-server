@@ -40,34 +40,6 @@ tests = testGroup "tests"
   , testProcess
   ]
 
-class ExtendedEq a where
-  (===) :: a -> a -> Bool
-
-instance (ExtendedEq a) => ExtendedEq [a] where
-  (===) xs ys = length xs == length ys && and (zipWith (===) xs ys)
-
-instance (ExtendedEq a, ExtendedEq b) => ExtendedEq (a, b) where
-  (===) (a, b) (c, d) = a === c && b === d
-
-instance ExtendedEq Char where
-  (===) = (==)
-
-instance ExtendedEq Text where
-  (===) = (==)
-
-instance ExtendedEq TagVal where
-  TagVal name t parent === TagVal name' t' parent' =
-    name == name' && t == t' && parent == parent'
-
-instance ExtendedEq TokenVal where
-  (===) = (==)
-
-instance (ExtendedEq a) => ExtendedEq (Pos a) where
-  (===) (Pos x y) (Pos x' y') = x === x' && y === y'
-
-instance ExtendedEq SrcPos where
-  (===) = (==)
-
 testTokenize :: TestTree
 testTokenize = testGroup "tokenize"
   [ "xyz  -- abc"          ==> [T "xyz", Newline 0]
@@ -978,9 +950,9 @@ testFFI = testGroup "ffi"
   where
     (==>) = testTagNames filename Vanilla
 
-test :: (Show a, ExtendedEq b, Show b) => (a -> b) -> a -> b -> TestTree
+test :: (Show a, Eq b, Show b) => (a -> b) -> a -> b -> TestTree
 test f x expected =
-  testCase (take 70 $ show x) $ assertBool msg (actual === expected)
+  testCase (take 70 $ show x) $ assertBool msg (actual == expected)
   where
     actual = f x
     msg    = "expected: " ++ show expected ++ "\n but got: " ++ show actual
