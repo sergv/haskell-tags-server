@@ -25,7 +25,7 @@ import qualified Data.Text as T
 
 import qualified FastTags (unstrippedTokensOf, stripNewlines, breakBlocks, processTokens, processAll)
 import FastTags (TagVal(..), Pos(..), UnstrippedTokens(..), Type(..))
-import Token (SrcPos(..), PragmaType(..), Token, TokenVal(..))
+import Token (SrcPos(..), PragmaType(..), Token, TokenVal(..), Line(..))
 
 import Haskell.Language.Lexer (LiterateMode(..))
 import qualified Haskell.Language.Lexer as Lexer
@@ -104,8 +104,6 @@ testTokenize = testGroup "tokenize"
     f :: Text -> [TokenVal]
     f = tail -- strip uninteresting initial newline
       . map valOf
-      . FastTags.unstrippedTokensOf
-      . UnstrippedTokens
       . tokenize' filename Vanilla
 
     tokenizeSplices = testGroup "tokenize splices"
@@ -210,8 +208,6 @@ testTokenizeWithNewlines = testGroup "tokenize with newlines"
     (|=>) = test (f Literate)
     f mode =
         map valOf
-      . FastTags.unstrippedTokensOf
-      . UnstrippedTokens
       . tokenize' filename mode
 
 testStripComments :: TestTree
@@ -253,35 +249,50 @@ testBreakBlocks = testGroup "breakBlocks"
 
 testProcessAll :: TestTree
 testProcessAll = testGroup "processAll"
-  [ ["data X", "module X"] ==> ["fn0:1 X Type", "fn1:1 X Module"]
+  [ ["data X", "module X"]
+    ==>
+    [ Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "X" Type Nothing)
+    , Pos (SrcPos "fn1" (Line 1) mempty) (TagVal "X" Module Nothing)
+    ]
   -- Type goes ahead of Module.
   , [ "module X\n\
        \data X"
-    ] ==>
-    ["fn0:2 X Type", "fn0:1 X Module"]
-  -- Extra X was filtered.
-  , [ "module X\n\
-      \data X = X\n"
-    ] ==>
-    ["fn0:2 X Type", "fn0:2 X Constructor", "fn0:1 X Module"]
-  , [ "module X\n\
+    ]
+    ==>
+    [ Pos (SrcPos "fn0" (Line 2) mempty) (TagVal "X" Type Nothing)
+    , Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "X" Module Nothing)
+    ]
+  , [ "module Z\n\
+      \data X = Y\n"
+    ]
+    ==>
+    [ Pos (SrcPos "fn0" (Line 2) mempty) (TagVal "X" Type Nothing)
+    , Pos (SrcPos "fn0" (Line 2) mempty) (TagVal "Y" Constructor (Just "X"))
+    , Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "Z" Module Nothing)
+    ]
+  , [ "module Z\n\
       \data X a =\n\
-      \  X a\n"
-    ] ==>
-    ["fn0:2 X Type", "fn0:3 X Constructor", "fn0:1 X Module"]
+      \  Y a\n"
+    ]
+    ==>
+    [ Pos (SrcPos "fn0" (Line 2) mempty) (TagVal "X" Type Nothing)
+    , Pos (SrcPos "fn0" (Line 3) mempty) (TagVal "Y" Constructor (Just "X"))
+    , Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "Z" Module Nothing)
+    ]
   , [ "newtype A f a b = A\n\
       \  { unA :: f (a -> b) }"
-    ] ==>
-    ["fn0:1 A Type", "fn0:1 A Constructor", "fn0:2 unA Function"]
+    ]
+    ==>
+    [ Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "A" Type Nothing)
+    , Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "A" Constructor (Just "A"))
+    , Pos (SrcPos "fn0" (Line 2) mempty) (TagVal "unA" Function (Just "A"))
+    ]
   ]
   where
-    (==>) = test f
-    f = map showTag
-      . FastTags.processAll
-      . map (\(i, t) -> fst $ FastTags.processTokens $ tokenize' ("fn" ++ show i) Vanilla t)
-      . zip [0..]
-    showTag (Pos p (TagVal text typ _)) =
-      unwords [show p, T.unpack text, show typ]
+    (==>) = test f'
+    f' = FastTags.processAll
+       . map (\(i, t) -> fst $ FastTags.processTokens $ tokenize' ("fn" ++ show i) Vanilla t)
+       . zip [0..]
 
 testProcess :: TestTree
 testProcess = testGroup "process"
