@@ -23,7 +23,7 @@ import Control.Arrow (first)
 import Data.Text (Text)
 import qualified Data.Text as T
 
-import qualified FastTags (unstrippedTokensOf, stripNewlines, breakBlocks, processTokens, processAll)
+import qualified FastTags (breakBlocks, processTokens, processAll, unstrippedTokensOf)
 import FastTags (TagVal(..), Pos(..), UnstrippedTokens(..), Type(..))
 import Token (SrcPos(..), PragmaType(..), Token, TokenVal(..), Line(..))
 
@@ -129,7 +129,7 @@ testTokenizeWithNewlines = testGroup "tokenize with newlines"
     []
   , "> foo = 1"
     |=>
-    [T "foo", Equals, T "1", Newline 0]
+    [Newline 1, T "foo", Equals, T "1", Newline 0]
   , "This is a factorial function\n\
     \\n\
     \> factorial :: Integer -> Integer\n\
@@ -141,7 +141,8 @@ testTokenizeWithNewlines = testGroup "tokenize with newlines"
     |=>
     -- TODO: maybe keep track of minimal newline indent across whole file
     -- and subtract it from all newlines at the end?
-    [ T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 1
+    [ Newline 1
+    , T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 1
     , T "factorial", T "0", Equals, T "1", Newline 1
     , T "factorial", T "n", Equals, Newline 3
     , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", T "1", RParen, Newline 0
@@ -160,10 +161,12 @@ testTokenizeWithNewlines = testGroup "tokenize with newlines"
     |=>
     -- TODO: maybe keep track of minimal newline indent across whole file
     -- and subtract it from all newlines at the end?
-    [ T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 1
+    [ Newline 1
+    , T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 1
     , T "factorial", T "0", Equals, T "1", Newline 1
     , T "factorial", T "n", Equals, Newline 3
     , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", T "1", RParen, Newline 0
+    , Newline 1
     , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 1
     , T "foo", T "x", Equals, T "x", Newline 0
     ]
@@ -176,7 +179,8 @@ testTokenizeWithNewlines = testGroup "tokenize with newlines"
     \\\end{code}\n\
     \And that's it !"
     |=>
-    [ T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 0
+    [ Newline 1
+    , T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 0
     , T "factorial", T "0", Equals, T "1", Newline 0
     , T "factorial", T "n", Equals, Newline 2
     , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", T "1", RParen, Newline 0
@@ -195,10 +199,12 @@ testTokenizeWithNewlines = testGroup "tokenize with newlines"
     \\\end{code}\n\
     \And that's it !"
     |=>
-    [ T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 0
+    [ Newline 1
+    , T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 0
     , T "factorial", T "0", Equals, T "1", Newline 0
     , T "factorial", T "n", Equals, Newline 2
     , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", T "1", RParen, Newline 0
+    , Newline 1
     , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
     , T "foo", T "x", Equals, T "x", Newline 0
     ]
@@ -211,41 +217,156 @@ testTokenizeWithNewlines = testGroup "tokenize with newlines"
       . tokenize' filename mode
 
 testStripComments :: TestTree
-testStripComments = testGroup "stripComments"
-  [ "hello -- there"                                           ==> ["nl 0", "hello", "nl 0"]
-  , "hello --there"                                            ==> ["nl 0", "hello", "nl 0"]
-  , "hello {- there -} fred"                                   ==> ["nl 0", "hello", "fred", "nl 0"]
-  , "hello -- {- there -}\nfred"                               ==> ["nl 0", "hello", "nl 0", "fred", "nl 0"]
-  , "{-# LANG #-} hello {- there {- nested -} comment -} fred" ==> ["nl 0", "hello", "fred", "nl 0"]
-  , "hello {-\nthere\n------}\n fred"                          ==> ["nl 0", "hello",  "nl 1", "fred", "nl 0"]
-  , "hello {-  \nthere\n  ------}  \n fred"                    ==> ["nl 0", "hello",  "nl 1", "fred", "nl 0"]
-  , "hello {-\nthere\n-----}\n fred"                           ==> ["nl 0", "hello", "nl 1", "fred", "nl 0"]
-  , "hello {-  \nthere\n  -----}  \n fred"                     ==> ["nl 0", "hello",  "nl 1", "fred", "nl 0"]
-  , "hello {-\n-- there -}"                                    ==> ["nl 0", "hello", "nl 0"]
-  , "foo --- my comment\n--- my other comment\nbar"            ==> ["nl 0", "foo", "nl 0", "nl 0", "bar", "nl 0"]
+testStripComments = testGroup "strip comments"
+  [ "hello -- there"
+    ==>
+    [Newline 0, T "hello", Newline 0]
+  , "hello --there"
+    ==>
+    [Newline 0, T "hello", Newline 0]
+  , "hello {- there -} fred"
+    ==>
+    [Newline 0, T "hello", T "fred", Newline 0]
+  , "hello -- {- there -}\n\
+    \fred"
+    ==>
+    [Newline 0, T "hello", Newline 0, T "fred", Newline 0]
+  , "{-# LANG #-} hello {- there {- nested -} comment -} fred"
+    ==>
+    [Newline 0, T "hello", T "fred", Newline 0]
+  , "hello {-\n\
+    \there\n\
+    \------}\n\
+    \ fred"
+    ==>
+    [Newline 0, T "hello", Newline 1, T "fred", Newline 0]
+  , "hello {-  \n\
+    \there\n\
+    \  ------}  \n\
+    \ fred"
+    ==>
+    [Newline 0, T "hello", Newline 1, T "fred", Newline 0]
+  , "hello {-\n\
+    \there\n\
+    \-----}\n\
+    \ fred"
+    ==>
+    [Newline 0, T "hello", Newline 1, T "fred", Newline 0]
+  , "hello {-  \n\
+    \there\n\
+    \  -----}  \n\
+    \ fred"
+    ==>
+    [Newline 0, T "hello", Newline 1, T "fred", Newline 0]
+  , "hello {-\n\
+    \-- there -}"
+    ==>
+    [Newline 0, T "hello", Newline 0]
+  , "foo --- my comment\n\
+    \--- my other comment\n\
+    \bar"
+    ==>
+    [Newline 0, T "foo", Newline 0, Newline 0, T "bar", Newline 0]
   ]
   where
     (==>) = test f
-    f = extractTokens . UnstrippedTokens . tokenize' filename Vanilla
+    f = map valOf . tokenize' filename Vanilla
 
 testBreakBlocks :: TestTree
-testBreakBlocks = testGroup "breakBlocks"
-  [ "1\n2\n"           ==> [["1"], ["2"]]
-  , "1\n 1\n2\n"       ==> [["1", "1"], ["2"]]
-  , "1\n 1\n 1\n2\n"   ==> [["1", "1", "1"], ["2"]]
-  -- intervening blank lines are ignored
-  , "1\n 1\n\n 1\n2\n" ==> [["1", "1", "1"], ["2"]]
-  , "1\n\n\n 1\n2\n"   ==> [["1", "1"], ["2"]]
-
-  , "1\n 11\n 11\n"    ==> [["1", "11", "11"]]
-  , " 11\n 11\n"       ==> [["11"], ["11"]]
+testBreakBlocks = testGroup "break blocks"
+  [ testGroup "non-literate"
+    [ "a\n\
+      \b\n"
+      ==>
+      [ [T "a"]
+      , [T "b"]
+      ]
+    , "a\n\
+      \ a\n\
+      \b\n"
+      ==>
+      [ [T "a", Newline 1, T "a"]
+      , [T "b"]
+      ]
+    , "a\n\
+      \ a\n\
+      \ a\n\
+      \b\n"
+      ==>
+      [ [T "a", Newline 1, T "a", Newline 1, T "a"]
+      , [T "b"]
+      ]
+    -- intervening blank lines are ignored
+    , "a\n\
+      \ a\n\
+      \\n\
+      \ a\n\
+      \b\n"
+      ==>
+      [ [T "a", Newline 1, T "a", Newline 1, T "a"]
+      , [T "b"]
+      ]
+    , "a\n\
+      \\n\
+      \\n\
+      \ a\n\
+      \b\n"
+      ==>
+      [ [T "a", Newline 1, T "a"]
+      , [T "b"]
+      ]
+    , "a\n\
+      \ aa\n\
+      \ aa\n"
+      ==>
+      [[T "a", Newline 1, T "aa", Newline 1, T "aa"]]
+    , " aa\n\
+      \ aa\n"
+      ==>
+      [ [T "aa"]
+      , [T "aa"]
+      ]
+    ]
+  , testGroup "literate"
+    [ "> a\n\
+      \>\n\
+      \>\n\
+      \>  a\n\
+      \> b\n"
+      |=>
+      [ [T "a", Newline 2, T "a"]
+      , [T "b"]
+      ]
+    , "> a\n\
+      \> \n\
+      \> \n\
+      \>  a\n\
+      \> b\n"
+      |=>
+      [ [T "a", Newline 2, T "a"]
+      , [T "b"]
+      ]
+    , "> a\n\
+      \>  aa\n\
+      \>  aa\n"
+      |=>
+      [[T "a", Newline 2, T "aa", Newline 2, T "aa"]]
+    , "> a\n\
+      \>  aa\n\
+      \>\n\
+      \>  aa\n"
+      |=>
+      [[T "a", Newline 2, T "aa", Newline 2, T "aa"]]
+    ]
   ]
   where
-    (==>) = test f
-    f = map (extractTokens . UnstrippedTokens . FastTags.stripNewlines)
+    (==>) = test (f Vanilla)
+    (|=>) = test (f Literate)
+    f mode =
+        map (map valOf . FastTags.unstrippedTokensOf)
       . FastTags.breakBlocks
       . UnstrippedTokens
-      . tokenize' filename Vanilla
+      . tokenize' filename mode
 
 testProcessAll :: TestTree
 testProcessAll = testGroup "processAll"
@@ -990,15 +1111,6 @@ testTagNames fn mode source tags =
 
 untag :: Pos TagVal -> String
 untag (Pos _ (TagVal name _ _)) = T.unpack name
-
-extractTokens :: UnstrippedTokens -> [Text]
-extractTokens = map tokenName . FastTags.unstrippedTokensOf
-  where
-    tokenName :: Token -> Text
-    tokenName token = case valOf token of
-        T name    -> name
-        Newline n -> T.pack ("nl " ++ show n)
-        t         -> T.pack $ show t
 
 tokenize' :: FilePath -> LiterateMode -> Text -> [Token]
 tokenize' fn mode = either (error . show) id . Lexer.tokenize fn mode

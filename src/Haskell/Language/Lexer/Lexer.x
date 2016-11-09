@@ -76,8 +76,8 @@ $hexdigit   = [0-9a-fA-F]
 <0, comment, qq, literate> $ws+ ;
 
 -- Literate stuff
-<literate> ^ > $ws*             / { isLiterate }           { \_ _   -> startNonLiterateBird }
-<literate> ^ "\begin{code}" $nl / { isLiterate }           { \_ _   -> startNonLiterateLatex }
+<literate> ^ > $ws*             / { isLiterate }           { \_ len -> startNonLiterateBird  *> pure (Newline (len - 1)) }
+<literate> ^ "\begin{code}" $nl / { isLiterate }           { \_ len -> startNonLiterateLatex *> pure (Newline (len - 12)) }
 <literate> (. | $nl)                                       ;
 
 
@@ -286,17 +286,15 @@ errorAtLine msg = do
   line <- gets (unLine . aiLine . asInput)
   throwError $ pretty line <> ":" <+> msg
 
-startNonLiterateBird :: AlexM TokenVal
+startNonLiterateBird :: AlexM ()
 startNonLiterateBird = do
   alexSetCode startCode
   alexEnterBirdLiterateEnv
-  alexScanTokenVal
 
-startNonLiterateLatex :: AlexM TokenVal
+startNonLiterateLatex :: AlexM ()
 startNonLiterateLatex = do
   alexSetCode startCode
   alexEnterLatexCodeEnv
-  alexScanTokenVal
 
 endNonLiterate :: AlexM TokenVal
 endNonLiterate = do
