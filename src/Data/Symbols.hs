@@ -52,7 +52,7 @@ import qualified Text.PrettyPrint.Leijen.Text as PP
 import FastTags (Pos(..), TagVal(..), Type(..), SrcPos(..), Line(..))
 
 import Data.KeyMap (HasKey(..))
-import Text.PrettyPrint.Leijen.Text.Utils
+import Text.PrettyPrint.Leijen.Text.Ext
 
 -- | e.g. Foo, Foo.Bar. Assume that this is not an import qualifier.
 -- Import qualifiers should be labeled as 'ImportQualifer'.

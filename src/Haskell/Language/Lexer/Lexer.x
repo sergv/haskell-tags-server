@@ -16,7 +16,7 @@ import Data.Semigroup
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
-import Text.PrettyPrint.Leijen.Text.Utils (Doc, Pretty(..), (<+>))
+import Text.PrettyPrint.Leijen.Text.Ext (Doc, Pretty(..), (<+>))
 
 import Haskell.Language.Lexer.LexerTypes
 import Token

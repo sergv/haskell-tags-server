@@ -76,7 +76,7 @@ import qualified Data.Set as S
 import Data.Time.Clock (UTCTime(..))
 import Data.Traversable (for)
 import System.Directory
-import Text.PrettyPrint.Leijen.Text.Utils
+import Text.PrettyPrint.Leijen.Text.Ext
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS

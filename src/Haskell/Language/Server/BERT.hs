@@ -41,7 +41,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy.Encoding as TLE
 import Network.Socket
-import Text.PrettyPrint.Leijen.Text.Utils
+import Text.PrettyPrint.Leijen.Text.Ext
 
 import Data.BERT
 import FastTags (SrcPos(..), Type, Line(..))

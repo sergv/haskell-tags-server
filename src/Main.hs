@@ -34,7 +34,7 @@ import Control.Monad.Logging
 import Control.Monad.Logging.Simple
 import Haskell.Language.Server.BERT
 import Haskell.Language.Server.Tags
-import Text.PrettyPrint.Leijen.Text.Utils
+import Text.PrettyPrint.Leijen.Text.Ext
 
 data ProgramConfig = ProgramConfig
   { cfgSourceDirectories :: Set FilePath -- ^ Directories with haskell files to index

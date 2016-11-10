@@ -41,10 +41,9 @@ import Data.Coerce
 import qualified Data.Text.Lazy.IO as TLIO
 import System.IO
 
-import Text.PrettyPrint.Leijen.Text.Utils
-
-import Control.Monad.Logging
 import Control.Monad.Filesystem
+import Control.Monad.Logging
+import Text.PrettyPrint.Leijen.Text.Ext
 
 data SimpleLoggerCfg m = SimpleLoggerCfg
   { logSink     :: Doc -> m ()

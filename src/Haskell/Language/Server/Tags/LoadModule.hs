@@ -48,7 +48,7 @@ import Data.Time.Clock (UTCTime)
 import Data.Traversable (for)
 import System.FilePath
 import qualified Text.PrettyPrint.Leijen.Text as PP
-import Text.PrettyPrint.Leijen.Text.Utils
+import Text.PrettyPrint.Leijen.Text.Ext
 
 import Haskell.Language.Lexer (tokenize')
 import FastTags (processTokens)

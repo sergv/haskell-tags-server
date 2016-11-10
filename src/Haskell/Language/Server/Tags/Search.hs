@@ -27,7 +27,7 @@ import Data.Foldable.Ext (toList, foldMapA, foldForA)
 import Data.List
 import qualified Data.Text as T
 import System.FilePath
-import Text.PrettyPrint.Leijen.Text.Utils
+import Text.PrettyPrint.Leijen.Text.Ext
 
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging

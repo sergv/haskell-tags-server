@@ -20,7 +20,7 @@ module Haskell.Language.Lexer
 
 import Data.Text (Text)
 import System.FilePath
-import Text.PrettyPrint.Leijen.Text.Utils (Doc)
+import Text.PrettyPrint.Leijen.Text.Ext (Doc)
 import Token (Token)
 
 import Haskell.Language.Lexer.Lexer (tokenize)

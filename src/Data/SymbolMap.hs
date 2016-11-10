@@ -44,7 +44,7 @@ import qualified Data.Set as S
 import Prelude hiding (lookup)
 
 import Data.Symbols
-import Text.PrettyPrint.Leijen.Text.Utils
+import Text.PrettyPrint.Leijen.Text.Ext
 
 data SymbolMap = SymbolMap
   { -- | Map from children entities to parents containing them. E.g.

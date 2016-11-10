@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------------
 -- |
--- Module      :  Text.PrettyPrint.Leijen.Text.Utils
+-- Module      :  Text.PrettyPrint.Leijen.Text.Ext
 -- Copyright   :  (c) Sergey Vinokurov 2016
 -- License     :  BSD3-style (see LICENSE)
 --
@@ -21,7 +21,7 @@
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Text.PrettyPrint.Leijen.Text.Utils
+module Text.PrettyPrint.Leijen.Text.Ext
   ( putDocLn
   , displayDoc
   , displayDocString

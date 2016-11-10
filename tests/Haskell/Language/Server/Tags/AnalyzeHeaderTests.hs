@@ -41,7 +41,7 @@ import qualified Data.SubkeyMap as SubkeyMap
 import Data.Symbols
 import Haskell.Language.Server.Tags.AnalyzeHeader
 import Haskell.Language.Server.Tags.Types
-import Text.PrettyPrint.Leijen.Text.Utils
+import Text.PrettyPrint.Leijen.Text.Ext
 
 import TestUtils
 import Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions

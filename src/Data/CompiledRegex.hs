@@ -27,7 +27,7 @@ import Control.Monad.Except
 import qualified Data.Text.Lazy as TL
 import Text.PrettyPrint.Leijen.Text (Doc)
 import qualified Text.PrettyPrint.Leijen.Text as PP
-import Text.PrettyPrint.Leijen.Text.Utils ((<+>))
+import Text.PrettyPrint.Leijen.Text.Ext ((<+>))
 import Text.Regex.TDFA
 
 -- | Wrapper around Regex that provides dummy Show, Eq and Ord instances
