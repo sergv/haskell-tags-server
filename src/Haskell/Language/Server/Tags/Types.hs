@@ -27,8 +27,7 @@ module Haskell.Language.Server.Tags.Types
   , RequestHandler
     -- * Tag server types
   , TagsServerConf(..)
-  , emptyTagsServerConf
-  , canonicalizeConfPaths
+  , defaultTagsServerConf
   , TagsServerState(..)
   , emptyTagsServerState
 
@@ -61,7 +60,6 @@ module Haskell.Language.Server.Tags.Types
   , ChildrenVisibility(..)
   ) where
 
-import Control.Monad.Base
 import Control.Monad.Except
 import Data.Char
 import Data.Foldable (toList)
@@ -75,14 +73,15 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Time.Clock (UTCTime(..))
 import Data.Traversable (for)
-import System.Directory
 import Text.PrettyPrint.Leijen.Text.Ext
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
+import Control.Monad.Filesystem.FileSearch (SearchCfg(..), versionControlDirs)
 import Data.CompiledRegex
 import Data.KeyMap (KeyMap, HasKey(..))
 import Data.Map.NonEmpty (NonEmptyMap)
+import Data.Path (FullPath, Extension)
 import Data.Promise (Promise)
 import Data.SubkeyMap (SubkeyMap, HasSubkey(..))
 import qualified Data.SubkeyMap as SubkeyMap
@@ -92,10 +91,10 @@ import Data.Symbols
 -- | Types of user requests that can be handled.
 data Request =
     -- | Request to find vanilla name in module identified by file path.
-    FindSymbol FilePath SymbolName
+    FindSymbol FullPath SymbolName
     -- | Request to find all names that match a gived regexp, starting with module
     -- identified by file path.
-  | FindSymbolByRegexp FilePath CompiledRegex
+  | FindSymbolByRegexp FullPath CompiledRegex
   deriving (Show, Eq, Ord)
 
 instance Pretty Request where
@@ -112,35 +111,21 @@ instance Pretty Response where
 type RequestHandler = Request -> IO (Promise (Either Doc Response))
 
 data TagsServerConf = TagsServerConf
-  { -- | Directories with haskell files. Haskell files will be looked up in
-    -- these directories but not in their children.
-    tsconfSourceDirectories          :: Set FilePath
-    -- | Directories where haskell files. Haskell files will be looked up in
-    -- both these directries and all of their children.
-  , tsconfRecursiveSourceDirectories :: Set FilePath
+  { tsconfSearchDirs        :: SearchCfg
+  , tsconfVanillaExtensions :: Set Extension
+  , tsconfHsBootExtensions  :: Set Extension
     -- | Whether to read and compute tags lazily or read them all at once when
     -- server starts.
-  , tsconfEagerTagging               :: Bool
+  , tsconfEagerTagging      :: Bool
   } deriving (Show, Eq, Ord)
 
-emptyTagsServerConf :: TagsServerConf
-emptyTagsServerConf = TagsServerConf
-  { tsconfSourceDirectories          = mempty
-  , tsconfRecursiveSourceDirectories = mempty
-  , tsconfEagerTagging               = False
+defaultTagsServerConf :: TagsServerConf
+defaultTagsServerConf = TagsServerConf
+  { tsconfSearchDirs        = mempty { ignoredDirs = versionControlDirs }
+  , tsconfVanillaExtensions = S.fromList [".hs", ".lhs", ".hsc", ".chs"]
+  , tsconfHsBootExtensions  = S.fromList [".hs-boot", ".lhs-boot"]
+  , tsconfEagerTagging      = False
   }
-
-forSet :: (Ord a, Ord b, Applicative f) => Set a -> (a -> f b) -> f (Set b)
-forSet xs f = S.fromList <$> traverse f (S.toList xs)
-
-canonicalizeConfPaths :: (MonadBase IO m) => TagsServerConf -> m TagsServerConf
-canonicalizeConfPaths conf = liftBase $ do
-  tsconfSourceDirectories'          <- forSet (tsconfSourceDirectories conf) canonicalizePath
-  tsconfRecursiveSourceDirectories' <- forSet (tsconfRecursiveSourceDirectories conf) canonicalizePath
-  pure conf
-    { tsconfSourceDirectories          = tsconfSourceDirectories'
-    , tsconfRecursiveSourceDirectories = tsconfRecursiveSourceDirectories'
-    }
 
 -- | Server state that may change while processing request.
 data TagsServerState = TagsServerState
@@ -148,7 +133,7 @@ data TagsServerState = TagsServerState
     tssLoadedModules   :: !(SubkeyMap ImportKey (NonEmpty ResolvedModule))
     -- | Set of modules we started loading. Used mainly for detecting import
     -- cycles.
-  , tssLoadsInProgress :: !(Map ImportKey (NonEmptyMap FilePath UnresolvedModule))
+  , tssLoadsInProgress :: !(Map ImportKey (NonEmptyMap FullPath UnresolvedModule))
   } deriving (Show, Eq, Ord)
 
 emptyTagsServerState :: TagsServerState
@@ -165,7 +150,7 @@ data Module a = Module
     -- relationships.
   , modAllSymbols       :: !SymbolMap
     -- | File the module was loaded from.
-  , modFile             :: !FilePath
+  , modFile             :: !FullPath
     -- | Time as reported by getModificationTime.
   , modLastModified     :: !UTCTime
     -- | All names that this module brings into scope
@@ -180,12 +165,12 @@ type ResolvedModule   = Module SymbolMap
 
 -- TODO: if module is dirty it is only needed to recompute its @modAllExportedName@
 -- field. There's no need
-moduleNeedsReloading :: (MonadFS m) => Module a -> m (Bool, UTCTime)
+moduleNeedsReloading :: MonadFS m => Module a -> m (Bool, UTCTime)
 moduleNeedsReloading m = do
   modifTime <- MonadFS.getModificationTime $ modFile m
   pure (modLastModified m /= modifTime || modIsDirty m, modifTime)
 
-instance (Pretty a) => Pretty (Module a) where
+instance Pretty a => Pretty (Module a) where
   pretty mod =
     ppDict "Module"
       [ "Name"          :-> pretty (mhModName (modHeader mod))
@@ -227,7 +212,7 @@ data ModuleHeader a = ModuleHeader
 type UnresolvedModuleHeader = ModuleHeader ()
 type ResolvedModuleHeader   = ModuleHeader SymbolMap
 
-instance (Pretty a) => Pretty (ModuleHeader a) where
+instance Pretty a => Pretty (ModuleHeader a) where
   pretty ModuleHeader{mhModName, mhExports, mhImportQualifiers, mhImports} =
     ppDict "Module" $
       [ "Name"             :-> pretty mhModName
@@ -244,7 +229,7 @@ instance (Pretty a) => Pretty (ModuleHeader a) where
 
 -- | Find out which modules a given @ImportQualifier@ refers to.
 resolveQualifier
-  :: (MonadError Doc m)
+  :: MonadError Doc m
   => ImportQualifier
   -> ModuleHeader a
   -> m (Maybe (NonEmpty (ImportSpec a)))
@@ -284,7 +269,7 @@ data ImportSpec a = ImportSpec
 type UnresolvedImportSpec = ImportSpec ()
 type ResolvedImportSpec   = ImportSpec SymbolMap
 
-instance (Pretty a) => Pretty (ImportSpec a) where
+instance Pretty a => Pretty (ImportSpec a) where
   pretty spec = ppDict "ImportSpec" $
     [ "ModuleName"    :-> pretty (ikModuleName $ ispecImportKey spec)
     , "Qualification" :-> pretty (ispecQualification spec)
@@ -395,7 +380,7 @@ data EntryWithChildren name = EntryWithChildren
   , entryChildrenVisibility :: Maybe ChildrenVisibility
   } deriving (Show, Eq, Ord)
 
-instance (Pretty name) => Pretty (EntryWithChildren name) where
+instance Pretty name => Pretty (EntryWithChildren name) where
   pretty (EntryWithChildren name children) =
     ppDict "EntryWithChildren" $
       [ "Name"     :-> pretty name
@@ -407,7 +392,7 @@ instance (Pretty name) => Pretty (EntryWithChildren name) where
 mkEntryWithoutChildren :: a -> EntryWithChildren a
 mkEntryWithoutChildren name = EntryWithChildren name Nothing
 
-instance (Ord a) => HasKey (EntryWithChildren a) where
+instance Ord a => HasKey (EntryWithChildren a) where
   type Key (EntryWithChildren a) = a
   getKey (EntryWithChildren name _) = name
 

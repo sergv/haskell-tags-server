@@ -14,6 +14,7 @@
 
 {-# LANGUAGE DoAndIfThenElse     #-}
 {-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -24,40 +25,40 @@ module Haskell.Language.Server.Tags.LoadFiles
 import Prelude hiding (readFile)
 
 import Control.Arrow ((&&&))
-import Control.Arrow.Ext
 import Control.Monad.Catch
 import Control.Monad.Except
 import Control.Monad.State.Strict
-import Data.Foldable.Ext
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Monoid
 import qualified Data.Semigroup as Semigroup
 import qualified Data.Set as S
 import Data.Traversable
-import System.FilePath
 import qualified Text.PrettyPrint.Leijen.Text as PP
 import Text.PrettyPrint.Leijen.Text.Ext
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
+import Control.Monad.Filesystem.FileSearch
 import Control.Monad.Logging
 import Data.Map.NonEmpty (NonEmptyMap)
 import qualified Data.Map.NonEmpty as NEMap
-import Haskell.Language.Server.Tags.LoadModule (loadModuleFromSource, resolveModule, vanillaExtensions, hsBootExtensions)
+import Data.Path
+import Haskell.Language.Server.Tags.LoadModule (loadModuleFromSource, resolveModule)
 import Haskell.Language.Server.Tags.Types
 
-classifyPath :: FilePath -> Maybe (ImportTarget, FilePath)
-classifyPath path
-  | ext `S.member` vanillaExtensions = Just (VanillaModule, path)
-  | ext `S.member` hsBootExtensions  = Just (HsBootModule, path)
-  | otherwise                        = Nothing
+-- todo: handle header files here
+classifyPath :: TagsServerConf -> FindEntry -> Maybe (ImportTarget, FullPath)
+classifyPath TagsServerConf{tsconfVanillaExtensions, tsconfHsBootExtensions} entry
+  | ext `S.member` tsconfVanillaExtensions = Just (VanillaModule, path)
+  | ext `S.member` tsconfHsBootExtensions  = Just (HsBootModule, path)
+  | otherwise                              = Nothing
   where
-    ext = takeExtension path
+    path = findEntryFullPath entry
+    ext  = bpExtension $ findEntryBasePath entry
 
 data ResolveState = ResolveState
-  { rsLoadingModules :: !(Map ImportKey (NonEmptyMap FilePath UnresolvedModule))
+  { rsLoadingModules :: !(Map ImportKey (NonEmptyMap FullPath UnresolvedModule))
   , rsLoadedModules  :: !(Map ImportKey (NonEmpty ResolvedModule))
   }
 
@@ -66,8 +67,8 @@ loadAllFilesIntoState
   => TagsServerConf
   -> m (Map ImportKey (NonEmpty ResolvedModule))
 loadAllFilesIntoState conf = do
-  allFiles <- foldForA (tsconfRecursiveSourceDirectories conf <> tsconfSourceDirectories conf) $
-    traverse (secondM MonadFS.canonicalizePath) <=< MonadFS.findRec MonadFS.isNotIgnoredDir classifyPath
+  allFiles <- runFileSearchT (tsconfSearchDirs conf) $ findRec (classifyPath conf)
+
   unresolvedModules <- for allFiles $ \(importType, filename) -> do
     modTime       <- MonadFS.getModificationTime filename
     source        <- MonadFS.readFile filename

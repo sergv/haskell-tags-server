@@ -23,9 +23,6 @@ module Haskell.Language.Server.Tags.LoadModule
   ( loadModule
   , loadModuleFromSource
   , resolveModule
-  -- * Utils
-  , vanillaExtensions
-  , hsBootExtensions
   ) where
 
 import Control.Arrow ((&&&), first)
@@ -35,7 +32,6 @@ import Control.Monad.State
 import qualified Control.Monad.State.Strict as SS
 import Data.Foldable.Ext
 import Data.Functor.Product (Product(..))
-import Data.List.Extra (nubOrd)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -44,9 +40,9 @@ import Data.Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import Data.Time.Clock (UTCTime)
 import Data.Traversable (for)
-import System.FilePath
 import qualified Text.PrettyPrint.Leijen.Text as PP
 import Text.PrettyPrint.Leijen.Text.Ext
 
@@ -56,12 +52,14 @@ import Token (Token)
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
+import Control.Monad.Filesystem.FileSearch
 import Control.Monad.Logging
 import qualified Data.KeyMap as KM
 import Data.Map.NonEmpty (NonEmptyMap)
 import qualified Data.Map.NonEmpty as NEMap
 import Data.MonoidalMap (MonoidalMap)
 import qualified Data.MonoidalMap as MM
+import Data.Path
 import Data.SubkeyMap (SubkeyMap)
 import qualified Data.SubkeyMap as SubkeyMap
 import Data.SymbolMap (SymbolMap)
@@ -69,12 +67,6 @@ import qualified Data.SymbolMap as SM
 import Data.Symbols
 import Haskell.Language.Server.Tags.AnalyzeHeader
 import Haskell.Language.Server.Tags.Types
-
-vanillaExtensions :: Set String
-vanillaExtensions = S.fromList [".hs", ".lhs", ".hsc", ".chs"]
-
-hsBootExtensions :: Set String
-hsBootExtensions = S.fromList [".hs-boot", ".lhs-boot"]
 
 defaultModuleName :: ModuleName
 defaultModuleName = mkModuleName "Main"
@@ -101,37 +93,21 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
     logDebug $ "[loadModule] loaded modules:" <+> ppList loadedMods
     pure mods
   where
-    extensions :: Set String
-    extensions = case ikImportTarget of
-                   VanillaModule -> vanillaExtensions
-                   HsBootModule  -> hsBootExtensions
-    isHaskellSource :: FilePath -> Maybe FilePath
-    isHaskellSource path
-      | takeExtension path `S.member` extensions = Just path
-      | otherwise                                = Nothing
     doLoad :: ImportKey -> m (NonEmpty ResolvedModule)
     doLoad key@ImportKey{ikModuleName} = do
       logInfo $ "[loadModule.doLoad] loading module" <+> showDoc ikModuleName
-      srcDirs <- asks tsconfSourceDirectories
-      let possibleShallowPaths = [ root </> filenamePart <> ext
-                                 | root <- toList srcDirs
-                                 , ext  <- toList extensions
-                                 ]
-      shallowPaths   <- filterM MonadFS.doesFileExist possibleShallowPaths
-      recursiveDirs  <- asks tsconfRecursiveSourceDirectories
-      recursivePaths <- foldMapA (MonadFS.findRec MonadFS.isNotIgnoredDir isHaskellSource) recursiveDirs
-
-      let allPaths = nubOrd $ shallowPaths ++ recursivePaths
-      case allPaths of
-        []     -> throwError $ ppFoldableWithHeader
-                    ("Cannot load module " <> pretty ikModuleName <> ": no attempted paths exist:")
-                    allPaths
-        p : ps -> traverse (loadModuleFromFile key Nothing) (p :| ps)
-      where
-        filenamePart :: FilePath
-        filenamePart = T.unpack
-                     $ T.map (\c -> if c == '.' then pathSeparator else c)
-                     $ getModuleName ikModuleName
+      case T.splitOn "." $ getModuleName ikModuleName of
+        []     -> throwError $ "Invalid module name:" <+> pretty ikModuleName
+        x : xs -> do
+          TagsServerConf{tsconfSearchDirs, tsconfVanillaExtensions, tsconfHsBootExtensions} <- ask
+          candidates <- runFileSearchT tsconfSearchDirs $ findByPathSuffixSansExtension $ mkPathFragment $ x :| xs
+          let extensions = case ikImportTarget of
+                VanillaModule -> tsconfVanillaExtensions
+                HsBootModule  -> tsconfHsBootExtensions
+          case filter ((`S.member` extensions) . takeExtension) candidates of
+            []     -> throwError $
+              "Cannot load module " <> pretty ikModuleName <> ": no paths found"
+            p : ps -> traverse (loadModuleFromFile key Nothing) $ p :| ps
 
 reloadIfNecessary
   :: (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
@@ -150,7 +126,7 @@ loadModuleFromFile
   :: (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => ImportKey
   -> Maybe UTCTime
-  -> FilePath
+  -> FullPath
   -> m ResolvedModule
 loadModuleFromFile key@ImportKey{ikModuleName} modifTime filename = do
   logInfo $ "[loadModuleFromFile] loading file " <> showDoc filename
@@ -164,7 +140,7 @@ loadModuleFromFile key@ImportKey{ikModuleName} modifTime filename = do
     { tssLoadsInProgress = M.update f key $ tssLoadsInProgress s }
   pure resolved
   where
-    f :: NonEmptyMap FilePath v -> Maybe (NonEmptyMap FilePath v)
+    f :: NonEmptyMap FullPath v -> Maybe (NonEmptyMap FullPath v)
     f = NEMap.delete filename
 
 checkLoadingModules
@@ -192,18 +168,18 @@ loadModuleFromSource
   :: (MonadError Doc m, MonadLog m)
   => Maybe ModuleName
   -> UTCTime
-  -> FilePath
-  -> T.Text
+  -> FullPath
+  -> TL.Text
   -> m UnresolvedModule
 loadModuleFromSource suggestedModuleName modifTime filename source = do
-  tokens <- either throwError pure $ tokenize' filename source
+  tokens <- either throwError pure $ tokenize' (T.unpack $ unFullPath filename) (TL.toStrict source)
   makeModule suggestedModuleName modifTime filename tokens
 
 makeModule
   :: (MonadError Doc m, MonadLog m)
   => Maybe ModuleName -- ^ Suggested module name, will be used if source does not define it's own name.
   -> UTCTime
-  -> FilePath
+  -> FullPath
   -> [Token]
   -> m UnresolvedModule
 makeModule suggestedModuleName modifTime filename tokens = do

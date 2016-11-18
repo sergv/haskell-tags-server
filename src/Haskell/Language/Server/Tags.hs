@@ -24,8 +24,7 @@ module Haskell.Language.Server.Tags
   , TagsServer(tsRequestHandler)
   , RequestHandler
   , TagsServerConf(..)
-  , emptyTagsServerConf
-  , canonicalizeConfPaths
+  , defaultTagsServerConf
   , TagsServerState(..)
   , emptyTagsServerState
   ) where
@@ -46,6 +45,7 @@ import qualified Data.Promise as Promise
 
 import Control.Monad.Filesystem (MonadFS(..))
 import Control.Monad.Logging
+import Data.Path (FullPath)
 import qualified Data.SubkeyMap as SubkeyMap
 import Haskell.Language.Server.Tags.LoadFiles
 import Haskell.Language.Server.Tags.Search
@@ -125,7 +125,7 @@ startTagsServer conf state = do
       Promise.putValue responsePromise response
       pure state'
 
-ensureFileExists :: (MonadFS m, MonadError Doc m) => FilePath -> m ()
+ensureFileExists :: (MonadFS m, MonadError Doc m) => FullPath -> m ()
 ensureFileExists path = do
   exists <- doesFileExist path
   unless exists $

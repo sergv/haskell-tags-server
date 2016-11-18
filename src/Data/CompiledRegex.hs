@@ -46,7 +46,7 @@ instance Eq CompiledRegex where
 instance Ord CompiledRegex where
   CompiledRegex src _ `compare` CompiledRegex src' _ = src `compare` src'
 
-compileRegex :: (MonadError Doc m) => Bool -> String -> m CompiledRegex
+compileRegex :: MonadError Doc m => Bool -> String -> m CompiledRegex
 compileRegex captureGroups src =
   case makeRegexOptsM compOpt execOpt src of
     Left err -> throwError $ "Invalid regexp. Error:" <+> PP.text (TL.pack err)

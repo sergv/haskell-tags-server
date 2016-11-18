@@ -40,6 +40,7 @@ library
     network >=2.6,
     regex-tdfa >=1.2.2,
     regex-tdfa-text,
+    semigroupoids,
     semigroups,
     stm,
     text,
@@ -52,6 +53,8 @@ library
     Control.Arrow.Ext
     Control.Monad.Ext
     Control.Monad.Filesystem
+    Control.Monad.Filesystem.FileSearch
+    Control.Monad.Filesystem.FileSearch.Class
     Control.Monad.Logging
     Control.Monad.Logging.Simple
     Data.CompiledRegex
@@ -60,6 +63,7 @@ library
     Data.KeyMap
     Data.Map.NonEmpty
     Data.MonoidalMap
+    Data.Path
     Data.Promise
     Data.SubkeyMap
     Data.SymbolMap
@@ -140,6 +144,7 @@ test-suite test-haskell-tags-server
   build-depends:
     base,
     bert,
+    bytestring,
     containers,
     directory,
     dlist,

@@ -103,13 +103,12 @@ main = do
                 { tssLoadedModules   = mempty
                 , tssLoadsInProgress = mempty
                 }
-  conf' <- canonicalizeConfPaths conf
   runSimpleLoggerT (Just Stderr) cfgDebugVerbosity $ do
     logDebug $ ppDict "Staring server with directories"
-      [ "Shallow"   :-> ppSet (tsconfSourceDirectories conf')
-      , "Recursive" :-> ppSet (tsconfRecursiveSourceDirectories conf')
+      [ "Shallow"   :-> ppSet (tsconfSourceDirectories conf)
+      , "Recursive" :-> ppSet (tsconfRecursiveSourceDirectories conf)
       ]
-    result <- runExceptT $ startTagsServer conf' state
+    result <- runExceptT $ startTagsServer conf state
     case result of
       Left err         -> putDocLn err
       Right tagsServer -> do

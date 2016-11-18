@@ -24,13 +24,12 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Data.Char
 import Data.Foldable.Ext (toList, foldMapA, foldForA)
-import Data.List
 import qualified Data.Text as T
-import System.FilePath
 import Text.PrettyPrint.Leijen.Text.Ext
 
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging
+import Data.Path
 import qualified Data.SymbolMap as SM
 import Data.Symbols
 import Haskell.Language.Server.Tags.LoadModule
@@ -38,8 +37,8 @@ import Haskell.Language.Server.Tags.Types
 
 findSymbol
   :: (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => FilePath   -- ^ File name
-  -> SymbolName -- ^ Symbol to find. Can be either qualified, unqualified, ascii name/utf name/operator
+  => FullPath           -- ^ File name
+  -> SymbolName         -- ^ Symbol to find. Can be either qualified, unqualified, ascii name/utf name/operator
   -> m [ResolvedSymbol] -- ^ Found tags, may be empty when nothing was found.
 findSymbol filename sym = do
   modName <- fileNameToModuleName filename
@@ -107,19 +106,20 @@ lookUpInImportedModule name importedMod =
 
 -- | Try to infer suitable module name from the file name. Tries to take
 -- as much directory names that start with the uppercase letter as possible.
-fileNameToModuleName :: (MonadError Doc m) => FilePath -> m ModuleName
+fileNameToModuleName :: MonadError Doc m => FullPath -> m ModuleName
 fileNameToModuleName fname =
   case reverse $ splitDirectories fname of
     []            -> throwError "Cannot convert empty file name to module name"
     fname' : dirs ->
       pure $
       mkModuleName $
-      T.pack $
-      intercalate "." $
+      T.intercalate "." $
       reverse $
       takeWhile canBeModuleName $
+      map unPathFragment $
       dropExtension fname' : dirs
   where
-    canBeModuleName :: FilePath -> Bool
-    canBeModuleName []     = False
-    canBeModuleName (c:cs) = isUpper c && all isModuleNameConstituentChar cs
+    canBeModuleName :: T.Text -> Bool
+    canBeModuleName t = case T.uncons t of
+      Nothing      -> False
+      Just (c, cs) -> isUpper c && T.all isModuleNameConstituentChar cs

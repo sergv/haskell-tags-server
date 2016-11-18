@@ -14,6 +14,7 @@
 {-# LANGUAGE DeriveFoldable      #-}
 {-# LANGUAGE DeriveFunctor       #-}
 {-# LANGUAGE DeriveTraversable   #-}
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -24,13 +25,14 @@ module ServerTests (tests) where
 import Control.Concurrent
 import Control.Exception
 import Control.Monad
+import Control.Monad.Base
 import Control.Monad.Except
+import qualified Data.ByteString.Lazy.Char8 as C8
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
 import Data.Set (Set)
 import qualified Data.Set as S
+import qualified Data.Text.Encoding as TE
 import Network.Socket (PortNumber)
-import System.Directory
-import System.FilePath
 import Test.Tasty
 import Test.Tasty.HUnit
 import qualified Text.PrettyPrint.Leijen.Text as PP
@@ -39,34 +41,36 @@ import Data.BERT
 import Network.BERT.Client
 import Network.BERT.Transport
 
+import Control.Monad.Filesystem.FileSearch (SearchCfg(..))
+import Data.Path
 import Haskell.Language.Server.BERT
 import Haskell.Language.Server.Tags
 import PortPool
-import Text.PrettyPrint.Leijen.Text.Utils
+import Text.PrettyPrint.Leijen.Text.Ext
 
 import ServerTests.LogCollectingServer
 
 -- | Directory with test projects.
-testDataDir :: FilePath
+testDataDir :: PathFragment
 testDataDir = "test-data"
 
-mkTestsConfig :: FilePath -> Set FilePath -> TagsServerConf
-mkTestsConfig srcDir trees = TagsServerConf
-  { tsconfSourceDirectories          =
-      S.insert srcDir' $ tsconfSourceDirectories emptyTagsServerConf
-  , tsconfRecursiveSourceDirectories = trees
-  , tsconfEagerTagging               = False
-  }
-  where
-    srcDir' :: FilePath
-    srcDir' = testDataDir </> srcDir
+mkTestsConfig :: MonadBase IO m => PathFragment -> Set FullPath -> m TagsServerConf
+mkTestsConfig srcDir trees = liftBase $ do
+  srcDir' <- mkFullPath $ testDataDir </> srcDir
+  pure defaultTagsServerConf
+    { tsconfSearchDirs   = (tsconfSearchDirs defaultTagsServerConf)
+        { shallowPaths   = S.singleton srcDir'
+        , recursivePaths = trees
+        }
+    , tsconfEagerTagging = False
+    }
 
 type SymbolType = String
 
 -- | Type that encodes all possible BERT responses.
 data BertResponse =
-    Known FilePath Int SymbolType
-  | Ambiguous [(FilePath, Int, SymbolType)]
+    Known BaseName Int SymbolType
+  | Ambiguous [(BaseName, Int, SymbolType)]
   | NotFound
   deriving (Show, Eq, Ord)
 
@@ -80,8 +84,9 @@ responseToTerm resp =
     NotFound ->
       AtomTerm "not_found"
   where
+    mkSymbol :: (BaseName, Int, SymbolType) -> Term
     mkSymbol (filename, line, typ) = TupleTerm
-      [ BinaryTerm $ UTF8.fromString filename
+      [ BinaryTerm $ baseNameToUTF8 filename
       , IntTerm line
       , AtomTerm typ
       ]
@@ -89,12 +94,12 @@ responseToTerm resp =
 data ServerTest = ServerTest
   { stTestName         :: String
   , stWorkingDirectory :: Directory
-  , stFile             :: FilePath
+  , stFile             :: BaseName
   , stSymbol           :: UTF8.ByteString
   , stExpectedResponse :: BertResponse
   } deriving (Show, Eq, Ord)
 
-newtype Directory = Directory { unDirectory :: FilePath }
+newtype Directory = Directory { unDirectory :: PathFragment }
   deriving (Show, Eq, Ord)
 
 data TestSet a =
@@ -119,7 +124,7 @@ withDir
   :: Directory            -- ^ Working directory under testDataDir
   -> TestSet
        ( String          -- ^ Test name
-       , FilePath        -- ^ Filepath within the working directory
+       , BaseName        -- ^ Filepath within the working directory
        , UTF8.ByteString -- ^ Symbol to seacrh for
        , BertResponse    -- ^ Expected response
        )
@@ -134,7 +139,7 @@ withDir dir =
     }
 
 withFile
-  :: FilePath            -- ^ Filepath within the working directory
+  :: a                   -- ^ Filepath within the working directory
   -> TestSet
        ( String          -- ^ Test name
        , UTF8.ByteString -- ^ Symbol to seacrh for
@@ -142,7 +147,7 @@ withFile
        )
   -> TestSet
        ( String          -- ^ Test name
-       , FilePath        -- ^ Filepath within the working directory
+       , a               -- ^ Filepath within the working directory
        , UTF8.ByteString -- ^ Symbol to seacrh for
        , BertResponse    -- ^ Expected response
        )
@@ -151,7 +156,7 @@ withFile file =
 
 withDirAndFile
   :: Directory           -- ^ Working directory under testDataDir
-  -> FilePath            -- ^ Filepath within the working directory
+  -> BaseName            -- ^ Filepath within the working directory
   -> TestSet
        ( String          -- ^ Test name
        , UTF8.ByteString -- ^ Symbol to seacrh for
@@ -1001,7 +1006,7 @@ instance Transport ServerConnection where
 reportErr :: String -> IO a
 reportErr = throwIO . ErrorCall
 
-connect :: IO PortPool -> FilePath -> Set FilePath -> IO ServerConnection
+connect :: IO PortPool -> PathFragment -> Set FullPath -> IO ServerConnection
 connect pool sourceDir dirTree =
   -- Try to connect to server. If attempt succeeds then server is running
   -- and there's no need to run server ourselves.
@@ -1011,7 +1016,7 @@ connect pool sourceDir dirTree =
     startLocalServer = do
       pool' <- pool
       withPort pool' $ \port -> do
-        conf <- canonicalizeConfPaths $ mkTestsConfig sourceDir dirTree
+        conf <- mkTestsConfig sourceDir dirTree
         serv <- runExceptT $ mkLogCollectingServer conf port
         case serv of
           Left err -> throwIO $ ErrorCall $
@@ -1029,8 +1034,6 @@ connect pool sourceDir dirTree =
     tryConnect port =
       (Right <$> tcpClient "localhost" port) `catch` (pure . Left)
 
-      -- name srcDir (sym, filename) expected
-
 mkFindSymbolTest
   :: IO ServerConnection
   -> ServerTest
@@ -1038,9 +1041,8 @@ mkFindSymbolTest
 mkFindSymbolTest getConn ServerTest{stTestName, stWorkingDirectory, stFile, stSymbol, stExpectedResponse} =
   testCase stTestName $ do
     conn <- getConn
-    let path = testDataDir </> unDirectory stWorkingDirectory </> stFile
-    f    <- UTF8.fromString <$> canonicalizePath path
-    r    <- call conn "haskell-tags-server" "find" [ BinaryTerm f
+    let path = pathFragmentToUTF8 $ testDataDir </> unDirectory stWorkingDirectory </> stFile
+    r    <- call conn "haskell-tags-server" "find" [ BinaryTerm path
                                                    , BinaryTerm stSymbol
                                                    ]
     logs <- case conn of
@@ -1051,7 +1053,9 @@ mkFindSymbolTest getConn ServerTest{stTestName, stWorkingDirectory, stFile, stSy
     case r of
       Left err  ->
         assertFailure $ displayDocString $ showDoc err PP.<$> logs
-      Right res ->
+      Right res -> do
+        actual <- relativizeFilepaths res
+        let msg = docFromString $ "expected: " ++ show expected ++ "\n but got: " ++ show actual
         if responseType actual == responseType expected
         then
           unless (actual == expected) $
@@ -1065,9 +1069,7 @@ mkFindSymbolTest getConn ServerTest{stTestName, stWorkingDirectory, stFile, stSy
                 displayDocString $
                   "Error from server:" PP.<$> PP.nest 2 (docFromByteString msg) PP.<$> logs
         where
-          actual   = relativizeFilepaths res
           expected = responseToTerm stExpectedResponse
-          msg      = docFromString $ "expected: " ++ show expected ++ "\n but got: " ++ show actual
 
 responseType :: Term -> Maybe String
 responseType (TupleTerm (AtomTerm x : _)) = Just x
@@ -1077,18 +1079,34 @@ extractResponseError :: Term -> Maybe UTF8.ByteString
 extractResponseError (TupleTerm [AtomTerm "error", BinaryTerm msg]) = Just msg
 extractResponseError _                                              = Nothing
 
-relativizeFilepaths :: Term -> Term
+relativizeFilepaths :: forall m. MonadBase IO m => Term -> m Term
 relativizeFilepaths term =
   case term of
-    TupleTerm [a@(AtomTerm "loc_known"), loc] ->
-      TupleTerm [a, fixLoc loc]
-    TupleTerm [a@(AtomTerm "loc_ambiguous"), ListTerm locs] ->
-      TupleTerm [a, ListTerm $ map fixLoc locs]
-    x -> x
+    TupleTerm [a@(AtomTerm "loc_known"), loc] -> do
+      loc' <- fixLoc loc
+      pure $ TupleTerm [a, loc']
+    TupleTerm [a@(AtomTerm "loc_ambiguous"), ListTerm locs] -> do
+      locs' <- traverse fixLoc locs
+      pure $ TupleTerm [a, ListTerm locs']
+    x -> pure x
   where
-    fixLoc :: Term -> Term
-    fixLoc (TupleTerm [BinaryTerm path, line, typ]) =
-      TupleTerm [BinaryTerm $ toFilename path, line, typ]
+    fixLoc :: Term -> m Term
+    fixLoc (TupleTerm [BinaryTerm path, line, typ]) = do
+      path' <- toFilename path
+      pure $ TupleTerm [BinaryTerm path', line, typ]
     fixLoc x = error $ "invalid symbol location term: " ++ show x
-    toFilename :: UTF8.ByteString -> UTF8.ByteString
-    toFilename = UTF8.fromString . takeFileName . UTF8.toString
+    toFilename :: UTF8.ByteString -> m UTF8.ByteString
+    toFilename = fmap (baseNameToUTF8 . takeFileName) . fullPathFromUTF8
+
+baseNameToUTF8 :: BaseName -> UTF8.ByteString
+baseNameToUTF8 = pathFragmentToUTF8 . unBaseName
+
+_fullPathToUTF8 :: FullPath -> UTF8.ByteString
+_fullPathToUTF8 = C8.fromStrict . TE.encodeUtf8 . unFullPath
+
+fullPathFromUTF8 :: MonadBase IO m => UTF8.ByteString -> m FullPath
+fullPathFromUTF8 = mkFullPath . TE.decodeUtf8 . C8.toStrict
+
+pathFragmentToUTF8 :: PathFragment -> UTF8.ByteString
+pathFragmentToUTF8 = C8.fromStrict . TE.encodeUtf8 . unPathFragment
+

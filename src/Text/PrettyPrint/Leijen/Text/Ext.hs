@@ -178,3 +178,6 @@ instance (Pretty k, Pretty v) => Pretty (MapEntry k v) where
 ppTrace :: Bool -> Doc -> a -> a
 ppTrace False _   = id
 ppTrace True  msg = trace (displayDocString msg)
+
+instance Pretty T.Text where
+  pretty = PP.text . TL.fromStrict

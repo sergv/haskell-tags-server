@@ -34,6 +34,7 @@ tests :: TestTree
 tests = testGroup "tests"
   [ testTokenize
   , testTokenizeWithNewlines
+  , testTokenizeCpp
   , testStripComments
   , testBreakBlocks
   , testProcessAll
@@ -215,6 +216,115 @@ testTokenizeWithNewlines = testGroup "tokenize with newlines"
     f mode =
         map valOf
       . tokenize' filename mode
+
+testTokenizeCpp :: TestTree
+testTokenizeCpp = testGroup "tokenize with preprocessor"
+  [ "#ifdef FOO\n\
+    \foo :: a -> a\n\
+    \foo x = x\n\
+    \#endif\n\
+    \bar :: b -> b\n\
+    \bar y = y\n\
+    \\n\
+    \\n"
+    ==>
+    [ Newline 0
+    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+    , T "foo", T "x", Equals, T "x", Newline 0
+    , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
+    , T "bar", T "y", Equals, T "y", Newline 0
+    , Newline 0
+    , Newline 0
+    ]
+  , "#ifdef FOO\n\
+    \foo :: a -> a\n\
+    \foo x = x\n\
+    \#else\n\
+    \bar :: b -> b\n\
+    \bar y = y\n\
+    \#endif\n"
+    ==>
+    [ Newline 0
+    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+    , T "foo", T "x", Equals, T "x", Newline 0
+    , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
+    , T "bar", T "y", Equals, T "y", Newline 0
+    ]
+  , "#define FOO a + b\n\
+    \foo :: Int -> Int -> int\n\
+    \foo a b c = FOO + c * (FOO)\n"
+    ==>
+    [ Newline 0
+    , T "foo", DoubleColon, T "Int", Arrow, T "Int", Arrow, T "Int", Newline 0
+    , T "foo", T "a", T "b", T "c", Equals, T "a", T "+", T "b", T "+", T "c", T "*", LParen, T "a", T "+", T "b", RParen, Newline 0
+    ]
+  , "#if defined(FOO)\n\
+    \foo :: a -> a\n\
+    \foo x = x\n\
+    \#elif defined(BAR)\n\
+    \bar :: b -> b\n\
+    \bar y = y\n\
+    \#else\n\
+    \baz :: c -> c\n\
+    \baz z = z\n\
+    \#endif\n"
+    ==>
+    [ Newline 0
+    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+    , T "foo", T "x", Equals, T "x", Newline 0
+    , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
+    , T "bar", T "y", Equals, T "y", Newline 0
+    , T "baz", DoubleColon, T "c", Arrow, T "c", Newline 0
+    , T "baz", T "z", Equals, T "z", Newline 0
+    ]
+  , "#define TEST(name, tvar, var) \\\n\
+    \  name :: tvar -> tvar \\\n\
+    \  name var = var\n\
+    \\n\
+    \foo :: a -> a\n\
+    \foo x = x\n\
+    \TEST(bar, b, y)\n\
+    \\n\
+    \TEST(baz, c, z)"
+    ==>
+    [ Newline 0
+    , Newline 0
+    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+    , T "foo", T "x", Equals, T "x", Newline 0
+    , Newline 0
+    , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
+    , T "bar", T "y", Equals, T "y", Newline 0
+    , Newline 0
+    , T "baz", DoubleColon, T "c", Arrow, T "c", Newline 0
+    , T "baz", T "z", Equals, T "z", Newline 0
+    ]
+  , "#define TEST(name, tvar, var) \\\n\
+    \  name :: tvar -> tvar \\\n\
+    \  name var = var\n\
+    \\n\
+    \foo :: a -> a\n\
+    \foo x = x\n\
+    \TEST(bar, b, y)\n\
+    \\n\
+    \TEST(baz, c, z)"
+    ==>
+    [ Newline 0
+    , Newline 0
+    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+    , T "foo", T "x", Equals, T "x", Newline 0
+    , Newline 0
+    , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
+    , T "bar", T "y", Equals, T "y", Newline 0
+    , Newline 0
+    , Newline 0
+    , T "baz", DoubleColon, T "c", Arrow, T "c", Newline 0
+    , T "baz", T "z", Equals, T "z", Newline 0
+    ]
+  ]
+  where
+    (==>) = test f
+    f = map valOf
+      . tokenize' filename Vanilla
 
 testStripComments :: TestTree
 testStripComments = testGroup "strip comments"

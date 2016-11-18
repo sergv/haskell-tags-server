@@ -51,16 +51,17 @@ import qualified Network.BERT.Transport as BERT
 import Control.Monad.Logging
 import Data.CompiledRegex
 import Data.Condition
+import Data.Path
 import qualified Data.Promise as Promise
 import Data.Symbols
 import Haskell.Language.Server.Tags.Types
 
-
 defaultPort :: PortNumber
 defaultPort = 10000
 
-decodeUtf8 :: (MonadError Doc m) => Doc -> UTF8.ByteString -> m T.Text
-decodeUtf8 thing = either (throwError . mkErr) pure . TE.decodeUtf8' . C8.toStrict
+decodeUtf8 :: MonadError Doc m => Doc -> UTF8.ByteString -> m T.Text
+decodeUtf8 thing =
+  either (throwError . mkErr) pure . TE.decodeUtf8' . C8.toStrict
   where
     mkErr = (msg <+>) . showDoc
     msg :: Doc
@@ -89,12 +90,12 @@ data BertServer = BertServer
   , bsTransport :: SynchronizedTransport
   }
 
-stopBertServer :: (MonadBase IO m) => BertServer -> m ()
+stopBertServer :: MonadBase IO m => BertServer -> m ()
 stopBertServer = liftBase . killThread . bsThreadId
 
 -- | After this function returns the server is guaranteed to be ready
 -- to receive new connections.
-waitForBertServerStart :: (MonadBase IO m) => BertServer -> m ()
+waitForBertServerStart :: MonadBase IO m => BertServer -> m ()
 waitForBertServerStart = waitForCondition . stStartedLock . bsTransport
 
 runBertServer
@@ -129,7 +130,7 @@ runBertServer port reqHandler = do
       case args of
         [BinaryTerm filename, BinaryTerm regexp] -> do
           request  <- FindSymbolByRegexp
-                        <$> (T.unpack <$> decodeUtf8 "filename" filename)
+                        <$> (mkFullPath =<< decodeUtf8 "filename" filename)
                         <*> (compileRegex False . T.unpack =<< decodeUtf8 "regexp" regexp)
           response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
           BERT.Success <$> either throwError (pure . responseToTerm) response
@@ -139,7 +140,7 @@ runBertServer port reqHandler = do
       case args of
         [BinaryTerm filename, BinaryTerm symbol] -> do
           request  <- FindSymbol
-                        <$> (T.unpack <$> decodeUtf8 "filename" filename)
+                        <$> (mkFullPath =<< decodeUtf8 "filename" filename)
                         <*> (mkSymbolName <$> decodeUtf8 "symbol to find" symbol)
           response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
           BERT.Success <$> either throwError (pure . responseToTerm) response

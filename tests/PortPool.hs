@@ -29,7 +29,7 @@ import Network.Socket (PortNumber)
 
 data PortPool = PortPool
   { portPoolPorts    :: Chan PortNumber
-  , portPoolCapacity :: Int
+  , portPoolCapacity :: !Int
   }
 
 newPortPool :: (MonadBase IO m) => Int -> PortNumber -> m PortPool
