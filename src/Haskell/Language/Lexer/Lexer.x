@@ -1,11 +1,16 @@
 {
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE NamedFieldPuns            #-}
+{-# LANGUAGE OverloadedStrings         #-}
 
-module Haskell.Language.Lexer.Lexer (tokenize) where
+-- Very important to have this one as it enables GHC to infer proper type of
+-- Alex 3.2.1 actions.
+--
+-- The basic type is (Monad m => AlexInput -> Int -> AlexT m TokenVal), but
+-- monomorphism restriction breaks its inference.
+{-# LANGUAGE NoMonomorphismRestriction #-}
+
+module Haskell.Language.Lexer.Lexer (tokenizeM) where
 
 import Control.Applicative
 import Control.Monad
@@ -188,28 +193,28 @@ $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 kw :: Applicative m => TokenVal -> AlexAction m
 kw tok = \_ _ -> pure tok
 
-tokenize :: FilePath -> LiterateMode -> Text -> Either Doc [Token]
-tokenize filename mode input = runAlexM filename mode code input scanTokens
+tokenizeM :: Monad m => FilePath -> LiterateMode -> Text -> m (Either Doc [Token])
+tokenizeM filename mode input = runAlexT filename mode code input scanTokens
   where
     code = case mode of
       Vanilla  -> startCode
       Literate -> literateStartCode
 
-scanTokens :: AlexM [Token]
+scanTokens :: Monad m => AlexT m [Token]
 scanTokens = do
   tok <- alexMonadScan
   case valOf tok of
     EOF -> return []
     _   -> (tok :) <$> scanTokens
 
-alexMonadScan :: AlexM Token
+alexMonadScan :: Monad m => AlexT m Token
 alexMonadScan = do
   filename <- asks aeFilename
   line     <- gets (aiLine . asInput)
   tokVal   <- alexScanTokenVal
   pure $ Pos (mkSrcPos filename line) tokVal
 
-alexScanTokenVal :: AlexM TokenVal
+alexScanTokenVal :: Monad m => AlexT m TokenVal
 alexScanTokenVal = do
   env                              <- ask
   state@AlexState{asInput, asCode} <- get
@@ -227,54 +232,54 @@ alexScanTokenVal = do
       alexSetInput input
       action asInput tokLen
 
-startComment :: AlexM TokenVal
+startComment :: Monad m => AlexT m TokenVal
 startComment = do
   void $ modifyCommentDepth (+1)
   alexSetCode commentCode
   alexScanTokenVal
 
-endComment :: AlexM TokenVal
+endComment :: Monad m => AlexT m TokenVal
 endComment = do
   newDepth <- modifyCommentDepth (\x -> x - 1)
   when (newDepth == 0) $
     alexSetCode startCode
   alexScanTokenVal
 
-startString :: AlexM TokenVal
+startString :: Monad m => AlexT m TokenVal
 startString = do
   alexSetCode stringCode
   alexScanTokenVal
 
-endString :: AlexM TokenVal
+endString :: Monad m => AlexT m TokenVal
 endString = do
   alexSetCode startCode
   pure String
 
-startQuasiquoter :: AlexM TokenVal
+startQuasiquoter :: Monad m => AlexT m TokenVal
 startQuasiquoter = do
   alexSetCode qqCode
   pure QuasiquoterStart
 
-startSplice :: Context -> AlexM TokenVal
+startSplice :: Monad m => Context -> AlexT m TokenVal
 startSplice ctx = do
   alexSetCode startCode
   pushContext ctx
   pure SpliceStart
 
-endQuasiquoter :: AlexM TokenVal
+endQuasiquoter :: Monad m => AlexT m TokenVal
 endQuasiquoter = do
   alexSetCode startCode
   pure QuasiquoterEnd
 
-pushLParen :: AlexAction AlexM
+pushLParen :: Monad m => AlexAction (AlexT m)
 pushLParen _ _ = do
   pushContext CtxHaskell
   pure LParen
 
-popRParen :: AlexAction AlexM
+popRParen :: Monad m => AlexAction (AlexT m)
 popRParen _ _ = (tryRestoringContext *> pure RParen) <|> pure RParen
 
-tryRestoringContext :: AlexM ()
+tryRestoringContext :: Monad m => AlexT m ()
 tryRestoringContext = do
   ctx <- popContext
   alexSetCode $ case ctx of
@@ -286,17 +291,17 @@ errorAtLine msg = do
   line <- gets (unLine . aiLine . asInput)
   throwError $ pretty line <> ":" <+> msg
 
-startNonLiterateBird :: AlexM ()
+startNonLiterateBird :: Monad m => AlexT m ()
 startNonLiterateBird = do
   alexSetCode startCode
   alexEnterBirdLiterateEnv
 
-startNonLiterateLatex :: AlexM ()
+startNonLiterateLatex :: Monad m => AlexT m ()
 startNonLiterateLatex = do
   alexSetCode startCode
   alexEnterLatexCodeEnv
 
-endNonLiterate :: AlexM TokenVal
+endNonLiterate :: Monad m => AlexT m TokenVal
 endNonLiterate = do
   alexSetCode literateCode
   alexExitLiterateEnv
@@ -321,5 +326,72 @@ qqCode = AlexCode qq
 
 stringCode :: AlexCode
 stringCode = AlexCode string
+
+-- Types for Alex actions
+
+-- alex_actions :: Monad m => Array Int (AlexAction (AlexT m))
+-- alex_action_1 :: Monad m => AlexAction (AlexT m)
+-- alex_action_2 :: Monad m => AlexAction (AlexT m)
+-- alex_action_4 :: Monad m => AlexAction (AlexT m)
+-- alex_action_5 :: Monad m => AlexAction (AlexT m)
+-- alex_action_6 :: Monad m => AlexAction (AlexT m)
+-- alex_action_7 :: Monad m => AlexAction (AlexT m)
+-- alex_action_10 :: Monad m => AlexAction (AlexT m)
+-- alex_action_11 :: Monad m => AlexAction (AlexT m)
+-- alex_action_12 :: Monad m => AlexAction (AlexT m)
+-- alex_action_14 :: Monad m => AlexAction (AlexT m)
+-- alex_action_15 :: Monad m => AlexAction (AlexT m)
+-- alex_action_16 :: Monad m => AlexAction (AlexT m)
+-- alex_action_19 :: Monad m => AlexAction (AlexT m)
+-- alex_action_22 :: Monad m => AlexAction (AlexT m)
+-- alex_action_24 :: Monad m => AlexAction (AlexT m)
+-- alex_action_25 :: Monad m => AlexAction (AlexT m)
+-- alex_action_26 :: Monad m => AlexAction (AlexT m)
+-- alex_action_27 :: Monad m => AlexAction (AlexT m)
+-- alex_action_29 :: Monad m => AlexAction (AlexT m)
+-- alex_action_30 :: Monad m => AlexAction (AlexT m)
+-- alex_action_31 :: Monad m => AlexAction (AlexT m)
+-- alex_action_32 :: Monad m => AlexAction (AlexT m)
+-- alex_action_33 :: Monad m => AlexAction (AlexT m)
+-- alex_action_34 :: Monad m => AlexAction (AlexT m)
+-- alex_action_35 :: Monad m => AlexAction (AlexT m)
+-- alex_action_36 :: Monad m => AlexAction (AlexT m)
+-- alex_action_37 :: Monad m => AlexAction (AlexT m)
+-- alex_action_38 :: Monad m => AlexAction (AlexT m)
+-- alex_action_39 :: Monad m => AlexAction (AlexT m)
+-- alex_action_40 :: Monad m => AlexAction (AlexT m)
+-- alex_action_41 :: Monad m => AlexAction (AlexT m)
+-- alex_action_42 :: Monad m => AlexAction (AlexT m)
+-- alex_action_43 :: Monad m => AlexAction (AlexT m)
+-- alex_action_44 :: Monad m => AlexAction (AlexT m)
+-- alex_action_45 :: Monad m => AlexAction (AlexT m)
+-- alex_action_46 :: Monad m => AlexAction (AlexT m)
+-- alex_action_47 :: Monad m => AlexAction (AlexT m)
+-- alex_action_48 :: Monad m => AlexAction (AlexT m)
+-- alex_action_49 :: Monad m => AlexAction (AlexT m)
+-- alex_action_50 :: Monad m => AlexAction (AlexT m)
+-- alex_action_51 :: Monad m => AlexAction (AlexT m)
+-- alex_action_52 :: Monad m => AlexAction (AlexT m)
+-- alex_action_53 :: Monad m => AlexAction (AlexT m)
+-- alex_action_54 :: Monad m => AlexAction (AlexT m)
+-- alex_action_55 :: Monad m => AlexAction (AlexT m)
+-- alex_action_56 :: Monad m => AlexAction (AlexT m)
+-- alex_action_57 :: Monad m => AlexAction (AlexT m)
+-- alex_action_58 :: Monad m => AlexAction (AlexT m)
+-- alex_action_59 :: Monad m => AlexAction (AlexT m)
+-- alex_action_60 :: Monad m => AlexAction (AlexT m)
+-- alex_action_61 :: Monad m => AlexAction (AlexT m)
+-- alex_action_62 :: Monad m => AlexAction (AlexT m)
+-- alex_action_63 :: Monad m => AlexAction (AlexT m)
+-- alex_action_64 :: Monad m => AlexAction (AlexT m)
+-- alex_action_65 :: Monad m => AlexAction (AlexT m)
+-- alex_action_66 :: Monad m => AlexAction (AlexT m)
+-- alex_action_67 :: Monad m => AlexAction (AlexT m)
+-- alex_action_68 :: Monad m => AlexAction (AlexT m)
+-- alex_action_69 :: Monad m => AlexAction (AlexT m)
+-- alex_action_70 :: Monad m => AlexAction (AlexT m)
+-- alex_action_71 :: Monad m => AlexAction (AlexT m)
+-- alex_action_72 :: Monad m => AlexAction (AlexT m)
+-- alex_action_74 :: Monad m => AlexAction (AlexT m)
 
 }

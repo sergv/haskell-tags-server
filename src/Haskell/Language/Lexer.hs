@@ -14,20 +14,21 @@
 
 module Haskell.Language.Lexer
   ( tokenize
-  , tokenize'
+  , tokenizeM
   , LiterateMode(..)
   ) where
 
+import Data.Functor.Identity
 import Data.Text (Text)
 import System.FilePath
 import Text.PrettyPrint.Leijen.Text.Ext (Doc)
 import Token (Token)
 
-import Haskell.Language.Lexer.Lexer (tokenize)
+import Haskell.Language.Lexer.Lexer (tokenizeM)
 import Haskell.Language.Lexer.LexerTypes (LiterateMode(..))
 
-tokenize' :: FilePath -> Text -> Either Doc [Token]
-tokenize' filename = tokenize filename mode
+tokenize :: FilePath -> Text -> Either Doc [Token]
+tokenize filename = runIdentity . tokenizeM filename mode
   where
     mode :: LiterateMode
     mode

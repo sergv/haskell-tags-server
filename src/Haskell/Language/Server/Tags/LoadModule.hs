@@ -46,7 +46,7 @@ import Data.Traversable (for)
 import qualified Text.PrettyPrint.Leijen.Text as PP
 import Text.PrettyPrint.Leijen.Text.Ext
 
-import Haskell.Language.Lexer (tokenize')
+import Haskell.Language.Lexer (tokenize)
 import FastTags (processTokens)
 import Token (Token)
 
@@ -172,7 +172,7 @@ loadModuleFromSource
   -> TL.Text
   -> m UnresolvedModule
 loadModuleFromSource suggestedModuleName modifTime filename source = do
-  tokens <- either throwError pure $ tokenize' (T.unpack $ unFullPath filename) (TL.toStrict source)
+  tokens <- either throwError pure $ tokenize (T.unpack $ unFullPath filename) (TL.toStrict source)
   makeModule suggestedModuleName modifTime filename tokens
 
 makeModule

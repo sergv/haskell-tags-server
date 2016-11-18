@@ -20,6 +20,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import Control.Arrow (first)
+import Data.Functor.Identity
 import Data.Text (Text)
 import qualified Data.Text as T
 
@@ -1223,4 +1224,4 @@ untag :: Pos TagVal -> String
 untag (Pos _ (TagVal name _ _)) = T.unpack name
 
 tokenize' :: FilePath -> LiterateMode -> Text -> [Token]
-tokenize' fn mode = either (error . show) id . Lexer.tokenize fn mode
+tokenize' fn mode = either (error . show) id . runIdentity . Lexer.tokenizeM fn mode

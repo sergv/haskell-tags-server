@@ -12,7 +12,6 @@
 --
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE ConstraintKinds            #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns             #-}
@@ -37,8 +36,8 @@ module Haskell.Language.Lexer.LexerTypes
   , modifyCommentDepth
   , modifyQuasiquoterDepth
   , retrieveToken
-  , AlexM
-  , runAlexM
+  , AlexT
+  , runAlexT
   , alexSetInput
   , alexSetCode
   , AlexAction
@@ -161,13 +160,13 @@ mkAlexState input code = AlexState
   , asContextStack     = []
   }
 
-alexEnterBirdLiterateEnv :: AlexM ()
+alexEnterBirdLiterateEnv :: MonadState AlexState m => m ()
 alexEnterBirdLiterateEnv = modify $ \s -> s { asLiterateStyle = Just Bird }
 
-alexEnterLatexCodeEnv :: AlexM ()
+alexEnterLatexCodeEnv :: MonadState AlexState m => m ()
 alexEnterLatexCodeEnv = modify $ \s -> s { asLiterateStyle = Just Latex }
 
-alexExitLiterateEnv :: AlexM ()
+alexExitLiterateEnv :: MonadState AlexState m => m ()
 alexExitLiterateEnv = modify $ \s -> s { asLiterateStyle = Nothing }
 
 pushContext :: MonadState AlexState m => Context -> m ()
@@ -182,14 +181,14 @@ popContext = do
       modify $ \s -> s { asContextStack = cs' }
       pure c
 
-modifyCommentDepth :: (MonadState AlexState m) => (Int -> Int) -> m Int
+modifyCommentDepth :: MonadState AlexState m => (Int -> Int) -> m Int
 modifyCommentDepth f = do
   depth <- gets asCommentDepth
   let depth' = f depth
   modify $ \s -> s { asCommentDepth = depth' }
   pure depth'
 
-modifyQuasiquoterDepth :: (MonadState AlexState m) => (Int -> Int) -> m Int
+modifyQuasiquoterDepth :: MonadState AlexState m => (Int -> Int) -> m Int
 modifyQuasiquoterDepth f = do
   depth <- gets asQuasiquoterDepth
   let depth' = f depth
@@ -199,11 +198,27 @@ modifyQuasiquoterDepth f = do
 retrieveToken :: AlexInput -> Int -> Text
 retrieveToken AlexInput{aiInput} len = T.take len aiInput
 
-type AlexM = EitherKT Doc (ReaderT AlexEnv (State AlexState))
+newtype AlexT m a = AlexT (EitherKT Doc (ReaderT AlexEnv (StateT AlexState m)) a)
+  deriving
+    ( Functor
+    , Applicative
+    , Monad
+    , Alternative
+    , MonadError Doc
+    , MonadReader AlexEnv
+    , MonadState AlexState
+    )
 
-runAlexM :: FilePath -> LiterateMode -> AlexCode -> Text -> AlexM a -> Either Doc a
-runAlexM filename mode code input action =
-  flip evalState s $
+runAlexT
+  :: Monad m
+  => FilePath
+  -> LiterateMode
+  -> AlexCode
+  -> Text
+  -> AlexT m a
+  -> m (Either Doc a)
+runAlexT filename mode code input (AlexT action) =
+  flip evalStateT s $
   flip runReaderT env $
   runEitherKT action (pure . Left) (pure . Right)
   where
