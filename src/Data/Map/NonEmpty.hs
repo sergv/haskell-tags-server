@@ -50,27 +50,27 @@ instance (Ord k, Semigroup v) => Semigroup (NonEmptyMap k v) where
 singleton :: k -> v -> NonEmptyMap k v
 singleton k v = NonEmptyMap k v M.empty
 
-lookup :: (Ord k) => k -> NonEmptyMap k v -> Maybe v
+lookup :: Ord k => k -> NonEmptyMap k v -> Maybe v
 lookup k (NonEmptyMap k' v' m)
   | k == k'   = Just v'
   | otherwise = M.lookup k m
 
-member :: (Ord k) => k -> NonEmptyMap k v -> Bool
+member :: Ord k => k -> NonEmptyMap k v -> Bool
 member k (NonEmptyMap k' _ m)
   | k == k'   = True
   | otherwise = M.member k m
 
-insert :: (Ord k) => k -> v -> NonEmptyMap k v -> NonEmptyMap k v
+insert :: Ord k => k -> v -> NonEmptyMap k v -> NonEmptyMap k v
 insert = insertWith const
 
 insertWith
-  :: (Ord k)
+  :: Ord k
   => (v -> v -> v) -> k -> v -> NonEmptyMap k v -> NonEmptyMap k v
 insertWith f k v (NonEmptyMap k' v' m)
   | k == k'   = NonEmptyMap k (f v v') m
   | otherwise = NonEmptyMap k' v' $ M.insertWith f k v m
 
-delete :: (Ord k) => k -> NonEmptyMap k v -> Maybe (NonEmptyMap k v)
+delete :: Ord k => k -> NonEmptyMap k v -> Maybe (NonEmptyMap k v)
 delete k (NonEmptyMap k' v' m)
   | k == k'   =
     case M.minViewWithKey m of
@@ -78,7 +78,7 @@ delete k (NonEmptyMap k' v' m)
       Just ((k'', v''), m') -> Just $ NonEmptyMap k'' v'' m'
   | otherwise = Just $ NonEmptyMap k' v' $ M.delete k m
 
-fromNonEmpty :: (Ord k) => NonEmpty (k, v) -> NonEmptyMap k v
+fromNonEmpty :: Ord k => NonEmpty (k, v) -> NonEmptyMap k v
 fromNonEmpty ((k, v) :| xs) = NonEmptyMap k v $ M.fromList xs
 
 toNonEmpty :: NonEmptyMap k v -> NonEmpty (k, v)
@@ -90,11 +90,11 @@ keysNE (NonEmptyMap k _ m) = k :| M.keys m
 elemsNE :: NonEmptyMap k v -> NonEmpty v
 elemsNE (NonEmptyMap _ v m) = v :| M.elems m
 
-union :: (Ord k) => NonEmptyMap k v -> NonEmptyMap k v -> NonEmptyMap k v
+union :: Ord k => NonEmptyMap k v -> NonEmptyMap k v -> NonEmptyMap k v
 union = unionWith const
 
 unionWith
-  :: (Ord k)
+  :: Ord k
   => (v -> v -> v)
   -> NonEmptyMap k v
   -> NonEmptyMap k v
