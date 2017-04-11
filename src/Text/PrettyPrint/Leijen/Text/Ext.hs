@@ -127,13 +127,12 @@ ppAlist entries = ppList' PP.lbrace PP.rbrace entries'
 
 ppDict :: (Pretty a) => Doc -> [MapEntry TL.Text a] -> Doc
 ppDict header entries =
-  header PP.<$>
-  PP.indent 2 (ppAlist entries)
+  PP.nest 2 $ header PP.<$> ppAlist entries
 
 ppFoldableWithHeader :: (Pretty a, Foldable f) => Doc -> f a -> Doc
 ppFoldableWithHeader header entries =
-  header PP.<$>
-  PP.indent 2 (PP.vsep (map (("-" PP.<+>) . PP.align . pretty) $ toList entries))
+  PP.nest 2 $
+  header PP.<$> PP.vsep (map (("-" PP.<+>) . PP.align . pretty) $ toList entries)
 
 ppMap :: (Pretty a, Pretty b) => Map a b -> Doc
 ppMap = ppAlist' . M.toList
