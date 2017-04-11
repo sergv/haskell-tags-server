@@ -21,13 +21,15 @@ import Test.Tasty.HUnit
 
 import Control.Arrow (first)
 import Data.Functor.Identity
+import Data.List (sort)
 import Data.Text (Text)
 import qualified Data.Text as T
 
-import qualified FastTags (breakBlocks, processTokens, processAll, unstrippedTokensOf)
-import FastTags (TagVal(..), Pos(..), UnstrippedTokens(..), Type(..))
-import Token (SrcPos(..), PragmaType(..), Token, TokenVal(..), Line(..))
+import qualified FastTags.Tag as Tag
+import FastTags.Tag (TagVal(..), Pos(..), UnstrippedTokens(..), Type(..))
+import FastTags.Token (SrcPos(..), PragmaType(..), Token, TokenVal(..), Line(..))
 
+import Data.Path
 import Haskell.Language.Lexer (LiterateMode(..))
 import qualified Haskell.Language.Lexer as Lexer
 
@@ -38,7 +40,7 @@ tests = testGroup "tests"
   , testTokenizeCpp
   , testStripComments
   , testBreakBlocks
-  , testProcessAll
+  , testFullPipeline
   , testProcess
   ]
 
@@ -296,12 +298,14 @@ testTokenizeCpp = testGroup "tokenize with preprocessor"
     , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
     , T "bar", T "y", Equals, T "y", Newline 0
     , Newline 0
+    , Newline 0
     , T "baz", DoubleColon, T "c", Arrow, T "c", Newline 0
     , T "baz", T "z", Equals, T "z", Newline 0
     ]
+    -- Name expansion and concatenation with the help of C comments.
   , "#define TEST(name, tvar, var) \\\n\
-    \  name :: tvar -> tvar \\\n\
-    \  name var = var\n\
+    \  name/**/Test :: tvar -> tvar \\\n\
+    \  name/**/Test var = var\n\
     \\n\
     \foo :: a -> a\n\
     \foo x = x\n\
@@ -314,18 +318,38 @@ testTokenizeCpp = testGroup "tokenize with preprocessor"
     , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
     , T "foo", T "x", Equals, T "x", Newline 0
     , Newline 0
-    , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
-    , T "bar", T "y", Equals, T "y", Newline 0
+    , T "barTest", DoubleColon, T "b", Arrow, T "b", Newline 0
+    , T "barTest", T "y", Equals, T "y", Newline 0
     , Newline 0
     , Newline 0
-    , T "baz", DoubleColon, T "c", Arrow, T "c", Newline 0
-    , T "baz", T "z", Equals, T "z", Newline 0
+    , T "bazTest", DoubleColon, T "c", Arrow, T "c", Newline 0
+    , T "bazTest", T "z", Equals, T "z", Newline 0
     ]
+  -- , testWithIncludes
+  --     "Just two includes"
+  --     "#include <foo.h>\n\
+  --     \\n\
+  --     \#include \"bar.h\"\n"
+  --     [ Newline 0
+  --     , Newline 0
+  --     , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+  --     , T "foo", T "x", Equals, T "x", Newline 0
+  --     , Newline 0
+  --     , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
+  --     , T "bar", T "y", Equals, T "y", Newline 0
+  --     , Newline 0
+  --     , Newline 0
+  --     , T "baz", DoubleColon, T "c", Arrow, T "c", Newline 0
+  --     , T "baz", T "z", Equals, T "z", Newline 0
+  --     ]
   ]
   where
     (==>) = test f
     f = map valOf
       . tokenize' filename Vanilla
+
+-- testWithIncludes :: Stirng ->
+
 
 testStripComments :: TestTree
 testStripComments = testGroup "strip comments"
@@ -474,13 +498,13 @@ testBreakBlocks = testGroup "break blocks"
     (==>) = test (f Vanilla)
     (|=>) = test (f Literate)
     f mode =
-        map (map valOf . FastTags.unstrippedTokensOf)
-      . FastTags.breakBlocks
+        map (map valOf . Tag.unstrippedTokensOf)
+      . Tag.breakBlocks
       . UnstrippedTokens
       . tokenize' filename mode
 
-testProcessAll :: TestTree
-testProcessAll = testGroup "processAll"
+testFullPipeline :: TestTree
+testFullPipeline = testGroup "full processing pipeline"
   [ ["data X", "module X"]
     ==>
     [ Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "X" Type Nothing)
@@ -491,25 +515,25 @@ testProcessAll = testGroup "processAll"
        \data X"
     ]
     ==>
-    [ Pos (SrcPos "fn0" (Line 2) mempty) (TagVal "X" Type Nothing)
-    , Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "X" Module Nothing)
+    [ Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "X" Module Nothing)
+    , Pos (SrcPos "fn0" (Line 2) mempty) (TagVal "X" Type Nothing)
     ]
   , [ "module Z\n\
       \data X = Y\n"
     ]
     ==>
-    [ Pos (SrcPos "fn0" (Line 2) mempty) (TagVal "X" Type Nothing)
+    [ Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "Z" Module Nothing)
+    , Pos (SrcPos "fn0" (Line 2) mempty) (TagVal "X" Type Nothing)
     , Pos (SrcPos "fn0" (Line 2) mempty) (TagVal "Y" Constructor (Just "X"))
-    , Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "Z" Module Nothing)
     ]
   , [ "module Z\n\
       \data X a =\n\
       \  Y a\n"
     ]
     ==>
-    [ Pos (SrcPos "fn0" (Line 2) mempty) (TagVal "X" Type Nothing)
+    [ Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "Z" Module Nothing)
+    , Pos (SrcPos "fn0" (Line 2) mempty) (TagVal "X" Type Nothing)
     , Pos (SrcPos "fn0" (Line 3) mempty) (TagVal "Y" Constructor (Just "X"))
-    , Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "Z" Module Nothing)
     ]
   , [ "newtype A f a b = A\n\
       \  { unA :: f (a -> b) }"
@@ -522,8 +546,8 @@ testProcessAll = testGroup "processAll"
   ]
   where
     (==>) = test f'
-    f' = FastTags.processAll
-       . map (\(i, t) -> fst $ FastTags.processTokens $ tokenize' ("fn" ++ show i) Vanilla t)
+    f' = sort
+       . concatMap (\(i, t) -> fst $ Tag.processTokens $ tokenize' ("fn" ++ show i) Vanilla t)
        . zip [0..]
 
 testProcess :: TestTree
@@ -548,14 +572,14 @@ testPrefixes = testGroup "prefix tracking"
   , "newtype Foo a b =\n\
     \\tBar x y z\n"
     ==>
-    [ Pos (SrcPos fn 2 "") (TagVal "Bar" Constructor (Just "Foo"))
-    , Pos (SrcPos fn 1 "") (TagVal "Foo" Type Nothing)
+    [ Pos (SrcPos fn 1 "") (TagVal "Foo" Type Nothing)
+    , Pos (SrcPos fn 2 "") (TagVal "Bar" Constructor (Just "Foo"))
     ]
   , "data Foo a b =\n\
     \\tBar x y z\n"
     ==>
-    [ Pos (SrcPos fn 2 "") (TagVal "Bar" Constructor (Just "Foo"))
-    , Pos (SrcPos fn 1 "") (TagVal "Foo" Type Nothing)
+    [ Pos (SrcPos fn 1 "") (TagVal "Foo" Type Nothing)
+    , Pos (SrcPos fn 2 "") (TagVal "Bar" Constructor (Just "Foo"))
     ]
   , "f :: A -> B\n\
     \g :: C -> D\n\
@@ -563,11 +587,11 @@ testPrefixes = testGroup "prefix tracking"
     \\tf :: A\n\
     \\t}\n"
     ==>
-    [ Pos (SrcPos fn 3 "") (TagVal "C" Constructor (Just "D"))
+    [ Pos (SrcPos fn 1 "") (TagVal "f" Function Nothing)
+    , Pos (SrcPos fn 2 "") (TagVal "g" Function Nothing)
+    , Pos (SrcPos fn 3 "") (TagVal "C" Constructor (Just "D"))
     , Pos (SrcPos fn 3 "") (TagVal "D" Type Nothing)
     , Pos (SrcPos fn 4 "") (TagVal "f" Function (Just "D"))
-    , Pos (SrcPos fn 1 "") (TagVal "f" Function Nothing)
-    , Pos (SrcPos fn 2 "") (TagVal "g" Function Nothing)
     ]
   , "instance Foo Bar where\n\
     \  newtype FooFam Bar = BarList [Int]"
@@ -585,8 +609,8 @@ testPrefixes = testGroup "prefix tracking"
     \                               | BarMap { getBarMap :: Map a Int }"
     ==>
     [ Pos (SrcPos fn 2 "") (TagVal "BarList" Constructor (Just "FooFam"))
-    , Pos (SrcPos fn 3 "") (TagVal "BarMap" Constructor (Just "FooFam"))
     , Pos (SrcPos fn 2 "") (TagVal "getBarList" Function (Just "FooFam"))
+    , Pos (SrcPos fn 3 "") (TagVal "BarMap" Constructor (Just "FooFam"))
     , Pos (SrcPos fn 3 "") (TagVal "getBarMap" Function (Just "FooFam"))
     ]
   , "newtype instance FooFam Bar = BarList { getBarList :: [Int] }"
@@ -598,8 +622,8 @@ testPrefixes = testGroup "prefix tracking"
     \                                      | BarMap { getBarMap :: Map a Int }"
     ==>
     [ Pos (SrcPos fn 1 "") (TagVal "BarList" Constructor (Just "FooFam"))
-    , Pos (SrcPos fn 2 "") (TagVal "BarMap" Constructor (Just "FooFam"))
     , Pos (SrcPos fn 1 "") (TagVal "getBarList" Function (Just "FooFam"))
+    , Pos (SrcPos fn 2 "") (TagVal "BarMap" Constructor (Just "FooFam"))
     , Pos (SrcPos fn 2 "") (TagVal "getBarMap" Function (Just "FooFam"))
     ]
   ]
@@ -1149,7 +1173,7 @@ testLiterate = testGroup "literate"
   ]
   where
     (==>) = test f
-    f = map untag . fst . FastTags.processTokens . tokenize' "fn.lhs" Literate
+    f = sort . map untag . fst . Tag.processTokens . tokenize' "fn.lhs" Literate
 
 testPatterns :: TestTree
 testPatterns = testGroup "patterns"
@@ -1205,7 +1229,7 @@ filename = "fn.hs"
 
 testFullTagsWithoutPrefixes :: FilePath -> LiterateMode -> Text -> [Pos TagVal] -> TestTree
 testFullTagsWithoutPrefixes fn mode = \source tags ->
-  test (FastTags.processTokens . tokenize' fn mode) source (tags, warnings)
+  test (first sort . Tag.processTokens . tokenize' fn mode) source (tags, warnings)
   where
     warnings :: [String]
     warnings = []
@@ -1218,10 +1242,19 @@ testTagNames fn mode source tags =
     warnings = []
 
     process :: Text -> ([String], [String])
-    process = first (map untag) . FastTags.processTokens . tokenize' fn mode
+    process = first (sort . map untag) . Tag.processTokens . tokenize' fn mode
 
 untag :: Pos TagVal -> String
 untag (Pos _ (TagVal name _ _)) = T.unpack name
 
 tokenize' :: FilePath -> LiterateMode -> Text -> [Token]
 tokenize' fn mode = either (error . show) id . runIdentity . Lexer.tokenizeM fn mode
+
+-- tokenize''
+--   :: FilePath
+--   -> LiterateMode
+--   -> [(PathFragment, Text)]
+--   -> Text
+--   -> [Token]
+-- tokenize'' fn mode includes =
+--   either (error . show) id . runIdentity . Lexer.tokenizeM fn mode

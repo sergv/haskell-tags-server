@@ -22,7 +22,6 @@ import Control.Monad
 import Control.Monad.Except
 import Data.Foldable (for_)
 import Data.Monoid
-import Data.Set (Set)
 import qualified Data.Set as S
 import Network.Socket (PortNumber)
 import Options.Applicative
@@ -30,16 +29,18 @@ import System.Directory
 import System.Exit
 import System.IO
 
+import Control.Monad.Filesystem.FileSearch (SearchCfg(..))
 import Control.Monad.Logging
 import Control.Monad.Logging.Simple
+import Data.Path (mkFullPath)
 import Haskell.Language.Server.BERT
 import Haskell.Language.Server.Tags
 import Text.PrettyPrint.Leijen.Text.Ext
 
 data ProgramConfig = ProgramConfig
-  { cfgSourceDirectories :: Set FilePath -- ^ Directories with haskell files to index
-  , cfgDirTrees          :: Set FilePath -- ^ Directories that should be searched recursively - i.e.
-                                         -- all their subdirectories are added to cfgSourceDirectories
+  { cfgSourceDirectories :: [FilePath] -- ^ Directories with haskell files to index
+  , cfgDirTrees          :: [FilePath] -- ^ Directories that should be searched recursively - i.e.
+                                       -- all their subdirectories are added to cfgSourceDirectories
   , cfgPort              :: PortNumber
     -- ^ Whether to eagerly read and resolve all tags at the start or to
     -- lazily load only required modules on a per-request basis.|
@@ -49,18 +50,16 @@ data ProgramConfig = ProgramConfig
 
 optsParser :: Parser ProgramConfig
 optsParser = ProgramConfig
-  <$> (S.fromList <$>
-         many
-           (strOption
-              (long "dir" <>
-               help "add directory with haskell files to index" <>
-               metavar "DIR")))
-  <*> (S.fromList <$>
-         many
-           (strOption
-              (long "recursive" <>
-               help "recursively add directory tree with haskell files to index" <>
-               metavar "DIR")))
+  <$> many
+        (strOption
+           (long "dir" <>
+            help "add directory with haskell files to index" <>
+            metavar "DIR"))
+  <*> many
+        (strOption
+           (long "recursive" <>
+            help "recursively add directory tree with haskell files to index" <>
+            metavar "DIR"))
   <*> option (fmap fromIntegral auto)
         (short 'p' <>
          long "port" <>
@@ -94,19 +93,23 @@ main = do
   -- validate that specified directories actually exist
   for_ cfgSourceDirectories ensureDirExists
   for_ cfgDirTrees ensureDirExists
-  let conf  = TagsServerConf
-                { tsconfSourceDirectories          = cfgSourceDirectories
-                , tsconfRecursiveSourceDirectories = cfgDirTrees
-                , tsconfEagerTagging               = cfgEagerTagging
+
+  cfgSourceDirectories' <- S.fromList <$> traverse mkFullPath cfgSourceDirectories
+  cfgDirTrees'          <- S.fromList <$> traverse mkFullPath cfgDirTrees
+  let conf  = defaultTagsServerConf
+                { tsconfSearchDirs = (tsconfSearchDirs defaultTagsServerConf)
+                    { shallowPaths   = cfgSourceDirectories'
+                    , recursivePaths = cfgDirTrees'
+                    }
+                , tsconfEagerTagging = cfgEagerTagging
                 }
       state = TagsServerState
                 { tssLoadedModules   = mempty
                 , tssLoadsInProgress = mempty
                 }
   runSimpleLoggerT (Just Stderr) cfgDebugVerbosity $ do
-    logDebug $ ppDict "Staring server with directories"
-      [ "Shallow"   :-> ppSet (tsconfSourceDirectories conf)
-      , "Recursive" :-> ppSet (tsconfRecursiveSourceDirectories conf)
+    logDebug $ ppDict "Staring server with search cfg"
+      [ "Search conf" :-> pretty (tsconfSearchDirs conf)
       ]
     result <- runExceptT $ startTagsServer conf state
     case result of

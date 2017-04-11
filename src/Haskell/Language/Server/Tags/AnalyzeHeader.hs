@@ -32,16 +32,15 @@ import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Monoid
-import qualified Data.Semigroup as Semigroup
+import Data.Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Text.PrettyPrint.Leijen.Text as PP
 
-import Token (Pos(..), TokenVal(..), Token, posFile, posLine, unLine, TokenVal, PragmaType(..))
-import FastTags (stripNewlines, UnstrippedTokens(..), tokToName)
+import FastTags.Tag (stripNewlines, UnstrippedTokens(..), tokToName)
+import FastTags.Token (Pos(..), TokenVal(..), Token, posFile, posLine, unLine, TokenVal, PragmaType(..))
 
 import Control.Monad.Logging
 import Data.KeyMap (KeyMap)
@@ -74,18 +73,31 @@ analyzeHeader ts = do
       -- No header present.
     _ -> pure (Nothing, ts)
 
+pattern PImport       :: Pos TokenVal
 pattern PImport       <- Pos _ KWImport
+pattern PPattern      :: Pos TokenVal
 pattern PPattern      <- Pos _ (T "pattern")
+pattern PType         :: Pos TokenVal
 pattern PType         <- Pos _ KWType
+pattern PModule       :: Pos TokenVal
 pattern PModule       <- Pos _ KWModule
+pattern PString       :: Pos TokenVal
 pattern PString       <- Pos _ String
+pattern PQualified    :: Pos TokenVal
 pattern PQualified    <- Pos _ (T "qualified")
+pattern PName         :: Text -> Pos TokenVal
 pattern PName name    <- Pos _ (T name)
+pattern PAs           :: Pos TokenVal
 pattern PAs           <- Pos _ (T "as")
+pattern PHiding       :: Pos TokenVal
 pattern PHiding       <- Pos _ (T "hiding")
+pattern PLParen       :: Pos TokenVal
 pattern PLParen       <- Pos _ LParen
+pattern PRParen       :: Pos TokenVal
 pattern PRParen       <- Pos _ RParen
+pattern PComma        :: Pos TokenVal
 pattern PComma        <- Pos _ Comma
+pattern PSourcePragma :: Pos TokenVal
 pattern PSourcePragma <- Pos _ (Pragma SourcePragma)
 
 analyzeImports
@@ -149,7 +161,7 @@ analyzeImports imports qualifiers ts = do
       (importList, toks') <- analyzeImportList toks
       let spec     = mkNewSpec importList
           imports' = SubkeyMap.insertWith
-                       (Semigroup.<>)
+                       (<>)
                        (ImportKey importTarget modName)
                        (spec :| [])
                        imports
@@ -159,7 +171,7 @@ analyzeImports imports qualifiers ts = do
         modName = mkModuleName name
         qualifiers' :: Map ImportQualifier (NonEmpty ModuleName)
         qualifiers' = case getQualifier qual of
-                        Just q  -> M.insertWith (Semigroup.<>) q (modName :| []) qualifiers
+                        Just q  -> M.insertWith (<>) q (modName :| []) qualifiers
                         Nothing -> qualifiers
         mkNewSpec :: Maybe ImportList -> UnresolvedImportSpec
         mkNewSpec importList = ImportSpec
@@ -363,11 +375,14 @@ data ChildrenPresence = ChildrenPresent | ChildrenAbsent
 
 data WildcardPresence = WildcardPresent | WildcardAbsent
 
+instance Semigroup WildcardPresence where
+  (<>) WildcardAbsent y              = y
+  (<>) x              WildcardAbsent = x
+  (<>) _              _              = WildcardPresent
+
 instance Monoid WildcardPresence where
   mempty = WildcardAbsent
-  mappend WildcardAbsent y              = y
-  mappend x              WildcardAbsent = x
-  mappend _              _              = WildcardPresent
+  mappend = (<>)
 
 analyzeChildren
   :: forall m. (MonadError Doc m)

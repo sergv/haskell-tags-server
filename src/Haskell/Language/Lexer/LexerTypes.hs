@@ -64,7 +64,7 @@ import Data.Word (Word8)
 import Text.PrettyPrint.Leijen.Text (Pretty, Doc)
 
 import Control.Monad.EitherK
-import Token
+import FastTags.Token
 
 advanceLine :: Char -> Line -> Line
 advanceLine '\n' = increaseLine

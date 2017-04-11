@@ -22,7 +22,7 @@ import Data.Functor.Identity
 import Data.Text (Text)
 import System.FilePath
 import Text.PrettyPrint.Leijen.Text.Ext (Doc)
-import Token (Token)
+import FastTags.Token (Token)
 
 import Haskell.Language.Lexer.Lexer (tokenizeM)
 import Haskell.Language.Lexer.LexerTypes (LiterateMode(..))

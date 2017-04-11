@@ -44,7 +44,7 @@ import Network.Socket
 import Text.PrettyPrint.Leijen.Text.Ext
 
 import Data.BERT
-import FastTags (SrcPos(..), Type, Line(..))
+import FastTags.Tag (SrcPos(..), Type, Line(..))
 import qualified Network.BERT.Server as BERT
 import qualified Network.BERT.Transport as BERT
 

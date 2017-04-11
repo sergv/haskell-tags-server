@@ -24,7 +24,7 @@ import qualified Data.Text.Lazy as TL
 import Text.PrettyPrint.Leijen.Text.Ext (Doc, Pretty(..), (<+>))
 
 import Haskell.Language.Lexer.LexerTypes
-import Token
+import FastTags.Token
 
 }
 

@@ -33,7 +33,7 @@ import Test.Tasty.HUnit
 import qualified Text.PrettyPrint.Leijen.Text as PP
 
 import Haskell.Language.Lexer (tokenize)
-import Token (Token)
+import FastTags.Token (Token)
 
 import Control.Monad.Logging.Simple
 import qualified Data.KeyMap as KM

@@ -30,18 +30,20 @@ module Control.Monad.Filesystem.FileSearch
   , module Control.Monad.Filesystem.FileSearch.Class
   ) where
 
-import Control.Monad.Ext
 import Control.Monad.Except
+import Control.Monad.Ext
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Writer
+import Control.Monad.Writer hiding ((<>))
 import Data.DList (DList)
 import qualified Data.DList as DL
 import Data.Maybe
+import Data.Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
-import Text.PrettyPrint.Leijen.Text.Ext (Doc)
+import qualified Text.PrettyPrint.Leijen.Text as PP
+import Text.PrettyPrint.Leijen.Text.Ext
 
 import Control.Monad.Filesystem as MonadFS
 import Control.Monad.Filesystem.FileSearch.Class
@@ -59,10 +61,21 @@ data SearchCfg = SearchCfg
   , ignoredDirs    :: Set BaseName
   } deriving (Show, Eq, Ord)
 
+instance Semigroup SearchCfg where
+  (<>) (SearchCfg x y z) (SearchCfg x' y' z') =
+    SearchCfg (x <> x') (y <> y') (z <> z')
+
 instance Monoid SearchCfg where
   mempty = SearchCfg mempty mempty mempty
-  mappend (SearchCfg x y z) (SearchCfg x' y' z') =
-    SearchCfg (x <> x') (y <> y') (z <> z')
+  mappend = (<>)
+
+instance Pretty SearchCfg where
+  pretty SearchCfg{shallowPaths, recursivePaths, ignoredDirs} =
+    ppDict "SearchCfg"
+      [ "shallowPaths"   :-> ppSet shallowPaths
+      , "recursivePaths" :-> ppSet recursivePaths
+      , "ignoredDirs"    :-> ppSet ignoredDirs
+      ]
 
 newtype FileSearchT m a = FileSearchT (ReaderT SearchCfg m a)
   deriving

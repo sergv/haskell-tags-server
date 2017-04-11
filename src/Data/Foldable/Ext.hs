@@ -20,18 +20,22 @@ module Data.Foldable.Ext
   ) where
 
 import Data.Foldable
+import Data.Semigroup
 
 newtype MonoidalLift f a = MonoidalLift { unMonoidalLift :: f a }
 
-instance (Applicative f, Monoid a) => Monoid (MonoidalLift f a) where
-  mempty = MonoidalLift $ pure mempty
-  mappend (MonoidalLift x) (MonoidalLift y) = MonoidalLift $ mappend <$> x <*> y
+instance (Applicative f, Semigroup a) => Semigroup (MonoidalLift f a) where
+  (<>) (MonoidalLift x) (MonoidalLift y) = MonoidalLift $ (<>) <$> x <*> y
 
-foldMapA :: (Applicative f, Monoid a, Foldable t) => (b -> f a) -> t b -> f a
+instance (Applicative f, Semigroup a, Monoid a) => Monoid (MonoidalLift f a) where
+  mempty = MonoidalLift $ pure mempty
+  mappend = (<>)
+
+foldMapA :: (Applicative f, Semigroup a, Monoid a, Foldable t) => (b -> f a) -> t b -> f a
 foldMapA f = unMonoidalLift . foldMap (MonoidalLift . f)
 
 {-# INLINE foldForA #-}
-foldForA :: (Applicative f, Monoid a, Foldable t) => t b -> (b -> f a) -> f a
+foldForA :: (Applicative f, Semigroup a, Monoid a, Foldable t) => t b -> (b -> f a) -> f a
 foldForA = flip foldMapA
 
 {-# INLINE foldFor #-}

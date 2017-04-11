@@ -50,7 +50,8 @@ data SimpleLoggerCfg m = SimpleLoggerCfg
   , logSeverity :: Severity
   }
 
-newtype SimpleLoggerT m a = SimpleLoggerT (ReaderT (SimpleLoggerCfg m) m a)
+newtype SimpleLoggerT m a = SimpleLoggerT
+  { unSimpleLoggerT :: ReaderT (SimpleLoggerCfg m) m a }
   deriving
     ( Functor
     , Applicative
@@ -70,9 +71,7 @@ instance MonadTrans SimpleLoggerT where
 
 instance (MonadBaseControl n m) => MonadBaseControl n (SimpleLoggerT m) where
   type StM (SimpleLoggerT m) a = StM (ReaderT (SimpleLoggerCfg m) m) a
-  -- liftBaseWith f = SimpleLoggerT $ liftBaseWith (\g -> f (g . unSimpleLoggerT))
-  liftBaseWith :: forall a. (RunInBase (SimpleLoggerT m) n -> n a) -> SimpleLoggerT m a
-  liftBaseWith = coerce (liftBaseWith :: (RunInBase (ReaderT (SimpleLoggerCfg m) m) n -> n a) -> ReaderT (SimpleLoggerCfg m) m a)
+  liftBaseWith f = SimpleLoggerT $ liftBaseWith (\g -> f (g . unSimpleLoggerT))
   restoreM :: forall a. StM (SimpleLoggerT m) a -> SimpleLoggerT m a
   restoreM = coerce . (restoreM :: StM (ReaderT (SimpleLoggerCfg m) m) a -> ReaderT (SimpleLoggerCfg m) m a)
 

@@ -75,9 +75,6 @@ import qualified Data.SubkeyMap as SubkeyMap
 
 import Debug.Trace
 
-instance Semigroup Doc where
-  (<>) = mappend
-
 putDocLn :: (MonadBase IO m) => Doc -> m ()
 putDocLn = liftBase . TLIO.putStrLn . displayDoc
 
@@ -178,6 +175,3 @@ instance (Pretty k, Pretty v) => Pretty (MapEntry k v) where
 ppTrace :: Bool -> Doc -> a -> a
 ppTrace False _   = id
 ppTrace True  msg = trace (displayDocString msg)
-
-instance Pretty T.Text where
-  pretty = PP.text . TL.fromStrict

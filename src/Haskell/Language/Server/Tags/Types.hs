@@ -66,9 +66,7 @@ import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Monoid
-import Data.Semigroup (sconcat)
-import qualified Data.Semigroup as Semigroup
+import Data.Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Time.Clock (UTCTime(..))
@@ -239,7 +237,7 @@ resolveQualifier qual ModuleHeader{mhImports, mhImportQualifiers} =
       case M.lookup qual mhImportQualifiers of
         Nothing    -> pure Nothing
         Just names ->
-          fmap (Just . foldr1 (Semigroup.<>)) $ for names $ \modName ->
+          fmap (Just . foldr1 (<>)) $ for names $ \modName ->
             case SubkeyMap.lookupSubkey modName mhImports of
               []    ->
                 -- If module's not found then this is a violation of internal
@@ -370,10 +368,13 @@ instance Pretty ModuleExports where
       , "HasWildcardExports" :-> pretty (meHasWildcardExports exports)
       ]
 
+instance Semigroup ModuleExports where
+  (<>) (ModuleExports x y z) (ModuleExports x' y' z') =
+    ModuleExports (x <> x') (y <> y') (z || z')
+
 instance Monoid ModuleExports where
   mempty = ModuleExports mempty mempty False
-  mappend (ModuleExports x y z) (ModuleExports x' y' z') =
-    ModuleExports (x <> x') (y <> y') (z || z')
+  mappend = (<>)
 
 data EntryWithChildren name = EntryWithChildren
   { entryName               :: name
