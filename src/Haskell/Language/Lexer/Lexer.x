@@ -44,10 +44,14 @@ $ascsmall  = [a-z]
 $unismall  = \x03
 $small     = [$ascsmall $unismall]
 
+-- These symbols can be part of operators but are reserved when occur by
+-- themselves.
+$symbols_reserved_as_standalone = [ \→ \∷ \⇒ \∀ ]
+
 $special_sym  = [\(\)\,\;\[\]\`\{\}]
 $ascsymbol    = [\!\#\$\%\&\*\+\.\/\<\=\>\?\@\\\^\|\-\~\:]
 $unisymbol    = \x04
-$symbol       = [$ascsymbol $unisymbol] # [$special_sym \_\'\"]
+$symbol       = [$ascsymbol $unisymbol $symbols_reserved_as_standalone] # [$special_sym \_\'\"]
 
 $ascident  = [$ascsmall $asclarge]
 $uniident  = [$unismall $unilarge]
@@ -146,7 +150,7 @@ $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 "else"                  { kw KWElse }
 "family"                { kw KWFamily }
 "forall"                { \_ _ -> pure $ T "forall" }
-"∀"                     { kw KWForall }
+"∀"                     { \_ _ -> pure $ T "forall" }
 "foreign"               { kw KWForeign }
 "if"                    { kw KWIf }
 "import"                { kw KWImport }
@@ -211,8 +215,7 @@ alexMonadScan :: Monad m => AlexT m Token
 alexMonadScan = do
   filename <- asks aeFilename
   line     <- gets (aiLine . asInput)
-  tokVal   <- alexScanTokenVal
-  pure $ Pos (mkSrcPos filename line) tokVal
+  Pos (mkSrcPos filename line) <$> alexScanTokenVal
 
 alexScanTokenVal :: Monad m => AlexT m TokenVal
 alexScanTokenVal = do

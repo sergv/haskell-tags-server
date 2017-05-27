@@ -22,7 +22,7 @@ cabal-version:
 
 library
   build-depends:
-    attoparsec >= 0.13.1.0,
+    attoparsec >=0.13.1.0,
     array,
     base >=4,
     bert >=1.2.2.5,
@@ -30,13 +30,13 @@ library
     containers,
     directory,
     dlist,
-    exceptions >= 0.8,
-    extra >= 1.4.2,
+    exceptions >=0.8,
+    extra >=1.4.2,
     fast-tags >=1.3,
     filepath,
     haskell-src-exts >=1.16,
     monad-control >=1.0,
-    mtl >= 2.2,
+    mtl >=2.2,
     network >=2.6,
     regex-tdfa >=1.2.2,
     regex-tdfa-text,
@@ -48,7 +48,7 @@ library
     transformers,
     transformers-base,
     utf8-string >=0.3,
-    wl-pprint-text >= 1.1.0.4
+    wl-pprint-text >=1.1.0.4
   exposed-modules:
     Control.Arrow.Ext
     Control.Monad.Ext
@@ -87,10 +87,12 @@ library
     Haskell2010
   ghc-options:
     -Wall
-    -Wcompat
     -Werror
     -fno-warn-type-defaults
     -fno-warn-name-shadowing
+  if impl(ghc >= 8.0)
+    ghc-options:
+      -Wcompat
   ghc-prof-options:
     -fprof-auto
   build-tools:
@@ -114,11 +116,13 @@ executable haskell-tags-server
     Haskell2010
   ghc-options:
     -Wall
-    -Wcompat
     -fno-warn-type-defaults
     -fno-warn-name-shadowing
     -rtsopts
     -threaded
+  if impl(ghc >= 8.0)
+    ghc-options:
+      -Wcompat
   ghc-prof-options:
     -fprof-auto
 
@@ -169,10 +173,12 @@ test-suite test-haskell-tags-server
     wl-pprint-text
   ghc-options:
     -Wall
-    -Wcompat
     -fno-warn-type-defaults
     -fno-warn-name-shadowing
     -rtsopts
     -threaded
+  if impl(ghc >= 8.0)
+    ghc-options:
+      -Wcompat
   ghc-prof-options:
     -fprof-auto

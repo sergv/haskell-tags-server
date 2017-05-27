@@ -29,7 +29,6 @@ import qualified FastTags.Tag as Tag
 import FastTags.Tag (TagVal(..), Pos(..), UnstrippedTokens(..), Type(..))
 import FastTags.Token (SrcPos(..), PragmaType(..), Token, TokenVal(..), Line(..))
 
-import Data.Path
 import Haskell.Language.Lexer (LiterateMode(..))
 import qualified Haskell.Language.Lexer as Lexer
 
@@ -643,6 +642,9 @@ testData = testGroup "data"
   , "data R = R { a∷X, b∷Y }"             ==> ["R", "R", "a", "b"]
   , "data R = R {\n\ta::X\n\t, b::Y\n\t}" ==> ["R", "R", "a", "b"]
   , "data R = R {\n\ta,b::X\n\t}"         ==> ["R", "R", "a", "b"]
+    -- Record operators
+    , "data Foo a b = (:*:) { foo :: a, bar :: b }" ==>
+        [":*:", "Foo", "bar", "foo"]
 
   , "data R = R {\n\
     \    a :: !RealTime\n\
@@ -850,7 +852,9 @@ testGADT = testGroup "gadt"
     \Vec Int\n"
     ==>
     [".+.", ":::", "Nil", "Vec"]
-  , "data NatSing (n :: Nat) where\n    ZeroSing :: 'Zero\n    SuccSing :: NatSing n -> NatSing ('Succ n)\n"
+    , "data NatSing (n :: Nat) where\n\
+      \  ZeroSing :: 'Zero\n\
+      \  SuccSing :: NatSing n -> NatSing ('Succ n)\n"
     ==>
     ["NatSing", "SuccSing", "ZeroSing"]
   , "data Rec a where\n\
@@ -929,6 +933,7 @@ testFunctions = testGroup "functions"
       , "infixl 5 |+|" ==> []
       , "infixr 5 |+|" ==> []
       , "f = g"        ==> ["f"]
+        -- Relies on RepeatableTag.
       , "f :: a -> b -> a\n\
         \f x y = x"
         ==>
@@ -982,7 +987,8 @@ testFunctions = testGroup "functions"
       , "f x !y = x"                  ==> ["f"]
       , "f !x !y = x"                 ==> ["f"]
       , "f ! x y = x"                 ==> ["f"]
-      -- this one is a bit controversial but it seems to be the way ghc parses it
+        -- this one is a bit controversial but it seems to be the way ghc
+        -- parses it
       , "f ! x = x"                   ==> ["f"]
       , "(:*:) !(x :+: y) z = x"      ==> [":*:"]
       , "(:*:) !(!x :+: !y) !z = x"   ==> [":*:"]
@@ -1001,7 +1007,8 @@ testFunctions = testGroup "functions"
       , "f x ~y = x"                  ==> ["f"]
       , "f ~x ~y = x"                 ==> ["f"]
       , "f ~ x y = x"                 ==> ["f"]
-      -- this one is a bit controversial but it seems to be the way ghc parses it
+        -- this one is a bit controversial but it seems to be the way ghc
+        -- parses it
       , "f ~ x = x"                   ==> ["f"]
       , "(:*:) ~(x :+: y) z = x"      ==> [":*:"]
       , "(:*:) ~(~x :+: ~y) ~z = x"   ==> [":*:"]
