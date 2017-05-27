@@ -60,7 +60,7 @@ data SymbolMap = SymbolMap
     -- | Map from parents to chidrens
   , smChildrenMap :: Map UnqualifiedSymbolName (Set UnqualifiedSymbolName)
   , smAllSymbols  :: Map UnqualifiedSymbolName (NonEmpty ResolvedSymbol)
-  } deriving (Show, Eq, Ord)
+  } deriving (Eq, Ord, Show)
 
 instance Semigroup SymbolMap where
   SymbolMap x y z <> SymbolMap x' y' z' = SymbolMap

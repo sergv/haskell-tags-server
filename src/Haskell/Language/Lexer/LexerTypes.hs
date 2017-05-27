@@ -75,7 +75,7 @@ data AlexInput = AlexInput
   , aiPrevChar      :: {-# UNPACK #-} !Char
   , aiBytes         :: [Word8]
   , aiLine          :: {-# UNPACK #-} !Line
-  } deriving (Show, Eq, Ord)
+  } deriving (Eq, Ord, Show)
 
 mkAlexInput :: Text -> AlexInput
 mkAlexInput s = AlexInput
@@ -116,15 +116,15 @@ mkSrcPos filename line = SrcPos
 data Context
   = CtxHaskell
   | CtxQuasiquoter
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 data LiterateMode = Literate | Vanilla
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 data AlexEnv = AlexEnv
   { aeFilename     :: FilePath
   , aeLiterateMode :: LiterateMode
-  } deriving (Show, Eq, Ord)
+  } deriving (Eq, Ord, Show)
 
 mkAlexEnv :: FilePath -> LiterateMode -> AlexEnv
 mkAlexEnv filename mode = AlexEnv
@@ -133,10 +133,10 @@ mkAlexEnv filename mode = AlexEnv
   }
 
 newtype AlexCode = AlexCode { unAlexCode :: Int }
-  deriving (Show, Eq, Ord, Pretty)
+  deriving (Eq, Ord, Show, Pretty)
 
 data LiterateStyle = Bird | Latex
-  deriving (Show, Eq, Ord, Enum, Bounded)
+  deriving (Eq, Ord, Show, Enum, Bounded)
 
 data AlexState = AlexState
   { asInput            :: AlexInput
@@ -148,7 +148,7 @@ data AlexState = AlexState
   -- | Whether we're in bird-style or latex-style literate environment
   , asLiterateStyle    :: !(Maybe LiterateStyle)
   , asContextStack     :: [Context]
-  } deriving (Show, Eq, Ord)
+  } deriving (Eq, Ord, Show)
 
 mkAlexState :: AlexInput -> AlexCode -> AlexState
 mkAlexState input code = AlexState

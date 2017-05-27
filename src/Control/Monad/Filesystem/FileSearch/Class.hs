@@ -33,7 +33,7 @@ data FindEntry = FindEntry
   { findEntryRoot     :: FullPath
   , findEntryBasePath :: BasePath
   , findEntryFullPath :: FullPath
-  } deriving (Show, Eq, Ord)
+  } deriving (Eq, Ord, Show)
 
 mkFindEntry :: FullPath -> BasePath -> FindEntry
 mkFindEntry root base = FindEntry

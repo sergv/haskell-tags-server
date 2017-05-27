@@ -28,7 +28,7 @@ data TestCase i o = TestCase
   { testName       :: String
   , input          :: i
   , expectedResult :: o
-  } deriving (Show, Eq, Ord)
+  } deriving (Eq, Ord, Show)
 
 mkUnqualSymName :: T.Text -> UnqualifiedSymbolName
 mkUnqualSymName name =

@@ -32,7 +32,7 @@ import qualified Control.Monad.State.Strict as SS
 import Text.PrettyPrint.Leijen.Text (Doc)
 
 data Severity = Debug | Info | Warning | Error
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 class (Monad m) => MonadLog m where
   logDoc :: Severity -> Doc -> m ()

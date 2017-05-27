@@ -59,7 +59,7 @@ data SearchCfg = SearchCfg
     -- files will be looked up in both the directroies and all of their children.
   , recursivePaths :: Set FullPath
   , ignoredDirs    :: Set BaseName
-  } deriving (Show, Eq, Ord)
+  } deriving (Eq, Ord, Show)
 
 instance Semigroup SearchCfg where
   (<>) (SearchCfg x y z) (SearchCfg x' y' z') =

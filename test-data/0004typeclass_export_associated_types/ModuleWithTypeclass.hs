@@ -30,10 +30,10 @@ class Test a where
 instance Test Int where
   data TestFam Int = IntBox
     { unIntBox :: Int }
-    deriving (Show, Eq, Ord)
+    deriving (Eq, Ord, Show)
   data PrivateFam Int = IntBoxPrivate
     { unIntBoxPrivate :: Int }
-    deriving (Show, Eq, Ord)
+    deriving (Eq, Ord, Show)
   wrap   = IntBox
   unwrap = unIntBox
   toPrivate = IntBoxPrivate . unIntBox

@@ -164,7 +164,7 @@ ppNEMap = ppAlist' . toList . NEMap.toNonEmpty
 infix 0 :->
 
 data MapEntry k v = k :-> v
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 instance (Pretty k, Pretty v) => Pretty (MapEntry k v) where
   pretty (x :-> y) =

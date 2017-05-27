@@ -93,7 +93,7 @@ data Request =
     -- | Request to find all names that match a gived regexp, starting with module
     -- identified by file path.
   | FindSymbolByRegexp FullPath CompiledRegex
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 instance Pretty Request where
   pretty = showDoc
@@ -101,7 +101,7 @@ instance Pretty Request where
 data Response =
     Found (NonEmpty ResolvedSymbol)
   | NotFound SymbolName
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 instance Pretty Response where
   pretty = showDoc
@@ -115,7 +115,7 @@ data TagsServerConf = TagsServerConf
     -- | Whether to read and compute tags lazily or read them all at once when
     -- server starts.
   , tsconfEagerTagging      :: Bool
-  } deriving (Show, Eq, Ord)
+  } deriving (Eq, Ord, Show)
 
 defaultTagsServerConf :: TagsServerConf
 defaultTagsServerConf = TagsServerConf
@@ -132,7 +132,7 @@ data TagsServerState = TagsServerState
     -- | Set of modules we started loading. Used mainly for detecting import
     -- cycles.
   , tssLoadsInProgress :: !(Map ImportKey (NonEmptyMap FullPath UnresolvedModule))
-  } deriving (Show, Eq, Ord)
+  } deriving (Eq, Ord, Show)
 
 emptyTagsServerState :: TagsServerState
 emptyTagsServerState = TagsServerState mempty mempty
@@ -156,7 +156,7 @@ data Module a = Module
     -- | Whether some imports of this module were updated and thus revolved
     -- module exports are no longer valid.
   , modIsDirty          :: !Bool
-  } deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
+  } deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 type UnresolvedModule = Module ()
 type ResolvedModule   = Module SymbolMap
@@ -185,7 +185,7 @@ data ImportKey = ImportKey
     ikImportTarget :: ImportTarget
     -- | Name of imported module
   , ikModuleName   :: ModuleName
-  } deriving (Show, Eq, Ord)
+  } deriving (Eq, Ord, Show)
 
 instance HasSubkey ImportKey where
   type Subkey ImportKey = ModuleName
@@ -205,7 +205,7 @@ data ModuleHeader a = ModuleHeader
     -- NB same module name may be present several times with different qualifications
     -- because it may be imported several times.
   , mhImports          :: !(SubkeyMap ImportKey (NonEmpty (ImportSpec a)))
-  } deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
+  } deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 type UnresolvedModuleHeader = ModuleHeader ()
 type ResolvedModuleHeader   = ModuleHeader SymbolMap
@@ -251,7 +251,7 @@ resolveQualifier qual ModuleHeader{mhImports, mhImportQualifiers} =
     qualifiedModName = getImportQualifier qual
 
 data ImportTarget = VanillaModule | HsBootModule
-  deriving (Show, Eq, Ord, Enum, Bounded)
+  deriving (Eq, Ord, Show, Enum, Bounded)
 
 instance Pretty ImportTarget where
   pretty = showDoc
@@ -262,7 +262,7 @@ data ImportSpec a = ImportSpec
   , ispecQualification :: ImportQualification
   , ispecImportList    :: Maybe ImportList
   , ispecImportedNames :: a
-  } deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
+  } deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 type UnresolvedImportSpec = ImportSpec ()
 type ResolvedImportSpec   = ImportSpec SymbolMap
@@ -311,7 +311,7 @@ data ImportQualification =
     --
     -- import X as Y
   | BothQualifiedAndUnqualified ImportQualifier
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 instance Pretty ImportQualification where
   pretty = \case
@@ -338,13 +338,13 @@ data ImportType =
     -- import Foo hiding (x, y(Bar), z)
     -- import Foo hiding ()
     Hidden
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 -- | User-provided import/hiding list.
 data ImportList = ImportList
   { ilEntries    :: KeyMap (EntryWithChildren UnqualifiedSymbolName)
   , ilImportType :: ImportType
-  } deriving (Show, Eq, Ord)
+  } deriving (Eq, Ord, Show)
 
 instance Pretty ImportList where
   pretty ImportList{ilImportType, ilEntries} =
@@ -358,7 +358,7 @@ data ModuleExports = ModuleExports
   , meReexports          :: Set ModuleName
     -- | Whether this module exports some entities that export all children.
   , meHasWildcardExports :: Bool
-  } deriving (Show, Eq, Ord)
+  } deriving (Eq, Ord, Show)
 
 instance Pretty ModuleExports where
   pretty exports =
@@ -379,7 +379,7 @@ instance Monoid ModuleExports where
 data EntryWithChildren name = EntryWithChildren
   { entryName               :: name
   , entryChildrenVisibility :: Maybe ChildrenVisibility
-  } deriving (Show, Eq, Ord)
+  } deriving (Eq, Ord, Show)
 
 instance Pretty name => Pretty (EntryWithChildren name) where
   pretty (EntryWithChildren name children) =
@@ -407,7 +407,7 @@ data ChildrenVisibility =
     -- wildcard import, e.g.
     -- ErrorCall(..,ErrorCall)
   | VisibleAllChildrenPlusSome (Set UnqualifiedSymbolName)
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 instance Pretty ChildrenVisibility where
   pretty = \case

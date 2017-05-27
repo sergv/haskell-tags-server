@@ -46,7 +46,7 @@ data ProgramConfig = ProgramConfig
     -- lazily load only required modules on a per-request basis.|
   , cfgEagerTagging      :: Bool
   , cfgDebugVerbosity    :: Severity
-  } deriving (Show, Eq, Ord)
+  } deriving (Eq, Ord, Show)
 
 optsParser :: Parser ProgramConfig
 optsParser = ProgramConfig

@@ -57,7 +57,7 @@ import Text.PrettyPrint.Leijen.Text.Ext
 -- | e.g. Foo, Foo.Bar. Assume that this is not an import qualifier.
 -- Import qualifiers should be labeled as 'ImportQualifer'.
 newtype ModuleName = ModuleName { getModuleName :: Text }
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 instance Pretty ModuleName where
   pretty = PP.text . TL.fromStrict . getModuleName
@@ -71,14 +71,14 @@ mkModuleName = ModuleName
 -- import Foo.Bar as XXX
 -- import qualified Fizz.Buzz as XXX
 newtype ImportQualifier = ImportQualifier { getImportQualifier :: ModuleName }
-  deriving (Show, Eq, Ord, Pretty)
+  deriving (Eq, Ord, Show, Pretty)
 
 mkImportQualifier :: ModuleName -> ImportQualifier
 mkImportQualifier = ImportQualifier
 
 -- | Name the @ResolvedSymbol@ refers to. Can be either qualified or unqualified.
 newtype SymbolName = SymbolName { getSymbolName :: Text }
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 instance Pretty SymbolName where
   pretty = PP.text . TL.fromStrict . getSymbolName
@@ -88,7 +88,7 @@ mkSymbolName = SymbolName
 
 -- | Name the @ResolvedSymbol@ refers to.
 newtype UnqualifiedSymbolName = UnqualifiedSymbolName { getUnqualifiedSymbolName :: SymbolName }
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 instance Pretty UnqualifiedSymbolName where
   pretty = pretty . getUnqualifiedSymbolName
@@ -129,7 +129,7 @@ splitQualifiedPart sym =
 -- | A symbolic name that identifier some Haskell entity. Has position,
 -- entity type and possibly a parent.
 newtype ResolvedSymbol = ResolvedSymbol (Pos TagVal)
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 instance HasKey ResolvedSymbol where
   type Key ResolvedSymbol = UnqualifiedSymbolName

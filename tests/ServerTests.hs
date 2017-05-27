@@ -72,7 +72,7 @@ data BertResponse =
     Known BaseName Int SymbolType
   | Ambiguous [(BaseName, Int, SymbolType)]
   | NotFound
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 responseToTerm :: BertResponse -> Term
 responseToTerm resp =
@@ -97,10 +97,10 @@ data ServerTest = ServerTest
   , stFile             :: BaseName
   , stSymbol           :: UTF8.ByteString
   , stExpectedResponse :: BertResponse
-  } deriving (Show, Eq, Ord)
+  } deriving (Eq, Ord, Show)
 
 newtype Directory = Directory { unDirectory :: PathFragment }
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 data TestSet a =
     AtomicTest a

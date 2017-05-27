@@ -42,7 +42,7 @@ import Prelude hiding (lookup)
 data NonEmptyMap k v =
   -- Invariant: map never contains root key stored in the constructor itself.
   NonEmptyMap k v (Map k v)
-  deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
+  deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 instance (Ord k, Semigroup v) => Semigroup (NonEmptyMap k v) where
   (<>) = unionWith (<>)

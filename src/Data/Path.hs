@@ -73,7 +73,7 @@ import Text.PrettyPrint.Leijen.Text.Ext (Pretty(..))
 -- but must be created in derivatives of IO monad.
 -- Invariant: does not end with \/.
 newtype FullPath = FullPath { unFullPath :: Text }
-  deriving (Show, Eq, Ord, Pretty, IsString)
+  deriving (Eq, Ord, Show, Pretty, IsString)
 
 class MkFullPath a m where
   mkFullPath :: a -> m FullPath
@@ -110,7 +110,7 @@ splitDirectories = map (PathFragment . T.pack) . FilePath.splitDirectories . T.u
 -- | Path fragment, possibly with some directories but without etxension.
 -- Invariant: does not start with \/, does not end with \/.
 newtype PathFragment = PathFragment { unPathFragment :: Text }
-  deriving (Show, Eq, Ord, Pretty, IsString)
+  deriving (Eq, Ord, Show, Pretty, IsString)
 
 newtype PathJoin = PathJoin { unPathJoin :: Text }
 
@@ -156,7 +156,7 @@ instance Contains BaseName
 
 -- | E.g. “.hs”.
 newtype Extension = Extension { unExtension :: Text }
-  deriving (Show, Eq, Ord, IsString)
+  deriving (Eq, Ord, Show, IsString)
 
 mkExtension :: Text -> Extension
 mkExtension = Extension
@@ -207,7 +207,7 @@ instance TakeExtension BasePath where
 
 -- | File basename without directory but with extension.
 newtype BaseName = BaseName { unBaseName :: PathFragment }
-  deriving (Show, Eq, Ord, Pretty, IsString)
+  deriving (Eq, Ord, Show, Pretty, IsString)
 
 data BasePath = BasePath
   { bpFileName  :: BaseName
