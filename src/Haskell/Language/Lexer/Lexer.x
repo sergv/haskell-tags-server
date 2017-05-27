@@ -85,14 +85,14 @@ $hexdigit   = [0-9a-fA-F]
 <0, comment, qq, literate> $ws+ ;
 
 -- Literate stuff
-<literate> ^ > $ws*             / { isLiterate }           { \_ len -> startNonLiterateBird  *> pure (Newline (len - 1)) }
-<literate> ^ "\begin{code}" $nl / { isLiterate }           { \_ len -> startNonLiterateLatex *> pure (Newline (len - 12)) }
+<literate> ^ > $ws*             / { isLiterate }           { \_ len -> startLiterateBird  *> pure (Newline (len - 1)) }
+<literate> ^ "\begin{code}" $nl / { isLiterate }           { \_ len -> startLiterateLatex *> pure (Newline (len - 12)) }
 <literate> (. | $nl)                                       ;
 
 
 <0> $nl > $space*  / { isLiterate }                        { \_ len -> pure $! Newline $! len - 2 }
-<0> $nl [^>]       / { isLiterate .&&&. isInBirdEnv }      { \_ _   -> endNonLiterate }
-<0> ^ "\end{code}" / { isLiterate .&&&. isInLatexCodeEnv } { \_ _   -> endNonLiterate }
+<0> $nl [^>]       / { isLiterate .&&&. isInBirdEnv }      { \_ _   -> endLiterate }
+<0> ^ "\end{code}" / { isLiterate .&&&. isInLatexCodeEnv } { \_ _   -> endLiterate }
 
 <0> {
 
@@ -294,18 +294,18 @@ errorAtLine msg = do
   line <- gets (unLine . aiLine . asInput)
   throwError $ pretty line <> ":" <+> msg
 
-startNonLiterateBird :: Monad m => AlexT m ()
-startNonLiterateBird = do
+startLiterateBird :: Monad m => AlexT m ()
+startLiterateBird = do
   alexSetCode startCode
   alexEnterBirdLiterateEnv
 
-startNonLiterateLatex :: Monad m => AlexT m ()
-startNonLiterateLatex = do
+startLiterateLatex :: Monad m => AlexT m ()
+startLiterateLatex = do
   alexSetCode startCode
   alexEnterLatexCodeEnv
 
-endNonLiterate :: Monad m => AlexT m TokenVal
-endNonLiterate = do
+endLiterate :: Monad m => AlexT m TokenVal
+endLiterate = do
   alexSetCode literateCode
   alexExitLiterateEnv
   alexScanTokenVal
