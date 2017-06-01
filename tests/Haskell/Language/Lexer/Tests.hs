@@ -17,7 +17,6 @@
 module Haskell.Language.Lexer.Tests (tests) where
 
 import Test.Tasty
-import Test.Tasty.HUnit
 
 import Control.Arrow (first)
 import Data.Functor.Identity
@@ -31,9 +30,10 @@ import FastTags.Token (SrcPos(..), PragmaType(..), Token, TokenVal(..), Line(..)
 
 import Haskell.Language.Lexer (LiterateMode(..))
 import qualified Haskell.Language.Lexer as Lexer
+import TestUtils (makeTest)
 
 tests :: TestTree
-tests = testGroup "tests"
+tests = testGroup "Lexer tests"
   [ testTokenize
   , testTokenizeWithNewlines
   , testTokenizeCpp
@@ -103,7 +103,7 @@ testTokenize = testGroup "tokenize"
     [KWImport, Pragma SourcePragma, T "Foo", T "hiding", LParen, T "Bar", RParen, Newline 0]
   ]
   where
-    (==>) = test f
+    (==>) = makeTest f
     f :: Text -> [TokenVal]
     f = tail -- strip uninteresting initial newline
       . map valOf
@@ -213,15 +213,119 @@ testTokenizeWithNewlines = testGroup "tokenize with newlines"
     ]
   ]
   where
-    (==>) = test (f Vanilla)
-    (|=>) = test (f Literate)
+    (==>) = makeTest (f Vanilla)
+    (|=>) = makeTest (f Literate)
     f mode =
         map valOf
       . tokenize' filename mode
 
+testTokenizeCppDefines :: TestTree
+testTokenizeCppDefines = testGroup "defines"
+  [ "#define FOO foo\n\
+    \FOO :: a -> a\n\
+    \FOO x = x"
+    ==>
+    [ Newline 0
+    , Newline 0
+    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+    , T "foo", T "x", Equals, T "X", Newline 0
+    ]
+  , "#  \n\
+    \  define \n\
+    \    FOO      \n\
+    \       foo\n\
+    \FOO :: a -> a\n\
+    \FOO x = x"
+    ==>
+    [ Newline 0
+    , Newline 0
+    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+    , T "foo", T "x", Equals, T "X", Newline 0
+    ]
+  , "#  \n\
+    \define \n\
+    \FOO      \n\
+    \foo\n\
+    \FOO :: a -> a\n\
+    \FOO x = x"
+    ==>
+    [ Newline 0
+    , Newline 0
+    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+    , T "foo", T "x", Equals, T "X", Newline 0
+    ]
+  , "#\n\
+    \define \n\
+    \FOO \n\
+    \foo\n\
+    \FOO :: a -> a\n\
+    \FOO x = x"
+    ==>
+    [ Newline 0
+    , Newline 0
+    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+    , T "foo", T "x", Equals, T "X", Newline 0
+    ]
+  , "#define FOO 1\n\
+    \quux = FOO(2)\n"
+    ==>
+    [ Newline 0
+    , Newline 0
+    , T "quux", Equals, T "1", LParen, T "2", RParen, Newline 0
+    ]
+  , "#define BAZ \"foo bar\n\
+    \\n\
+    \bar = BAZ FOO quux\"\n\
+    \\n\
+    \foo ::  a -> b"
+    ==>
+    [ Newline 0
+    , Newline 0
+    , Newline 0
+    , T "bar", Equals, String, Newline 0
+    , Newline 0
+    , T "foo", DoubleColon, T "a", Arrow, T "b", Newline 0
+    ]
+  , "#define BAZ2 \"foo \n\
+    \  bar\n\
+    \\n\
+    \bar = BAZ2 FOO quux\"\n\
+    \\n\
+    \foo ::  a -> b"
+    ==>
+    [ Newline 0
+    , Newline 0
+    , Newline 0
+    , T "bar", Equals, String, Newline 0
+    , Newline 0
+    , T "foo", DoubleColon, T "a", Arrow, T "b", Newline 0
+    ]
+  ]
+  where
+    (==>) = makeTest f
+    f = map valOf . tokenize' filename Vanilla
+
 testTokenizeCpp :: TestTree
 testTokenizeCpp = testGroup "tokenize with preprocessor"
-  [ "#ifdef FOO\n\
+  [ testTokenizeCppDefines
+  , "#ifdef FOO\n\
+    \foo :: a -> a\n\
+    \foo x = x\n\
+    \#endif\n\
+    \bar :: b -> b\n\
+    \bar y = y\n\
+    \\n\
+    \\n"
+    ==>
+    [ Newline 0
+    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+    , T "foo", T "x", Equals, T "x", Newline 0
+    , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
+    , T "bar", T "y", Equals, T "y", Newline 0
+    , Newline 0
+    , Newline 0
+    ]
+  , "#ifdef FOO\n\
     \foo :: a -> a\n\
     \foo x = x\n\
     \#endif\n\
@@ -343,9 +447,8 @@ testTokenizeCpp = testGroup "tokenize with preprocessor"
   --     ]
   ]
   where
-    (==>) = test f
-    f = map valOf
-      . tokenize' filename Vanilla
+    (==>) = makeTest f
+    f = map valOf . tokenize' filename Vanilla
 
 -- testWithIncludes :: Stirng ->
 
@@ -403,7 +506,7 @@ testStripComments = testGroup "strip comments"
     [Newline 0, T "foo", Newline 0, Newline 0, T "bar", Newline 0]
   ]
   where
-    (==>) = test f
+    (==>) = makeTest f
     f = map valOf . tokenize' filename Vanilla
 
 testBreakBlocks :: TestTree
@@ -494,8 +597,8 @@ testBreakBlocks = testGroup "break blocks"
     ]
   ]
   where
-    (==>) = test (f Vanilla)
-    (|=>) = test (f Literate)
+    (==>) = makeTest (f Vanilla)
+    (|=>) = makeTest (f Literate)
     f mode =
         map (map valOf . Tag.unstrippedTokensOf)
       . Tag.breakBlocks
@@ -544,7 +647,7 @@ testFullPipeline = testGroup "full processing pipeline"
     ]
   ]
   where
-    (==>) = test f'
+    (==>) = makeTest f'
     f' = sort
        . concatMap (\(i, t) -> fst $ Tag.processTokens $ tokenize' ("fn" ++ show i) Vanilla t)
        . zip [0..]
@@ -1179,7 +1282,7 @@ testLiterate = testGroup "literate"
     ["C", "m", "n"]
   ]
   where
-    (==>) = test f
+    (==>) = makeTest f
     f = sort . map untag . fst . Tag.processTokens . tokenize' "fn.lhs" Literate
 
 testPatterns :: TestTree
@@ -1224,26 +1327,19 @@ testFFI = testGroup "ffi"
   where
     (==>) = testTagNames filename Vanilla
 
-test :: (Show a, Eq b, Show b) => (a -> b) -> a -> b -> TestTree
-test f x expected =
-  testCase (take 70 $ show x) $ assertBool msg (actual == expected)
-  where
-    actual = f x
-    msg    = "expected: " ++ show expected ++ "\n but got: " ++ show actual
-
 filename :: FilePath
 filename = "fn.hs"
 
 testFullTagsWithoutPrefixes :: FilePath -> LiterateMode -> Text -> [Pos TagVal] -> TestTree
 testFullTagsWithoutPrefixes fn mode = \source tags ->
-  test (first sort . Tag.processTokens . tokenize' fn mode) source (tags, warnings)
+  makeTest (first sort . Tag.processTokens . tokenize' fn mode) source (tags, warnings)
   where
     warnings :: [String]
     warnings = []
 
 testTagNames :: FilePath -> LiterateMode -> Text -> [String] -> TestTree
 testTagNames fn mode source tags =
-  test process source (tags, warnings)
+  makeTest process source (tags, warnings)
   where
     warnings :: [String]
     warnings = []

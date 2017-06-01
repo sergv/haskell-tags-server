@@ -17,6 +17,7 @@ import Control.Monad
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
+import Data.Profunctor (lmap)
 import Data.Semigroup
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -24,6 +25,7 @@ import qualified Data.Text.Lazy as TL
 import Text.PrettyPrint.Leijen.Text.Ext (Doc, Pretty(..), (<+>))
 
 import Haskell.Language.Lexer.LexerTypes
+import Haskell.Language.Lexer.Preprocessor
 import FastTags.Token
 
 }
@@ -63,6 +65,14 @@ $ident_nonsym = [$ascident $uniident $unisuffix $digit] # [$symbol]
 $ident_syms   = [\'\_\#]
 $ident     = [$ident_nonsym $ident_syms]
 
+@nl = ( [\r]? $nl )
+
+@cpp_ident       = ( [ $ascsmall $asclarge $ascdigit \_ ] | [\\] @nl )
+@cpp_ws          = ( $ascspace | [\\] @nl )
+@cpp_opt_ws      = @cpp_ws*
+@cpp_nonempty_ws = ( $ascspace @cpp_ws* | @cpp_ws* $ascspace )
+@define_body       = ( [^\\$nl] | [\\] @nl )+ @nl
+
 -- $reserved_op = [→ ∷ ⇒ ∀]
 
 @qualificationPrefix = ( $large $ident* $dot )*
@@ -85,14 +95,25 @@ $hexdigit   = [0-9a-fA-F]
 <0, comment, qq, literate> $ws+ ;
 
 -- Literate stuff
-<literate> ^ > $ws*             / { isLiterate }           { \_ len -> startLiterateBird  *> pure (Newline (len - 1)) }
-<literate> ^ "\begin{code}" $nl / { isLiterate }           { \_ len -> startLiterateLatex *> pure (Newline (len - 12)) }
-<literate> (. | $nl)                                       ;
+<literate> ^ > $ws*
+  / { runAlexPredM (lmap fst isLiterate) }
+  { \_ len -> startLiterateBird  *> pure (Newline (len - 1)) }
+<literate> ^ "\begin{code}" @nl
+  / { runAlexPredM (lmap fst isLiterate) }
+  { \_ len -> startLiterateLatex *> pure (Newline (len - 12)) }
+<literate> (. | @nl)
+  ;
 
 
-<0> $nl > $space*  / { isLiterate }                        { \_ len -> pure $! Newline $! len - 2 }
-<0> $nl [^>]       / { isLiterate .&&&. isInBirdEnv }      { \_ _   -> endLiterate }
-<0> ^ "\end{code}" / { isLiterate .&&&. isInLatexCodeEnv } { \_ _   -> endLiterate }
+<0> @nl > $space*
+  / { runAlexPredM (lmap fst isLiterate) }
+  { \_ len -> pure $! Newline $! len - 2 }
+<0> @nl [^>]
+  / { runAlexPredM (isLiterate .&&&. isInBirdEnv) }
+  { \_ _   -> endLiterate }
+<0> ^ "\end{code}"
+  / { runAlexPredM (isLiterate .&&&. isInLatexCodeEnv) }
+  { \_ _   -> endLiterate }
 
 <0> {
 
@@ -106,25 +127,45 @@ $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 
 }
 
+-- Preprocessor
+
+<0> "#" @cpp_opt_ws
+    "define" @cpp_nonempty_ws
+    @cpp_ident+
+    ( "(" @cpp_opt_ws @cpp_ident+ ( @cpp_opt_ws "," @cpp_opt_ws @cpp_ident+ )* @cpp_opt_ws ")" )?
+    @cpp_nonempty_ws @define_body
+  { \input len -> do
+      (name, macro) <- parsePreprocessorDefine $! retrieveToken input len
+      addMacroDef name macro
+      pure $ Newline 0
+  }
+
+<0> "#" @cpp_opt_ws
+    "undef" @cpp_nonempty_ws
+    @cpp_ident+
+  { \input len -> do
+      removeMacroDef $! retrieveToken input len
+      pure $ Newline 0
+  }
 
 -- Comments
 <0, comment> "{-"       { \_ _ -> startComment }
 <comment> "-}"          { \_ _ -> endComment }
-<comment> (. | $nl)     ;
+<comment> (. | @nl)     ;
 <0> "-}"                { \_ _ -> errorAtLine "Unmatched -}" }
 
 -- Strings
 <0> [\"]                { \_ _ -> startString }
 <string> [\"]           { \_ _ -> endString }
-<string> [\\] $nl ( $ws+ [\\] )? ;
+<string> [\\] @nl ( $ws+ [\\] )? ;
 <string> ( $ws+ | [^\"\\$nl] | [\\] . )+ ;
 
 -- Strings
 <0> [\"]                { \_ _ -> startString }
 <string> [\\] [\"\\]    ;
-<string> [\\] $nl ($ws+ [\\])? ;
+<string> [\\] @nl ($ws+ [\\])? ;
 <string> [\"]           { \_ _ -> endString }
-<string> (. | $nl)      ;
+<string> (. | @nl)      ;
 
 -- Characters
 <0> [\'] ( [^\'\\] | @charescape ) [\'] { kw Character }
@@ -134,7 +175,7 @@ $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 <0> "[" $ident* "|"     { \_ _ -> startQuasiquoter }
 <qq> "$("               { \_ _ -> startSplice CtxQuasiquoter }
 <qq> "|]"               { \_ _ -> endQuasiquoter }
-<qq> (. | $nl)          ;
+<qq> (. | @nl)          ;
 
 <0> "$("                { \_ _ -> startSplice CtxHaskell }
 
@@ -188,7 +229,7 @@ $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 ";"                     ;
 
 @qualificationPrefix ( $ident+ | $symbol+ )
-                        { \input len -> return $ T $ retrieveToken input len }
+                        { \input len -> pure $ T $ retrieveToken input len }
 
 }
 

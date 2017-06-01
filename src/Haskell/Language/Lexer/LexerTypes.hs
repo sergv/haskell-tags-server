@@ -12,8 +12,11 @@
 --
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
 
@@ -35,16 +38,24 @@ module Haskell.Language.Lexer.LexerTypes
   , popContext
   , modifyCommentDepth
   , modifyQuasiquoterDepth
+  , addMacroDef
+  , removeMacroDef
   , retrieveToken
+    -- * Alex monad
   , AlexT
   , runAlexT
   , alexSetInput
   , alexSetCode
   , AlexAction
+    -- * Predicates
+  , AlexPredM
+  , runAlexPredM
   , AlexPred
+  , matchedNameInPredicate
   , isLiterate
   , isInBirdEnv
   , isInLatexCodeEnv
+  , isNameDefined
   , (.&&&.)
     -- * Interface for alex
   , alexInputPrevChar
@@ -54,10 +65,15 @@ module Haskell.Language.Lexer.LexerTypes
 import Codec.Binary.UTF8.String (encodeChar)
 import Control.Applicative
 import Control.Monad.Except
-import Control.Monad.State
 import Control.Monad.Reader
+import Control.Monad.State
 import Data.Char
+import Data.Map (Map)
+import qualified Data.Map as M
 import Data.Maybe
+import Data.Profunctor
+import Data.Set (Set)
+import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Word (Word8)
@@ -65,6 +81,7 @@ import Text.PrettyPrint.Leijen.Text (Pretty, Doc)
 
 import Control.Monad.EitherK
 import FastTags.Token
+import Haskell.Language.Lexer.Preprocessor (PreprocessorMacro)
 
 advanceLine :: Char -> Line -> Line
 advanceLine '\n' = increaseLine
@@ -148,6 +165,7 @@ data AlexState = AlexState
   -- | Whether we're in bird-style or latex-style literate environment
   , asLiterateStyle    :: !(Maybe LiterateStyle)
   , asContextStack     :: [Context]
+  , asDefines          :: !(Map Text (Set PreprocessorMacro))
   } deriving (Eq, Ord, Show)
 
 mkAlexState :: AlexInput -> AlexCode -> AlexState
@@ -158,6 +176,7 @@ mkAlexState input code = AlexState
   , asQuasiquoterDepth = 0
   , asLiterateStyle    = Nothing
   , asContextStack     = []
+  , asDefines          = M.empty
   }
 
 alexEnterBirdLiterateEnv :: MonadState AlexState m => m ()
@@ -194,6 +213,15 @@ modifyQuasiquoterDepth f = do
   let depth' = f depth
   modify $ \s -> s { asQuasiquoterDepth = depth' }
   pure depth'
+
+addMacroDef :: MonadState AlexState m => Text -> PreprocessorMacro -> m ()
+addMacroDef name value =
+  modify $ \s -> s { asDefines = M.insertWith S.union name (S.singleton value) $ asDefines s }
+
+removeMacroDef :: MonadState AlexState m => Text -> m ()
+removeMacroDef _ =
+  -- Don't remove defines for now
+  pure ()
 
 retrieveToken :: AlexInput -> Int -> Text
 retrieveToken AlexInput{aiInput} len = T.take len aiInput
@@ -234,27 +262,67 @@ alexSetCode :: MonadState AlexState m => AlexCode -> m ()
 alexSetCode code = modify $ \s -> s { asCode = code }
 
 type AlexAction m = AlexInput -> Int -> m TokenVal
-type AlexPred a = a -> AlexInput -> Int -> AlexInput -> Bool
 
-isLiterate :: AlexPred (AlexEnv, b)
-isLiterate (env, _) _ _ _ = case aeLiterateMode env of
-  Literate -> True
-  Vanilla  -> False
 
-isInBirdEnv :: AlexPred (a, AlexState)
-isInBirdEnv (_, state) _ _ _ = case asLiterateStyle state of
-  Nothing    -> False
-  Just Latex -> False
-  Just Bird  -> True
+newtype AlexPredM r a = AlexPredM
+  { runAlexPredM
+      :: r         -- ^ Predicate state.
+      -> AlexInput -- ^ Input stream before the token.
+      -> Int       -- ^ Length of the token.
+      -> AlexInput -- ^ Input stream after the token.
+      -> a
+  } deriving (Functor)
 
-isInLatexCodeEnv :: AlexPred (a, AlexState)
-isInLatexCodeEnv (_, state) _ _ _ = case asLiterateStyle state of
-  Nothing    -> False
-  Just Latex -> True
-  Just Bird  -> False
+type AlexPred a = AlexPredM a Bool
 
-(.&&&.) :: AlexPred a -> AlexPred a -> AlexPred a
-(.&&&.) f g x y z w = f x y z w && g x y z w
+instance Applicative (AlexPredM r) where
+  pure x = AlexPredM $ \_ _ _ _ -> x
+  AlexPredM gf <*> AlexPredM gx =
+    AlexPredM $ \a b c d -> gf a b c d $ gx a b c d
+
+instance Monad (AlexPredM r) where
+  return = pure
+  AlexPredM gf >>= k =
+    AlexPredM $ \a b c d -> runAlexPredM (k (gf a b c d)) a b c d
+
+instance MonadReader r (AlexPredM r) where
+  ask = AlexPredM $ \x _ _ _ -> x
+  local f (AlexPredM g) = AlexPredM $ \a -> g (f a)
+
+instance Profunctor AlexPredM where
+  dimap f g (AlexPredM action) = AlexPredM $ \a b c d -> g $ action (f a) b c d
+
+matchedNameInPredicate :: AlexPredM r Text
+matchedNameInPredicate = AlexPredM $ \_ input len _ -> retrieveToken input len
+
+isLiterate :: AlexPred AlexEnv
+isLiterate = do
+  env <- ask
+  pure $ case aeLiterateMode env of
+    Literate -> True
+    Vanilla  -> False
+
+isInBirdEnv :: AlexPred AlexState
+isInBirdEnv = do
+  style <- asks asLiterateStyle
+  pure $ case style of
+    Nothing    -> False
+    Just Latex -> False
+    Just Bird  -> True
+
+isInLatexCodeEnv :: AlexPred AlexState
+isInLatexCodeEnv = do
+  style <- asks asLiterateStyle
+  pure $ case style of
+    Nothing    -> False
+    Just Latex -> True
+    Just Bird  -> False
+
+isNameDefined :: Text -> AlexPred AlexState
+isNameDefined name = asks (M.member name . asDefines)
+
+(.&&&.) :: AlexPred a -> AlexPred b -> AlexPred (a, b)
+(.&&&.) x y = (&&) <$> lmap fst x <*> lmap snd y
 
 -- Alex interface
 alexInputPrevChar :: AlexInput -> Char
