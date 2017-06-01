@@ -29,6 +29,12 @@ import Text.PrettyPrint.Leijen.Text.Ext (displayDocString)
 
 tests :: TestTree
 tests = testGroup "Preprocessor tests"
+  [ defineTests
+  , undefTests
+  ]
+
+defineTests :: TestTree
+defineTests = testGroup "#define"
   [ testGroup "Constants"
       [ testCase "Vanilla define" $
           "#define foo bar"
@@ -91,3 +97,21 @@ tests = testGroup "Preprocessor tests"
     -- f :: Text -> Either Doc (Text, PreprocessorMacro) -> Assertion
     -- f input expected =
     --   parsePreprocessorDefine input == expected
+
+undefTests :: TestTree
+undefTests = testGroup "#undef"
+  [ testCase "Vanilla undef" $
+      "#undef FOO"
+      ==> Right "FOO"
+  , testCase "Undef with some spaces" $
+      "#   undef    FOO"
+      ==> Right "FOO"
+  , testCase "Undef with lots of continuation lines" $
+      "# \\\n\
+      \  undef  \\\n\
+      \  F\\\n\
+      \OO"
+      ==> Right "FOO"
+  ]
+  where
+    (==>) = makeAssertion (left displayDocString . parsePreprocessorUndef)

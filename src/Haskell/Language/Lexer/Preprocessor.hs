@@ -20,6 +20,7 @@
 module Haskell.Language.Lexer.Preprocessor
   ( PreprocessorMacro(..)
   , parsePreprocessorDefine
+  , parsePreprocessorUndef
   ) where
 
 import Control.Monad.Except
@@ -37,6 +38,7 @@ data PreprocessorMacro =
       !Text            -- ^ Body
   deriving (Eq, Ord, Show)
 
+-- | Parse "#define ..." directive
 parsePreprocessorDefine
   :: MonadError Doc m
   => Text
@@ -44,11 +46,25 @@ parsePreprocessorDefine
 parsePreprocessorDefine =
   either (throwError . docFromString) pure . parseOnly (pDefine <* endOfInput)
 
+-- | Parse "#undef ..." directive
+parsePreprocessorUndef
+  :: MonadError Doc m
+  => Text
+  -> m Text
+parsePreprocessorUndef =
+  either (throwError . docFromString) pure . parseOnly (pUndef <* endOfInput)
+
+-- | Parse preprocessor directive start - hash, followed by optional whitespace,
+-- and literal directive name.
+pDirectiveStart :: Text -> Parser ()
+pDirectiveStart directive = do
+  _ <- char '#'    <?> "hash"
+  skipMany pCppWS  <?> "optional whitespace after hash"
+  void (string directive) <?> T.unpack directive
+
 pDefine :: Parser (Text, PreprocessorMacro)
 pDefine = do
-  _ <- char '#'          <?> "hash"
-  skipMany pCppWS        <?> "optional whitespace after hash"
-  _ <- string "define"   <?> "define"
+  pDirectiveStart "define"
   skipMany1 pCppWS       <?> "mandatory whitespace after define"
   name <- pCppIdentifier <?> "defined name"
   args <- option Nothing (Just <$> pArguments <?> "arguments")
@@ -58,6 +74,12 @@ pDefine = do
         Nothing    -> PreprocessorConstant body
         Just args' -> PreprocessorFunction args' body
   pure (name, body')
+
+pUndef :: Parser Text
+pUndef = do
+  pDirectiveStart "undef"
+  skipMany1 pCppWS <?> "mandatory whitespace after define"
+  pCppIdentifier   <?> "name"
 
 pCppIdentifier :: Parser Text
 pCppIdentifier =
