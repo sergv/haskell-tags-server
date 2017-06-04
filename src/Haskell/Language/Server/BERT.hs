@@ -30,7 +30,7 @@ module Haskell.Language.Server.BERT
 
 import Control.Concurrent
 import Control.Monad.Base
-import Control.Monad.Except
+import Control.Monad.Except.Ext
 import Control.Monad.Trans.Control
 import qualified Data.ByteString.Lazy.Char8 as C8
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
@@ -59,9 +59,11 @@ import Haskell.Language.Server.Tags.Types
 defaultPort :: PortNumber
 defaultPort = 10000
 
-decodeUtf8 :: MonadError Doc m => Doc -> UTF8.ByteString -> m T.Text
+decodeUtf8
+  :: (HasCallStack, MonadError Doc m)
+  => Doc -> UTF8.ByteString -> m T.Text
 decodeUtf8 thing =
-  either (throwError . mkErr) pure . TE.decodeUtf8' . C8.toStrict
+  either (throwErrorWithCallStack . mkErr) pure . TE.decodeUtf8' . C8.toStrict
   where
     mkErr = (msg <+>) . showDoc
     msg :: Doc
@@ -99,7 +101,7 @@ waitForBertServerStart :: MonadBase IO m => BertServer -> m ()
 waitForBertServerStart = waitForCondition . stStartedLock . bsTransport
 
 runBertServer
-  :: forall m. (MonadBase IO m, MonadBaseControl IO m, MonadLog m, StM m BERT.DispatchResult ~ BERT.DispatchResult)
+  :: forall m. (HasCallStack, MonadBase IO m, MonadBaseControl IO m, MonadLog m, StM m BERT.DispatchResult ~ BERT.DispatchResult)
   => PortNumber
   -> RequestHandler
   -> m BertServer
@@ -133,9 +135,9 @@ runBertServer port reqHandler = do
                         <$> (mkFullPath =<< decodeUtf8 "filename" filename)
                         <*> (compileRegex False . T.unpack =<< decodeUtf8 "regexp" regexp)
           response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
-          BERT.Success <$> either throwError (pure . responseToTerm) response
+          BERT.Success <$> either throwErrorWithCallStack (pure . responseToTerm) response
         _                                    ->
-          throwError $ "Expected 2 arguments but got:" <+> showDoc args
+          throwErrorWithCallStack $ "Expected 2 arguments but got:" <+> showDoc args
     go' "haskell-tags-server" "find" args =
       case args of
         [BinaryTerm filename, BinaryTerm symbol] -> do
@@ -143,9 +145,9 @@ runBertServer port reqHandler = do
                         <$> (mkFullPath =<< decodeUtf8 "filename" filename)
                         <*> (mkSymbolName <$> decodeUtf8 "symbol to find" symbol)
           response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
-          BERT.Success <$> either throwError (pure . responseToTerm) response
+          BERT.Success <$> either throwErrorWithCallStack (pure . responseToTerm) response
         _                                    ->
-          throwError $ "Expected 2 arguments but got:" <+> showDoc args
+          throwErrorWithCallStack $ "Expected 2 arguments but got:" <+> showDoc args
     go' "haskell-tags-server" _ _ = pure BERT.NoSuchFunction
     go' _                     _ _ = pure BERT.NoSuchModule
 

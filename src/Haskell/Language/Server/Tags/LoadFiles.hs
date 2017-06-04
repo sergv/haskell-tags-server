@@ -26,7 +26,7 @@ import Prelude hiding (readFile)
 
 import Control.Arrow ((&&&))
 import Control.Monad.Catch
-import Control.Monad.Except
+import Control.Monad.Except.Ext
 import Control.Monad.State.Strict
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
@@ -63,7 +63,7 @@ data ResolveState = ResolveState
   }
 
 loadAllFilesIntoState
-  :: forall m. (MonadCatch m, MonadError Doc m, MonadLog m, MonadFS m)
+  :: forall m. (HasCallStack, MonadCatch m, MonadError Doc m, MonadLog m, MonadFS m)
   => TagsServerConf
   -> m (Map ImportKey (NonEmpty ResolvedModule))
 loadAllFilesIntoState conf = do
@@ -109,12 +109,19 @@ loadAllFilesIntoState conf = do
             let currentlyLoading = rsLoadingModules state
             if M.member key currentlyLoading
             then
-              throwError $ "[loadAllFilesIntoState.doResolve] found import loop: module" <+> PP.dquotes (pretty key) <+>
-                "was required while being loaded"
+              throwErrorWithCallStack $ PP.hsep
+                [ "[loadAllFilesIntoState.doResolve] found import loop: module"
+                , PP.dquotes (pretty key)
+                , "was required while being loaded"
+                ]
             else
               case M.lookup key unresolvedModulesMap of
                 Nothing         ->
-                  throwError $ "[loadAllFilesIntoState.doResolve] imported module" <+> PP.dquotes (pretty key) <+> "not found"
+                  throwErrorWithCallStack $ PP.hsep
+                    [ "[loadAllFilesIntoState.doResolve] imported module"
+                    , PP.dquotes (pretty key)
+                    , "not found"
+                    ]
                 Just unresolved -> do
                   let unresolvedMap = NEMap.fromNonEmpty $ (modFile &&& id) <$> unresolved
                   logDebug $ "[loadAllFilesIntoState.doResolve] currentlyLoading =" <+> ppMap (ppNE . NEMap.keysNE <$> currentlyLoading)

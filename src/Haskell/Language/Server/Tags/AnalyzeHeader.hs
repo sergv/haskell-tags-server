@@ -25,7 +25,7 @@ module Haskell.Language.Server.Tags.AnalyzeHeader
 
 import Control.Arrow (first, second)
 import Control.Category ((>>>))
-import Control.Monad.Except
+import Control.Monad.Except.Ext
 import Control.Monad.Trans.Maybe
 import Data.Char
 import Data.Foldable (toList)
@@ -101,7 +101,7 @@ pattern PSourcePragma :: Pos TokenVal
 pattern PSourcePragma <- Pos _ (Pragma SourcePragma)
 
 analyzeImports
-  :: forall m. (MonadError Doc m, MonadLog m)
+  :: forall m. (HasCallStack, MonadError Doc m, MonadLog m)
   => SubkeyMap ImportKey (NonEmpty UnresolvedImportSpec)
   -> Map ImportQualifier (NonEmpty ModuleName)
   -> [Token]
@@ -237,7 +237,7 @@ analyzeImports imports qualifiers ts = do
             PLParen : rest                                                    ->
               findImportListEntries importType acc rest
             rest                                                              ->
-              throwError $ "Unrecognized shape of import list:" <+> ppTokens rest
+              throwErrorWithCallStack $ "Unrecognized shape of import list:" <+> ppTokens rest
           where
             importList :: ImportList
             importList = ImportList
@@ -259,11 +259,11 @@ analyzeImports imports qualifiers ts = do
         mkUnqualName name =
           case mkUnqualifiedSymbolName (mkSymbolName name) of
             Nothing    ->
-              throwError $ "Invalid qualified entry on import list:" <+> docFromText name
+              throwErrorWithCallStack $ "Invalid qualified entry on import list:" <+> docFromText name
             Just name' -> pure name'
 
 analyzeExports
-  :: forall m. (MonadError Doc m, MonadLog m)
+  :: forall m. (HasCallStack, MonadError Doc m, MonadLog m)
   => Map ImportQualifier (NonEmpty ModuleName)
   -> [Token]
   -> m (Maybe ModuleExports)
@@ -273,7 +273,7 @@ analyzeExports importQualifiers ts = do
     []            -> pure Nothing
     PLParen : rest -> Just <$> go mempty mempty rest
     toks          ->
-      throwError $ "Unrecognized shape of export list:" <+> ppTokens toks
+      throwErrorWithCallStack $ "Unrecognized shape of export list:" <+> ppTokens toks
   where
     -- Analyze comma-separated list of entries like
     -- - Foo
@@ -330,7 +330,7 @@ analyzeExports importQualifiers ts = do
         PLParen : rest                                                    ->
           go entries reexports rest
         toks                                                              ->
-          throwError $ "Unrecognized export list structure:" <+> ppTokens toks
+          throwErrorWithCallStack $ "Unrecognized export list structure:" <+> ppTokens toks
       where
         exports :: ModuleExports
         exports = ModuleExports
@@ -385,7 +385,7 @@ instance Monoid WildcardPresence where
   mappend = (<>)
 
 analyzeChildren
-  :: forall m. (MonadError Doc m)
+  :: forall m. (HasCallStack, MonadError Doc m)
   => Doc -> [Token] -> (ChildrenPresence, m (Maybe ChildrenVisibility, [Token]))
 analyzeChildren listType toks =
   case dropNLs toks of
@@ -405,10 +405,11 @@ analyzeChildren listType toks =
       | isAsciiName name -> (ChildrenAbsent, pure (Nothing, toks))
       | otherwise        -> analyzeList rest
     toks                                             ->
-      (ChildrenAbsent, throwError $ "Cannot handle children of" <+> listType <> ":" <+> ppTokens toks)
+      (ChildrenAbsent, throwErrorWithCallStack $ "Cannot handle children of" <+> listType <> ":" <+> ppTokens toks)
   where
     analyzeList
-      :: [Token]
+      :: HasCallStack
+      => [Token]
       -> (ChildrenPresence, m (Maybe ChildrenVisibility, [Token]))
     analyzeList = second (fmap mkVisibility) . extractChildren mempty mempty . dropNLs
       where
@@ -428,7 +429,8 @@ analyzeChildren listType toks =
                   WildcardAbsent  -> Just $ VisibleSpecificChildren children
 
     extractChildren
-      :: WildcardPresence
+      :: HasCallStack
+      => WildcardPresence
       -> Set UnqualifiedSymbolName
       -> [Token]
       -> (ChildrenPresence, m (Set UnqualifiedSymbolName, WildcardPresence, [Token]))
@@ -447,7 +449,7 @@ analyzeChildren listType toks =
           extractChildren wildcardPresence (S.insert name' names) $ dropCommas rest
       PLParen : rest -> extractChildren wildcardPresence names $ dropNLs rest
       toks           ->
-        (ChildrenAbsent, throwError $ "Unrecognized children list structure:" <+> ppTokens toks)
+        (ChildrenAbsent, throwErrorWithCallStack $ "Unrecognized children list structure:" <+> ppTokens toks)
       where
         childrenPresence
           | S.null names =

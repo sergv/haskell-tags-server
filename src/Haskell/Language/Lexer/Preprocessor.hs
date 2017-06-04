@@ -23,7 +23,7 @@ module Haskell.Language.Lexer.Preprocessor
   , parsePreprocessorUndef
   ) where
 
-import Control.Monad.Except
+import Control.Monad.Except.Ext
 import Data.Attoparsec.Text
 import Data.Char (isAlphaNum)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -40,19 +40,19 @@ data PreprocessorMacro =
 
 -- | Parse "#define ..." directive
 parsePreprocessorDefine
-  :: MonadError Doc m
+  :: (HasCallStack, MonadError Doc m)
   => Text
   -> m (Text, PreprocessorMacro)
 parsePreprocessorDefine =
-  either (throwError . docFromString) pure . parseOnly (pDefine <* endOfInput)
+  either (throwErrorWithCallStack . docFromString) pure . parseOnly (pDefine <* endOfInput)
 
 -- | Parse "#undef ..." directive
 parsePreprocessorUndef
-  :: MonadError Doc m
+  :: (HasCallStack, MonadError Doc m)
   => Text
   -> m Text
 parsePreprocessorUndef =
-  either (throwError . docFromString) pure . parseOnly (pUndef <* endOfInput)
+  either (throwErrorWithCallStack . docFromString) pure . parseOnly (pUndef <* endOfInput)
 
 -- | Parse preprocessor directive start - hash, followed by optional whitespace,
 -- and literal directive name.

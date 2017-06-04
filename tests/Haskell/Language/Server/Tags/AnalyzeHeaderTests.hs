@@ -21,7 +21,7 @@
 module Haskell.Language.Server.Tags.AnalyzeHeaderTests (tests) where
 
 import Control.Arrow
-import Control.Monad.Except
+import Control.Monad.Except.Ext
 import Control.Monad.Writer
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
@@ -1844,7 +1844,7 @@ tests = testGroup "Header analysis tests"
     ]
   ]
 
-doTest :: Test -> TestTree
+doTest :: HasCallStack => Test -> TestTree
 doTest TestCase{testName, input, expectedResult} =
   testCase testName $ do
     let (res, logs) = runWriter $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runExceptT $ analyzeHeader =<< tokens
@@ -1884,5 +1884,5 @@ doTest TestCase{testName, input, expectedResult} =
         unless (header == expectedResult) $
           assertFailure $ displayDocString $ msg PP.<$> logsDoc
   where
-    tokens :: forall m. (MonadError Doc m) => m [Token]
-    tokens = either throwError pure $ tokenize "test.hs" input
+    tokens :: forall m. MonadError Doc m => m [Token]
+    tokens = either throwErrorWithCallStack pure $ tokenize "test.hs" input

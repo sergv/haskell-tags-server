@@ -15,11 +15,10 @@
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections       #-}
 
 module Haskell.Language.Server.Tags.Search (findSymbol) where
 
-import Control.Monad.Except
+import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Char
@@ -46,7 +45,7 @@ findSymbol filename sym = do
 
 -- | Try to find out what @sym@ refers to in the context of module @mod@.
 findInModule
-  :: forall m. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: forall m. (HasCallStack, MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => SymbolName
   -> ResolvedModule
   -> m [ResolvedSymbol]
@@ -64,7 +63,7 @@ findInModule sym mod =
       resolvedSpecs <- resolveQualifier qualifier' header
       case resolvedSpecs of
         Nothing     ->
-          throwError $ "Qualifier" <+> showDoc qualifier' <+>
+          throwErrorWithCallStack $ "Qualifier" <+> showDoc qualifier' <+>
             "not listed among module's import qualifiers:" <+> showDoc (mhImportQualifiers header)
         Just specs ->
           lookUpInImportedModules sym' specs
@@ -76,7 +75,7 @@ findInModule sym mod =
     header = modHeader mod
 
 lookUpInImportedModules
-  :: forall m f. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: forall m f. (HasCallStack, MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => (Foldable f)
   => UnqualifiedSymbolName
   -> f ResolvedImportSpec
@@ -95,7 +94,7 @@ lookUpInImportedModules name specs = do
     else pure mempty
 
 lookUpInImportedModule
-  :: forall m. (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: forall m. (HasCallStack, MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => UnqualifiedSymbolName
   -> ResolvedModule
   -> m [ResolvedSymbol]
@@ -106,10 +105,12 @@ lookUpInImportedModule name importedMod =
 
 -- | Try to infer suitable module name from the file name. Tries to take
 -- as much directory names that start with the uppercase letter as possible.
-fileNameToModuleName :: MonadError Doc m => FullPath -> m ModuleName
+fileNameToModuleName
+  :: (HasCallStack, MonadError Doc m)
+  => FullPath -> m ModuleName
 fileNameToModuleName fname =
   case reverse $ splitDirectories fname of
-    []            -> throwError "Cannot convert empty file name to module name"
+    []            -> throwErrorWithCallStack "Cannot convert empty file name to module name"
     fname' : dirs ->
       pure $
       mkModuleName $

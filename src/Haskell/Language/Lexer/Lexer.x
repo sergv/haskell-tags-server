@@ -14,7 +14,7 @@ module Haskell.Language.Lexer.Lexer (tokenizeM) where
 
 import Control.Applicative
 import Control.Monad
-import Control.Monad.Except
+import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Profunctor (lmap)
@@ -260,7 +260,7 @@ alexMonadScan = do
   line     <- gets (aiLine . asInput)
   Pos (mkSrcPos filename line) <$> alexScanTokenVal
 
-alexScanTokenVal :: Monad m => AlexT m TokenVal
+alexScanTokenVal :: (HasCallStack, Monad m) => AlexT m TokenVal
 alexScanTokenVal = do
   env                              <- ask
   state@AlexState{asInput, asCode} <- get
@@ -269,7 +269,7 @@ alexScanTokenVal = do
       pure EOF
     AlexError AlexInput{aiLine, aiInput} -> do
       AlexState{asCode} <- get
-      throwError $ "lexical error while in state" <+> pretty asCode <+> "at line" <+>
+      throwErrorWithCallStack $ "lexical error while in state" <+> pretty asCode <+> "at line" <+>
         pretty (unLine aiLine) <> ":" <+> pretty (TL.fromStrict (T.take 40 aiInput))
     AlexSkip input _                     -> do
       alexSetInput input
@@ -332,10 +332,10 @@ tryRestoringContext = do
     CtxHaskell     -> startCode
     CtxQuasiquoter -> qqCode
 
-errorAtLine :: (MonadError Doc m, MonadState AlexState m) => Doc -> m a
+errorAtLine :: (HasCallStack,MonadError Doc m, MonadState AlexState m) => Doc -> m a
 errorAtLine msg = do
   line <- gets (unLine . aiLine . asInput)
-  throwError $ pretty line <> ":" <+> msg
+  throwErrorWithCallStack $ pretty line <> ":" <+> msg
 
 startLiterateBird :: Monad m => AlexT m ()
 startLiterateBird = do

@@ -47,9 +47,10 @@ module Text.PrettyPrint.Leijen.Text.Ext
   , Pretty(..)
   , Doc
   , ppTrace
+  , ppCallStack
   ) where
 
-import Control.Arrow (second)
+import Control.Arrow (second, (***))
 import Control.Monad.Base
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
 import Data.Foldable (toList)
@@ -63,6 +64,7 @@ import qualified Data.Text.Encoding.Error as TEE
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
 import qualified Data.Text.Lazy.IO as TLIO
+import GHC.Stack
 import Text.PrettyPrint.Leijen.Text (Pretty(..), Doc, (<+>))
 import qualified Text.PrettyPrint.Leijen.Text as PP
 
@@ -174,3 +176,10 @@ instance (Pretty k, Pretty v) => Pretty (MapEntry k v) where
 ppTrace :: Bool -> Doc -> a -> a
 ppTrace False _   = id
 ppTrace True  msg = trace (displayDocString msg)
+
+ppCallStack :: HasCallStack => Doc
+ppCallStack =
+  PP.vcat $
+  map (\(name, loc) -> name <> ":" PP.<+> loc) $
+  map (docFromString *** docFromString . prettySrcLoc) $
+  getCallStack callStack

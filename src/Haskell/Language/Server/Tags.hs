@@ -33,7 +33,7 @@ import Control.Concurrent
 import Control.Monad
 import Control.Monad.Base
 import Control.Monad.Catch
-import Control.Monad.Except
+import Control.Monad.Except.Ext
 import Control.Monad.Trans.Control
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup
@@ -60,17 +60,17 @@ data TagsServer = TagsServer
   , tsThreadId       :: ThreadId
   }
 
-stopTagsServer :: (MonadBase IO m) => TagsServer -> m ()
+stopTagsServer :: MonadBase IO m => TagsServer -> m ()
 stopTagsServer = liftBase . killThread . tsThreadId
 
 -- | Block until tags server stops.
-waitForTagsServerFinish :: (MonadBase IO m) => TagsServer -> m TagsServerState
+waitForTagsServerFinish :: MonadBase IO m => TagsServer -> m TagsServerState
 waitForTagsServerFinish = liftBase . readMVar . tsFinishState
 
 -- | Start new tags server thread that will serve requests supplied via returned
 -- RequestHandler.
 startTagsServer
-  :: forall m. (MonadBase IO m, MonadBaseControl IO m, MonadCatch m, MonadError Doc m, MonadLog m, MonadFS m)
+  :: forall m. (HasCallStack, MonadBase IO m, MonadBaseControl IO m, MonadCatch m, MonadError Doc m, MonadLog m, MonadFS m)
   => TagsServerConf
   -> TagsServerState
   -> m TagsServer
@@ -120,13 +120,15 @@ startTagsServer conf state = do
               s:ss -> pure $ Found $ s :| ss
           FindSymbolByRegexp filename _ -> do
             ensureFileExists filename
-            throwError "Search by regexp is not implemented yet"
+            throwErrorWithCallStack "Search by regexp is not implemented yet"
       logDebug $ "[startTagsServer.handleReq] got response:" <+> either id pretty response
       Promise.putValue responsePromise response
       pure state'
 
-ensureFileExists :: (MonadFS m, MonadError Doc m) => FullPath -> m ()
+ensureFileExists
+  :: (HasCallStack, MonadFS m, MonadError Doc m)
+  => FullPath -> m ()
 ensureFileExists path = do
   exists <- doesFileExist path
   unless exists $
-    throwError $ "Error: file" <+> PP.dquotes (pretty path) <+> "does not exist"
+    throwErrorWithCallStack $ "Error: file" <+> PP.dquotes (pretty path) <+> "does not exist"

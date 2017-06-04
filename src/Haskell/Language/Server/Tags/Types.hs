@@ -60,7 +60,7 @@ module Haskell.Language.Server.Tags.Types
   , ChildrenVisibility(..)
   ) where
 
-import Control.Monad.Except
+import Control.Monad.Except.Ext
 import Data.Char
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -227,7 +227,7 @@ instance Pretty a => Pretty (ModuleHeader a) where
 
 -- | Find out which modules a given @ImportQualifier@ refers to.
 resolveQualifier
-  :: MonadError Doc m
+  :: (HasCallStack, MonadError Doc m)
   => ImportQualifier
   -> ModuleHeader a
   -> m (Maybe (NonEmpty (ImportSpec a)))
@@ -242,7 +242,7 @@ resolveQualifier qual ModuleHeader{mhImports, mhImportQualifiers} =
               []    ->
                 -- If module's not found then this is a violation of internal
                 -- invariant of ModuleHeader module header datastructure.
-                throwError $
+                throwErrorWithCallStack $
                   "Internal error: module" <+> pretty modName <+>
                   "for qualifier" <+> pretty qual <+> "not found in the imports map"
               s:ss -> pure $ sconcat $ s :| ss

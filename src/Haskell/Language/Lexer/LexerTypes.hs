@@ -64,7 +64,7 @@ module Haskell.Language.Lexer.LexerTypes
 
 import Codec.Binary.UTF8.String (encodeChar)
 import Control.Applicative
-import Control.Monad.Except
+import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Char
@@ -191,11 +191,11 @@ alexExitLiterateEnv = modify $ \s -> s { asLiterateStyle = Nothing }
 pushContext :: MonadState AlexState m => Context -> m ()
 pushContext ctx = modify (\s -> s { asContextStack = ctx : asContextStack s })
 
-popContext :: (MonadState AlexState m, MonadError Doc m) => m Context
+popContext :: (HasCallStack, MonadState AlexState m, MonadError Doc m) => m Context
 popContext = do
   cs <- gets asContextStack
   case cs of
-    []      -> throwError "Popping empty context stack"
+    []      -> throwErrorWithCallStack "Popping empty context stack"
     c : cs' -> do
       modify $ \s -> s { asContextStack = cs' }
       pure c

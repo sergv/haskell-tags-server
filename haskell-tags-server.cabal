@@ -53,6 +53,7 @@ library
   exposed-modules:
     Control.Arrow.Ext
     Control.Monad.Ext
+    Control.Monad.Except.Ext
     Control.Monad.Filesystem
     Control.Monad.Filesystem.FileSearch
     Control.Monad.Filesystem.FileSearch.Class

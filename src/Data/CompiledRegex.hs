@@ -23,7 +23,8 @@ module Data.CompiledRegex
   , compileRegex
   ) where
 
-import Control.Monad.Except
+import Control.Monad.Except.Ext
+import Data.Function (on)
 import qualified Data.Text.Lazy as TL
 import Text.PrettyPrint.Leijen.Text (Doc)
 import qualified Text.PrettyPrint.Leijen.Text as PP
@@ -37,19 +38,21 @@ data CompiledRegex = CompiledRegex
   }
 
 instance Show CompiledRegex where
-  show CompiledRegex{source} = "Compil\
-                               \edRegex " ++ show source
+  show CompiledRegex{source} = "CompiledRegex " ++ show source
 
 instance Eq CompiledRegex where
-  CompiledRegex src _ == CompiledRegex src' _ = src == src'
+  (==) = (==) `on` source
 
 instance Ord CompiledRegex where
-  CompiledRegex src _ `compare` CompiledRegex src' _ = src `compare` src'
+  compare = compare `on` source
 
-compileRegex :: MonadError Doc m => Bool -> String -> m CompiledRegex
+compileRegex
+  :: (HasCallStack, MonadError Doc m)
+  => Bool -> String -> m CompiledRegex
 compileRegex captureGroups src =
   case makeRegexOptsM compOpt execOpt src of
-    Left err -> throwError $ "Invalid regexp. Error:" <+> PP.text (TL.pack err)
+    Left err -> throwErrorWithCallStack $
+      "Invalid regexp. Error:" <+> PP.text (TL.pack err)
     Right re -> pure CompiledRegex
       { source = src
       , regex  = re
