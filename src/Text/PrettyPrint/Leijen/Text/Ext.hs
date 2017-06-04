@@ -77,7 +77,7 @@ import qualified Data.SubkeyMap as SubkeyMap
 
 import Debug.Trace
 
-putDocLn :: (MonadBase IO m) => Doc -> m ()
+putDocLn :: MonadBase IO m => Doc -> m ()
 putDocLn = liftBase . TLIO.putStrLn . displayDoc
 
 displayDoc :: Doc -> TL.Text
@@ -86,13 +86,13 @@ displayDoc = PP.displayT . PP.renderPretty 0.9 80
 displayDocString :: Doc -> String
 displayDocString = TL.unpack . displayDoc
 
-show' :: (Show a) => a -> T.Text
+show' :: Show a => a -> T.Text
 show' = T.pack . show
 
-show'' :: (Show a) => a -> TL.Text
+show'' :: Show a => a -> TL.Text
 show'' = TL.pack . show
 
-showDoc :: (Show a) => a -> Doc
+showDoc :: Show a => a -> Doc
 showDoc = docFromString . show
 
 docFromString :: String -> Doc
@@ -104,7 +104,7 @@ docFromByteString = PP.text . TLE.decodeUtf8With TEE.lenientDecode
 docFromText :: T.Text -> Doc
 docFromText = PP.text . TL.fromStrict
 
-ppList :: forall a. (Pretty a) => [a] -> Doc
+ppList :: forall a. Pretty a => [a] -> Doc
 ppList = ppList' PP.lbracket PP.rbracket
 
 ppList' :: forall a f. (Pretty a, Functor f, Foldable f) => Doc -> Doc -> f a -> Doc
@@ -121,13 +121,13 @@ ppList' left right xs =
   where
     separator = ","
 
-ppAlist :: (Pretty a) => [MapEntry TL.Text a] -> Doc
+ppAlist :: Pretty a => [MapEntry TL.Text a] -> Doc
 ppAlist entries = ppList' PP.lbrace PP.rbrace entries'
   where
     entries' = map (\(k :-> v) -> PP.fillBreak maxWidth (PP.text k) :-> v) entries
     maxWidth = fromIntegral $ maximum $ map (\(k :-> _) -> TL.length k) entries
 
-ppDict :: (Pretty a) => Doc -> [MapEntry TL.Text a] -> Doc
+ppDict :: Pretty a => Doc -> [MapEntry TL.Text a] -> Doc
 ppDict header entries =
   PP.nest 2 $ header PP.<$> ppAlist entries
 
@@ -154,10 +154,10 @@ ppSubkeyMap sm = ppDict "SubkeyMap"
 ppAlist' :: (Pretty k, Pretty v) => [(k, v)] -> Doc
 ppAlist' = ppList' PP.lbrace PP.rbrace . map (uncurry (:->))
 
-ppNE :: (Pretty a) => NonEmpty a -> Doc
+ppNE :: Pretty a => NonEmpty a -> Doc
 ppNE = ppList' PP.lbracket PP.rbracket . toList
 
-ppSet :: (Pretty a) => Set a -> Doc
+ppSet :: Pretty a => Set a -> Doc
 ppSet = ppList' PP.lbrace PP.rbrace . toList
 
 ppNEMap :: (Pretty k, Pretty v) => NonEmptyMap k v -> Doc
