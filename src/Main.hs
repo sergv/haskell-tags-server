@@ -113,7 +113,7 @@ main = do
       ]
     result <- runExceptT $ startTagsServer conf state
     case result of
-      Left err         -> putDocLn err
+      Left err         -> putDocLn $ pretty err
       Right tagsServer -> do
         bertServer <- runBertServer cfgPort $ tsRequestHandler tagsServer
         waitForBertServerStart bertServer

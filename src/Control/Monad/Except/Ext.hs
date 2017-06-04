@@ -13,7 +13,6 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 module Control.Monad.Except.Ext
   ( throwErrorWithCallStack
@@ -23,12 +22,17 @@ module Control.Monad.Except.Ext
 
 import Control.Monad.Except
 import qualified Control.Monad.Except as ExceptExport hiding (throwError)
-import GHC.Stack (HasCallStack)
-import qualified Text.PrettyPrint.Leijen.Text as PP
+import GHC.Stack (HasCallStack, callStack)
 import Text.PrettyPrint.Leijen.Text.Ext
 
-throwErrorWithCallStack :: MonadError Doc m => Doc -> m a
-throwErrorWithCallStack msg = throwError $
-  msg PP.<$> PP.nest 2 ("Backtrace:" PP.<$> ppCallStack)
+import Data.ErrorMessage
+
+throwErrorWithCallStack
+  :: (HasCallStack, MonadError ErrorMessage m)
+  => Doc -> m a
+throwErrorWithCallStack msg = throwError $ ErrorMessage
+  { errorMessageBody      = msg
+  , errorMessageBacktrace = callStack
+  }
 
 

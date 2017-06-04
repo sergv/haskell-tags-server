@@ -23,7 +23,7 @@ import Control.Arrow (left)
 
 import Haskell.Language.Lexer.Preprocessor
 import TestUtils (makeAssertion)
-import Text.PrettyPrint.Leijen.Text.Ext (displayDocString)
+import Text.PrettyPrint.Leijen.Text.Ext (pretty, displayDocString)
 
 tests :: TestTree
 tests = testGroup "Preprocessor tests"
@@ -91,7 +91,7 @@ defineTests = testGroup "#define"
       ]
   ]
   where
-    (==>) = makeAssertion (left displayDocString . parsePreprocessorDefine)
+    (==>) = makeAssertion (left (displayDocString . pretty) . parsePreprocessorDefine)
     -- f :: Text -> Either Doc (Text, PreprocessorMacro) -> Assertion
     -- f input expected =
     --   parsePreprocessorDefine input == expected
@@ -112,4 +112,4 @@ undefTests = testGroup "#undef"
       ==> Right "FOO"
   ]
   where
-    (==>) = makeAssertion (left displayDocString . parsePreprocessorUndef)
+    (==>) = makeAssertion (left (displayDocString . pretty) . parsePreprocessorUndef)

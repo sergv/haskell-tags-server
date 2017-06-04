@@ -62,6 +62,7 @@ library
     Control.Monad.Logging.Simple
     Data.CompiledRegex
     Data.Condition
+    Data.ErrorMessage
     Data.Foldable.Ext
     Data.KeyMap
     Data.Map.NonEmpty

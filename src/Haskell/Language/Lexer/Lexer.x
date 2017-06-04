@@ -24,10 +24,11 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import Text.PrettyPrint.Leijen.Text.Ext (Doc, Pretty(..), (<+>))
 
-import Haskell.Language.Lexer.LexerTypes
-import qualified Haskell.Language.Lexer.InputStack as InputStack
-import Haskell.Language.Lexer.Preprocessor
+import Data.ErrorMessage
 import FastTags.Token
+import qualified Haskell.Language.Lexer.InputStack as InputStack
+import Haskell.Language.Lexer.LexerTypes
+import Haskell.Language.Lexer.Preprocessor
 
 }
 
@@ -281,7 +282,9 @@ $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 kw :: Applicative m => TokenVal -> AlexAction m
 kw tok = \_ _ -> pure tok
 
-tokenizeM :: Monad m => FilePath -> LiterateMode -> Text -> m (Either Doc [Token])
+tokenizeM
+  :: (HasCallStack, Monad m)
+  => FilePath -> LiterateMode -> Text -> m (Either ErrorMessage [Token])
 tokenizeM filename mode input =
   runAlexT filename mode code toplevelCode input scanTokens
   where
@@ -378,7 +381,9 @@ tryRestoringContext = do
     CtxHaskell     -> alexToplevelCode
     CtxQuasiquoter -> alexSetCode qqCode
 
-errorAtLine :: (HasCallStack,MonadError Doc m, MonadState AlexState m) => Doc -> m a
+errorAtLine
+  :: (HasCallStack, MonadError ErrorMessage m, MonadState AlexState m)
+  => Doc -> m a
 errorAtLine msg = do
   line <- gets (unLine . aiLine . asInput)
   throwErrorWithCallStack $ pretty line <> ":" <+> msg

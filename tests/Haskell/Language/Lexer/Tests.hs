@@ -24,6 +24,7 @@ import Data.Functor.Identity
 import Data.List (sort)
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Text.PrettyPrint.Leijen.Text.Ext as PP
 
 import qualified FastTags.Tag as Tag
 import FastTags.Tag (TagVal(..), Pos(..), UnstrippedTokens(..), Type(..))
@@ -1389,7 +1390,10 @@ untag :: Pos TagVal -> String
 untag (Pos _ (TagVal name _ _)) = T.unpack name
 
 tokenize' :: FilePath -> LiterateMode -> Text -> [Token]
-tokenize' fn mode = either (error . show) id . runIdentity . Lexer.tokenizeM fn mode
+tokenize' fn mode =
+    either (error . PP.displayDocString . PP.pretty) id
+  . runIdentity
+  . Lexer.tokenizeM fn mode
 
 -- tokenize''
 --   :: FilePath

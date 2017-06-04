@@ -21,13 +21,13 @@ module Haskell.Language.Lexer
 import Data.Functor.Identity
 import Data.Text (Text)
 import System.FilePath
-import Text.PrettyPrint.Leijen.Text.Ext (Doc)
 import FastTags.Token (Token)
 
+import Data.ErrorMessage
 import Haskell.Language.Lexer.Lexer (tokenizeM)
 import Haskell.Language.Lexer.LexerTypes (LiterateMode(..))
 
-tokenize :: FilePath -> Text -> Either Doc [Token]
+tokenize :: FilePath -> Text -> Either ErrorMessage [Token]
 tokenize filename = runIdentity . tokenizeM filename mode
   where
     mode :: LiterateMode

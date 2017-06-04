@@ -21,6 +21,7 @@
 module Haskell.Language.Server.Tags.AnalyzeHeaderTests (tests) where
 
 import Control.Arrow
+import Control.Monad.Except (throwError)
 import Control.Monad.Except.Ext
 import Control.Monad.Writer
 import qualified Data.List.NonEmpty as NE
@@ -36,6 +37,7 @@ import Haskell.Language.Lexer (tokenize)
 import FastTags.Token (Token)
 
 import Control.Monad.Logging.Simple
+import Data.ErrorMessage
 import qualified Data.KeyMap as KM
 import qualified Data.SubkeyMap as SubkeyMap
 import Data.Symbols
@@ -1850,7 +1852,7 @@ doTest TestCase{testName, input, expectedResult} =
     let (res, logs) = runWriter $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runExceptT $ analyzeHeader =<< tokens
         logsDoc     = "Logs, size " <> pretty (length logs) <> ":" PP.<$> PP.indent 2 (PP.vcat logs)
     case res of
-      Left msg               -> assertFailure $ displayDocString $ msg PP.<$> logsDoc
+      Left msg               -> assertFailure $ displayDocString $ pretty msg PP.<$> logsDoc
       Right (Nothing, _)     -> assertFailure $ displayDocString $
         "No header detected, but was expecting header" PP.<$> pretty expectedResult PP.<$> logsDoc
       Right (Just header, _) -> do
@@ -1884,5 +1886,5 @@ doTest TestCase{testName, input, expectedResult} =
         unless (header == expectedResult) $
           assertFailure $ displayDocString $ msg PP.<$> logsDoc
   where
-    tokens :: forall m. MonadError Doc m => m [Token]
-    tokens = either throwErrorWithCallStack pure $ tokenize "test.hs" input
+    tokens :: forall m. MonadError ErrorMessage m => m [Token]
+    tokens = either throwError pure $ tokenize "test.hs" input

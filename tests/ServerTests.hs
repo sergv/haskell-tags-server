@@ -1019,8 +1019,8 @@ connect pool sourceDir dirTree =
         conf <- mkTestsConfig sourceDir dirTree
         serv <- runExceptT $ mkLogCollectingServer conf port
         case serv of
-          Left err -> throwIO $ ErrorCall $
-            "Failed to start local server\n" ++ show err
+          Left err -> throwIO $ ErrorCall $ displayDocString $
+            "Failed to start local server:" PP.<$> pretty err
           Right serv' -> do
             waitUntilStart serv'
             conn <- tryConnect port

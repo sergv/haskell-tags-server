@@ -37,7 +37,7 @@ import Control.Monad.Except.Ext
 import Control.Monad.Trans.Control
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup
-import Text.PrettyPrint.Leijen.Text (Doc, (<+>), pretty)
+import Text.PrettyPrint.Leijen.Text ((<+>), pretty)
 import qualified Text.PrettyPrint.Leijen.Text as PP
 
 import Data.Promise (Promise)
@@ -45,6 +45,7 @@ import qualified Data.Promise as Promise
 
 import Control.Monad.Filesystem (MonadFS(..))
 import Control.Monad.Logging
+import Data.ErrorMessage
 import Data.Path (FullPath)
 import qualified Data.SubkeyMap as SubkeyMap
 import Haskell.Language.Server.Tags.LoadFiles
@@ -70,7 +71,7 @@ waitForTagsServerFinish = liftBase . readMVar . tsFinishState
 -- | Start new tags server thread that will serve requests supplied via returned
 -- RequestHandler.
 startTagsServer
-  :: forall m. (HasCallStack, MonadBase IO m, MonadBaseControl IO m, MonadCatch m, MonadError Doc m, MonadLog m, MonadFS m)
+  :: forall m. (HasCallStack, MonadBase IO m, MonadBaseControl IO m, MonadCatch m, MonadError ErrorMessage m, MonadLog m, MonadFS m)
   => TagsServerConf
   -> TagsServerState
   -> m TagsServer
@@ -97,14 +98,14 @@ startTagsServer conf state = do
   where
     handleRequests
       :: MVar TagsServerState
-      -> Chan (Request, Promise (Either Doc Response))
+      -> Chan (Request, Promise (Either ErrorMessage Response))
       -> TagsServerState
       -> m ()
     handleRequests lock reqChan state = do
       state' <- handleReq reqChan state `onException` liftBase (putMVar lock state)
       handleRequests lock reqChan state'
     handleReq
-      :: Chan (Request, Promise (Either Doc Response))
+      :: Chan (Request, Promise (Either ErrorMessage Response))
       -> TagsServerState
       -> m TagsServerState
     handleReq reqChan state = do
@@ -121,12 +122,12 @@ startTagsServer conf state = do
           FindSymbolByRegexp filename _ -> do
             ensureFileExists filename
             throwErrorWithCallStack "Search by regexp is not implemented yet"
-      logDebug $ "[startTagsServer.handleReq] got response:" <+> either id pretty response
+      logDebug $ "[startTagsServer.handleReq] got response:" <+> either pretty pretty response
       Promise.putValue responsePromise response
       pure state'
 
 ensureFileExists
-  :: (HasCallStack, MonadFS m, MonadError Doc m)
+  :: (HasCallStack, MonadFS m, MonadError ErrorMessage m)
   => FullPath -> m ()
 ensureFileExists path = do
   exists <- doesFileExist path

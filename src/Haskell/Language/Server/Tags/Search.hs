@@ -28,6 +28,7 @@ import Text.PrettyPrint.Leijen.Text.Ext
 
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging
+import Data.ErrorMessage
 import Data.Path
 import qualified Data.SymbolMap as SM
 import Data.Symbols
@@ -35,7 +36,7 @@ import Haskell.Language.Server.Tags.LoadModule
 import Haskell.Language.Server.Tags.Types
 
 findSymbol
-  :: (MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: (HasCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => FullPath           -- ^ File name
   -> SymbolName         -- ^ Symbol to find. Can be either qualified, unqualified, ascii name/utf name/operator
   -> m [ResolvedSymbol] -- ^ Found tags, may be empty when nothing was found.
@@ -45,7 +46,7 @@ findSymbol filename sym = do
 
 -- | Try to find out what @sym@ refers to in the context of module @mod@.
 findInModule
-  :: forall m. (HasCallStack, MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: forall m. (HasCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => SymbolName
   -> ResolvedModule
   -> m [ResolvedSymbol]
@@ -75,7 +76,7 @@ findInModule sym mod =
     header = modHeader mod
 
 lookUpInImportedModules
-  :: forall m f. (HasCallStack, MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: forall m f. (HasCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => (Foldable f)
   => UnqualifiedSymbolName
   -> f ResolvedImportSpec
@@ -94,7 +95,7 @@ lookUpInImportedModules name specs = do
     else pure mempty
 
 lookUpInImportedModule
-  :: forall m. (HasCallStack, MonadError Doc m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: forall m. (HasCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => UnqualifiedSymbolName
   -> ResolvedModule
   -> m [ResolvedSymbol]
@@ -106,7 +107,7 @@ lookUpInImportedModule name importedMod =
 -- | Try to infer suitable module name from the file name. Tries to take
 -- as much directory names that start with the uppercase letter as possible.
 fileNameToModuleName
-  :: (HasCallStack, MonadError Doc m)
+  :: (HasCallStack, MonadError ErrorMessage m)
   => FullPath -> m ModuleName
 fileNameToModuleName fname =
   case reverse $ splitDirectories fname of

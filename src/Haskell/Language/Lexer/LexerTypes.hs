@@ -81,11 +81,12 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Word (Word8)
 import qualified Text.PrettyPrint.Leijen.Text as PP
-import Text.PrettyPrint.Leijen.Text.Ext (Pretty(..), Doc)
+import Text.PrettyPrint.Leijen.Text.Ext (Pretty(..))
 import qualified Text.PrettyPrint.Leijen.Text.Ext as PP
 import Lens.Micro (Lens', lens, over)
 
 import Control.Monad.EitherK
+import Data.ErrorMessage
 import Data.KeyMap (KeyMap)
 import qualified Data.KeyMap as KM
 import FastTags.Token
@@ -213,7 +214,9 @@ alexExitLiterateEnv = modify $ \s -> s { asLiterateStyle = Nothing }
 pushContext :: MonadState AlexState m => Context -> m ()
 pushContext ctx = modify (\s -> s { asContextStack = ctx : asContextStack s })
 
-popContext :: (HasCallStack, MonadState AlexState m, MonadError Doc m) => m Context
+popContext
+  :: (HasCallStack, MonadState AlexState m, MonadError ErrorMessage m)
+  => m Context
 popContext = do
   cs <- gets asContextStack
   case cs of
@@ -246,7 +249,7 @@ removeMacroDef _ =
   pure ()
 
 enterConstantMacroDef
-  :: (HasCallStack, MonadState AlexState m, MonadError Doc m)
+  :: (HasCallStack, MonadState AlexState m, MonadError ErrorMessage m)
   => Text -- ^ Macro name, must be already defined.
   -> m ()
 enterConstantMacroDef name = do
@@ -281,13 +284,13 @@ enterConstantMacroDef name = do
 retrieveToken :: AlexInput -> Int -> Text
 retrieveToken AlexInput{aiInput} len = InputStack.take len aiInput
 
-newtype AlexT m a = AlexT (EitherKT Doc (ReaderT AlexEnv (StateT AlexState m)) a)
+newtype AlexT m a = AlexT (EitherKT ErrorMessage (ReaderT AlexEnv (StateT AlexState m)) a)
   deriving
     ( Functor
     , Applicative
     , Monad
     , Alternative
-    , MonadError Doc
+    , MonadError ErrorMessage
     , MonadReader AlexEnv
     , MonadState AlexState
     )
@@ -300,7 +303,7 @@ runAlexT
   -> AlexCode
   -> Text
   -> AlexT m a
-  -> m (Either Doc a)
+  -> m (Either ErrorMessage a)
 runAlexT filename mode code toplevelCode input (AlexT action) =
   flip evalStateT s $
   flip runReaderT env $

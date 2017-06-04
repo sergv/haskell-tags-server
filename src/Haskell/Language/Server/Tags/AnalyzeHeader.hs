@@ -43,6 +43,7 @@ import FastTags.Tag (stripNewlines, UnstrippedTokens(..), tokToName)
 import FastTags.Token (Pos(..), TokenVal(..), Token, posFile, posLine, unLine, TokenVal, PragmaType(..))
 
 import Control.Monad.Logging
+import Data.ErrorMessage
 import Data.KeyMap (KeyMap)
 import qualified Data.KeyMap as KM
 import Data.SubkeyMap (SubkeyMap)
@@ -52,10 +53,10 @@ import Haskell.Language.Server.Tags.Types
 import Text.PrettyPrint.Leijen.Text.Ext
 
 analyzeHeader
-  :: (MonadError Doc m, MonadLog m)
+  :: (MonadError ErrorMessage m, MonadLog m)
   => [Token]
   -> m (Maybe UnresolvedModuleHeader, [Token])
-analyzeHeader ts = do
+analyzeHeader ts =
   -- logDebug $ "[analyzeHeader] ts =" <+> ppTokens ts
   case dropWhile ((/= KWModule) . valOf) ts of
     Pos _ KWModule :
@@ -101,7 +102,7 @@ pattern PSourcePragma :: Pos TokenVal
 pattern PSourcePragma <- Pos _ (Pragma SourcePragma)
 
 analyzeImports
-  :: forall m. (HasCallStack, MonadError Doc m, MonadLog m)
+  :: forall m. (HasCallStack, MonadError ErrorMessage m, MonadLog m)
   => SubkeyMap ImportKey (NonEmpty UnresolvedImportSpec)
   -> Map ImportQualifier (NonEmpty ModuleName)
   -> [Token]
@@ -263,7 +264,7 @@ analyzeImports imports qualifiers ts = do
             Just name' -> pure name'
 
 analyzeExports
-  :: forall m. (HasCallStack, MonadError Doc m, MonadLog m)
+  :: forall m. (HasCallStack, MonadError ErrorMessage m, MonadLog m)
   => Map ImportQualifier (NonEmpty ModuleName)
   -> [Token]
   -> m (Maybe ModuleExports)
@@ -367,7 +368,7 @@ analyzeExports importQualifiers ts = do
 
 isChildrenList :: [Token] -> Bool
 isChildrenList toks =
-  case fst (analyzeChildren mempty toks :: (ChildrenPresence, Either Doc (Maybe ChildrenVisibility, [Token]))) of
+  case fst (analyzeChildren mempty toks :: (ChildrenPresence, Either ErrorMessage (Maybe ChildrenVisibility, [Token]))) of
     ChildrenPresent -> True
     ChildrenAbsent  -> False
 
@@ -385,7 +386,7 @@ instance Monoid WildcardPresence where
   mappend = (<>)
 
 analyzeChildren
-  :: forall m. (HasCallStack, MonadError Doc m)
+  :: forall m. (HasCallStack, MonadError ErrorMessage m)
   => Doc -> [Token] -> (ChildrenPresence, m (Maybe ChildrenVisibility, [Token]))
 analyzeChildren listType toks =
   case dropNLs toks of

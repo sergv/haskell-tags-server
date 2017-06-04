@@ -33,9 +33,10 @@ import Data.Semigroup ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Text.PrettyPrint.Leijen.Text as PP
-import Text.PrettyPrint.Leijen.Text.Ext (Pretty(..), Doc)
+import Text.PrettyPrint.Leijen.Text.Ext (Pretty(..))
 import qualified Text.PrettyPrint.Leijen.Text.Ext as PP
 
+import Data.ErrorMessage
 import Data.KeyMap (HasKey)
 import qualified Data.KeyMap as KM
 
@@ -81,7 +82,7 @@ isFunction = \case
 
 -- | Parse "#define ..." directive
 parsePreprocessorDefine
-  :: (HasCallStack, MonadError Doc m)
+  :: (HasCallStack, MonadError ErrorMessage m)
   => Text
   -> m PreprocessorMacro
 parsePreprocessorDefine =
@@ -89,7 +90,7 @@ parsePreprocessorDefine =
 
 -- | Parse "#undef ..." directive
 parsePreprocessorUndef
-  :: (HasCallStack, MonadError Doc m)
+  :: (HasCallStack, MonadError ErrorMessage m)
   => Text
   -> m Text
 parsePreprocessorUndef =

@@ -26,10 +26,11 @@ module Data.CompiledRegex
 import Control.Monad.Except.Ext
 import Data.Function (on)
 import qualified Data.Text.Lazy as TL
-import Text.PrettyPrint.Leijen.Text (Doc)
 import qualified Text.PrettyPrint.Leijen.Text as PP
 import Text.PrettyPrint.Leijen.Text.Ext ((<+>))
 import Text.Regex.TDFA
+
+import Data.ErrorMessage
 
 -- | Wrapper around Regex that provides dummy Show, Eq and Ord instances
 data CompiledRegex = CompiledRegex
@@ -47,7 +48,7 @@ instance Ord CompiledRegex where
   compare = compare `on` source
 
 compileRegex
-  :: (HasCallStack, MonadError Doc m)
+  :: (HasCallStack, MonadError ErrorMessage m)
   => Bool -> String -> m CompiledRegex
 compileRegex captureGroups src =
   case makeRegexOptsM compOpt execOpt src of

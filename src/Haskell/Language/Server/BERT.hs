@@ -30,6 +30,7 @@ module Haskell.Language.Server.BERT
 
 import Control.Concurrent
 import Control.Monad.Base
+import Control.Monad.Except (throwError)
 import Control.Monad.Except.Ext
 import Control.Monad.Trans.Control
 import qualified Data.ByteString.Lazy.Char8 as C8
@@ -51,6 +52,7 @@ import qualified Network.BERT.Transport as BERT
 import Control.Monad.Logging
 import Data.CompiledRegex
 import Data.Condition
+import Data.ErrorMessage
 import Data.Path
 import qualified Data.Promise as Promise
 import Data.Symbols
@@ -60,7 +62,7 @@ defaultPort :: PortNumber
 defaultPort = 10000
 
 decodeUtf8
-  :: (HasCallStack, MonadError Doc m)
+  :: (HasCallStack, MonadError ErrorMessage m)
   => Doc -> UTF8.ByteString -> m T.Text
 decodeUtf8 thing =
   either (throwErrorWithCallStack . mkErr) pure . TE.decodeUtf8' . C8.toStrict
@@ -116,7 +118,7 @@ runBertServer port reqHandler = do
     , bsTransport = syncTransport
     }
   where
-    go :: String -> String -> [Term] -> m BERT.DispatchResult
+    go :: HasCallStack => String -> String -> [Term] -> m BERT.DispatchResult
     go mod func args = do
       logDebug $ "[runBertServer.go] got request" <+> pretty mod <> ":" <> pretty func
       res <- runExceptT $ go' mod func args
@@ -124,10 +126,12 @@ runBertServer port reqHandler = do
         Left err ->
           pure $ BERT.Success $ TupleTerm
             [ AtomTerm "error"
-            , BinaryTerm $ TLE.encodeUtf8 $ displayDoc err
+            , BinaryTerm $ TLE.encodeUtf8 $ displayDoc $ pretty err
             ]
         Right x -> pure x
-    go' :: String -> String -> [Term] -> ExceptT Doc m BERT.DispatchResult
+    go'
+      :: HasCallStack
+      => String -> String -> [Term] -> ExceptT ErrorMessage m BERT.DispatchResult
     go' "haskell-tags-server" "find-regexp" args =
       case args of
         [BinaryTerm filename, BinaryTerm regexp] -> do
@@ -135,7 +139,7 @@ runBertServer port reqHandler = do
                         <$> (mkFullPath =<< decodeUtf8 "filename" filename)
                         <*> (compileRegex False . T.unpack =<< decodeUtf8 "regexp" regexp)
           response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
-          BERT.Success <$> either throwErrorWithCallStack (pure . responseToTerm) response
+          BERT.Success <$> either throwError (pure . responseToTerm) response
         _                                    ->
           throwErrorWithCallStack $ "Expected 2 arguments but got:" <+> showDoc args
     go' "haskell-tags-server" "find" args =
@@ -145,7 +149,7 @@ runBertServer port reqHandler = do
                         <$> (mkFullPath =<< decodeUtf8 "filename" filename)
                         <*> (mkSymbolName <$> decodeUtf8 "symbol to find" symbol)
           response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
-          BERT.Success <$> either throwErrorWithCallStack (pure . responseToTerm) response
+          BERT.Success <$> either throwError (pure . responseToTerm) response
         _                                    ->
           throwErrorWithCallStack $ "Expected 2 arguments but got:" <+> showDoc args
     go' "haskell-tags-server" _ _ = pure BERT.NoSuchFunction

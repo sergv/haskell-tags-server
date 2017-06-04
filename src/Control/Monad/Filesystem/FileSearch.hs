@@ -30,7 +30,7 @@ module Control.Monad.Filesystem.FileSearch
   , module Control.Monad.Filesystem.FileSearch.Class
   ) where
 
-import Control.Monad.Except
+import Control.Monad.Except.Ext
 import Control.Monad.Ext
 import Control.Monad.Reader
 import Control.Monad.State
@@ -47,6 +47,7 @@ import Text.PrettyPrint.Leijen.Text.Ext
 
 import Control.Monad.Filesystem as MonadFS
 import Control.Monad.Filesystem.FileSearch.Class
+import Data.ErrorMessage
 import Data.Foldable.Ext
 import Data.Path
 
@@ -103,7 +104,7 @@ instance MonadReader r m => MonadReader r (FileSearchT m) where
     env <- ask
     lift $ local f (runReaderT action env)
 
-instance (MonadError Doc m, MonadFS m) => MonadFileSearch (FileSearchT m) where
+instance (MonadError ErrorMessage m, MonadFS m) => MonadFileSearch (FileSearchT m) where
   findByPathSuffixSansExtension fragment = FileSearchT $ do
     cfg <- ask
     findAllMatching cfg checkPath

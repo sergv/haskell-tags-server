@@ -41,6 +41,7 @@ import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
 import Control.Monad.Filesystem.FileSearch
 import Control.Monad.Logging
+import Data.ErrorMessage
 import Data.Map.NonEmpty (NonEmptyMap)
 import qualified Data.Map.NonEmpty as NEMap
 import Data.Path
@@ -63,7 +64,7 @@ data ResolveState = ResolveState
   }
 
 loadAllFilesIntoState
-  :: forall m. (HasCallStack, MonadCatch m, MonadError Doc m, MonadLog m, MonadFS m)
+  :: forall m. (HasCallStack, MonadCatch m, MonadError ErrorMessage m, MonadLog m, MonadFS m)
   => TagsServerConf
   -> m (Map ImportKey (NonEmpty ResolvedModule))
 loadAllFilesIntoState conf = do
@@ -97,7 +98,7 @@ loadAllFilesIntoState conf = do
         pure $ NEMap.elemsNE <$> M.lookup key (rsLoadingModules s)
 
       doResolve
-        :: forall m. (MonadState ResolveState m, MonadError Doc m, MonadLog m)
+        :: forall m. (HasCallStack, MonadState ResolveState m, MonadError ErrorMessage m, MonadLog m)
         => ImportKey
         -> m (NonEmpty ResolvedModule)
       doResolve key = do

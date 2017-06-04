@@ -22,26 +22,26 @@ module Haskell.Language.Server.Tags.SearchM
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
-import Text.PrettyPrint.Leijen.Text (Doc)
 
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging (MonadLog)
+import Data.ErrorMessage
 import Haskell.Language.Server.Tags.Types
 
--- | Monad for carrying out symbol search  operations.
-newtype SearchT m a = SearchM (ExceptT Doc (StateT TagsServerState (ReaderT TagsServerConf m)) a)
+-- | Monad for carrying out symbol search operations.
+newtype SearchT m a = SearchM (ExceptT ErrorMessage (StateT TagsServerState (ReaderT TagsServerConf m)) a)
   deriving
     ( Functor
     , Applicative
     , Monad
     , MonadState TagsServerState
     , MonadReader TagsServerConf
-    , MonadError Doc
+    , MonadError ErrorMessage
     , MonadLog
     , MonadFS
     )
 
-runSearchT :: TagsServerConf -> TagsServerState -> SearchT m a -> m (Either Doc a, TagsServerState)
+runSearchT :: TagsServerConf -> TagsServerState -> SearchT m a -> m (Either ErrorMessage a, TagsServerState)
 runSearchT conf state (SearchM action)
   = flip runReaderT conf
   $ flip runStateT state

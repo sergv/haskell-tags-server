@@ -50,7 +50,7 @@ module Text.PrettyPrint.Leijen.Text.Ext
   , ppCallStack
   ) where
 
-import Control.Arrow (second, (***))
+import Control.Arrow (second)
 import Control.Monad.Base
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
 import Data.Foldable (toList)
@@ -177,9 +177,17 @@ ppTrace :: Bool -> Doc -> a -> a
 ppTrace False _   = id
 ppTrace True  msg = trace (displayDocString msg)
 
-ppCallStack :: HasCallStack => Doc
+ppCallStack :: CallStack -> Doc
 ppCallStack =
-  PP.vcat $
-  map (\(name, loc) -> name <> ":" PP.<+> loc) $
-  map (docFromString *** docFromString . prettySrcLoc) $
-  getCallStack callStack
+  PP.vcat .
+  map (\(name, loc) -> PP.hcat
+        [ docFromString (srcLocModule loc)
+        , "."
+        , docFromString name
+        , ":"
+        , pretty (srcLocStartLine loc)
+        , ":"
+        , pretty (srcLocStartCol loc)
+        ]
+        ) .
+  getCallStack

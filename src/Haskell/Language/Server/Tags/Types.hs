@@ -77,6 +77,7 @@ import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
 import Control.Monad.Filesystem.FileSearch (SearchCfg(..), versionControlDirs)
 import Data.CompiledRegex
+import Data.ErrorMessage
 import Data.KeyMap (KeyMap, HasKey(..))
 import Data.Map.NonEmpty (NonEmptyMap)
 import Data.Path (FullPath, Extension)
@@ -106,7 +107,7 @@ data Response =
 instance Pretty Response where
   pretty = showDoc
 
-type RequestHandler = Request -> IO (Promise (Either Doc Response))
+type RequestHandler = Request -> IO (Promise (Either ErrorMessage Response))
 
 data TagsServerConf = TagsServerConf
   { tsconfSearchDirs        :: SearchCfg
@@ -227,7 +228,7 @@ instance Pretty a => Pretty (ModuleHeader a) where
 
 -- | Find out which modules a given @ImportQualifier@ refers to.
 resolveQualifier
-  :: (HasCallStack, MonadError Doc m)
+  :: (HasCallStack, MonadError ErrorMessage m)
   => ImportQualifier
   -> ModuleHeader a
   -> m (Maybe (NonEmpty (ImportSpec a)))

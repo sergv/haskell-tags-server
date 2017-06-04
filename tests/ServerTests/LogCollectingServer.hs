@@ -27,7 +27,7 @@ module ServerTests.LogCollectingServer
 import Control.Concurrent.MVar
 import Control.Monad.Base
 import Control.Monad.Catch
-import Control.Monad.Except
+import Control.Monad.Except.Ext
 import Control.Monad.Trans.Control
 import Data.Foldable (toList)
 import Network.Socket (PortNumber)
@@ -36,6 +36,7 @@ import Text.PrettyPrint.Leijen.Text (Doc)
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging
 import Control.Monad.Logging.Simple
+import Data.ErrorMessage
 import Haskell.Language.Server.BERT
 import Haskell.Language.Server.Tags
 
@@ -46,7 +47,7 @@ data LogCollectingServer = LogCollectingServer
   }
 
 mkLogCollectingServer
-  :: (MonadBaseControl IO m, MonadError Doc m, MonadCatch m, MonadFS m)
+  :: (MonadBaseControl IO m, MonadError ErrorMessage m, MonadCatch m, MonadFS m)
   => TagsServerConf -> PortNumber -> m LogCollectingServer
 mkLogCollectingServer conf port = do
   logOutputVar <- liftBase $ newMVar mempty
@@ -62,7 +63,9 @@ mkLogCollectingServer conf port = do
     , lcsBertServer = bertServer
     }
 
-stopLogCollectingServer :: (MonadBase IO m) => LogCollectingServer -> m ()
+stopLogCollectingServer
+  :: (HasCallStack, MonadBase IO m)
+  => LogCollectingServer -> m ()
 stopLogCollectingServer LogCollectingServer{lcsTagsServer, lcsBertServer} = do
   stopBertServer lcsBertServer
   stopTagsServer lcsTagsServer
