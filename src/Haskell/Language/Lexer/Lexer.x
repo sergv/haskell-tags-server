@@ -68,8 +68,10 @@ $ident     = [$ident_nonsym $ident_syms]
 
 @nl = ( [\r]? $nl )
 
-$cpp_ident       =  [ $ascsmall $asclarge $ascdigit \_ ]
-@cpp_ident_split = ( $cpp_ident | [\\] @nl )
+$cpp_ident       = [ $ascsmall $asclarge $ascdigit \_ ]
+@cpp_ident       = [ $ascsmall $asclarge \_ ] $cpp_ident*
+@cpp_ident_split = [ $ascsmall $asclarge \_ ] ( $cpp_ident | [\\] @nl )*
+
 @cpp_ws          = ( $ascspace | [\\] @nl )
 @cpp_opt_ws      = @cpp_ws*
 @cpp_nonempty_ws = ( $ascspace @cpp_ws* | @cpp_ws* $ascspace )
@@ -142,8 +144,8 @@ $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 
 "#" @cpp_opt_ws
   "define" @cpp_nonempty_ws
-  @cpp_ident_split+
-  ( "(" @cpp_opt_ws @cpp_ident_split+ ( @cpp_opt_ws "," @cpp_opt_ws @cpp_ident_split+ )* @cpp_opt_ws ")" )?
+  @cpp_ident_split
+  ( "(" @cpp_opt_ws ( @cpp_ident_split ( @cpp_opt_ws "," @cpp_opt_ws @cpp_ident_split )* @cpp_opt_ws )? ")" )?
   @cpp_nonempty_ws @define_body
   { \input len -> do
       macro <- parsePreprocessorDefine $! retrieveToken input len
@@ -155,7 +157,7 @@ $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 
 "#" @cpp_opt_ws
   "undef" @cpp_nonempty_ws
-  @cpp_ident_split+
+  @cpp_ident_split
   { \input len -> do
       name <- parsePreprocessorUndef $! retrieveToken input len
       removeMacroDef name
@@ -166,13 +168,13 @@ $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 
 <macroDefined, comment, qq> {
 
-( $cpp_ident )+ "("  ")"
-  / { runAlexPredM (lmap snd (matchedNameInPredicate >>= isNameDefinedAsFunction . T.dropWhile (/= '('))) }
+@cpp_ident "(" ")"
+  / { runAlexPredM (lmap snd (matchedNameInPredicate >>= isNameDefinedAsFunction . T.takeWhile (/= '('))) }
   { \_input _len ->
       error "Function defines are not implemented yet"
   }
 
-( $cpp_ident )+
+@cpp_ident
   / { runAlexPredM (lmap snd (matchedNameInPredicate >>= isNameDefinedAsConstant)) }
   { \input len -> do
       let macroName = retrieveToken input len
