@@ -25,6 +25,7 @@ import qualified Data.Text.Lazy as TL
 import Text.PrettyPrint.Leijen.Text.Ext (Doc, Pretty(..), (<+>))
 
 import Haskell.Language.Lexer.LexerTypes
+import qualified Haskell.Language.Lexer.InputStack as InputStack
 import Haskell.Language.Lexer.Preprocessor
 import FastTags.Token
 
@@ -72,7 +73,9 @@ $cpp_ident       =  [ $ascsmall $asclarge $ascdigit \_ ]
 @cpp_ws          = ( $ascspace | [\\] @nl )
 @cpp_opt_ws      = @cpp_ws*
 @cpp_nonempty_ws = ( $ascspace @cpp_ws* | @cpp_ws* $ascspace )
-@define_body       = ( [^\\$nl] | [\\] @nl )+ @nl
+-- NB must include newline so that full line will be replaced by a Newline token.
+-- We'll strip trailing newline during parsing so it won't cause any troubles.
+@define_body     = ( [^\\$nl] | [\\] @nl )+ @nl
 
 -- $reserved_op = [→ ∷ ⇒ ∀]
 
@@ -93,30 +96,35 @@ $hexdigit   = [0-9a-fA-F]
 
 -- Can skip whitespace everywhere since it does not affect meaning in any
 -- state.
-<0, comment, qq, literate> $ws+ ;
+<0, macroDefined, comment, qq, literate> $ws+ ;
 
 -- Literate stuff
-<literate> ^ > $ws*
+<literate> {
+^ > $ws*
   / { runAlexPredM (lmap fst isLiterate) }
   { \_ len -> startLiterateBird  *> pure (Newline (len - 1)) }
-<literate> ^ "\begin{code}" @nl
+^ "\begin{code}" @nl
   / { runAlexPredM (lmap fst isLiterate) }
   { \_ len -> startLiterateLatex *> pure (Newline (len - 12)) }
-<literate> (. | @nl)
+(. | @nl)
   ;
+}
 
+<0, macroDefined> {
 
-<0> @nl > $space*
+@nl > $space*
   / { runAlexPredM (lmap fst isLiterate) }
   { \_ len -> pure $! Newline $! len - 2 }
-<0> @nl [^>]
+@nl [^>]
   / { runAlexPredM (isLiterate .&&&. isInBirdEnv) }
   { \_ _   -> endLiterate }
-<0> ^ "\end{code}"
+^ "\end{code}"
   / { runAlexPredM (isLiterate .&&&. isInLatexCodeEnv) }
   { \_ _   -> endLiterate }
 
-<0> {
+}
+
+<0, macroDefined> {
 
 $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 
@@ -130,59 +138,90 @@ $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 
 -- Preprocessor
 
-<0> "#" @cpp_opt_ws
-    "define" @cpp_nonempty_ws
-    @cpp_ident_split+
-    ( "(" @cpp_opt_ws @cpp_ident_split+ ( @cpp_opt_ws "," @cpp_opt_ws @cpp_ident_split+ )* @cpp_opt_ws ")" )?
-    @cpp_nonempty_ws @define_body
+<0, macroDefined> {
+
+"#" @cpp_opt_ws
+  "define" @cpp_nonempty_ws
+  @cpp_ident_split+
+  ( "(" @cpp_opt_ws @cpp_ident_split+ ( @cpp_opt_ws "," @cpp_opt_ws @cpp_ident_split+ )* @cpp_opt_ws ")" )?
+  @cpp_nonempty_ws @define_body
   { \input len -> do
-      (name, macro) <- parsePreprocessorDefine $! retrieveToken input len
-      addMacroDef name macro
+      macro <- parsePreprocessorDefine $! retrieveToken input len
+      addMacroDef macro
+      alexChangeToplevelCode macroDefinedCode
+      alexSetCode macroDefinedCode
       pure $ Newline 0
   }
 
-<0> "#" @cpp_opt_ws
-    "undef" @cpp_nonempty_ws
-    @cpp_ident_split+
+"#" @cpp_opt_ws
+  "undef" @cpp_nonempty_ws
+  @cpp_ident_split+
   { \input len -> do
       name <- parsePreprocessorUndef $! retrieveToken input len
       removeMacroDef name
       pure $ Newline 0
   }
 
+}
+
+<macroDefined, comment, qq> {
+
+( $cpp_ident )+ "("  ")"
+  / { runAlexPredM (lmap snd (matchedNameInPredicate >>= isNameDefinedAsFunction . T.dropWhile (/= '('))) }
+  { \_input _len ->
+      error "Function defines are not implemented yet"
+  }
+
+( $cpp_ident )+
+  / { runAlexPredM (lmap snd (matchedNameInPredicate >>= isNameDefinedAsConstant)) }
+  { \input len -> do
+      let macroName = retrieveToken input len
+      enterConstantMacroDef $! macroName
+      alexScanTokenVal -- continue scanning
+  }
+
+}
+
 -- Comments
-<0, comment> "{-"       { \_ _ -> startComment }
-<comment> "-}"          { \_ _ -> endComment }
-<comment> (. | @nl)     ;
-<0> "-}"                { \_ _ -> errorAtLine "Unmatched -}" }
+<0, macroDefined, comment> "{-"
+  { \_ _ -> startComment }
+<comment> "-}"
+  { \_ _ -> endComment }
+<comment> (. | @nl)
+  ;
+<0, macroDefined> "-}"
+  { \_ _ -> errorAtLine "Unmatched -}" }
+
+-- -- Strings
+-- <0, macroDefined> [\"]  { \_ _ -> startString }
+-- <string> [\"]           { \_ _ -> endString }
+-- <string> [\\] @nl ( $ws+ [\\] )?
+--   ;
+-- <string> ( $ws+ | [^\"\\$nl] | [\\] . )+
+--   ;
 
 -- Strings
-<0> [\"]                { \_ _ -> startString }
-<string> [\"]           { \_ _ -> endString }
-<string> [\\] @nl ( $ws+ [\\] )? ;
-<string> ( $ws+ | [^\"\\$nl] | [\\] . )+ ;
-
--- Strings
-<0> [\"]                { \_ _ -> startString }
+<0, macroDefined> [\"]  { \_ _ -> startString }
 <string> [\\] [\"\\]    ;
-<string> [\\] @nl ($ws+ [\\])? ;
+<string> [\\] @nl ( $ws+ [\\] )? ;
 <string> [\"]           { \_ _ -> endString }
 <string> (. | @nl)      ;
 
 -- Characters
-<0> [\'] ( [^\'\\] | @charescape ) [\'] { kw Character }
+<0, macroDefined> [\'] ( [^\'\\] | @charescape ) [\'] { kw Character }
 
 -- Template Haskell quasiquoters
 
-<0> "[" $ident* "|"     { \_ _ -> startQuasiquoter }
+<0, macroDefined> "[" $ident* "|"
+  { \_ _ -> startQuasiquoter }
 <qq> "$("               { \_ _ -> startSplice CtxQuasiquoter }
 <qq> "|]"               { \_ _ -> endQuasiquoter }
 <qq> (. | @nl)          ;
 
-<0> "$("                { \_ _ -> startSplice CtxHaskell }
+<0, macroDefined> "$("  { \_ _ -> startSplice CtxHaskell }
 
 -- Vanilla tokens
-<0> {
+<0, macroDefined> {
 
 "case"                  { kw KWCase }
 "class"                 { kw KWClass }
@@ -241,11 +280,16 @@ kw :: Applicative m => TokenVal -> AlexAction m
 kw tok = \_ _ -> pure tok
 
 tokenizeM :: Monad m => FilePath -> LiterateMode -> Text -> m (Either Doc [Token])
-tokenizeM filename mode input = runAlexT filename mode code input scanTokens
+tokenizeM filename mode input =
+  runAlexT filename mode code toplevelCode input scanTokens
   where
+    code :: AlexCode
     code = case mode of
       Vanilla  -> startCode
       Literate -> literateStartCode
+    -- Use 'startCode' as a toplevel until a macro will be defined.
+    toplevelCode :: AlexCode
+    toplevelCode = startCode
 
 scanTokens :: Monad m => AlexT m [Token]
 scanTokens = do
@@ -270,7 +314,7 @@ alexScanTokenVal = do
     AlexError AlexInput{aiLine, aiInput} -> do
       AlexState{asCode} <- get
       throwErrorWithCallStack $ "lexical error while in state" <+> pretty asCode <+> "at line" <+>
-        pretty (unLine aiLine) <> ":" <+> pretty (TL.fromStrict (T.take 40 aiInput))
+        pretty (unLine aiLine) <> ":" <+> pretty (TL.fromStrict (InputStack.take 40 aiInput))
     AlexSkip input _                     -> do
       alexSetInput input
       alexScanTokenVal
@@ -288,7 +332,7 @@ endComment :: Monad m => AlexT m TokenVal
 endComment = do
   newDepth <- modifyCommentDepth (\x -> x - 1)
   when (newDepth == 0) $
-    alexSetCode startCode
+    alexToplevelCode
   alexScanTokenVal
 
 startString :: Monad m => AlexT m TokenVal
@@ -298,7 +342,7 @@ startString = do
 
 endString :: Monad m => AlexT m TokenVal
 endString = do
-  alexSetCode startCode
+  alexToplevelCode
   pure String
 
 startQuasiquoter :: Monad m => AlexT m TokenVal
@@ -308,13 +352,13 @@ startQuasiquoter = do
 
 startSplice :: Monad m => Context -> AlexT m TokenVal
 startSplice ctx = do
-  alexSetCode startCode
+  alexToplevelCode
   pushContext ctx
   pure SpliceStart
 
 endQuasiquoter :: Monad m => AlexT m TokenVal
 endQuasiquoter = do
-  alexSetCode startCode
+  alexToplevelCode
   pure QuasiquoterEnd
 
 pushLParen :: Monad m => AlexAction (AlexT m)
@@ -328,9 +372,9 @@ popRParen _ _ = (tryRestoringContext *> pure RParen) <|> pure RParen
 tryRestoringContext :: Monad m => AlexT m ()
 tryRestoringContext = do
   ctx <- popContext
-  alexSetCode $ case ctx of
-    CtxHaskell     -> startCode
-    CtxQuasiquoter -> qqCode
+  case ctx of
+    CtxHaskell     -> alexToplevelCode
+    CtxQuasiquoter -> alexSetCode qqCode
 
 errorAtLine :: (HasCallStack,MonadError Doc m, MonadState AlexState m) => Doc -> m a
 errorAtLine msg = do
@@ -339,12 +383,12 @@ errorAtLine msg = do
 
 startLiterateBird :: Monad m => AlexT m ()
 startLiterateBird = do
-  alexSetCode startCode
+  alexToplevelCode
   alexEnterBirdLiterateEnv
 
 startLiterateLatex :: Monad m => AlexT m ()
 startLiterateLatex = do
-  alexSetCode startCode
+  alexToplevelCode
   alexEnterLatexCodeEnv
 
 endLiterate :: Monad m => AlexT m TokenVal
@@ -372,6 +416,9 @@ qqCode = AlexCode qq
 
 stringCode :: AlexCode
 stringCode = AlexCode string
+
+macroDefinedCode :: AlexCode
+macroDefinedCode = AlexCode macroDefined
 
 -- Types for Alex actions
 

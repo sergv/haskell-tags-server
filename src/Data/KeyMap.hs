@@ -30,6 +30,8 @@ module Data.KeyMap
   , elems
   , intersectAgainst
   , keysSet
+  , empty
+  , null
   ) where
 
 import Control.Arrow
@@ -38,7 +40,7 @@ import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map as M
 import Data.Semigroup
 import Data.Set (Set)
-import Prelude hiding (lookup)
+import Prelude hiding (lookup, null)
 
 -- | Map than maintains sets of values that all share some key.
 -- Every value must be a member of 'HasKey' typeclass.
@@ -89,3 +91,9 @@ intersectAgainst (KeyMap m) keys =
 
 keysSet :: HasKey a => KeyMap a -> Set (Key a)
 keysSet = M.keysSet . unKeyMap
+
+empty :: KeyMap a
+empty = KeyMap M.empty
+
+null :: KeyMap a -> Bool
+null = M.null . unKeyMap

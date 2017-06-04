@@ -16,6 +16,7 @@
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -40,12 +41,15 @@ module Haskell.Language.Lexer.LexerTypes
   , modifyQuasiquoterDepth
   , addMacroDef
   , removeMacroDef
+  , enterConstantMacroDef
   , retrieveToken
     -- * Alex monad
   , AlexT
   , runAlexT
   , alexSetInput
   , alexSetCode
+  , alexChangeToplevelCode
+  , alexToplevelCode
   , AlexAction
     -- * Predicates
   , AlexPredM
@@ -55,7 +59,8 @@ module Haskell.Language.Lexer.LexerTypes
   , isLiterate
   , isInBirdEnv
   , isInLatexCodeEnv
-  , isNameDefined
+  , isNameDefinedAsConstant
+  , isNameDefinedAsFunction
   , (.&&&.)
     -- * Interface for alex
   , alexInputPrevChar
@@ -68,35 +73,44 @@ import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Char
-import Data.Map (Map)
-import qualified Data.Map as M
+import Data.Foldable
 import Data.Maybe
 import Data.Profunctor
-import Data.Set (Set)
-import qualified Data.Set as S
+import Data.Semigroup (Any(..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Word (Word8)
-import Text.PrettyPrint.Leijen.Text (Pretty, Doc)
+import qualified Text.PrettyPrint.Leijen.Text as PP
+import Text.PrettyPrint.Leijen.Text.Ext (Pretty(..), Doc)
+import qualified Text.PrettyPrint.Leijen.Text.Ext as PP
+import Lens.Micro (Lens', lens, over)
 
 import Control.Monad.EitherK
+import Data.KeyMap (KeyMap)
+import qualified Data.KeyMap as KM
 import FastTags.Token
-import Haskell.Language.Lexer.Preprocessor (PreprocessorMacro)
+import Haskell.Language.Lexer.InputStack (InputStack(..), InputType(..))
+import qualified Haskell.Language.Lexer.InputStack as InputStack
+import Haskell.Language.Lexer.Preprocessor (PreprocessorMacro(..), isConstant, isFunction)
 
 advanceLine :: Char -> Line -> Line
 advanceLine '\n' = increaseLine
 advanceLine _    = id
 
 data AlexInput = AlexInput
-  { aiInput         :: Text -- ^ TODO: try out lazy text
-  , aiPrevChar      :: {-# UNPACK #-} !Char
-  , aiBytes         :: [Word8]
-  , aiLine          :: {-# UNPACK #-} !Line
+  { aiInput    :: InputStack
+  , aiPrevChar :: {-# UNPACK #-} !Char
+  , aiBytes    :: [Word8]
+  , aiLine     :: {-# UNPACK #-} !Line
   } deriving (Eq, Ord, Show)
+
+{-# INLINE aiInputL #-}
+aiInputL :: Lens' AlexInput InputStack
+aiInputL = lens aiInput (\s a -> s { aiInput = a })
 
 mkAlexInput :: Text -> AlexInput
 mkAlexInput s = AlexInput
-  { aiInput    = s'
+  { aiInput    = OriginalSourceStack s'
   , aiPrevChar = '\n'
   , aiBytes    = []
   , aiLine     = initLine
@@ -149,6 +163,7 @@ mkAlexEnv filename mode = AlexEnv
   , aeLiterateMode = mode
   }
 
+-- | Abstract wrapper around alex automata states.
 newtype AlexCode = AlexCode { unAlexCode :: Int }
   deriving (Eq, Ord, Show, Pretty)
 
@@ -160,23 +175,30 @@ data AlexState = AlexState
   -- | Current Alex state the lexer is in. E.g. comments, string, TH quasiquoter
   -- or vanilla toplevel mode.
   , asCode             :: {-# UNPACK #-} !AlexCode
+    -- | Code used to parse toplevel definitions.
+  , asToplevelCode     :: {-# UNPACK #-} !AlexCode
   , asCommentDepth     :: {-# UNPACK #-} !Int
   , asQuasiquoterDepth :: {-# UNPACK #-} !Int
   -- | Whether we're in bird-style or latex-style literate environment
   , asLiterateStyle    :: !(Maybe LiterateStyle)
   , asContextStack     :: [Context]
-  , asDefines          :: !(Map Text (Set PreprocessorMacro))
+  , asDefines          :: !(KeyMap PreprocessorMacro)
   } deriving (Eq, Ord, Show)
 
-mkAlexState :: AlexInput -> AlexCode -> AlexState
-mkAlexState input code = AlexState
+{-# INLINE asInputL #-}
+asInputL :: Lens' AlexState AlexInput
+asInputL = lens asInput (\s a -> s { asInput = a })
+
+mkAlexState :: AlexInput -> AlexCode -> AlexCode -> AlexState
+mkAlexState input startCode toplevelCode = AlexState
   { asInput            = input
-  , asCode             = code
+  , asCode             = startCode
+  , asToplevelCode     = toplevelCode
   , asCommentDepth     = 0
   , asQuasiquoterDepth = 0
   , asLiterateStyle    = Nothing
   , asContextStack     = []
-  , asDefines          = M.empty
+  , asDefines          = KM.empty
   }
 
 alexEnterBirdLiterateEnv :: MonadState AlexState m => m ()
@@ -214,17 +236,50 @@ modifyQuasiquoterDepth f = do
   modify $ \s -> s { asQuasiquoterDepth = depth' }
   pure depth'
 
-addMacroDef :: MonadState AlexState m => Text -> PreprocessorMacro -> m ()
-addMacroDef name value =
-  modify $ \s -> s { asDefines = M.insertWith S.union name (S.singleton value) $ asDefines s }
+addMacroDef :: MonadState AlexState m => PreprocessorMacro -> m ()
+addMacroDef macro =
+  modify $ \s -> s { asDefines = KM.insert macro $ asDefines s }
 
 removeMacroDef :: MonadState AlexState m => Text -> m ()
 removeMacroDef _ =
   -- Don't remove defines for now
   pure ()
 
+enterConstantMacroDef
+  :: (HasCallStack, MonadState AlexState m, MonadError Doc m)
+  => Text -- ^ Macro name, must be already defined.
+  -> m ()
+enterConstantMacroDef name = do
+  macroDef <- gets $ KM.lookup name . asDefines
+  case macroDef of
+    Nothing  -> throwErrorWithCallStack $ PP.hsep
+      [ "Macro name is not actually defined,"
+      , "but must be at this point in program:"
+      , pretty name
+      ]
+    Just defs ->
+      case mapMaybe
+             (\case
+               PreprocessorConstant name body -> Just (name, body)
+               PreprocessorFunction{}         -> Nothing)
+             $ toList defs of
+        [(name, body)] ->
+          modify $ over (asInputL . aiInputL) (MacroStack name body (T.length body))
+        []  -> throwErrorWithCallStack $ PP.hsep
+          [ "The macro name"
+          , PP.squotes $ pretty name
+          , "does not define any macros constants"
+          ]
+        -- Not really an error, but quite embarassing to deal with...
+        xs@(_:_:_) -> throwErrorWithCallStack $ PP.hsep
+          [ "The macro name"
+          , PP.squotes $ pretty name
+          , "defines multiple constant items:"
+          , PP.ppList $ map pretty xs
+          ]
+
 retrieveToken :: AlexInput -> Int -> Text
-retrieveToken AlexInput{aiInput} len = T.take len aiInput
+retrieveToken AlexInput{aiInput} len = InputStack.take len aiInput
 
 newtype AlexT m a = AlexT (EitherKT Doc (ReaderT AlexEnv (StateT AlexState m)) a)
   deriving
@@ -242,16 +297,17 @@ runAlexT
   => FilePath
   -> LiterateMode
   -> AlexCode
+  -> AlexCode
   -> Text
   -> AlexT m a
   -> m (Either Doc a)
-runAlexT filename mode code input (AlexT action) =
+runAlexT filename mode code toplevelCode input (AlexT action) =
   flip evalStateT s $
   flip runReaderT env $
   runEitherKT action (pure . Left) (pure . Right)
   where
     s :: AlexState
-    s   = mkAlexState (mkAlexInput input) code
+    s   = mkAlexState (mkAlexInput input) code toplevelCode
     env :: AlexEnv
     env = mkAlexEnv filename mode
 
@@ -260,6 +316,12 @@ alexSetInput input = modify $ \s -> s { asInput = input }
 
 alexSetCode :: MonadState AlexState m => AlexCode -> m ()
 alexSetCode code = modify $ \s -> s { asCode = code }
+
+alexChangeToplevelCode :: MonadState AlexState m => AlexCode -> m ()
+alexChangeToplevelCode code = modify $ \s -> s { asToplevelCode = code }
+
+alexToplevelCode :: MonadState AlexState m => m ()
+alexToplevelCode = alexSetCode =<< gets asToplevelCode
 
 type AlexAction m = AlexInput -> Int -> m TokenVal
 
@@ -318,8 +380,31 @@ isInLatexCodeEnv = do
     Just Latex -> True
     Just Bird  -> False
 
-isNameDefined :: Text -> AlexPred AlexState
-isNameDefined name = asks (M.member name . asDefines)
+-- | Check whether given name is a cpp define.
+isNameDefinedAsConstant :: Text -> AlexPred AlexState
+isNameDefinedAsConstant name = -- do
+    asks
+  $ getAny
+  . foldMap (foldMap (Any . isConstant))
+  . KM.lookup name
+  . asDefines
+  -- defines <- asks asDefines
+  -- pure $ if KM.null defines
+  --   then False
+  --   else getAny $ foldMap (foldMap (Any . isConstant)) $ KM.lookup name $ defines
+
+-- | Check whether given name is a cpp define of a macro with arguments.
+isNameDefinedAsFunction :: Text -> AlexPred AlexState
+isNameDefinedAsFunction name = -- do
+    asks
+  $ getAny
+  . foldMap (foldMap (Any . isFunction))
+  . KM.lookup name
+  . asDefines
+  -- defines <- asks asDefines
+  -- pure $ if KM.null defines
+  --   then False
+  --   else getAny $ foldMap (foldMap (Any . isFunction)) $ KM.lookup name $ defines
 
 (.&&&.) :: AlexPred a -> AlexPred b -> AlexPred (a, b)
 (.&&&.) x y = (&&) <$> lmap fst x <*> lmap snd y
@@ -334,18 +419,23 @@ alexGetByte input@AlexInput{aiInput, aiBytes, aiLine} =
     b:bs -> Just (b, input { aiBytes = bs })
     []   -> nextChar
   where
-    nextChar = case T.uncons aiInput of
-      Nothing      -> Nothing
-      Just (c, cs) -> encode (fromMaybe c $ fixChar c) cs
-    encode c cs =
+    nextChar :: Maybe (Word8, AlexInput)
+    nextChar = case InputStack.uncons aiInput of
+      Nothing           -> Nothing
+      Just (typ, c, cs) -> Just $ encode typ (fromMaybe c $ fixChar c) cs
+    encode :: InputType -> Char -> InputStack -> (Word8, AlexInput)
+    encode typ c cs =
       case encodeChar c of
-        b:bs -> Just (b, input')
+        b:bs -> (b, input')
           where
             input' = input
               { aiInput    = cs
               , aiBytes    = bs
               , aiPrevChar = c
-              , aiLine     = advanceLine c aiLine
+              , aiLine     =
+                  case typ of
+                    OriginalSource -> advanceLine c aiLine
+                    Macro          -> aiLine
               }
         []   -> error
           "alexGetByte: should not happen - utf8 encoding of a character is empty"

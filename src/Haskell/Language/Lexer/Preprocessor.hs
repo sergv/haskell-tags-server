@@ -16,9 +16,12 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module Haskell.Language.Lexer.Preprocessor
   ( PreprocessorMacro(..)
+  , isConstant
+  , isFunction
   , parsePreprocessorDefine
   , parsePreprocessorUndef
   ) where
@@ -26,25 +29,63 @@ module Haskell.Language.Lexer.Preprocessor
 import Control.Monad.Except.Ext
 import Data.Attoparsec.Text
 import Data.Char (isAlphaNum)
-import Data.List.NonEmpty (NonEmpty(..))
+import Data.Semigroup ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
-import Text.PrettyPrint.Leijen.Text.Ext (Doc, docFromString)
+import qualified Text.PrettyPrint.Leijen.Text as PP
+import Text.PrettyPrint.Leijen.Text.Ext (Pretty(..), Doc)
+import qualified Text.PrettyPrint.Leijen.Text.Ext as PP
+
+import Data.KeyMap (HasKey)
+import qualified Data.KeyMap as KM
 
 data PreprocessorMacro =
-    PreprocessorConstant !Text -- ^ Value
+    PreprocessorConstant
+      !Text -- ^ Name
+      !Text -- ^ Value
   | PreprocessorFunction
-      !(NonEmpty Text) -- ^ Arguments
-      !Text            -- ^ Body
+      !Text -- ^ Name
+      ![Text] -- ^ Arguments
+      !Text   -- ^ Body
   deriving (Eq, Ord, Show)
+
+macroName :: PreprocessorMacro -> Text
+macroName = \case
+  PreprocessorConstant name _   -> name
+  PreprocessorFunction name _ _ -> name
+
+instance HasKey PreprocessorMacro where
+  type Key PreprocessorMacro = Text
+  getKey = macroName
+
+instance Pretty PreprocessorMacro where
+  pretty = \case
+    PreprocessorConstant name value     ->
+      PP.hsep ["#define", pretty name, pretty value]
+    PreprocessorFunction name args body -> PP.hsep
+      [ "#define"
+      , pretty name
+      , PP.parens $ PP.hsep $ map ((<> ",") . pretty) args
+      , pretty body
+      ]
+
+isConstant :: PreprocessorMacro -> Bool
+isConstant = \case
+  PreprocessorConstant{} -> True
+  PreprocessorFunction{} -> False
+
+isFunction :: PreprocessorMacro -> Bool
+isFunction = \case
+  PreprocessorConstant{} -> False
+  PreprocessorFunction{} -> True
 
 -- | Parse "#define ..." directive
 parsePreprocessorDefine
   :: (HasCallStack, MonadError Doc m)
   => Text
-  -> m (Text, PreprocessorMacro)
+  -> m PreprocessorMacro
 parsePreprocessorDefine =
-  either (throwErrorWithCallStack . docFromString) pure . parseOnly (pDefine <* endOfInput)
+  either (throwErrorWithCallStack . PP.docFromString) pure . parseOnly (pDefine <* endOfInput)
 
 -- | Parse "#undef ..." directive
 parsePreprocessorUndef
@@ -52,7 +93,7 @@ parsePreprocessorUndef
   => Text
   -> m Text
 parsePreprocessorUndef =
-  either (throwErrorWithCallStack . docFromString) pure . parseOnly (pUndef <* endOfInput)
+  either (throwErrorWithCallStack . PP.docFromString) pure . parseOnly (pUndef <* endOfInput)
 
 -- | Parse preprocessor directive start - hash, followed by optional whitespace,
 -- and literal directive name.
@@ -62,7 +103,7 @@ pDirectiveStart directive = do
   skipMany pCppWS  <?> "optional whitespace after hash"
   void (string directive) <?> T.unpack directive
 
-pDefine :: Parser (Text, PreprocessorMacro)
+pDefine :: Parser PreprocessorMacro
 pDefine = do
   pDirectiveStart "define"
   skipMany1 pCppWS       <?> "mandatory whitespace after define"
@@ -71,9 +112,9 @@ pDefine = do
   skipMany1 pCppWS       <?> "space before macro body"
   body <- pCppBody       <?> "macro body"
   let body' = case args of
-        Nothing    -> PreprocessorConstant body
-        Just args' -> PreprocessorFunction args' body
-  pure (name, body')
+        Nothing    -> PreprocessorConstant name body
+        Just args' -> PreprocessorFunction name args' body
+  pure body'
 
 pUndef :: Parser Text
 pUndef = do
@@ -90,21 +131,21 @@ isCPPIdentifierChar c = case c of
   '_' -> True
   c   -> isAlphaNum c
 
-pArguments :: Parser (NonEmpty Text)
+pArguments :: Parser [Text]
 pArguments = do
   _    <- char '('
   skipMany pCppWS
-  args <- (pCppIdentifier <* skipMany pCppWS) `sepBy1` (char ',' *> skipMany pCppWS)
+  args <- (pCppIdentifier <* skipMany pCppWS) `sepBy` (char ',' *> skipMany pCppWS)
+  skipMany pCppWS
   _    <- char ')'
-  case args of
-    []   -> fail "Empty list of arguments"
-    x:xs -> pure $ x :| xs
+  pure args
 
 pCppBody :: Parser Text
-pCppBody = removeContinuationMarkers <$> takeText
+pCppBody = stripTrailingNewline . removeContinuationMarkers <$> takeText
   where
     removeContinuationMarkers =
       T.replace "\\\r" "" . T.replace "\\\n" "" . T.replace "\\\r\n" ""
+    stripTrailingNewline = T.dropWhileEnd isAsciiSpaceOrNewline
 
 -- pCppBody = T.concat <$> sepBy1 takeMany
 -- pCppBody = takeText
@@ -142,3 +183,14 @@ isAsciiSpace = \case
   '\t' -> True
   '\r' -> True
   _    -> False
+
+isAsciiSpaceOrNewline :: Char -> Bool
+isAsciiSpaceOrNewline = \case
+  ' '  -> True
+  '\t' -> True
+  '\r' -> True
+  '\n' -> True
+  '\f' -> True
+  '\v' -> True
+  _    -> False
+

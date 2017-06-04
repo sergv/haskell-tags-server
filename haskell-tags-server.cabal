@@ -35,6 +35,7 @@ library
     fast-tags >=1.3,
     filepath,
     haskell-src-exts >=1.16,
+    microlens,
     monad-control >=1.0,
     mtl >=2.2,
     network >=2.6,
@@ -71,6 +72,7 @@ library
     Data.SymbolMap
     Data.Symbols
     Haskell.Language.Lexer
+    Haskell.Language.Lexer.InputStack
     Haskell.Language.Lexer.Lexer
     Haskell.Language.Lexer.LexerTypes
     Haskell.Language.Lexer.Preprocessor

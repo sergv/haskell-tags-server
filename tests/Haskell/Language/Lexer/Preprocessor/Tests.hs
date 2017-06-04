@@ -20,8 +20,6 @@ import Test.Tasty
 import Test.Tasty.HUnit (testCase)
 
 import Control.Arrow (left)
-import Data.List.NonEmpty (NonEmpty(..))
--- import Data.Text (Text)
 
 import Haskell.Language.Lexer.Preprocessor
 import TestUtils (makeAssertion)
@@ -38,38 +36,38 @@ defineTests = testGroup "#define"
   [ testGroup "Constants"
       [ testCase "Vanilla define" $
           "#define foo bar"
-          ==> Right ("foo", PreprocessorConstant "bar")
+          ==> Right (PreprocessorConstant "foo" "bar")
       , testCase "Define with some spaces" $
           "# define FOO qu ux"
-          ==> Right ("FOO", PreprocessorConstant "qu ux")
+          ==> Right (PreprocessorConstant "FOO" "qu ux")
       , testCase "Define with lots of continuation lines" $
           "# \\\n\
           \ define \\\n\
           \ FOO \\\n\
           \ qu \\\n\
           \ ux"
-          ==> Right ("FOO", PreprocessorConstant "qu  ux")
+          ==> Right (PreprocessorConstant "FOO" "qu  ux")
       , testCase "Define with name split by continuation line" $
           "#define FO\\\n\
           \O bar"
-          ==> Right ("FOO", PreprocessorConstant "bar")
+          ==> Right (PreprocessorConstant "FOO" "bar")
       ]
   , testGroup "Macro functions"
       [ testGroup "Single argument"
           [ testCase "Vanilla define" $
               "#define FOO(x) x"
-              ==> Right ("FOO", PreprocessorFunction ("x" :| []) "x")
+              ==> Right (PreprocessorFunction "FOO" ["x"] "x")
           , testCase "Define with some spaces" $
               "# define FOO( x ) x"
-              ==> Right ("FOO", PreprocessorFunction ("x" :| []) "x")
+              ==> Right (PreprocessorFunction "FOO" ["x"] "x")
           ]
       , testGroup "Two arguments"
           [ testCase "Vanilla define" $
               "#define FOO(x, y) (x < y)"
-              ==> Right ("FOO", PreprocessorFunction ("x" :| ["y"]) "(x < y)")
+              ==> Right (PreprocessorFunction "FOO" ["x", "y"] "(x < y)")
           , testCase "Define with with some spaces" $
               "# define FOO( x , y ) ( x < y )"
-              ==> Right ("FOO", PreprocessorFunction ("x" :| ["y"]) "( x < y )")
+              ==> Right (PreprocessorFunction "FOO" ["x", "y"] "( x < y )")
           , testCase "Define with lots of continuation lines" $
               "# \\\n\
               \ define \\\n\
@@ -80,7 +78,7 @@ defineTests = testGroup "#define"
               \ ) \\\n\
               \ ( x < \\\n\
               \ y )"
-              ==> Right ("FOO", PreprocessorFunction ("x" :| ["y"]) "( x <  y )")
+              ==> Right (PreprocessorFunction "FOO" ["x", "y"] "( x <  y )")
       , testCase "Define with name split by continuation line" $
           "#define FO\\\n\
           \O(x \\\n\
@@ -88,7 +86,7 @@ defineTests = testGroup "#define"
           \ y) \\\n\
           \                                (y -\\\n\
           \x)"
-          ==> Right ("FOO", PreprocessorFunction ("x" :| ["y"]) "(y -x)")
+          ==> Right (PreprocessorFunction "FOO" ["x", "y"] "(y -x)")
           ]
       ]
   ]

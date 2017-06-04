@@ -17,6 +17,7 @@
 module Haskell.Language.Lexer.Tests (tests) where
 
 import Test.Tasty
+import Test.Tasty.HUnit (testCase)
 
 import Control.Arrow (first)
 import Data.Functor.Identity
@@ -30,7 +31,7 @@ import FastTags.Token (SrcPos(..), PragmaType(..), Token, TokenVal(..), Line(..)
 
 import Haskell.Language.Lexer (LiterateMode(..))
 import qualified Haskell.Language.Lexer as Lexer
-import TestUtils (makeTest)
+import TestUtils (makeAssertion, makeTest)
 
 tests :: TestTree
 tests = testGroup "Lexer tests"
@@ -221,89 +222,126 @@ testTokenizeWithNewlines = testGroup "tokenize with newlines"
 
 testTokenizeCppDefines :: TestTree
 testTokenizeCppDefines = testGroup "defines"
-  [ "#define FOO foo\n\
-    \FOO :: a -> a\n\
-    \FOO x = x"
-    ==>
-    [ Newline 0
-    , Newline 0
-    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
-    , T "foo", T "x", Equals, T "X", Newline 0
-    ]
-  , "#  \n\
-    \  define \n\
-    \    FOO      \n\
-    \       foo\n\
-    \FOO :: a -> a\n\
-    \FOO x = x"
-    ==>
-    [ Newline 0
-    , Newline 0
-    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
-    , T "foo", T "x", Equals, T "X", Newline 0
-    ]
-  , "#  \n\
-    \define \n\
-    \FOO      \n\
-    \foo\n\
-    \FOO :: a -> a\n\
-    \FOO x = x"
-    ==>
-    [ Newline 0
-    , Newline 0
-    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
-    , T "foo", T "x", Equals, T "X", Newline 0
-    ]
-  , "#\n\
-    \define \n\
-    \FOO \n\
-    \foo\n\
-    \FOO :: a -> a\n\
-    \FOO x = x"
-    ==>
-    [ Newline 0
-    , Newline 0
-    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
-    , T "foo", T "x", Equals, T "X", Newline 0
-    ]
-  , "#define FOO 1\n\
-    \quux = FOO(2)\n"
-    ==>
-    [ Newline 0
-    , Newline 0
-    , T "quux", Equals, T "1", LParen, T "2", RParen, Newline 0
-    ]
-  , "#define BAZ \"foo bar\n\
-    \\n\
-    \bar = BAZ FOO quux\"\n\
-    \\n\
-    \foo ::  a -> b"
-    ==>
-    [ Newline 0
-    , Newline 0
-    , Newline 0
-    , T "bar", Equals, String, Newline 0
-    , Newline 0
-    , T "foo", DoubleColon, T "a", Arrow, T "b", Newline 0
-    ]
-  , "#define BAZ2 \"foo \n\
-    \  bar\n\
-    \\n\
-    \bar = BAZ2 FOO quux\"\n\
-    \\n\
-    \foo ::  a -> b"
-    ==>
-    [ Newline 0
-    , Newline 0
-    , Newline 0
-    , T "bar", Equals, String, Newline 0
-    , Newline 0
-    , T "foo", DoubleColon, T "a", Arrow, T "b", Newline 0
-    ]
+  [ constants
+  , functions
   ]
   where
-    (==>) = makeTest f
+    (==>) = makeAssertion f
     f = map valOf . tokenize' filename Vanilla
+
+    constants :: TestTree
+    constants = testGroup "constants"
+      [ testCase "Vanilla define" $
+          "#define FOO foo\n\
+          \FOO :: a -> a\n\
+          \FOO x = x"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "foo", T "x", Equals, T "x", Newline 0
+          ]
+      , testCase "Define with lots of continuation lines and indentation" $
+         "#  \\\n\
+          \  define \\\n\
+          \    FOO      \\\n\
+          \       foo\n\
+          \FOO :: a -> a\n\
+          \FOO x = x"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "foo", T "x", Equals, T "x", Newline 0
+          ]
+      , testCase "Define with lots of continuation lines, no indentation and some spaces" $
+          "#  \\\n\
+          \define \\\n\
+          \FOO      \\\n\
+          \foo\n\
+          \FOO :: a -> a\n\
+          \FOO x = x"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "foo", T "x", Equals, T "x", Newline 0
+          ]
+      , testCase "Define with lots of continuation lines, no indentation and minimum spaces" $
+          "#\\\n\
+          \define \\\n\
+          \FOO \\\n\
+          \foo\n\
+          \FOO :: a -> a\n\
+          \FOO x = x"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "foo", T "x", Equals, T "x", Newline 0
+          ]
+      , testCase "Try to use constant define as a macro" $
+          "#define FOO 1\n\
+          \quux = FOO(2)\n"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "quux", Equals, T "1", LParen, T "2", RParen, Newline 0
+          ]
+      , testCase "Define constant that spans boundaries of a string token" $
+          "#define BAZ \"foo bar\n\
+          \\n\
+          \bar = BAZ FOO quux\"\n\
+          \\n\
+          \foo ::  a -> b"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , Newline 0
+          , T "bar", Equals, String, Newline 0
+          , Newline 0
+          , T "foo", DoubleColon, T "a", Arrow, T "b", Newline 0
+          ]
+      , testCase "Define multiline constant that spans boundaries of a string token" $
+          "#define BAZ2 \"foo \\\n\
+          \  bar\n\
+          \\n\
+          \bar = BAZ2 FOO quux\"\n\
+          \\n\
+          \foo ::  a -> b"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , Newline 0
+          , T "bar", Equals, String, Newline 0
+          , Newline 0
+          , T "foo", DoubleColon, T "a", Arrow, T "b", Newline 0
+          ]
+      ]
+
+    functions :: TestTree
+    functions = testGroup "functions"
+      [ testCase "Vanilla function" $
+          "#define MKLENS(x) x\n\
+          \MKLENS(bar) :: a -> a\n\
+          \MKLENS(bar) x = x"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "bar", T "x", Equals, T "x", Newline 0
+          ]
+      , testCase "Function of 0 arguments" $
+          "#define foo() bar\n\
+          \test :: a -> a\n\
+          \test x = foo()baz"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "test", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "test", T "x", Equals, T "bar", T "baz", Newline 0
+          ]
+      ]
 
 testTokenizeCpp :: TestTree
 testTokenizeCpp = testGroup "tokenize with preprocessor"
