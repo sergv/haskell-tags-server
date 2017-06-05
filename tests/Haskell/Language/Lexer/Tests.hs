@@ -24,6 +24,7 @@ import Data.Functor.Identity
 import Data.List (sort)
 import Data.Text (Text)
 import qualified Data.Text as T
+import GHC.Stack (HasCallStack)
 import qualified Text.PrettyPrint.Leijen.Text.Ext as PP
 
 import qualified FastTags.Tag as Tag
@@ -1369,14 +1370,18 @@ testFFI = testGroup "ffi"
 filename :: FilePath
 filename = "fn.hs"
 
-testFullTagsWithoutPrefixes :: FilePath -> LiterateMode -> Text -> [Pos TagVal] -> TestTree
+testFullTagsWithoutPrefixes
+  :: HasCallStack
+  => FilePath -> LiterateMode -> Text -> [Pos TagVal] -> TestTree
 testFullTagsWithoutPrefixes fn mode = \source tags ->
   makeTest (first sort . Tag.processTokens . tokenize' fn mode) source (tags, warnings)
   where
     warnings :: [String]
     warnings = []
 
-testTagNames :: FilePath -> LiterateMode -> Text -> [String] -> TestTree
+testTagNames
+  :: HasCallStack
+  => FilePath -> LiterateMode -> Text -> [String] -> TestTree
 testTagNames fn mode source tags =
   makeTest process source (tags, warnings)
   where
@@ -1389,7 +1394,9 @@ testTagNames fn mode source tags =
 untag :: Pos TagVal -> String
 untag (Pos _ (TagVal name _ _)) = T.unpack name
 
-tokenize' :: FilePath -> LiterateMode -> Text -> [Token]
+tokenize'
+  :: HasCallStack
+  => FilePath -> LiterateMode -> Text -> [Token]
 tokenize' fn mode =
     either (error . PP.displayDocString . PP.pretty) id
   . runIdentity

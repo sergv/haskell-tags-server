@@ -28,7 +28,7 @@ module Haskell.Language.Lexer.Preprocessor
 
 import Control.Monad.Except.Ext
 import Data.Attoparsec.Text
-import Data.Char (isAlphaNum)
+import Data.Char (isAlphaNum, isAlpha)
 import Data.Semigroup ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -39,24 +39,25 @@ import qualified Text.PrettyPrint.Leijen.Text.Ext as PP
 import Data.ErrorMessage
 import Data.KeyMap (HasKey)
 import qualified Data.KeyMap as KM
+import Data.Symbols.MacroName
 
 data PreprocessorMacro =
     PreprocessorConstant
-      !Text -- ^ Name
-      !Text -- ^ Value
+      !MacroName -- ^ Name
+      !Text      -- ^ Value
   | PreprocessorFunction
-      !Text -- ^ Name
-      ![Text] -- ^ Arguments
-      !Text   -- ^ Body
+      !MacroName -- ^ Name
+      ![Text]    -- ^ Arguments
+      !Text      -- ^ Body
   deriving (Eq, Ord, Show)
 
-macroName :: PreprocessorMacro -> Text
+macroName :: PreprocessorMacro -> MacroName
 macroName = \case
   PreprocessorConstant name _   -> name
   PreprocessorFunction name _ _ -> name
 
 instance HasKey PreprocessorMacro where
-  type Key PreprocessorMacro = Text
+  type Key PreprocessorMacro = MacroName
   getKey = macroName
 
 instance Pretty PreprocessorMacro where
@@ -92,7 +93,7 @@ parsePreprocessorDefine =
 parsePreprocessorUndef
   :: (HasCallStack, MonadError ErrorMessage m)
   => Text
-  -> m Text
+  -> m MacroName
 parsePreprocessorUndef =
   either (throwErrorWithCallStack . PP.docFromString) pure . parseOnly (pUndef <* endOfInput)
 
@@ -112,20 +113,33 @@ pDefine = do
   args <- option Nothing (Just <$> pArguments <?> "arguments")
   skipMany1 pCppWS       <?> "space before macro body"
   body <- pCppBody       <?> "macro body"
-  let body' = case args of
-        Nothing    -> PreprocessorConstant name body
-        Just args' -> PreprocessorFunction name args' body
+  let name' = mkMacroName name
+      body' = case args of
+        Nothing    -> PreprocessorConstant name' body
+        Just args' -> PreprocessorFunction name' args' body
   pure body'
 
-pUndef :: Parser Text
+pUndef :: Parser MacroName
 pUndef = do
   pDirectiveStart "undef"
-  skipMany1 pCppWS <?> "mandatory whitespace after define"
-  pCppIdentifier   <?> "name"
+  skipMany1 pCppWS        <?> "mandatory whitespace after define"
+  ident <- pCppIdentifier <?> "name"
+  pure $ mkMacroName ident
 
 pCppIdentifier :: Parser Text
 pCppIdentifier =
-  T.concat <$> (takeWhile1 isCPPIdentifierChar `sepBy1` (char '\\' *> skipNewline))
+  T.cons
+    <$> ((satisfy isLeadingCPPIdentifierChar <?> "first cpp identifier char")
+        <* skipMany pContinuationLine)
+    <*> (T.concat <$> (takeWhile1 isCPPIdentifierChar `sepBy` pContinuationLine <?> "rest of cpp identifier"))
+  where
+    pContinuationLine = char '\\' *> skipNewline <?> "continuation line"
+
+-- Characters that can occur at first position of Cpp identifier.
+isLeadingCPPIdentifierChar :: Char -> Bool
+isLeadingCPPIdentifierChar c = case c of
+ '_' -> True
+ c   -> isAlpha c
 
 isCPPIdentifierChar :: Char -> Bool
 isCPPIdentifierChar c = case c of

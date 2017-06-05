@@ -25,6 +25,7 @@ import qualified Data.Text.Lazy as TL
 import Text.PrettyPrint.Leijen.Text.Ext (Doc, Pretty(..), (<+>))
 
 import Data.ErrorMessage
+import Data.Symbols.MacroName (mkMacroName)
 import FastTags.Token
 import qualified Haskell.Language.Lexer.InputStack as InputStack
 import Haskell.Language.Lexer.LexerTypes
@@ -170,15 +171,15 @@ $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 <macroDefined, comment, qq> {
 
 @cpp_ident "(" ")"
-  / { runAlexPredM (lmap snd (matchedNameInPredicate >>= isNameDefinedAsFunction . T.takeWhile (/= '('))) }
+  / { runAlexPredM (lmap snd (matchedNameInPredicate >>= isNameDefinedAsFunction . mkMacroName . T.takeWhile (/= '('))) }
   { \_input _len ->
-      error "Function defines are not implemented yet"
+      throwErrorWithCallStack "Function defines are not implemented yet"
   }
 
 @cpp_ident
-  / { runAlexPredM (lmap snd (matchedNameInPredicate >>= isNameDefinedAsConstant)) }
+  / { runAlexPredM (lmap snd (matchedNameInPredicate >>= isNameDefinedAsConstant . mkMacroName)) }
   { \input len -> do
-      let macroName = retrieveToken input len
+      let macroName = mkMacroName $ retrieveToken input len
       enterConstantMacroDef $! macroName
       alexScanTokenVal -- continue scanning
   }
@@ -296,14 +297,14 @@ tokenizeM filename mode input =
     toplevelCode :: AlexCode
     toplevelCode = startCode
 
-scanTokens :: Monad m => AlexT m [Token]
+scanTokens :: (HasCallStack, Monad m) => AlexT m [Token]
 scanTokens = do
   tok <- alexMonadScan
   case valOf tok of
     EOF -> return []
     _   -> (tok :) <$> scanTokens
 
-alexMonadScan :: Monad m => AlexT m Token
+alexMonadScan :: (HasCallStack, Monad m) => AlexT m Token
 alexMonadScan = do
   filename <- asks aeFilename
   line     <- gets (aiLine . asInput)

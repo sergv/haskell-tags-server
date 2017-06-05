@@ -77,18 +77,21 @@ import Data.Foldable
 import Data.Maybe
 import Data.Profunctor
 import Data.Semigroup (Any(..))
+import Data.Set (Set)
+import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Word (Word8)
+import Lens.Micro (Lens', lens, over)
 import qualified Text.PrettyPrint.Leijen.Text as PP
 import Text.PrettyPrint.Leijen.Text.Ext (Pretty(..))
 import qualified Text.PrettyPrint.Leijen.Text.Ext as PP
-import Lens.Micro (Lens', lens, over)
 
 import Control.Monad.EitherK
 import Data.ErrorMessage
 import Data.KeyMap (KeyMap)
 import qualified Data.KeyMap as KM
+import Data.Symbols.MacroName (MacroName)
 import FastTags.Token
 import Haskell.Language.Lexer.InputStack (InputStack(..), InputType(..))
 import qualified Haskell.Language.Lexer.InputStack as InputStack
@@ -184,6 +187,7 @@ data AlexState = AlexState
   , asLiterateStyle    :: !(Maybe LiterateStyle)
   , asContextStack     :: [Context]
   , asDefines          :: !(KeyMap PreprocessorMacro)
+  , asUndefinedMacro   :: !(Set MacroName)
   } deriving (Eq, Ord, Show)
 
 {-# INLINE asInputL #-}
@@ -200,6 +204,7 @@ mkAlexState input startCode toplevelCode = AlexState
   , asLiterateStyle    = Nothing
   , asContextStack     = []
   , asDefines          = KM.empty
+  , asUndefinedMacro   = S.empty
   }
 
 alexEnterBirdLiterateEnv :: MonadState AlexState m => m ()
@@ -243,14 +248,14 @@ addMacroDef :: MonadState AlexState m => PreprocessorMacro -> m ()
 addMacroDef macro =
   modify $ \s -> s { asDefines = KM.insert macro $ asDefines s }
 
-removeMacroDef :: MonadState AlexState m => Text -> m ()
-removeMacroDef _ =
-  -- Don't remove defines for now
-  pure ()
+removeMacroDef :: MonadState AlexState m => MacroName -> m ()
+removeMacroDef name =
+  -- Mark name as undefined for later checks.
+  modify $ \s -> s { asUndefinedMacro = S.insert name $ asUndefinedMacro s }
 
 enterConstantMacroDef
   :: (HasCallStack, MonadState AlexState m, MonadError ErrorMessage m)
-  => Text -- ^ Macro name, must be already defined.
+  => MacroName -- ^ Macro name, must be already defined.
   -> m ()
 enterConstantMacroDef name = do
   macroDef <- gets $ KM.lookup name . asDefines
@@ -266,8 +271,8 @@ enterConstantMacroDef name = do
                PreprocessorConstant name body -> Just (name, body)
                PreprocessorFunction{}         -> Nothing)
              $ toList defs of
-        [(name, body)] ->
-          modify $ over (asInputL . aiInputL) (MacroStack name body (T.length body))
+        [(macroName, body)] ->
+          modify $ over (asInputL . aiInputL) (MacroStack macroName body (T.length body))
         []  -> throwErrorWithCallStack $ PP.hsep
           [ "The macro name"
           , PP.squotes $ pretty name
@@ -384,7 +389,7 @@ isInLatexCodeEnv = do
     Just Bird  -> False
 
 -- | Check whether given name is a cpp define.
-isNameDefinedAsConstant :: Text -> AlexPred AlexState
+isNameDefinedAsConstant :: MacroName -> AlexPred AlexState
 isNameDefinedAsConstant name = -- do
     asks
   $ getAny
@@ -397,7 +402,7 @@ isNameDefinedAsConstant name = -- do
   --   else getAny $ foldMap (foldMap (Any . isConstant)) $ KM.lookup name $ defines
 
 -- | Check whether given name is a cpp define of a macro with arguments.
-isNameDefinedAsFunction :: Text -> AlexPred AlexState
+isNameDefinedAsFunction :: MacroName -> AlexPred AlexState
 isNameDefinedAsFunction name = -- do
     asks
   $ getAny

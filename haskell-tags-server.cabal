@@ -72,6 +72,7 @@ library
     Data.SubkeyMap
     Data.SymbolMap
     Data.Symbols
+    Data.Symbols.MacroName
     Haskell.Language.Lexer
     Haskell.Language.Lexer.InputStack
     Haskell.Language.Lexer.Lexer

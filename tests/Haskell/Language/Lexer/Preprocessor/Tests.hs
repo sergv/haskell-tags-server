@@ -21,9 +21,11 @@ import Test.Tasty.HUnit (testCase)
 
 import Control.Arrow (left)
 
+import Data.ErrorMessage
+import Data.Symbols.MacroName (mkMacroName)
 import Haskell.Language.Lexer.Preprocessor
-import TestUtils (makeAssertion)
-import Text.PrettyPrint.Leijen.Text.Ext (pretty, displayDocString)
+import TestUtils
+import qualified Text.PrettyPrint.Leijen.Text.Ext as PP
 
 tests :: TestTree
 tests = testGroup "Preprocessor tests"
@@ -36,38 +38,41 @@ defineTests = testGroup "#define"
   [ testGroup "Constants"
       [ testCase "Vanilla define" $
           "#define foo bar"
-          ==> Right (PreprocessorConstant "foo" "bar")
+          ==> PreprocessorConstant (mkMacroName "foo") "bar"
       , testCase "Define with some spaces" $
           "# define FOO qu ux"
-          ==> Right (PreprocessorConstant "FOO" "qu ux")
+          ==> PreprocessorConstant (mkMacroName "FOO") "qu ux"
       , testCase "Define with lots of continuation lines" $
           "# \\\n\
           \ define \\\n\
           \ FOO \\\n\
           \ qu \\\n\
           \ ux"
-          ==> Right (PreprocessorConstant "FOO" "qu  ux")
+          ==> PreprocessorConstant (mkMacroName "FOO") "qu  ux"
       , testCase "Define with name split by continuation line" $
           "#define FO\\\n\
           \O bar"
-          ==> Right (PreprocessorConstant "FOO" "bar")
+          ==> PreprocessorConstant (mkMacroName "FOO") "bar"
+      , testCase "Malformed define starting with a number" $
+          "#define 1foo bar"
+          !=> Left "defined name > first cpp identifier char: Failed reading: satisfy"
       ]
   , testGroup "Macro functions"
       [ testGroup "Single argument"
           [ testCase "Vanilla define" $
               "#define FOO(x) x"
-              ==> Right (PreprocessorFunction "FOO" ["x"] "x")
+              ==> PreprocessorFunction (mkMacroName "FOO") ["x"] "x"
           , testCase "Define with some spaces" $
               "# define FOO( x ) x"
-              ==> Right (PreprocessorFunction "FOO" ["x"] "x")
+              ==> PreprocessorFunction (mkMacroName "FOO") ["x"] "x"
           ]
       , testGroup "Two arguments"
           [ testCase "Vanilla define" $
               "#define FOO(x, y) (x < y)"
-              ==> Right (PreprocessorFunction "FOO" ["x", "y"] "(x < y)")
+              ==> PreprocessorFunction (mkMacroName "FOO") ["x", "y"] "(x < y)"
           , testCase "Define with with some spaces" $
               "# define FOO( x , y ) ( x < y )"
-              ==> Right (PreprocessorFunction "FOO" ["x", "y"] "( x < y )")
+              ==> PreprocessorFunction (mkMacroName "FOO") ["x", "y"] "( x < y )"
           , testCase "Define with lots of continuation lines" $
               "# \\\n\
               \ define \\\n\
@@ -78,7 +83,7 @@ defineTests = testGroup "#define"
               \ ) \\\n\
               \ ( x < \\\n\
               \ y )"
-              ==> Right (PreprocessorFunction "FOO" ["x", "y"] "( x <  y )")
+              ==> PreprocessorFunction (mkMacroName "FOO") ["x", "y"] "( x <  y )"
       , testCase "Define with name split by continuation line" $
           "#define FO\\\n\
           \O(x \\\n\
@@ -86,30 +91,29 @@ defineTests = testGroup "#define"
           \ y) \\\n\
           \                                (y -\\\n\
           \x)"
-          ==> Right (PreprocessorFunction "FOO" ["x", "y"] "(y -x)")
+          ==> PreprocessorFunction (mkMacroName "FOO") ["x", "y"] "(y -x)"
           ]
       ]
   ]
   where
-    (==>) = makeAssertion (left (displayDocString . pretty) . parsePreprocessorDefine)
-    -- f :: Text -> Either Doc (Text, PreprocessorMacro) -> Assertion
-    -- f input expected =
-    --   parsePreprocessorDefine input == expected
+    (==>) = makeAssertion' parsePreprocessorDefine
+    (!=>) = makeAssertion (left (PP.displayDocString . errorMessageBody) . parsePreprocessorDefine)
+
 
 undefTests :: TestTree
 undefTests = testGroup "#undef"
   [ testCase "Vanilla undef" $
       "#undef FOO"
-      ==> Right "FOO"
+      ==> mkMacroName "FOO"
   , testCase "Undef with some spaces" $
       "#   undef    FOO"
-      ==> Right "FOO"
+      ==> mkMacroName "FOO"
   , testCase "Undef with lots of continuation lines" $
       "# \\\n\
       \  undef  \\\n\
       \  F\\\n\
       \OO"
-      ==> Right "FOO"
+      ==> mkMacroName "FOO"
   ]
   where
-    (==>) = makeAssertion (left (displayDocString . pretty) . parsePreprocessorUndef)
+    (==>) = makeAssertion' parsePreprocessorUndef

@@ -28,13 +28,15 @@ import qualified Data.Text as T
 
 import Prelude hiding (take)
 
+import Data.Symbols.MacroName (MacroName)
+
 data InputType = OriginalSource | Macro
 
 data InputStack =
     OriginalSourceStack Text
   | MacroStack
-      !Text               -- ^ Macro name
-      !Text               -- ^ Macro text
+      !MacroName          -- ^ Macro name
+      !Text               -- ^ Macro body
       {-# UNPACK #-} !Int -- ^ Length of macro text
       InputStack          -- ^ Rest of the stack
   deriving (Eq, Ord, Show)
