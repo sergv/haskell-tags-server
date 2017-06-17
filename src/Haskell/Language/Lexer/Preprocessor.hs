@@ -156,10 +156,17 @@ pArguments = do
   pure args
 
 pCppBody :: Parser Text
-pCppBody = stripTrailingNewline . removeContinuationMarkers <$> takeText
+pCppBody = stripTrailingNewline . removeComments . removeContinuationMarkers <$> takeText
   where
     removeContinuationMarkers =
       T.replace "\\\r" "" . T.replace "\\\n" "" . T.replace "\\\r\n" ""
+    -- TODO: improve stripping to handle non-empty comments.
+    removeComments xs =
+      case T.splitOn "/*" xs of
+        []   -> T.empty -- no occurrences of /*
+        [y]  -> y       -- no occurrences of /*
+        y:ys -> T.concat $ y : map (T.drop 2 . snd . T.breakOn "*/") ys
+      -- T.replace "/**/" ""
     stripTrailingNewline = T.dropWhileEnd isAsciiSpaceOrNewline
 
 -- pCppBody = T.concat <$> sepBy1 takeMany

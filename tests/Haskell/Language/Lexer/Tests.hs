@@ -319,6 +319,34 @@ testTokenizeCppDefines = testGroup "defines"
           , Newline 0
           , T "foo", DoubleColon, T "a", Arrow, T "b", Newline 0
           ]
+      , testCase "Stripping of empty c-style comments" $
+          "#define TEST foo/**/bar\n\
+          \\n\
+          \concatTest :: a -> a\n\
+          \concatTest x =\n\
+          \  x + TEST + \"foobar\"   "
+          ==>
+          [ Newline 0
+          , Newline 0
+          , Newline 0
+          , T "concatTest", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "concatTest", T "x", Equals, Newline 2
+          , T "x", T "+", T "foobar", T "+", String, Newline 0
+          ]
+      , testCase "Stripping of non-empty c-style comments" $
+          "#define TEST foo/* hello world! */bar\n\
+          \\n\
+          \concatTest :: a -> a\n\
+          \concatTest x =\n\
+          \  x + TEST + \"foobar\"   "
+          ==>
+          [ Newline 0
+          , Newline 0
+          , Newline 0
+          , T "concatTest", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "concatTest", T "x", Equals, Newline 2
+          , T "x", T "+", T "foobar", T "+", String, Newline 0
+          ]
       ]
 
     functions :: TestTree
@@ -1326,7 +1354,7 @@ testLiterate = testGroup "literate"
     f = sort . map untag . fst . Tag.processTokens . tokenize' "fn.lhs" Literate
 
 testPatterns :: TestTree
-testPatterns = testGroup "patterns"
+testPatterns = testGroup "Patterns"
   [ "pattern Arrow a b = ConsT \"->\" [a, b]"
     ==>
     ["Arrow"]
