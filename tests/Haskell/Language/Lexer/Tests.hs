@@ -47,7 +47,7 @@ tests = testGroup "Lexer tests"
   ]
 
 testTokenize :: TestTree
-testTokenize = testGroup "tokenize"
+testTokenize = testGroup "Tokenize"
   [ "xyz  -- abc"          ==> [T "xyz", Newline 0]
   , "xyz  --- abc"         ==> [T "xyz", Newline 0]
   , "  {-   foo -}"        ==> [Newline 0]
@@ -112,7 +112,7 @@ testTokenize = testGroup "tokenize"
       . map valOf
       . tokenize' filename Vanilla
 
-    tokenizeSplices = testGroup "tokenize splices"
+    tokenizeSplices = testGroup "Splices"
       [ "$(foo)"                              ==>
         [SpliceStart, T "foo", RParen, Newline 0]
       , "$(foo [| baz |])"                    ==>
@@ -124,7 +124,7 @@ testTokenize = testGroup "tokenize"
       ]
 
 testTokenizeWithNewlines :: TestTree
-testTokenizeWithNewlines = testGroup "tokenize with newlines"
+testTokenizeWithNewlines = testGroup "Tokenize with newlines"
   [ "1\n2\n"     ==> [Newline 0, T "1", Newline 0, T "2", Newline 0]
   , " 11\n 11\n" ==> [Newline 1, T "11", Newline 1, T "11", Newline 0]
   , "foo bar baz"
@@ -223,16 +223,18 @@ testTokenizeWithNewlines = testGroup "tokenize with newlines"
       . tokenize' filename mode
 
 testTokenizeCppDefines :: TestTree
-testTokenizeCppDefines = testGroup "defines"
+testTokenizeCppDefines = testGroup "#define"
   [ constants
   , functions
+  , concatenation
+  , functionsAndConstants
   ]
   where
     (==>) = makeAssertion f
     f = map valOf . tokenize' filename Vanilla
 
     constants :: TestTree
-    constants = testGroup "constants"
+    constants = testGroup "Constants"
       [ testCase "Vanilla define" $
           "#define FOO foo\n\
           \FOO :: a -> a\n\
@@ -357,21 +359,80 @@ testTokenizeCppDefines = testGroup "defines"
           , T "concatTest", T "x", Equals, Newline 2
           , T "x", T "+", T "foobar", T "+", String, Newline 0
           ]
-      ]
-
-    functions :: TestTree
-    functions = testGroup "functions"
-      [ testCase "Vanilla function" $
-          "#define MKLENS(x) x\n\
-          \MKLENS(bar) :: a -> a\n\
-          \MKLENS(bar) x = x"
+      , testCase "Define after use" $
+          "foo = X\n\
+          \\n\
+          \#define X Y\n\
+          \\n\
+          \bar = X"
+          ==>
+          [ Newline 0
+          , T "foo", Equals, T "X", Newline 0
+          , Newline 0
+          , Newline 0
+          , Newline 0
+          , T "bar", Equals, T "Y", Newline 0
+          ]
+      , testCase "Redefine" $
+          "#define X Y\n\
+          \\n\
+          \foo = X\n\
+          \\n\
+          \#define X Z\n\
+          \\n\
+          \bar = X"
           ==>
           [ Newline 0
           , Newline 0
-          , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
-          , T "bar", T "x", Equals, T "x", Newline 0
+          , T "foo", Equals, T "Y", Newline 0
+          , Newline 0
+          , Newline 0
+          , Newline 0
+          , T "bar", Equals, T "Z", Newline 0
           ]
-      , testCase "Function of 0 arguments" $
+      , testCase "Expand vanilla multi-token #define" $
+          "#define FOO a + b\n\
+          \foo :: Int -> Int -> Int\n\
+          \foo a b c = FOO + c * (FOO)\n"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "foo", DoubleColon, T "Int", Arrow, T "Int", Arrow, T "Int", Newline 0
+          , T "foo", T "a", T "b", T "c", Equals, T "a", T "+", T "b", T "+", T "c", T "*", LParen, T "a", T "+", T "b", RParen, Newline 0
+          ]
+      , testCase "Expand #define that expands to another #define'd name" $
+          "#define FOO foo\n\
+          \#define BAR FOO\n\
+          \\n\
+          \BAR :: a -> b\n\
+          \BAR x = x"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , Newline 0
+          , Newline 0
+          , T "foo", DoubleColon, T "a", Arrow, T "b", Newline 0
+          , T "foo", T "x", Equals, T "x", Newline 0
+          ]
+      , testCase "Expand #define that expands to name #define'd later in the program" $
+          "#define BAR FOO\n\
+          \#define FOO foo\n\
+          \\n\
+          \BAR :: a -> b\n\
+          \BAR x = x"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , Newline 0
+          , Newline 0
+          , T "foo", DoubleColon, T "a", Arrow, T "b", Newline 0
+          , T "foo", T "x", Equals, T "x", Newline 0
+          ]
+      ]
+
+    functions :: TestTree
+    functions = testGroup "Functions"
+      [ testCase "Function of 0 arguments" $
           "#define foo() bar\n\
           \test :: a -> a\n\
           \test x = foo()baz"
@@ -381,131 +442,384 @@ testTokenizeCppDefines = testGroup "defines"
           , T "test", DoubleColon, T "a", Arrow, T "a", Newline 0
           , T "test", T "x", Equals, T "bar", T "baz", Newline 0
           ]
+      , testCase "Function of 0 arguments not equivalent to macro name" $
+          "#define foo() bar\n\
+          \test :: a -> a\n\
+          \test x = foo baz"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "test", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "test", T "x", Equals, T "foo", T "baz", Newline 0
+          ]
+      , testCase "Function of 1 argument" $
+          "#define MKLENS(x) x\n\
+          \MKLENS(bar) :: a -> a\n\
+          \MKLENS(bar) x = x"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "bar", T "x", Equals, T "x", Newline 0
+          ]
+      , testCase "Function of 1 arguments not expanded instead of constant" $
+          "#define foo() bar\n\
+          \test :: a -> a\n\
+          \test x = foo baz"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "test", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "test", T "x", Equals, T "foo", T "baz", Newline 0
+          ]
+      , testCase "Function of 2 vanilla arguments" $
+          "#define TEST(x, y) x + y\n\
+          \bar :: a -> a\n\
+          \bar x = TEST(x, x)"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "bar", T "x", Equals, T "x", T "+",T "x", Newline 0
+          ]
+      , testCase "Function of 2 arguments when one argument contains comma within single quotes" $
+          "#define TEST(x, y) x + y\n\
+          \bar :: a -> a\n\
+          \bar x = TEST(',', x)"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "bar", T "x", Equals, Character, T "+",T "x", Newline 0
+          ]
+      , testCase "Function of 2 arguments when one argument contains comma within double quotes" $
+          "#define TEST(x, y) x + y\n\
+          \bar :: a -> a\n\
+          \bar x = TEST(\"x, x\", x)"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "bar", T "x", Equals, String, T "+",T "x", Newline 0
+          ]
+      , testCase "Function of 2 arguments when one argument contains comma within balanced parentheses" $
+          "#define TEST(x, y) x + y\n\
+          \bar :: a -> a\n\
+          \bar x = TEST((x, x), x)"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "bar", T "x", Equals, LParen, T "x", Comma, T "x", RParen, T "+",T "x", Newline 0
+          ]
+      , testCase "Function of 2 arguments when one argument contains comma within many balanced parentheses" $
+          "#define TEST(x, y) x + y\n\
+          \bar :: a -> a\n\
+          \bar x = TEST(((((((((((x, x)))))))))), x)"
+          ==>
+          ([ Newline 0
+           , Newline 0
+           , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
+           , T "bar", T "x", Equals
+           ] ++
+           replicate 10 LParen ++ [T "x", Comma, T "x"] ++ replicate 10 RParen ++
+           [T "+",T "x", Newline 0])
+      , testCase "Function of 2 arguments - balanced brackets do not change semantics of comma" $
+          "#define TEST(x, y) x + y\n\
+          \bar :: a -> a\n\
+          \bar x = TEST([x, x])"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "bar", T "x", Equals, LBracket, T "x", T "+", T "x", RBracket, Newline 0
+          ]
+      , testCase "Expand multiline function-like macro" $
+          "#define TEST(name, tvar, var) \\\n\
+          \  name :: tvar -> tvar \\\n\
+          \  name var = var\n\
+          \\n\
+          \foo :: a -> a\n\
+          \foo x = x\n\
+          \TEST(bar, b, y)\n\
+          \\n\
+          \TEST(baz, c, z)"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "foo", T "x", Equals, T "x", Newline 0
+          , Newline 0
+          , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
+          , T "bar", T "y", Equals, T "y", Newline 0
+          , Newline 0
+          , Newline 0
+          , T "baz", DoubleColon, T "c", Arrow, T "c", Newline 0
+          , T "baz", T "z", Equals, T "z", Newline 0
+          ]
+      , testCase "Expand invalid function-like macro" $
+          "#define FOO () foo()\n\
+          \\n\
+          \bar :: a -> ()\n\
+          \bar = FOO() + 1"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , Newline 0
+          , T "bar", DoubleColon, T "a", Arrow, LParen, RParen, Newline 0
+          , T "bar", Equals, LParen, RParen, T "foo", LParen, RParen, LParen, RParen, T "+", T "1", Newline 0
+          ]
+      , testCase "Stringization with # without spaces" $
+          "#define TEST(x) x (#x)\n\
+          \bar :: a -> a\n\
+          \bar x = TEST(x)"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "bar", T "x", Equals, T "x", LParen, String, RParen, Newline 0
+          ]
+      , testCase "Stringization with # surrounded with spaces" $
+          "#define TEST(x) x (  #  x  )\n\
+          \bar :: a -> a\n\
+          \bar x = TEST(x)"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "bar", T "x", Equals, T "x", LParen, String, RParen, Newline 0
+          ]
+      , testCase "Redefine" $
+          "#define X(a) Y\n\
+          \\n\
+          \foo = X(1)\n\
+          \\n\
+          \#define X(a) Z\n\
+          \\n\
+          \bar = X(1)"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "foo", Equals, T "Y", Newline 0
+          , Newline 0
+          , Newline 0
+          , Newline 0
+          , T "bar", Equals, T "Z", Newline 0
+          ]
       ]
 
+    concatenation :: TestTree
+    concatenation = testGroup "Concatenation"
+      [ -- Must do this because gcc and cpphs do this.
+        -- Clang doesn't do this right, but that would be definitely
+        -- nonportable, so don't aim for Clang.
+        testCase "Via c-style comments" $
+          "#define CONCAT_TEST(name) name/**/Test\n\
+          \\n\
+          \concatTest :: a -> a\n\
+          \concatTest x =\n\
+          \  x + CONCAT_TEST(bar) + \"foobar\"   "
+          ==>
+          [ Newline 0
+          , Newline 0
+          , Newline 0
+          , T "concatTest", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "concatTest", T "x", Equals, Newline 2
+          , T "x", T "+", T "barTest", T "+", String, Newline 0
+          ]
+        -- Gcc does not support this, but cpphs does and it's pretty standard
+        -- in the C world.
+      , testCase "Via ##" $
+          "#define CONCAT_TEST(name) name##Test\n\
+          \\n\
+          \concatTest :: a -> a\n\
+          \concatTest x =\n\
+          \  x + CONCAT_TEST(bar) + \"foobar\"   "
+          ==>
+          [ Newline 0
+          , Newline 0
+          , Newline 0
+          , T "concatTest", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "concatTest", T "x", Equals, Newline 2
+          , T "x", T "+", T "barTest", T "+", String, Newline 0
+          ]
+      , testCase "Via ## with spaces" $
+          "#define CONCAT_TEST(name) name ## Test\n\
+          \\n\
+          \concatTest :: a -> a\n\
+          \concatTest x =\n\
+          \  x + CONCAT_TEST(bar) + \"foobar\"   "
+          ==>
+          [ Newline 0
+          , Newline 0
+          , Newline 0
+          , T "concatTest", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "concatTest", T "x", Equals, Newline 2
+          , T "x", T "+", T "barTest", T "+", String, Newline 0
+          ]
+      ]
+
+    functionsAndConstants :: TestTree
+    functionsAndConstants = testGroup "Functions and constants"
+      [ testCase "Function redefines constant" $
+          "#define X Y\n\
+          \\n\
+          \foo = X\n\
+          \\n\
+          \#define X(a) Z\n\
+          \\n\
+          \bar = X(1)"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "foo", Equals, T "Y", Newline 0
+          , Newline 0
+          , Newline 0
+          , Newline 0
+          , T "bar", Equals, T "Z", Newline 0
+          ]
+      ]
+
+testTokenizeCppConditionals :: TestTree
+testTokenizeCppConditionals = testGroup "Conditionals"
+  [ testCase "Expand #ifdef-#endif" $
+      "#ifdef FOO\n\
+      \foo :: a -> a\n\
+      \foo x = x\n\
+      \#endif\n\
+      \bar :: b -> b\n\
+      \bar y = y\n\
+      \\n\
+      \\n"
+      ==>
+      [ Newline 0
+      , Newline 0
+      , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+      , T "foo", T "x", Equals, T "x", Newline 0
+      , Newline 0
+      , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
+      , T "bar", T "y", Equals, T "y", Newline 0
+      , Newline 0
+      , Newline 0
+      ]
+  , testCase "Expand both branches of #ifdef-#else-#endif" $
+      "#ifdef FOO\n\
+      \foo :: a -> a\n\
+      \foo x = x\n\
+      \#else\n\
+      \bar :: b -> b\n\
+      \bar y = y\n\
+      \#endif\n"
+      ==>
+      [ Newline 0
+      , Newline 0
+      , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+      , T "foo", T "x", Equals, T "x", Newline 0
+      , Newline 0
+      , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
+      , T "bar", T "y", Equals, T "y", Newline 0
+      , Newline 0
+      ]
+  , testCase "Expand all branches in #if-#elif-#else-#endif" $
+      "#if defined(FOO)\n\
+      \foo :: a -> a\n\
+      \foo x = x\n\
+      \#elif defined(BAR)\n\
+      \bar :: b -> b\n\
+      \bar y = y\n\
+      \#else\n\
+      \baz :: c -> c\n\
+      \baz z = z\n\
+      \#endif\n"
+      ==>
+      [ Newline 0
+      , Newline 0
+      , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+      , T "foo", T "x", Equals, T "x", Newline 0
+      , Newline 0
+      , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
+      , T "bar", T "y", Equals, T "y", Newline 0
+      , Newline 0
+      , T "baz", DoubleColon, T "c", Arrow, T "c", Newline 0
+      , T "baz", T "z", Equals, T "z", Newline 0
+      , Newline 0
+      ]
+  ]
+  where
+    (==>) = makeAssertion f
+    f = map valOf . tokenize' filename Vanilla
+
+testTokenizeCppDefinesWithinConditionals :: TestTree
+testTokenizeCppDefinesWithinConditionals =
+  testGroup "Defines within conditionals"
+    [ testCase "Define same constant within conditional branches" $
+        "#if defined(FOO)\n\
+        \#define BAR x\n\
+        \#else\n\
+        \#define BAR y\n\
+        \#endif\n\
+        \\n\
+        \BAR :: a -> b"
+        ==>
+        [ Newline 0
+        , Newline 0
+        , Newline 0
+        , Newline 0
+        , Newline 0
+        , Newline 0
+        , Newline 0
+        , T "x", DoubleColon, T "a", Arrow, T "b", Newline 0
+        , T "y", DoubleColon, T "a", Arrow, T "b", Newline 0
+        ]
+    , testCase "Define same function within conditional branches" $
+        "#if defined(FOO)\n\
+        \#define BAR(a) x\n\
+        \#else\n\
+        \#define BAR(a) y\n\
+        \#endif\n\
+        \\n\
+        \BAR(1) :: a -> b"
+        ==>
+        [ Newline 0
+        , Newline 0
+        , Newline 0
+        , Newline 0
+        , Newline 0
+        , Newline 0
+        , Newline 0
+        , T "x", DoubleColon, T "a", Arrow, T "b", Newline 0
+        , T "y", DoubleColon, T "a", Arrow, T "b", Newline 0
+        ]
+    , testCase "Define constant and function with the same name within conditional branches" $
+        "#if defined(FOO)\n\
+        \#define BAR x\n\
+        \#else\n\
+        \#define BAR(a) y\n\
+        \#endif\n\
+        \\n\
+        \BAR :: a -> b\n\
+        \BAR(1) :: a -> b"
+        ==>
+        [ Newline 0
+        , Newline 0
+        , Newline 0
+        , Newline 0
+        , Newline 0
+        , Newline 0
+        , Newline 0
+        , T "x", DoubleColon, T "a", Arrow, T "b", Newline 0
+        , T "y", DoubleColon, T "a", Arrow, T "b", Newline 0
+        ]
+    ]
+  where
+    (==>) = makeAssertion f
+    f = map valOf . tokenize' filename Vanilla
+
 testTokenizeCpp :: TestTree
-testTokenizeCpp = testGroup "tokenize with preprocessor"
+testTokenizeCpp = testGroup "Tokenize with preprocessor"
   [ testTokenizeCppDefines
-  , "#ifdef FOO\n\
-    \foo :: a -> a\n\
-    \foo x = x\n\
-    \#endif\n\
-    \bar :: b -> b\n\
-    \bar y = y\n\
-    \\n\
-    \\n"
-    ==>
-    [ Newline 0
-    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
-    , T "foo", T "x", Equals, T "x", Newline 0
-    , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
-    , T "bar", T "y", Equals, T "y", Newline 0
-    , Newline 0
-    , Newline 0
-    ]
-  , "#ifdef FOO\n\
-    \foo :: a -> a\n\
-    \foo x = x\n\
-    \#endif\n\
-    \bar :: b -> b\n\
-    \bar y = y\n\
-    \\n\
-    \\n"
-    ==>
-    [ Newline 0
-    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
-    , T "foo", T "x", Equals, T "x", Newline 0
-    , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
-    , T "bar", T "y", Equals, T "y", Newline 0
-    , Newline 0
-    , Newline 0
-    ]
-  , "#ifdef FOO\n\
-    \foo :: a -> a\n\
-    \foo x = x\n\
-    \#else\n\
-    \bar :: b -> b\n\
-    \bar y = y\n\
-    \#endif\n"
-    ==>
-    [ Newline 0
-    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
-    , T "foo", T "x", Equals, T "x", Newline 0
-    , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
-    , T "bar", T "y", Equals, T "y", Newline 0
-    ]
-  , "#define FOO a + b\n\
-    \foo :: Int -> Int -> int\n\
-    \foo a b c = FOO + c * (FOO)\n"
-    ==>
-    [ Newline 0
-    , T "foo", DoubleColon, T "Int", Arrow, T "Int", Arrow, T "Int", Newline 0
-    , T "foo", T "a", T "b", T "c", Equals, T "a", T "+", T "b", T "+", T "c", T "*", LParen, T "a", T "+", T "b", RParen, Newline 0
-    ]
-  , "#if defined(FOO)\n\
-    \foo :: a -> a\n\
-    \foo x = x\n\
-    \#elif defined(BAR)\n\
-    \bar :: b -> b\n\
-    \bar y = y\n\
-    \#else\n\
-    \baz :: c -> c\n\
-    \baz z = z\n\
-    \#endif\n"
-    ==>
-    [ Newline 0
-    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
-    , T "foo", T "x", Equals, T "x", Newline 0
-    , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
-    , T "bar", T "y", Equals, T "y", Newline 0
-    , T "baz", DoubleColon, T "c", Arrow, T "c", Newline 0
-    , T "baz", T "z", Equals, T "z", Newline 0
-    ]
-  , "#define TEST(name, tvar, var) \\\n\
-    \  name :: tvar -> tvar \\\n\
-    \  name var = var\n\
-    \\n\
-    \foo :: a -> a\n\
-    \foo x = x\n\
-    \TEST(bar, b, y)\n\
-    \\n\
-    \TEST(baz, c, z)"
-    ==>
-    [ Newline 0
-    , Newline 0
-    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
-    , T "foo", T "x", Equals, T "x", Newline 0
-    , Newline 0
-    , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
-    , T "bar", T "y", Equals, T "y", Newline 0
-    , Newline 0
-    , Newline 0
-    , T "baz", DoubleColon, T "c", Arrow, T "c", Newline 0
-    , T "baz", T "z", Equals, T "z", Newline 0
-    ]
-    -- Name expansion and concatenation with the help of C comments.
-  , "#define TEST(name, tvar, var) \\\n\
-    \  name/**/Test :: tvar -> tvar \\\n\
-    \  name/**/Test var = var\n\
-    \\n\
-    \foo :: a -> a\n\
-    \foo x = x\n\
-    \TEST(bar, b, y)\n\
-    \\n\
-    \TEST(baz, c, z)"
-    ==>
-    [ Newline 0
-    , Newline 0
-    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
-    , T "foo", T "x", Equals, T "x", Newline 0
-    , Newline 0
-    , T "barTest", DoubleColon, T "b", Arrow, T "b", Newline 0
-    , T "barTest", T "y", Equals, T "y", Newline 0
-    , Newline 0
-    , Newline 0
-    , T "bazTest", DoubleColon, T "c", Arrow, T "c", Newline 0
-    , T "bazTest", T "z", Equals, T "z", Newline 0
-    ]
+  , testTokenizeCppConditionals
+  , testTokenizeCppDefinesWithinConditionals
   -- , testWithIncludes
   --     "Just two includes"
   --     "#include <foo.h>\n\
@@ -524,15 +838,12 @@ testTokenizeCpp = testGroup "tokenize with preprocessor"
   --     , T "baz", T "z", Equals, T "z", Newline 0
   --     ]
   ]
-  where
-    (==>) = makeTest f
-    f = map valOf . tokenize' filename Vanilla
 
 -- testWithIncludes :: Stirng ->
 
 
 testStripComments :: TestTree
-testStripComments = testGroup "strip comments"
+testStripComments = testGroup "Strip comments"
   [ "hello -- there"
     ==>
     [Newline 0, T "hello", Newline 0]
@@ -588,7 +899,7 @@ testStripComments = testGroup "strip comments"
     f = map valOf . tokenize' filename Vanilla
 
 testBreakBlocks :: TestTree
-testBreakBlocks = testGroup "break blocks"
+testBreakBlocks = testGroup "Break blocks"
   [ testGroup "non-literate"
     [ "a\n\
       \b\n"
@@ -684,7 +995,7 @@ testBreakBlocks = testGroup "break blocks"
       . tokenize' filename mode
 
 testFullPipeline :: TestTree
-testFullPipeline = testGroup "full processing pipeline"
+testFullPipeline = testGroup "Full processing pipeline"
   [ ["data X", "module X"]
     ==>
     [ Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "X" Type Nothing)
@@ -731,7 +1042,7 @@ testFullPipeline = testGroup "full processing pipeline"
        . zip [0..]
 
 testProcess :: TestTree
-testProcess = testGroup "process"
+testProcess = testGroup "Process"
   [ testPrefixes
   , testData
   , testGADT
@@ -745,7 +1056,7 @@ testProcess = testGroup "process"
   ]
 
 testPrefixes :: TestTree
-testPrefixes = testGroup "prefix tracking"
+testPrefixes = testGroup "Prefix tracking"
   [ "module Bar.Foo where\n"
     ==>
     [Pos (SrcPos fn 1 "") (TagVal "Foo" Module Nothing)]
@@ -812,7 +1123,7 @@ testPrefixes = testGroup "prefix tracking"
     fn = filename
 
 testData :: TestTree
-testData = testGroup "data"
+testData = testGroup "Data"
   [ "data X\n"                            ==> ["X"]
   , "data X = X Int\n"                    ==> ["X", "X"]
   , "data Foo = Bar | Baz"                ==> ["Bar", "Baz", "Foo"]
@@ -1002,7 +1313,7 @@ testData = testGroup "data"
     (==>) = testTagNames filename Vanilla
 
 testGADT :: TestTree
-testGADT = testGroup "gadt"
+testGADT = testGroup "GADT"
   [ "data X where A :: X\n"              ==> ["A", "X"]
   , "data X where\n\tA :: X\n"           ==> ["A", "X"]
   , "data X where\n\tA :: X\n\tB :: X\n" ==> ["A", "B", "X"]
@@ -1056,7 +1367,7 @@ testGADT = testGroup "gadt"
     (==>) = testTagNames filename Vanilla
 
 testFamilies :: TestTree
-testFamilies = testGroup "families"
+testFamilies = testGroup "Families"
   [ "type family X :: *\n"                                           ==> ["X"]
   , "data family X :: * -> *\n"                                      ==> ["X"]
   , "data family a ** b"                                             ==> ["**"]
@@ -1087,7 +1398,7 @@ testFamilies = testGroup "families"
     (==>) = testTagNames filename Vanilla
 
 testFunctions :: TestTree
-testFunctions = testGroup "functions"
+testFunctions = testGroup "Functions"
   [
   -- Multiple declarations.
     "a,b::X"          ==> ["a", "b"]
@@ -1109,7 +1420,7 @@ testFunctions = testGroup "functions"
   where
     (==>) = testTagNames filename Vanilla
 
-    toplevelFunctionsWithoutSignatures = testGroup "toplevel functions without signatures"
+    toplevelFunctionsWithoutSignatures = testGroup "Toplevel functions without signatures"
       [ "infix 5 |+|"  ==> []
       , "infixl 5 |+|" ==> []
       , "infixr 5 |+|" ==> []
@@ -1163,7 +1474,7 @@ testFunctions = testGroup "functions"
       -- Arguments named "forall
       , "f forall = forall + 1"                       ==> ["f"]
       ]
-    strictMatchTests = testGroup "strict match (!)"
+    strictMatchTests = testGroup "Strict match (!)"
       [ "f !x y = x"                  ==> ["f"]
       , "f x !y = x"                  ==> ["f"]
       , "f !x !y = x"                 ==> ["f"]
@@ -1183,7 +1494,7 @@ testFunctions = testGroup "functions"
       -- a BangPatterns instead of operator
       , "x ! y = x" ==> ["x"]
       ]
-    lazyMatchTests = testGroup "lazy match (~)"
+    lazyMatchTests = testGroup "Lazy match (~)"
       [ "f ~x y = x"                  ==> ["f"]
       , "f x ~y = x"                  ==> ["f"]
       , "f ~x ~y = x"                 ==> ["f"]
@@ -1203,7 +1514,7 @@ testFunctions = testGroup "functions"
       -- a BangPatterns instead of operator
       , "x ~ y = x" ==> ["x"]
       ]
-    atPatternsTests = testGroup "at patterns (@)"
+    atPatternsTests = testGroup "At patterns (@)"
       [ "f z@x y    = z"                        ==> ["f"]
       , "f x   z'@y = z'"                       ==> ["f"]
       , "f z@x z'@y = z"                        ==> ["f"]
@@ -1223,7 +1534,7 @@ testFunctions = testGroup "functions"
       ]
 
 testClass :: TestTree
-testClass = testGroup "class"
+testClass = testGroup "Class"
   [ "class (X x) => C a b where\n\tm :: a->b\n\tn :: c\n"          ==> ["C", "m", "n"]
   , "class (X x) ⇒ C a b where\n\tm ∷ a→b\n\tn ∷ c\n"              ==> ["C", "m", "n"]
   , "class (X x) => C a b | a -> b where\n\tm :: a->b\n\tn :: c\n" ==> ["C", "m", "n"]
@@ -1290,7 +1601,7 @@ testClass = testGroup "class"
     (==>) = testTagNames filename Vanilla
 
 testInstance :: TestTree
-testInstance = testGroup "instance"
+testInstance = testGroup "Instance"
   [ "instance Foo Quux where\n\
     \  data Bar Quux a = QBar { frob :: a }\n\
     \                  | QBaz { fizz :: String }\n\
@@ -1346,7 +1657,7 @@ testInstance = testGroup "instance"
     (==>) = testTagNames filename Vanilla
 
 testLiterate :: TestTree
-testLiterate = testGroup "literate"
+testLiterate = testGroup "Literate"
   [ "> class (X x) => C a b where\n>\tm :: a->b\n>\tn :: c\n"
     ==>
     ["C", "m", "n"]
@@ -1396,7 +1707,7 @@ testPatterns = testGroup "Patterns"
     (==>) = testTagNames filename Vanilla
 
 testFFI :: TestTree
-testFFI = testGroup "ffi"
+testFFI = testGroup "FFI"
   [ "foreign import ccall foo :: Double -> IO Double"            ==> ["foo"]
   , "foreign import unsafe java foo :: Double -> IO Double"      ==> ["foo"]
   , "foreign import safe stdcall foo :: Double -> IO Double"     ==> ["foo"]
