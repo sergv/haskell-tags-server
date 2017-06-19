@@ -243,6 +243,16 @@ testTokenizeCppDefines = testGroup "defines"
           , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
           , T "foo", T "x", Equals, T "x", Newline 0
           ]
+      , testCase "Haskell-style define names with primes and backticks" $
+          "#define FOO'Bar` foo\n\
+          \FOO'Bar` :: a -> a\n\
+          \FOO'Bar` x = x"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "foo", T "x", Equals, T "x", Newline 0
+          ]
       , testCase "Define with lots of continuation lines and indentation" $
          "#  \\\n\
           \  define \\\n\

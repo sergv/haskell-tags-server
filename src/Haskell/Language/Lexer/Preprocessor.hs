@@ -28,7 +28,7 @@ module Haskell.Language.Lexer.Preprocessor
 
 import Control.Monad.Except.Ext
 import Data.Attoparsec.Text
-import Data.Char (isAlphaNum, isAlpha)
+import Data.Char (isAlpha, isDigit)
 import Data.Semigroup ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -138,13 +138,13 @@ pCppIdentifier =
 -- Characters that can occur at first position of Cpp identifier.
 isLeadingCPPIdentifierChar :: Char -> Bool
 isLeadingCPPIdentifierChar c = case c of
- '_' -> True
- c   -> isAlpha c
+  '_'  -> True
+  '\'' -> True
+  '`'  -> True
+  c    -> isAlpha c
 
 isCPPIdentifierChar :: Char -> Bool
-isCPPIdentifierChar c = case c of
-  '_' -> True
-  c   -> isAlphaNum c
+isCPPIdentifierChar c = isLeadingCPPIdentifierChar c || isDigit c
 
 pArguments :: Parser [Text]
 pArguments = do

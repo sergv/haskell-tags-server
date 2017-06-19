@@ -70,9 +70,9 @@ $ident     = [$ident_nonsym $ident_syms]
 
 @nl = ( [\r]? $nl )
 
-$cpp_ident       = [ $ascsmall $asclarge $ascdigit \_ ]
-@cpp_ident       = [ $ascsmall $asclarge \_ ] $cpp_ident*
-@cpp_ident_split = [ $ascsmall $asclarge \_ ] ( $cpp_ident | [\\] @nl )*
+$cpp_ident       = [ $ascsmall $asclarge $ascdigit \_ \' \` ]
+@cpp_ident       = [ $ascsmall $asclarge \_ \' \` ] $cpp_ident*
+@cpp_ident_split = [ $ascsmall $asclarge \_ \' \` ] ( $cpp_ident | [\\] @nl )*
 
 @cpp_ws          = ( $ascspace | [\\] @nl )
 @cpp_opt_ws      = @cpp_ws*

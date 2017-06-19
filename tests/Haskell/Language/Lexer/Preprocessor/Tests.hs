@@ -28,7 +28,7 @@ import TestUtils
 import qualified Text.PrettyPrint.Leijen.Text.Ext as PP
 
 tests :: TestTree
-tests = testGroup "Preprocessor tests"
+tests = testGroup "Preprocessor parsing tests"
   [ defineTests
   , undefTests
   ]
@@ -56,6 +56,17 @@ defineTests = testGroup "#define"
       , testCase "Malformed define starting with a number" $
           "#define 1foo bar"
           !=> Left "defined name > first cpp identifier char: Failed reading: satisfy"
+      , testGroup "Haskell-style names"
+          [ testCase "primes and backticks in the body" $
+              "#define foo'_bar` baz"
+              ==> PreprocessorConstant (mkMacroName "foo'_bar`") "baz"
+          , testCase "prime at the start" $
+              "#define 'foo_bar baz"
+              ==> PreprocessorConstant (mkMacroName "'foo_bar") "baz"
+          , testCase "backtick at the start" $
+              "#define `foo_bar baz"
+              ==> PreprocessorConstant (mkMacroName "`foo_bar") "baz"
+          ]
       ]
   , testGroup "Macro functions"
       [ testGroup "Single argument"
