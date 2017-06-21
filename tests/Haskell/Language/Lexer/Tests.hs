@@ -27,9 +27,8 @@ import qualified Data.Text as T
 import GHC.Stack (HasCallStack)
 import qualified Text.PrettyPrint.Leijen.Text.Ext as PP
 
-import qualified FastTags.Tag as Tag
-import FastTags.Tag (TagVal(..), Pos(..), UnstrippedTokens(..), Type(..))
-import FastTags.Token (SrcPos(..), PragmaType(..), Token, TokenVal(..), Line(..))
+import Haskell.Language.Lexer.FastTags (TokenVal(..), PragmaType(..), Token, TagVal(..), Pos(..), UnstrippedTokens(..), Type(..), SrcPos(..), Line(..))
+import qualified Haskell.Language.Lexer.FastTags as Tag
 
 import Haskell.Language.Lexer (LiterateMode(..))
 import qualified Haskell.Language.Lexer as Lexer

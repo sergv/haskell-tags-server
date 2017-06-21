@@ -64,6 +64,7 @@ library
     Data.Condition
     Data.ErrorMessage
     Data.Foldable.Ext
+    Data.HasLens
     Data.KeyMap
     Data.Map.NonEmpty
     Data.MonoidalMap
@@ -74,10 +75,16 @@ library
     Data.Symbols
     Data.Symbols.MacroName
     Haskell.Language.Lexer
+    Haskell.Language.Lexer.Env
+    Haskell.Language.Lexer.FastTags
     Haskell.Language.Lexer.InputStack
+    Haskell.Language.Lexer.Input
     Haskell.Language.Lexer.Lexer
-    Haskell.Language.Lexer.LexerTypes
+    Haskell.Language.Lexer.Monad
     Haskell.Language.Lexer.Preprocessor
+    Haskell.Language.Lexer.RulePredicate
+    Haskell.Language.Lexer.State
+    Haskell.Language.Lexer.Types
     Haskell.Language.Server.BERT
     Haskell.Language.Server.Tags
     Haskell.Language.Server.Tags.AnalyzeHeader

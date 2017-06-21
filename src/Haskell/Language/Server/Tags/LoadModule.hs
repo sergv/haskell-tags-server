@@ -47,8 +47,7 @@ import qualified Text.PrettyPrint.Leijen.Text as PP
 import Text.PrettyPrint.Leijen.Text.Ext
 
 import Haskell.Language.Lexer (tokenize)
-import FastTags.Tag (processTokens)
-import FastTags.Token (Token)
+import Haskell.Language.Lexer.FastTags (Token, processTokens)
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS

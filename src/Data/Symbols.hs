@@ -49,7 +49,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Text.PrettyPrint.Leijen.Text as PP
 
-import FastTags.Tag (Pos(..), TagVal(..), Type(..), SrcPos(..), Line(..))
+import Haskell.Language.Lexer.FastTags (Pos(..), TagVal(..), Type(..), SrcPos(..), Line(..))
 
 import Data.KeyMap (HasKey(..))
 import Text.PrettyPrint.Leijen.Text.Ext

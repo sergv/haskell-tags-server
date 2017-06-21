@@ -21,11 +21,11 @@ module Haskell.Language.Lexer
 import Data.Functor.Identity
 import Data.Text (Text)
 import System.FilePath
-import FastTags.Token (Token)
 
 import Data.ErrorMessage
+import Haskell.Language.Lexer.FastTags (Token)
 import Haskell.Language.Lexer.Lexer (tokenizeM)
-import Haskell.Language.Lexer.LexerTypes (LiterateMode(..))
+import Haskell.Language.Lexer.Types (LiterateMode(..))
 
 tokenize :: FilePath -> Text -> Either ErrorMessage [Token]
 tokenize filename = runIdentity . tokenizeM filename mode

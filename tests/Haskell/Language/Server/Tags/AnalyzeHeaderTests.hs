@@ -34,7 +34,7 @@ import Test.Tasty.HUnit
 import qualified Text.PrettyPrint.Leijen.Text as PP
 
 import Haskell.Language.Lexer (tokenize)
-import FastTags.Token (Token)
+import Haskell.Language.Lexer.FastTags (Token)
 
 import Control.Monad.Logging.Simple
 import Data.ErrorMessage

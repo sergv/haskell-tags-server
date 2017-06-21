@@ -26,10 +26,15 @@ import Text.PrettyPrint.Leijen.Text.Ext (Doc, Pretty(..), (<+>))
 
 import Data.ErrorMessage
 import Data.Symbols.MacroName (mkMacroName)
-import FastTags.Token
+import Haskell.Language.Lexer.Env
+import Haskell.Language.Lexer.FastTags (Token, TokenVal(..), Pos(..), PragmaType(..), unLine, valOf)
+import Haskell.Language.Lexer.Input (AlexInput, aiInput, aiLine, alexInputPrevChar, alexGetByte, retrieveToken)
 import qualified Haskell.Language.Lexer.InputStack as InputStack
-import Haskell.Language.Lexer.LexerTypes
+import Haskell.Language.Lexer.Monad
 import Haskell.Language.Lexer.Preprocessor
+import Haskell.Language.Lexer.RulePredicate
+import Haskell.Language.Lexer.State
+import Haskell.Language.Lexer.Types
 
 }
 
@@ -105,10 +110,10 @@ $hexdigit   = [0-9a-fA-F]
 -- Literate stuff
 <literate> {
 ^ > $ws*
-  / { runAlexPredM (lmap fst isLiterate) }
+  / { runRulePredM (lmap fst isLiterate) }
   { \_ len -> startLiterateBird  *> pure (Newline (len - 1)) }
 ^ "\begin{code}" @nl
-  / { runAlexPredM (lmap fst isLiterate) }
+  / { runRulePredM (lmap fst isLiterate) }
   { \_ len -> startLiterateLatex *> pure (Newline (len - 12)) }
 (. | @nl)
   ;
@@ -117,13 +122,13 @@ $hexdigit   = [0-9a-fA-F]
 <0, macroDefined> {
 
 @nl > $space*
-  / { runAlexPredM (lmap fst isLiterate) }
+  / { runRulePredM (lmap fst isLiterate) }
   { \_ len -> pure $! Newline $! len - 2 }
 @nl [^>]
-  / { runAlexPredM (isLiterate .&&&. isInBirdEnv) }
+  / { runRulePredM (isLiterate .&&&. isInBirdEnv) }
   { \_ _   -> endLiterate }
 ^ "\end{code}"
-  / { runAlexPredM (isLiterate .&&&. isInLatexCodeEnv) }
+  / { runRulePredM (isLiterate .&&&. isInLatexCodeEnv) }
   { \_ _   -> endLiterate }
 
 }
@@ -171,13 +176,13 @@ $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 <macroDefined, comment, qq> {
 
 @cpp_ident "(" ")"
-  / { runAlexPredM (lmap snd (matchedNameInPredicate >>= isNameDefinedAsFunction . mkMacroName . T.takeWhile (/= '('))) }
+  / { runRulePredM (lmap snd (matchedNameInPredicate >>= isNameDefinedAsFunction . mkMacroName . T.takeWhile (/= '('))) }
   { \_input _len ->
       throwErrorWithCallStack "Function defines are not implemented yet"
   }
 
 @cpp_ident
-  / { runAlexPredM (lmap snd (matchedNameInPredicate >>= isNameDefinedAsConstant . mkMacroName)) }
+  / { runRulePredM (lmap snd (matchedNameInPredicate >>= isNameDefinedAsConstant . mkMacroName)) }
   { \input len -> do
       let macroName = mkMacroName $ retrieveToken input len
       enterConstantMacroDef $! macroName
@@ -280,6 +285,8 @@ $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 
 {
 
+type AlexAction m = AlexInput -> Int -> m TokenVal
+
 kw :: Applicative m => TokenVal -> AlexAction m
 kw tok = \_ _ -> pure tok
 
@@ -312,21 +319,21 @@ alexMonadScan = do
 
 alexScanTokenVal :: (HasCallStack, Monad m) => AlexT m TokenVal
 alexScanTokenVal = do
-  env                              <- ask
-  state@AlexState{asInput, asCode} <- get
-  case alexScanUser (env, state) asInput (unAlexCode asCode) of
-    AlexEOF                              ->
+  env   <- ask
+  state <- get
+  case alexScanUser (env, state) (asInput state) (unAlexCode (asCode state)) of
+    AlexEOF         ->
       pure EOF
-    AlexError AlexInput{aiLine, aiInput} -> do
-      AlexState{asCode} <- get
-      throwErrorWithCallStack $ "lexical error while in state" <+> pretty asCode <+> "at line" <+>
-        pretty (unLine aiLine) <> ":" <+> pretty (TL.fromStrict (InputStack.take 40 aiInput))
+    AlexError input -> do
+      state' <- get
+      throwErrorWithCallStack $ "lexical error while in state" <+> pretty (asCode state') <+> "at line" <+>
+        pretty (unLine (aiLine input)) <> ":" <+> pretty (TL.fromStrict (InputStack.take 40 (aiInput input)))
     AlexSkip input _                     -> do
       alexSetInput input
       alexScanTokenVal
     AlexToken input tokLen action        -> do
       alexSetInput input
-      action asInput tokLen
+      action (asInput state) tokLen
 
 startComment :: Monad m => AlexT m TokenVal
 startComment = do
@@ -338,7 +345,7 @@ endComment :: Monad m => AlexT m TokenVal
 endComment = do
   newDepth <- modifyCommentDepth (\x -> x - 1)
   when (newDepth == 0) $
-    alexToplevelCode
+    alexSetToplevelCode
   alexScanTokenVal
 
 startString :: Monad m => AlexT m TokenVal
@@ -348,7 +355,7 @@ startString = do
 
 endString :: Monad m => AlexT m TokenVal
 endString = do
-  alexToplevelCode
+  alexSetToplevelCode
   pure String
 
 startQuasiquoter :: Monad m => AlexT m TokenVal
@@ -358,13 +365,13 @@ startQuasiquoter = do
 
 startSplice :: Monad m => Context -> AlexT m TokenVal
 startSplice ctx = do
-  alexToplevelCode
+  alexSetToplevelCode
   pushContext ctx
   pure SpliceStart
 
 endQuasiquoter :: Monad m => AlexT m TokenVal
 endQuasiquoter = do
-  alexToplevelCode
+  alexSetToplevelCode
   pure QuasiquoterEnd
 
 pushLParen :: Monad m => AlexAction (AlexT m)
@@ -379,7 +386,7 @@ tryRestoringContext :: Monad m => AlexT m ()
 tryRestoringContext = do
   ctx <- popContext
   case ctx of
-    CtxHaskell     -> alexToplevelCode
+    CtxHaskell     -> alexSetToplevelCode
     CtxQuasiquoter -> alexSetCode qqCode
 
 errorAtLine
@@ -391,12 +398,12 @@ errorAtLine msg = do
 
 startLiterateBird :: Monad m => AlexT m ()
 startLiterateBird = do
-  alexToplevelCode
+  alexSetToplevelCode
   alexEnterBirdLiterateEnv
 
 startLiterateLatex :: Monad m => AlexT m ()
 startLiterateLatex = do
-  alexToplevelCode
+  alexSetToplevelCode
   alexEnterLatexCodeEnv
 
 endLiterate :: Monad m => AlexT m TokenVal

@@ -45,7 +45,6 @@ import Network.Socket
 import Text.PrettyPrint.Leijen.Text.Ext
 
 import Data.BERT
-import FastTags.Tag (SrcPos(..), Type, Line(..))
 import qualified Network.BERT.Server as BERT
 import qualified Network.BERT.Transport as BERT
 
@@ -56,6 +55,7 @@ import Data.ErrorMessage
 import Data.Path
 import qualified Data.Promise as Promise
 import Data.Symbols
+import Haskell.Language.Lexer.FastTags (SrcPos(..), Type, Line(..))
 import Haskell.Language.Server.Tags.Types
 
 defaultPort :: PortNumber

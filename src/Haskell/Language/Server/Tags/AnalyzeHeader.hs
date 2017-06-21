@@ -39,8 +39,8 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Text.PrettyPrint.Leijen.Text as PP
 
-import FastTags.Tag (stripNewlines, UnstrippedTokens(..), tokToName)
-import FastTags.Token (Pos(..), TokenVal(..), Token, posFile, posLine, unLine, TokenVal, PragmaType(..))
+import Haskell.Language.Lexer.FastTags
+  (stripNewlines, UnstrippedTokens(..), tokToName, Pos(..), TokenVal(..), Token, posFile, posLine, unLine, TokenVal, PragmaType(..))
 
 import Control.Monad.Logging
 import Data.ErrorMessage
