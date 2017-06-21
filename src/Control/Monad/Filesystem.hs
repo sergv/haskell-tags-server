@@ -13,7 +13,6 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Control.Monad.Filesystem (MonadFS(..)) where

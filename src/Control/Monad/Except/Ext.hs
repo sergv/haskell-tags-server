@@ -30,7 +30,7 @@ import Data.ErrorMessage
 throwErrorWithCallStack
   :: (HasCallStack, MonadError ErrorMessage m)
   => Doc -> m a
-throwErrorWithCallStack msg = throwError $ ErrorMessage
+throwErrorWithCallStack msg = throwError ErrorMessage
   { errorMessageBody      = msg
   , errorMessageBacktrace = callStack
   }

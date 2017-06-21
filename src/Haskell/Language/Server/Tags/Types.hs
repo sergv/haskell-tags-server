@@ -383,13 +383,16 @@ data EntryWithChildren name = EntryWithChildren
   } deriving (Eq, Ord, Show)
 
 instance Pretty name => Pretty (EntryWithChildren name) where
-  pretty (EntryWithChildren name children) =
-    ppDict "EntryWithChildren" $
-      [ "Name"     :-> pretty name
-      ] ++
-      [ "Children" :-> pretty children'
-      | Just children' <- [children]
-      ]
+  pretty = ppEntryWithChildren
+
+ppEntryWithChildren :: Pretty name => EntryWithChildren name -> Doc
+ppEntryWithChildren (EntryWithChildren name children) =
+  ppDict "EntryWithChildren" $
+    [ "Name"     :-> pretty name
+    ] ++
+    [ "Children" :-> pretty children'
+    | Just children' <- [children]
+    ]
 
 mkEntryWithoutChildren :: a -> EntryWithChildren a
 mkEntryWithoutChildren name = EntryWithChildren name Nothing
