@@ -12,9 +12,9 @@
 --
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE TupleSections #-}
+
 module Control.Arrow.Ext (secondM) where
 
-secondM :: (Monad m) => (b -> m c) -> (a, b) -> m (a, c)
-secondM f (x, y) = do
-  z <- f y
-  pure (x, z)
+secondM :: Functor m => (b -> m c) -> (a, b) -> m (a, c)
+secondM f (x, y) = (x,) <$> f y
