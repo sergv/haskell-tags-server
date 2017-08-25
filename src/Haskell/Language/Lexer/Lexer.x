@@ -1,7 +1,8 @@
 {
-{-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE NamedFieldPuns            #-}
-{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- Very important to have this one as it enables GHC to infer proper type of
 -- Alex 3.2.1 actions.
@@ -12,19 +13,23 @@
 
 module Haskell.Language.Lexer.Lexer (tokenizeM) where
 
-import Control.Applicative
 import Control.Monad
 import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
+import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NE
+import Data.Maybe (mapMaybe)
 import Data.Profunctor (lmap)
 import Data.Semigroup
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
-import Text.PrettyPrint.Leijen.Text.Ext (Doc, Pretty(..), (<+>))
+import qualified Text.PrettyPrint.Leijen.Text as PP
+import Text.PrettyPrint.Leijen.Text.Ext (Doc, Pretty(..), (<+>), ppList)
 
 import Data.ErrorMessage
+import qualified Data.KeyMap as KM
 import Data.Symbols.MacroName (mkMacroName)
 import Haskell.Language.Lexer.Env
 import Haskell.Language.Lexer.FastTags (Token, TokenVal(..), Pos(..), PragmaType(..), unLine, valOf)
@@ -101,20 +106,26 @@ $hexdigit   = [0-9a-fA-F]
 
 @source_pragma = [Ss][Oo][Uu][Rr][Cc][Ee]
 
+$filename = [a-z A-Z 0-9 \- \_ \. \\]
+@filename = $filename+
+
+@character = [\'] ( [^\'\\] | @charescape ) [\']
+@string    = [\"] ( [^\"\\] | @charescape | [\\] @nl ( $ws* [\\] )? )* [\"]
+
 :-
 
 -- Can skip whitespace everywhere since it does not affect meaning in any
 -- state.
 <0, macroDefined, comment, qq, literate> $ws+ ;
 
--- Literate stuff
+-- Literate Haskell support
 <literate> {
 ^ > $ws*
-  / { runRulePredM (lmap fst isLiterate) }
-  { \_ len -> startLiterateBird  *> pure (Newline (len - 1)) }
+  / { runRulePredM' (lmap predAlexEnv isLiterate) }
+  { \_ len -> startLiterateBird  *> pure (one $! Newline $! len - 1) }
 ^ "\begin{code}" @nl
-  / { runRulePredM (lmap fst isLiterate) }
-  { \_ len -> startLiterateLatex *> pure (Newline (len - 12)) }
+  / { runRulePredM' (lmap predAlexEnv isLiterate) }
+  { \_ len -> startLiterateLatex *> pure (one $! Newline $! len - 12) }
 (. | @nl)
   ;
 }
@@ -122,20 +133,21 @@ $hexdigit   = [0-9a-fA-F]
 <0, macroDefined> {
 
 @nl > $space*
-  / { runRulePredM (lmap fst isLiterate) }
-  { \_ len -> pure $! Newline $! len - 2 }
+  / { runRulePredM' (lmap predAlexEnv isLiterate) }
+  { \_ len -> pure $! one $! Newline $! len - 2 }
 @nl [^>]
-  / { runRulePredM (isLiterate .&&&. isInBirdEnv) }
+  / { runRulePredM' (isLiterate .&&&. isInBirdEnv) }
   { \_ _   -> endLiterate }
 ^ "\end{code}"
-  / { runRulePredM (isLiterate .&&&. isInLatexCodeEnv) }
+  / { runRulePredM' (isLiterate .&&&. isInLatexCodeEnv) }
   { \_ _   -> endLiterate }
 
 }
 
+-- Line comments and pragmas
 <0, macroDefined> {
 
-$nl $space*             { \_ len -> pure $! Newline $! len - 1 }
+$nl $space*             { \_ len -> pure $! one $! Newline $! len - 1 }
 
 [\-][\-]+ ~[$symbol $nl] .* ;
 [\-][\-]+ / $nl         ;
@@ -145,79 +157,19 @@ $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 
 }
 
--- Preprocessor
-
-<0, macroDefined> {
-
-"#" @cpp_opt_ws
-  "define" @cpp_nonempty_ws
-  @cpp_ident_split
-  ( "(" @cpp_opt_ws ( @cpp_ident_split ( @cpp_opt_ws "," @cpp_opt_ws @cpp_ident_split )* @cpp_opt_ws )? ")" )?
-  @cpp_nonempty_ws @define_body
-  { \input len -> do
-      macro <- parsePreprocessorDefine $! retrieveToken input len
-      addMacroDef macro
-      alexChangeToplevelCode macroDefinedCode
-      alexSetCode macroDefinedCode
-      pure $ Newline 0
-  }
-
-"#" @cpp_opt_ws
-  "undef" @cpp_nonempty_ws
-  @cpp_ident_split
-  { \input len -> do
-      name <- parsePreprocessorUndef $! retrieveToken input len
-      removeMacroDef name
-      pure $ Newline 0
-  }
-
-}
-
-<macroDefined, comment, qq> {
-
-@cpp_ident "(" ")"
-  / { runRulePredM (lmap snd (matchedNameInPredicate >>= isNameDefinedAsFunction . mkMacroName . T.takeWhile (/= '('))) }
-  { \_input _len ->
-      throwErrorWithCallStack "Function defines are not implemented yet"
-  }
-
-@cpp_ident
-  / { runRulePredM (lmap snd (matchedNameInPredicate >>= isNameDefinedAsConstant . mkMacroName)) }
-  { \input len -> do
-      let macroName = mkMacroName $ retrieveToken input len
-      enterConstantMacroDef $! macroName
-      alexScanTokenVal -- continue scanning
-  }
-
-}
-
--- Comments
+-- Recursive comments, {- ... -}
 <0, macroDefined, comment> "{-"
-  { \_ _ -> startComment }
+  { \_ _ -> startRecursiveComment }
 <comment> "-}"
-  { \_ _ -> endComment }
+  { \_ _ -> endRecursiveComment }
 <comment> (. | @nl)
   ;
 <0, macroDefined> "-}"
   { \_ _ -> errorAtLine "Unmatched -}" }
 
--- -- Strings
--- <0, macroDefined> [\"]  { \_ _ -> startString }
--- <string> [\"]           { \_ _ -> endString }
--- <string> [\\] @nl ( $ws+ [\\] )?
---   ;
--- <string> ( $ws+ | [^\"\\$nl] | [\\] . )+
---   ;
-
--- Strings
-<0, macroDefined> [\"]  { \_ _ -> startString }
-<string> [\\] [\"\\]    ;
-<string> [\\] @nl ( $ws+ [\\] )? ;
-<string> [\"]           { \_ _ -> endString }
-<string> (. | @nl)      ;
-
--- Characters
-<0, macroDefined> [\'] ( [^\'\\] | @charescape ) [\'] { kw Character }
+-- Characters and strings
+<0, macroDefined> @character { kw Character }
+<0, macroDefined> @string    { kw String }
 
 -- Template Haskell quasiquoters
 
@@ -228,6 +180,167 @@ $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 <qq> (. | @nl)          ;
 
 <0, macroDefined> "$("  { \_ _ -> startSplice CtxHaskell }
+
+-- Preprocessor
+
+-- Pragmas
+<0, macroDefined> {
+
+-- "#" @cpp_opt_ws "include" @cpp_nonempty_ws "<" @filename ">" @nl
+--   { \input len -> do
+--       throwErrorWithCallStack "TODO"
+--       pure $ Newline 0
+--   }
+--
+-- "#" @cpp_opt_ws "include" @cpp_nonempty_ws [\"] @filename [\"] @nl
+--   { \input len -> do
+--       throwErrorWithCallStack "TODO - #include <foo>"
+--       pure $ Newline 0
+--   }
+--
+-- So-called computed includes, when filename to be included comes from a
+-- macro. Not sure we should implement them yet...
+-- "#" @cpp_opt_ws "include" @cpp_nonempty_ws @cpp_ident_split
+--   { \input len -> do
+--       throwErrorWithCallStack "TODO - #include \"foo\""
+--       pure $ Newline 0
+--   }
+--
+-- "#" @cpp_opt_ws "include_next" @cpp_nonempty_ws "<" @filename ">" @nl
+--   { \input len -> do
+--       throwErrorWithCallStack "TODO - #include_next <foo>"
+--       pure $ Newline 0
+--   }
+--
+-- "#" @cpp_opt_ws "include_next" @cpp_nonempty_ws [\"] @filename [\"] @nl
+--   { \input len -> do
+--       throwErrorWithCallStack "TODO - #include_next \"foo\""
+--       pure $ Newline 0
+--   }
+--
+-- "#" @cpp_opt_ws ( "warning" | "error" ) @cpp_nonempty_ws [\"] ( . | [\\] [\"] ) * [\"] @nl
+--   { \input len -> do
+--       throwErrorWithCallStack "TODO - warnings / errors"
+--       pure $ Newline 0
+--   }
+--
+-- "#" @cpp_opt_ws  "pragma" @cpp_nonempty_ws .* @nl
+--   { \input len -> do
+--       throwErrorWithCallStack "TODO - #pragma"
+--       pure $ Newline 0
+--   }
+--
+-- "#" @cpp_opt_ws  "line" @cpp_nonempty_ws .* @nl
+--   { \input len -> do
+--       throwErrorWithCallStack "TODO - #line"
+--       pure $ Newline 0
+--   }
+
+-- #define FOO(x, y, z)
+"#" @cpp_opt_ws
+  "define" @cpp_nonempty_ws
+  @cpp_ident_split
+  ( "(" @cpp_opt_ws ( @cpp_ident_split ( @cpp_opt_ws "," @cpp_opt_ws @cpp_ident_split )* @cpp_opt_ws )? ")" )?
+  @cpp_nonempty_ws @define_body
+  { \input len -> do
+      macro <- parsePreprocessorDefine $! retrieveToken input len
+      addMacroDef macro
+      alexChangeToplevelCode macroDefinedCode
+      alexSetCode macroDefinedCode
+      pure $ one $ Newline 0
+  }
+
+-- #undef FOO
+"#" @cpp_opt_ws
+  "undef" @cpp_nonempty_ws
+  @cpp_ident_split
+  { \input len -> do
+      name <- parsePreprocessorUndef $! retrieveToken input len
+      removeMacroDef name
+      pure $ one $ Newline 0
+  }
+
+}
+
+-- Expansion of macro definitions. Macro definitions *must* be
+-- expanded *after* strings, comments and quasiquotes are
+-- lexed. Except quasiquotes, C preprocessor does not expand within
+-- strings or comments. It's not absolutely clear what should happen
+-- with quasiquotes, but it's definitely possible (and easier) to
+-- pretend they're strings, really. However, 'cpp' may disagree...
+<macroDefined, comment, qq> {
+
+-- Expand macro function application
+@cpp_ident "(" @cpp_opt_ws
+  -- / { runRulePredM (lmap predAlexState (matchedNameInPredicate >>= isNameDefinedAsFunction . mkMacroName . T.takeWhile (/= '('))) }
+  { \input len -> resolvePossibleFunctionMacroApplication input len }
+
+}
+
+<readMacroCallArguments> {
+
+")"
+  { \_input _len -> do
+    s <- get
+    if asMacroArgsParenDepth s <= 1
+    then do
+      alexSetCode $ asCodeBeforeParsingMacroArgs s
+      let realArgs = reverse $ asMacroArgs s
+      enterFunctionMacroDef (asFunctionMacroDef s) realArgs
+      modify $ \s' -> s'
+        { asFunctionMacroDef    = defaultFunctionMacroDef
+        , asMacroArgsParenDepth = 0
+        , asMacroArgs           = []
+        }
+    else do
+      addToCurrentMacroArg ")"
+      modify $ \s' -> s'
+        { asMacroArgsParenDepth = max 0 (asMacroArgsParenDepth s' - 1) }
+    continueScanning
+  }
+
+"(" [^ \( \) \' \" ]*
+  { \input len -> do
+    addToCurrentMacroArg $ retrieveToken input len
+    modify $ \s -> s { asMacroArgsParenDepth = asMacroArgsParenDepth s + 1 }
+    continueScanning
+  }
+
+( [^ \( \) \, \' \" ] )+ -- | [ \n ]
+  { \input len -> do
+    addToCurrentMacroArg $ retrieveToken input len
+    continueScanning
+  }
+
+( @character | @string )
+  { \input len -> do
+    addToCurrentMacroArg $ retrieveToken input len
+    continueScanning
+  }
+
+","
+  { \_input _len -> do
+    addNewMacroArg
+    continueScanning
+  }
+
+}
+
+-- <macroDefined, comment, qq> {
+<macroDefined> {
+
+-- Expand macro constant
+@cpp_ident
+  { \input len ->
+      resolvePossibleMacroArgumentOrConstantMacro input $ retrieveToken input len
+  }
+
+  -- / { runRulePredM (lmap predAlexState (matchedNameInPredicate >>= isNameDefinedAsConstant . mkMacroName)) }
+  -- / { runRulePredM (do
+  --       name <- matchedNameInPredicate
+  --       isConstant <- lmap predAlexState $ isNameDefinedAsConstant $ mkMacroName name) }
+
+}
 
 -- Vanilla tokens
 <0, macroDefined> {
@@ -240,8 +353,8 @@ $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 "do"                    { kw KWDo }
 "else"                  { kw KWElse }
 "family"                { kw KWFamily }
-"forall"                { \_ _ -> pure $ T "forall" }
-"∀"                     { \_ _ -> pure $ T "forall" }
+"forall"                { \_ _ -> pure $ one $ T "forall" }
+"∀"                     { \_ _ -> pure $ one $ T "forall" }
 "foreign"               { kw KWForeign }
 "if"                    { kw KWIf }
 "import"                { kw KWImport }
@@ -254,7 +367,7 @@ $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 "module"                { kw KWModule }
 "newtype"               { kw KWNewtype }
 "of"                    { kw KWOf }
-"pattern"               { \_ _ -> return $ T "pattern" }
+"pattern"               { \_ _ -> return $ one $ T "pattern" }
 "then"                  { kw KWThen }
 "type"                  { kw KWType }
 "where"                 { kw KWWhere }
@@ -279,16 +392,25 @@ $nl $space*             { \_ len -> pure $! Newline $! len - 1 }
 ";"                     ;
 
 @qualificationPrefix ( $ident+ | $symbol+ )
-                        { \input len -> pure $ T $ retrieveToken input len }
+                        { \input len -> pure $ one $ T $ retrieveToken input len }
 
 }
 
 {
 
-type AlexAction m = AlexInput -> Int -> m TokenVal
+foo :: a -> a
+foo x = x
+
+-- -- Like (NonEmpty TokenVal)
+-- data SomeTokens = SomeTokens !TokenVal ![TokenVal]
+
+type AlexAction m = AlexInput -> Int -> m (NonEmpty TokenVal)
+
+one :: a -> NonEmpty a
+one x = x :| []
 
 kw :: Applicative m => TokenVal -> AlexAction m
-kw tok = \_ _ -> pure tok
+kw tok = \_ _ -> pure $ one tok
 
 tokenizeM
   :: (HasCallStack, Monad m)
@@ -306,88 +428,85 @@ tokenizeM filename mode input =
 
 scanTokens :: (HasCallStack, Monad m) => AlexT m [Token]
 scanTokens = do
-  tok <- alexMonadScan
-  case valOf tok of
+  toks <- alexMonadScan
+  case valOf $ NE.last toks of
     EOF -> return []
-    _   -> (tok :) <$> scanTokens
+    _   -> (toList toks <>) <$> scanTokens
 
-alexMonadScan :: (HasCallStack, Monad m) => AlexT m Token
+alexMonadScan :: (HasCallStack, Monad m) => AlexT m (NonEmpty Token)
 alexMonadScan = do
   filename <- asks aeFilename
   line     <- gets (aiLine . asInput)
-  Pos (mkSrcPos filename line) <$> alexScanTokenVal
+  fmap (Pos (mkSrcPos filename line)) <$> continueScanning
 
-alexScanTokenVal :: (HasCallStack, Monad m) => AlexT m TokenVal
-alexScanTokenVal = do
+continueScanning :: forall m. (HasCallStack, Monad m) => AlexT m (NonEmpty TokenVal)
+continueScanning = do
   env   <- ask
   state <- get
-  case alexScanUser (env, state) (asInput state) (unAlexCode (asCode state)) of
-    AlexEOF         ->
-      pure EOF
-    AlexError input -> do
+  let predEnv = PredEnv env state
+  let scanResult :: AlexReturn (AlexAction (AlexT m))
+      scanResult = alexScanUser predEnv (asInput state) (unAlexCode (asCode state))
+  toks <- case scanResult of
+    AlexEOF                       ->
+      pure $ one EOF
+    AlexError input               -> do
       state' <- get
-      throwErrorWithCallStack $ "lexical error while in state" <+> pretty (asCode state') <+> "at line" <+>
-        pretty (unLine (aiLine input)) <> ":" <+> pretty (TL.fromStrict (InputStack.take 40 (aiInput input)))
-    AlexSkip input _                     -> do
+      throwErrorWithCallStack $
+        "lexical error while in state" <+> pretty (asCode state') <+>
+        "at line" <+> pretty (unLine (aiLine input)) <> ":" <+>
+        PP.squotes (pretty (TL.fromStrict (InputStack.take 40 (aiInput input))))
+    AlexSkip input _              -> do
       alexSetInput input
-      alexScanTokenVal
-    AlexToken input tokLen action        -> do
+      continueScanning
+    AlexToken input tokLen action -> do
       alexSetInput input
       action (asInput state) tokLen
+  pure toks
 
-startComment :: Monad m => AlexT m TokenVal
-startComment = do
+startRecursiveComment :: Monad m => AlexT m (NonEmpty TokenVal)
+startRecursiveComment = do
   void $ modifyCommentDepth (+1)
   alexSetCode commentCode
-  alexScanTokenVal
+  continueScanning
 
-endComment :: Monad m => AlexT m TokenVal
-endComment = do
-  newDepth <- modifyCommentDepth (\x -> x - 1)
+endRecursiveComment :: Monad m => AlexT m (NonEmpty TokenVal)
+endRecursiveComment = do
+  newDepth <- modifyCommentDepth (\x -> max 0 (x - 1))
   when (newDepth == 0) $
     alexSetToplevelCode
-  alexScanTokenVal
+  continueScanning
 
-startString :: Monad m => AlexT m TokenVal
-startString = do
-  alexSetCode stringCode
-  alexScanTokenVal
-
-endString :: Monad m => AlexT m TokenVal
-endString = do
-  alexSetToplevelCode
-  pure String
-
-startQuasiquoter :: Monad m => AlexT m TokenVal
+startQuasiquoter :: Monad m => AlexT m (NonEmpty TokenVal)
 startQuasiquoter = do
   alexSetCode qqCode
-  pure QuasiquoterStart
+  pure $ one QuasiquoterStart
 
-startSplice :: Monad m => Context -> AlexT m TokenVal
+startSplice :: Monad m => Context -> AlexT m (NonEmpty TokenVal)
 startSplice ctx = do
   alexSetToplevelCode
   pushContext ctx
-  pure SpliceStart
+  pure $ one SpliceStart
 
-endQuasiquoter :: Monad m => AlexT m TokenVal
+endQuasiquoter :: Monad m => AlexT m (NonEmpty TokenVal)
 endQuasiquoter = do
   alexSetToplevelCode
-  pure QuasiquoterEnd
+  pure $ one QuasiquoterEnd
 
 pushLParen :: Monad m => AlexAction (AlexT m)
 pushLParen _ _ = do
   pushContext CtxHaskell
-  pure LParen
+  pure $ one LParen
 
 popRParen :: Monad m => AlexAction (AlexT m)
-popRParen _ _ = (tryRestoringContext *> pure RParen) <|> pure RParen
+popRParen _ _ = tryRestoringContext *> pure (one RParen)
 
 tryRestoringContext :: Monad m => AlexT m ()
 tryRestoringContext = do
   ctx <- popContext
   case ctx of
-    CtxHaskell     -> alexSetToplevelCode
-    CtxQuasiquoter -> alexSetCode qqCode
+    Nothing             -> pure ()
+    Just CtxHaskell     -> alexSetToplevelCode
+    Just CtxQuasiquoter -> alexSetCode qqCode
 
 errorAtLine
   :: (HasCallStack, MonadError ErrorMessage m, MonadState AlexState m)
@@ -406,11 +525,11 @@ startLiterateLatex = do
   alexSetToplevelCode
   alexEnterLatexCodeEnv
 
-endLiterate :: Monad m => AlexT m TokenVal
+endLiterate :: Monad m => AlexT m (NonEmpty TokenVal)
 endLiterate = do
   alexSetCode literateCode
   alexExitLiterateEnv
-  alexScanTokenVal
+  continueScanning
 
 -- Alex codes
 
@@ -429,77 +548,103 @@ commentCode = AlexCode comment
 qqCode :: AlexCode
 qqCode = AlexCode qq
 
-stringCode :: AlexCode
-stringCode = AlexCode string
-
 macroDefinedCode :: AlexCode
 macroDefinedCode = AlexCode macroDefined
+
+readMacroCallArgumentsCode :: AlexCode
+readMacroCallArgumentsCode = AlexCode readMacroCallArguments
+
+data PredEnv = PredEnv
+  { predAlexEnv   :: AlexEnv
+  , predAlexState :: AlexState
+  } deriving (Show)
+
+(.&&&.)
+  :: RulePredM AlexEnv Bool
+  -> RulePredM AlexState Bool
+  -> RulePredM PredEnv Bool
+(.&&&.) x y = (&&) <$> lmap predAlexEnv x <*> lmap predAlexState y
+
+-- TODO: alex does not like two adjacent single quotes, even in comments!
+
+resolvePossibleMacroArgumentOrConstantMacro
+  :: (HasCallStack, Monad m)
+  => AlexInput -> Text -> AlexT m (NonEmpty TokenVal)
+resolvePossibleMacroArgumentOrConstantMacro input matchedText = do
+  let macroName   = mkMacroName matchedText
+  case InputStack.lookupMacroArg macroName $ aiInput input of
+    Just body -> do
+      enterConstantMacroDef $ ConstantMacroDef
+        { cmdName = macroName
+        , cmdBody = body
+        }
+      continueScanning
+    Nothing   -> do
+      defs               <- gets $ KM.lookup macroName . asDefines
+      isConstantMacroDef <- case defs of
+        Nothing    -> pure Nothing
+        Just defs1 ->
+          case mapMaybe extractConstant $ toList defs1 of
+            []      -> pure Nothing
+            [def]   -> pure $ Just def
+            defs2   -> throwErrorWithCallStack $ PP.vsep
+              [ PP.hsep
+                  [ "The macro name"
+                  , PP.squotes $ pretty macroName
+                  , "defines multiple constant macros"
+                  ]
+              , PP.indent 2 $ ppList defs2
+              ]
+      case isConstantMacroDef of
+        Nothing  ->
+          -- Neither macro nor argument, return token for matched text.
+          pure $ one $ T matchedText
+        Just def -> do
+          enterConstantMacroDef def
+          continueScanning
+
+resolvePossibleFunctionMacroApplication
+  :: (HasCallStack, Monad m)
+  => AlexAction (AlexT m)
+resolvePossibleFunctionMacroApplication input len = do
+  let functionName :: Text
+      functionName = T.init
+                   $ T.dropWhileEnd (\c -> c /= '(')
+                   $ retrieveToken input len
+      macroName    = mkMacroName functionName
+  defs               <- gets $ KM.lookup macroName . asDefines
+  isFunctionMacroDef <- case defs of
+    Nothing    -> pure Nothing
+    Just defs1 ->
+      case mapMaybe extractFunction $ toList defs1 of
+        []     -> pure Nothing
+        [def]  -> pure $ Just def
+        defs2  -> throwErrorWithCallStack $ PP.vsep
+          [ PP.hsep
+              [ "The macro name"
+              , PP.squotes $ pretty macroName
+              , "defines multiple function macros:"
+              ]
+          , PP.indent 2 $ ppList defs2
+          ]
+  case isFunctionMacroDef of
+    Nothing  ->
+      -- Not a function, but possibly a constant.
+      (<> one LParen) <$> resolvePossibleMacroArgumentOrConstantMacro input functionName
+    Just def -> do
+      modify $ \s -> s
+        { asCodeBeforeParsingMacroArgs = asCode s
+        , asFunctionMacroDef           = def
+        , asMacroArgsParenDepth        = 1 -- Encountered first paren in this rule.
+        , asMacroArgs                  = []
+        }
+      alexSetCode readMacroCallArgumentsCode
+      continueScanning
+
+}
 
 -- Types for Alex actions
 
 -- alex_actions :: Monad m => Array Int (AlexAction (AlexT m))
 -- alex_action_1 :: Monad m => AlexAction (AlexT m)
--- alex_action_2 :: Monad m => AlexAction (AlexT m)
--- alex_action_4 :: Monad m => AlexAction (AlexT m)
--- alex_action_5 :: Monad m => AlexAction (AlexT m)
--- alex_action_6 :: Monad m => AlexAction (AlexT m)
--- alex_action_7 :: Monad m => AlexAction (AlexT m)
--- alex_action_10 :: Monad m => AlexAction (AlexT m)
--- alex_action_11 :: Monad m => AlexAction (AlexT m)
--- alex_action_12 :: Monad m => AlexAction (AlexT m)
--- alex_action_14 :: Monad m => AlexAction (AlexT m)
--- alex_action_15 :: Monad m => AlexAction (AlexT m)
--- alex_action_16 :: Monad m => AlexAction (AlexT m)
--- alex_action_19 :: Monad m => AlexAction (AlexT m)
--- alex_action_22 :: Monad m => AlexAction (AlexT m)
--- alex_action_24 :: Monad m => AlexAction (AlexT m)
--- alex_action_25 :: Monad m => AlexAction (AlexT m)
--- alex_action_26 :: Monad m => AlexAction (AlexT m)
--- alex_action_27 :: Monad m => AlexAction (AlexT m)
--- alex_action_29 :: Monad m => AlexAction (AlexT m)
--- alex_action_30 :: Monad m => AlexAction (AlexT m)
--- alex_action_31 :: Monad m => AlexAction (AlexT m)
--- alex_action_32 :: Monad m => AlexAction (AlexT m)
--- alex_action_33 :: Monad m => AlexAction (AlexT m)
--- alex_action_34 :: Monad m => AlexAction (AlexT m)
--- alex_action_35 :: Monad m => AlexAction (AlexT m)
--- alex_action_36 :: Monad m => AlexAction (AlexT m)
--- alex_action_37 :: Monad m => AlexAction (AlexT m)
--- alex_action_38 :: Monad m => AlexAction (AlexT m)
--- alex_action_39 :: Monad m => AlexAction (AlexT m)
--- alex_action_40 :: Monad m => AlexAction (AlexT m)
--- alex_action_41 :: Monad m => AlexAction (AlexT m)
--- alex_action_42 :: Monad m => AlexAction (AlexT m)
--- alex_action_43 :: Monad m => AlexAction (AlexT m)
--- alex_action_44 :: Monad m => AlexAction (AlexT m)
--- alex_action_45 :: Monad m => AlexAction (AlexT m)
--- alex_action_46 :: Monad m => AlexAction (AlexT m)
--- alex_action_47 :: Monad m => AlexAction (AlexT m)
--- alex_action_48 :: Monad m => AlexAction (AlexT m)
--- alex_action_49 :: Monad m => AlexAction (AlexT m)
--- alex_action_50 :: Monad m => AlexAction (AlexT m)
--- alex_action_51 :: Monad m => AlexAction (AlexT m)
--- alex_action_52 :: Monad m => AlexAction (AlexT m)
--- alex_action_53 :: Monad m => AlexAction (AlexT m)
--- alex_action_54 :: Monad m => AlexAction (AlexT m)
--- alex_action_55 :: Monad m => AlexAction (AlexT m)
--- alex_action_56 :: Monad m => AlexAction (AlexT m)
--- alex_action_57 :: Monad m => AlexAction (AlexT m)
--- alex_action_58 :: Monad m => AlexAction (AlexT m)
--- alex_action_59 :: Monad m => AlexAction (AlexT m)
--- alex_action_60 :: Monad m => AlexAction (AlexT m)
--- alex_action_61 :: Monad m => AlexAction (AlexT m)
--- alex_action_62 :: Monad m => AlexAction (AlexT m)
--- alex_action_63 :: Monad m => AlexAction (AlexT m)
--- alex_action_64 :: Monad m => AlexAction (AlexT m)
--- alex_action_65 :: Monad m => AlexAction (AlexT m)
--- alex_action_66 :: Monad m => AlexAction (AlexT m)
--- alex_action_67 :: Monad m => AlexAction (AlexT m)
--- alex_action_68 :: Monad m => AlexAction (AlexT m)
--- alex_action_69 :: Monad m => AlexAction (AlexT m)
--- alex_action_70 :: Monad m => AlexAction (AlexT m)
--- alex_action_71 :: Monad m => AlexAction (AlexT m)
--- alex_action_72 :: Monad m => AlexAction (AlexT m)
--- alex_action_74 :: Monad m => AlexAction (AlexT m)
 
-}

@@ -90,7 +90,7 @@ alexInputPrevChar :: AlexInput -> Char
 alexInputPrevChar = aiPrevChar
 
 alexGetByte :: AlexInput -> Maybe (Word8, AlexInput)
-alexGetByte input = -- @AlexInput{aiInput, aiBytes, aiLine} =
+alexGetByte input =
   case aiBytes input of
     b:bs -> Just (b, input { aiBytes = bs })
     []   -> nextChar

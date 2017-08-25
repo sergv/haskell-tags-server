@@ -13,7 +13,7 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Haskell.Language.Lexer.State
@@ -27,6 +27,10 @@ module Haskell.Language.Lexer.State
   , asContextStack
   , asDefines
   , asUndefinedMacro
+  , asCodeBeforeParsingMacroArgs
+  , asFunctionMacroDef
+  , asMacroArgsParenDepth
+  , asMacroArgs
   , asInputL
   , mkAlexState
   , alexEnterBirdLiterateEnv
@@ -39,6 +43,9 @@ module Haskell.Language.Lexer.State
   , addMacroDef
   , removeMacroDef
   , enterConstantMacroDef
+  , enterFunctionMacroDef
+  , addToCurrentMacroArg
+  , addNewMacroArg
   , alexSetInput
   , alexSetCode
   , alexChangeToplevelCode
@@ -47,40 +54,47 @@ module Haskell.Language.Lexer.State
 
 import Control.Monad.Except.Ext
 import Control.Monad.State
-import Data.Foldable
-import Data.Maybe
+import qualified Data.Map as M
+import Data.Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import GHC.Stack (HasCallStack)
 import Lens.Micro
-import qualified Text.PrettyPrint.Leijen.Text as PP
-import Text.PrettyPrint.Leijen.Text.Ext (Pretty(..))
-import qualified Text.PrettyPrint.Leijen.Text.Ext as PP
+import Text.PrettyPrint.Leijen.Text.Ext (Pretty(..), ppDict, MapEntry(..))
 
 import Data.ErrorMessage
 import Data.KeyMap (KeyMap)
 import qualified Data.KeyMap as KM
 import Data.Symbols.MacroName (MacroName)
 import Haskell.Language.Lexer.Input (AlexInput, aiInputL)
-import Haskell.Language.Lexer.InputStack
-import Haskell.Language.Lexer.Preprocessor (PreprocessorMacro(..))
+import qualified Haskell.Language.Lexer.InputStack as InputStack
+import Haskell.Language.Lexer.Preprocessor
 import Haskell.Language.Lexer.Types
 
 data AlexState = AlexState
-  { asInput            :: AlexInput
+  { asInput               :: AlexInput
   -- | Current Alex state the lexer is in. E.g. comments, string, TH quasiquoter
   -- or vanilla toplevel mode.
-  , asCode             :: {-# UNPACK #-} !AlexCode
+  , asCode                :: {-# UNPACK #-} !AlexCode
     -- | Code used to parse toplevel definitions.
-  , asToplevelCode     :: {-# UNPACK #-} !AlexCode
-  , asCommentDepth     :: {-# UNPACK #-} !Int
-  , asQuasiquoterDepth :: {-# UNPACK #-} !Int
+  , asToplevelCode        :: {-# UNPACK #-} !AlexCode
+  , asCommentDepth        :: {-# UNPACK #-} !Int
+  , asQuasiquoterDepth    :: {-# UNPACK #-} !Int
   -- | Whether we're in bird-style or latex-style literate environment
-  , asLiterateStyle    :: !(Maybe LiterateStyle)
-  , asContextStack     :: [Context]
-  , asDefines          :: !(KeyMap PreprocessorMacro)
-  , asUndefinedMacro   :: !(Set MacroName)
+  , asLiterateStyle       :: !(Maybe LiterateStyle)
+  , asContextStack        :: [Context]
+  , asDefines             :: !(KeyMap PreprocessorMacro)
+  , asUndefinedMacro      :: !(Set MacroName)
+
+  , asCodeBeforeParsingMacroArgs :: {-# UNPACK #-} !AlexCode
+  , -- | Definition of function macro that were're parsing arguments for.
+    asFunctionMacroDef    :: FunctionMacroDef
+    --
+  , asMacroArgsParenDepth :: {-# UNPACK #-} !Int
+    -- Actual textual arguments stored in reverse order. That is, in
+    -- order to get correct actual arguments reverse the list itself.
+  , asMacroArgs           :: [T.Text]
   } deriving (Eq, Ord, Show)
 
 {-# INLINE asInputL #-}
@@ -98,6 +112,13 @@ mkAlexState input startCode toplevelCode = AlexState
   , asContextStack     = []
   , asDefines          = KM.empty
   , asUndefinedMacro   = S.empty
+
+  , asCodeBeforeParsingMacroArgs = startCode
+  , asFunctionMacroDef    = defaultFunctionMacroDef
+  , asMacroArgsParenDepth = 0
+    -- Actual textual arguments stored in reverse order. That is, in
+    -- order to get correct actual arguments reverse the list itself.
+  , asMacroArgs           = []
   }
 
 alexEnterBirdLiterateEnv :: MonadState AlexState m => m ()
@@ -114,14 +135,14 @@ pushContext ctx = modify (\s -> s { asContextStack = ctx : asContextStack s })
 
 popContext
   :: (HasCallStack, MonadState AlexState m, MonadError ErrorMessage m)
-  => m Context
+  => m (Maybe Context)
 popContext = do
   cs <- gets asContextStack
   case cs of
-    []      -> throwErrorWithCallStack "Popping empty context stack"
+    []      -> pure Nothing
     c : cs' -> do
       modify $ \s -> s { asContextStack = cs' }
-      pure c
+      pure $ Just c
 
 modifyCommentDepth :: MonadState AlexState m => (Int -> Int) -> m Int
 modifyCommentDepth f = do
@@ -148,36 +169,49 @@ removeMacroDef name =
 
 enterConstantMacroDef
   :: (HasCallStack, MonadState AlexState m, MonadError ErrorMessage m)
-  => MacroName -- ^ Macro name, must be already defined.
+  => ConstantMacroDef
   -> m ()
-enterConstantMacroDef name = do
-  macroDef <- gets $ KM.lookup name . asDefines
-  case macroDef of
-    Nothing  -> throwErrorWithCallStack $ PP.hsep
-      [ "Macro name is not actually defined,"
-      , "but must be at this point in program:"
-      , pretty name
+enterConstantMacroDef ConstantMacroDef{cmdName, cmdBody} =
+  modify $
+    asInputL . aiInputL %~
+      InputStack.ExpandingConstant cmdName cmdBody (T.length cmdBody)
+
+enterFunctionMacroDef
+  :: (HasCallStack, MonadState AlexState m, MonadError ErrorMessage m)
+  => FunctionMacroDef
+  -> [T.Text]
+  -> m ()
+enterFunctionMacroDef FunctionMacroDef{fmdName, fmdArgs, fmdBody} realArgs = do
+  unless (sameLength fmdArgs realArgs) $
+    throwErrorWithCallStack $ ppDict
+      "Macro definition and macro application have different number of arguments"
+      [ "defined arguments" :-> pretty (show fmdArgs)
+      , "real arguments"    :-> pretty (show realArgs)
+      , "defined arguments length" :-> pretty (length fmdArgs)
+      , "real arguments length"    :-> pretty (length realArgs)
       ]
-    Just defs ->
-      case mapMaybe
-             (\case
-               PreprocessorConstant name body -> Just (name, body)
-               PreprocessorFunction{}         -> Nothing)
-             $ toList defs of
-        [(macroName, body)] ->
-          modify $ over (asInputL . aiInputL) (MacroStack macroName body (T.length body))
-        []  -> throwErrorWithCallStack $ PP.hsep
-          [ "The macro name"
-          , PP.squotes $ pretty name
-          , "does not define any macros constants"
-          ]
-        -- Not really an error, but quite embarassing to deal with...
-        xs@(_:_:_) -> throwErrorWithCallStack $ PP.hsep
-          [ "The macro name"
-          , PP.squotes $ pretty name
-          , "defines multiple constant items:"
-          , PP.ppList $ map pretty xs
-          ]
+  let args = M.fromList $ zip fmdArgs realArgs
+  modify $
+    asInputL . aiInputL %~
+      InputStack.ExpandingFunction fmdName args fmdBody (T.length fmdBody)
+
+sameLength :: [a] -> [b] -> Bool
+sameLength []     []     = True
+sameLength []     _      = False
+sameLength _      []     = False
+sameLength (_:xs) (_:ys) = sameLength xs ys
+
+addToCurrentMacroArg :: MonadState AlexState m => T.Text -> m ()
+addToCurrentMacroArg argPart =
+  modify $ \s -> s
+    { asMacroArgs = case asMacroArgs s of
+        []     -> [argPart]
+        a : as -> a <> argPart : as
+    }
+
+addNewMacroArg :: MonadState AlexState m => m ()
+addNewMacroArg =
+  modify $ \s -> s { asMacroArgs = T.empty : asMacroArgs s }
 
 alexSetInput :: MonadState AlexState m => AlexInput -> m ()
 alexSetInput input = modify $ \s -> s { asInput = input }

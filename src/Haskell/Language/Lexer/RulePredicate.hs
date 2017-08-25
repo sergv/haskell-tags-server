@@ -19,26 +19,27 @@
 module Haskell.Language.Lexer.RulePredicate
   ( RulePredM
   , runRulePredM
-  , AlexPred
+  , runRulePredM'
+  , inputBeforeToken
   , matchedNameInPredicate
   , isLiterate
   , isInBirdEnv
   , isInLatexCodeEnv
   , isNameDefinedAsConstant
   , isNameDefinedAsFunction
-  , (.&&&.)
+  , isNameDefinedAsMacroArgument
   ) where
 
 import Control.Monad.Reader
 -- import Data.HasLens
 import Data.Profunctor
-import Data.Semigroup
 import Data.Text (Text)
 
 import qualified Data.KeyMap as KM
 import Data.Symbols.MacroName (MacroName)
 import Haskell.Language.Lexer.Env
 import Haskell.Language.Lexer.Input
+import qualified Haskell.Language.Lexer.InputStack as InputStack
 import Haskell.Language.Lexer.Preprocessor (isConstant, isFunction)
 import Haskell.Language.Lexer.State
 import Haskell.Language.Lexer.Types
@@ -48,42 +49,53 @@ newtype RulePredM r a = RulePredM
       :: r         -- ^ Predicate state.
       -> AlexInput -- ^ Input stream before the token.
       -> Int       -- ^ Length of the token.
-      -> AlexInput -- ^ Input stream after the token.
+      -- -> AlexInput -- ^ Input stream after the token.
       -> a
   } deriving (Functor)
 
-type AlexPred a = RulePredM a Bool
+runRulePredM'
+  :: RulePredM r a
+  -> r         -- ^ Predicate state
+  -> AlexInput -- ^ Input stream before the token.
+  -> Int       -- ^ Length of the token
+  -> AlexInput -- ^ Input stream after the token.
+  -> a
+runRulePredM'  (RulePredM f)state inputBefore len _inputAfter =
+  f state inputBefore len
 
 instance Applicative (RulePredM r) where
-  pure x = RulePredM $ \_ _ _ _ -> x
+  pure x = RulePredM $ \_ _ _ -> x
   RulePredM gf <*> RulePredM gx =
-    RulePredM $ \a b c d -> gf a b c d $ gx a b c d
+    RulePredM $ \a b c -> gf a b c $ gx a b c
 
 instance Monad (RulePredM r) where
   return = pure
   RulePredM gf >>= k =
-    RulePredM $ \a b c d -> runRulePredM (k (gf a b c d)) a b c d
+    RulePredM $ \a b c -> runRulePredM (k (gf a b c)) a b c
 
 instance MonadReader r (RulePredM r) where
-  ask = RulePredM $ \x _ _ _ -> x
+  ask = RulePredM $ \x _ _ -> x
   local f (RulePredM g) = RulePredM $ \a -> g (f a)
 
 instance Profunctor RulePredM where
   dimap f g (RulePredM action) =
-    RulePredM $ \a b c d -> g $ action (f a) b c d
+    RulePredM $ \a b c -> g $ action (f a) b c
 
-matchedNameInPredicate :: RulePredM r Text
+inputBeforeToken :: RulePredM a AlexInput
+inputBeforeToken = RulePredM $ \_ input _ -> input
+
+matchedNameInPredicate :: RulePredM a Text
 matchedNameInPredicate =
-  RulePredM $ \_ input len _ -> retrieveToken input len
+  RulePredM $ \_ input len -> retrieveToken input len
 
-isLiterate :: AlexPred AlexEnv
+isLiterate :: RulePredM AlexEnv Bool
 isLiterate = do
   env <- ask
   pure $ case aeLiterateMode env of
     Literate -> True
     Vanilla  -> False
 
-isInBirdEnv :: AlexPred AlexState
+isInBirdEnv :: RulePredM AlexState Bool
 isInBirdEnv = do
   style <- asks asLiterateStyle
   pure $ case style of
@@ -91,7 +103,7 @@ isInBirdEnv = do
     Just Latex -> False
     Just Bird  -> True
 
-isInLatexCodeEnv :: AlexPred AlexState
+isInLatexCodeEnv :: RulePredM AlexState Bool
 isInLatexCodeEnv = do
   style <- asks asLiterateStyle
   pure $ case style of
@@ -100,30 +112,19 @@ isInLatexCodeEnv = do
     Just Bird  -> False
 
 -- | Check whether given name is a cpp define.
-isNameDefinedAsConstant :: MacroName -> AlexPred AlexState
-isNameDefinedAsConstant name = -- do
-    asks
-  $ getAny
-  . foldMap (foldMap (Any . isConstant))
-  . KM.lookup name
-  . asDefines
-  -- defines <- asks asDefines
-  -- pure $ if KM.null defines
-  --   then False
-  --   else getAny $ foldMap (foldMap (Any . isConstant)) $ KM.lookup name $ defines
+isNameDefinedAsConstant :: MacroName -> RulePredM AlexState Bool
+isNameDefinedAsConstant name =
+  asks $ any (any isConstant) . KM.lookup name . asDefines
 
 -- | Check whether given name is a cpp define of a macro with arguments.
-isNameDefinedAsFunction :: MacroName -> AlexPred AlexState
-isNameDefinedAsFunction name = -- do
-    asks
-  $ getAny
-  . foldMap (foldMap (Any . isFunction))
-  . KM.lookup name
-  . asDefines
-  -- defines <- asks asDefines
-  -- pure $ if KM.null defines
-  --   then False
-  --   else getAny $ foldMap (foldMap (Any . isFunction)) $ KM.lookup name $ defines
+isNameDefinedAsFunction :: MacroName -> RulePredM AlexState Bool
+isNameDefinedAsFunction name =
+  asks $ any (any isFunction) . KM.lookup name . asDefines
 
-(.&&&.) :: AlexPred a -> AlexPred b -> AlexPred (a, b)
-(.&&&.) x y = (&&) <$> lmap fst x <*> lmap snd y
+-- | Check whether given name is a cpp define.
+isNameDefinedAsMacroArgument :: MacroName -> RulePredM a Bool
+isNameDefinedAsMacroArgument name = do
+  input <- inputBeforeToken
+  pure $ case InputStack.lookupMacroArg name $ aiInput input of
+    Nothing -> False
+    Just _  -> True

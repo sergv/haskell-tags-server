@@ -20,6 +20,7 @@ import Test.Tasty
 import Test.Tasty.HUnit (testCase)
 
 import Control.Arrow (left)
+import Data.Text (Text)
 
 import Data.ErrorMessage
 import Data.Symbols.MacroName (mkMacroName)
@@ -33,57 +34,70 @@ tests = testGroup "Preprocessor parsing tests"
   , undefTests
   ]
 
+mkConstantMacroDef :: Text -> Text -> ConstantMacroDef
+mkConstantMacroDef name body = ConstantMacroDef
+  { cmdName = mkMacroName name
+  , cmdBody = body
+  }
+
+mkFunctionMacroDef :: Text -> [Text] -> Text -> FunctionMacroDef
+mkFunctionMacroDef name args body = FunctionMacroDef
+  { fmdName = mkMacroName name
+  , fmdArgs = map mkMacroName args
+  , fmdBody = body
+  }
+
 defineTests :: TestTree
 defineTests = testGroup "#define"
   [ testGroup "Constants"
       [ testCase "Vanilla define" $
           "#define foo bar"
-          ==> PreprocessorConstant (mkMacroName "foo") "bar"
+          ==> PreprocessorConstant (mkConstantMacroDef "foo" "bar")
       , testCase "Define with some spaces" $
           "# define FOO qu ux"
-          ==> PreprocessorConstant (mkMacroName "FOO") "qu ux"
+          ==> PreprocessorConstant (mkConstantMacroDef "FOO" "qu ux")
       , testCase "Define with lots of continuation lines" $
           "# \\\n\
           \ define \\\n\
           \ FOO \\\n\
           \ qu \\\n\
           \ ux"
-          ==> PreprocessorConstant (mkMacroName "FOO") "qu  ux"
+          ==> PreprocessorConstant (mkConstantMacroDef "FOO" "qu  ux")
       , testCase "Define with name split by continuation line" $
           "#define FO\\\n\
           \O bar"
-          ==> PreprocessorConstant (mkMacroName "FOO") "bar"
+          ==> PreprocessorConstant (mkConstantMacroDef "FOO" "bar")
       , testCase "Malformed define starting with a number" $
           "#define 1foo bar"
           !=> Left "defined name > first cpp identifier char: Failed reading: satisfy"
       , testGroup "Haskell-style names"
           [ testCase "primes and backticks in the body" $
               "#define foo'_bar` baz"
-              ==> PreprocessorConstant (mkMacroName "foo'_bar`") "baz"
+              ==> PreprocessorConstant (mkConstantMacroDef "foo'_bar`" "baz")
           , testCase "prime at the start" $
               "#define 'foo_bar baz"
-              ==> PreprocessorConstant (mkMacroName "'foo_bar") "baz"
+              ==> PreprocessorConstant (mkConstantMacroDef "'foo_bar" "baz")
           , testCase "backtick at the start" $
               "#define `foo_bar baz"
-              ==> PreprocessorConstant (mkMacroName "`foo_bar") "baz"
+              ==> PreprocessorConstant (mkConstantMacroDef "`foo_bar" "baz")
           ]
       ]
   , testGroup "Macro functions"
       [ testGroup "Single argument"
           [ testCase "Vanilla define" $
               "#define FOO(x) x"
-              ==> PreprocessorFunction (mkMacroName "FOO") ["x"] "x"
+              ==> PreprocessorFunction (mkFunctionMacroDef "FOO" ["x"] "x")
           , testCase "Define with some spaces" $
               "# define FOO( x ) x"
-              ==> PreprocessorFunction (mkMacroName "FOO") ["x"] "x"
+              ==> PreprocessorFunction (mkFunctionMacroDef "FOO" ["x"] "x")
           ]
       , testGroup "Two arguments"
           [ testCase "Vanilla define" $
               "#define FOO(x, y) (x < y)"
-              ==> PreprocessorFunction (mkMacroName "FOO") ["x", "y"] "(x < y)"
+              ==> PreprocessorFunction (mkFunctionMacroDef "FOO" ["x", "y"] "(x < y)")
           , testCase "Define with with some spaces" $
               "# define FOO( x , y ) ( x < y )"
-              ==> PreprocessorFunction (mkMacroName "FOO") ["x", "y"] "( x < y )"
+              ==> PreprocessorFunction (mkFunctionMacroDef "FOO" ["x", "y"] "( x < y )")
           , testCase "Define with lots of continuation lines" $
               "# \\\n\
               \ define \\\n\
@@ -94,7 +108,7 @@ defineTests = testGroup "#define"
               \ ) \\\n\
               \ ( x < \\\n\
               \ y )"
-              ==> PreprocessorFunction (mkMacroName "FOO") ["x", "y"] "( x <  y )"
+              ==> PreprocessorFunction (mkFunctionMacroDef "FOO" ["x", "y"] "( x <  y )")
       , testCase "Define with name split by continuation line" $
           "#define FO\\\n\
           \O(x \\\n\
@@ -102,7 +116,7 @@ defineTests = testGroup "#define"
           \ y) \\\n\
           \                                (y -\\\n\
           \x)"
-          ==> PreprocessorFunction (mkMacroName "FOO") ["x", "y"] "(y -x)"
+          ==> PreprocessorFunction (mkFunctionMacroDef "FOO" ["x", "y"] "(y -x)")
           ]
       ]
   ]

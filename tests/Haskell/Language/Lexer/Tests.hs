@@ -431,10 +431,30 @@ testTokenizeCppDefines = testGroup "#define"
 
     functions :: TestTree
     functions = testGroup "Functions"
-      [ testCase "Function of 0 arguments" $
+      [ testCase "Function of 0 arguments without whitespace" $
           "#define foo() bar\n\
           \test :: a -> a\n\
           \test x = foo()baz"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "test", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "test", T "x", Equals, T "bar", T "baz", Newline 0
+          ]
+      , testCase "Function of 0 arguments with whitespace in argument list at definition site" $
+          "#define foo(           ) bar\n\
+          \test :: a -> a\n\
+          \test x = foo()baz"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "test", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "test", T "x", Equals, T "bar", T "baz", Newline 0
+          ]
+      , testCase "Function of 0 arguments and whitespace in argument list at call site" $
+          "#define foo() bar\n\
+          \test :: a -> a\n\
+          \test x = foo(           )baz"
           ==>
           [ Newline 0
           , Newline 0
@@ -511,6 +531,16 @@ testTokenizeCppDefines = testGroup "#define"
           , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
           , T "bar", T "x", Equals, LParen, T "x", Comma, T "x", RParen, T "+",T "x", Newline 0
           ]
+      , testCase "Function of 2 arguments when one argument contains balanced parentheses surrounded by other text" $
+          "#define TEST(x, y) x + y\n\
+          \bar :: a -> a\n\
+          \bar x = TEST(y (x, x) * z, x)"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "bar", T "x", Equals, T "y", LParen, T "x", Comma, T "x", RParen, T "*", T "z", T "+", T "x", Newline 0
+          ]
       , testCase "Function of 2 arguments when one argument contains comma within many balanced parentheses" $
           "#define TEST(x, y) x + y\n\
           \bar :: a -> a\n\
@@ -532,6 +562,16 @@ testTokenizeCppDefines = testGroup "#define"
           , Newline 0
           , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
           , T "bar", T "x", Equals, LBracket, T "x", T "+", T "x", RBracket, Newline 0
+          ]
+      , testCase "Function of 4 arguments with some arguments empty" $
+          "#define TEST(x, y, z, w) x + y + z + w\n\
+          \bar :: a -> a\n\
+          \bar x = TEST(x * x,   ,, 2 )"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "bar", T "x", Equals, T "x", T "*", T "x", T "+", T "+", T "+", T "2", Newline 0
           ]
       , testCase "Expand multiline function-like macro" $
           "#define TEST(name, tvar, var) \\\n\
@@ -605,6 +645,23 @@ testTokenizeCppDefines = testGroup "#define"
           , Newline 0
           , T "bar", Equals, T "Z", Newline 0
           ]
+      , testCase "Function macro passed as argument to different function macro and applied there" $
+          "#define BAR(x) 1\n\
+          \#define BAZ(x) 2\n\
+          \\n\
+          \#define FOO(BAR, X) BAR(X)\n\
+          \\n\
+          \foo :: a -> a\n\
+          \foo = FOO(BAZ, 3)"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , Newline 0
+          , Newline 0
+          , Newline 0
+          , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "foo", Equals, T "2", Newline 0
+          ]
       ]
 
     concatenation :: TestTree
@@ -676,6 +733,55 @@ testTokenizeCppDefines = testGroup "#define"
           , Newline 0
           , Newline 0
           , T "bar", Equals, T "Z", Newline 0
+          ]
+      , testCase "Function argument takes precedence over other defined macros" $
+          "#define FOO(BAR) BAR\n\
+          \\n\
+          \#define BAR 15\n\
+          \\n\
+          \baz :: a -> a\n\
+          \baz x = FOO(x) + 1"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , Newline 0
+          , Newline 0
+          , T "baz", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "baz", T "X", Equals, T "x", T "+", T "1", Newline 0
+          ]
+      , testCase "Function macro passed as argument to another function macro but not aplied there" $
+          "#define BAR(x) 1\n\
+          \#define BAZ(x) 2\n\
+          \\n\
+          \#define FOO(BAR, X) BAR\n\
+          \\n\
+          \foo :: a -> a\n\
+          \foo = FOO(BAZ, 3)"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , Newline 0
+          , Newline 0
+          , Newline 0
+          , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "foo", Equals, T "BAZ", Newline 0
+          ]
+      , testCase "Constant macro passed as argument to another function macro gets expanded" $
+          "#define BAR(x) 1\n\
+          \#define BAZ 2\n\
+          \\n\
+          \#define FOO(BAR, X) BAR\n\
+          \\n\
+          \foo :: a -> a\n\
+          \foo = FOO(BAZ, 3)"
+          ==>
+          [ Newline 0
+          , Newline 0
+          , Newline 0
+          , Newline 0
+          , Newline 0
+          , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+          , T "foo", Equals, T "2", Newline 0
           ]
       ]
 

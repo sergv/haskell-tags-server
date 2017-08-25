@@ -15,13 +15,19 @@
 {-# LANGUAGE ApplicativeDo     #-}
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
 
 module Haskell.Language.Lexer.Preprocessor
   ( PreprocessorMacro(..)
+  , ConstantMacroDef(..)
+  , FunctionMacroDef(..)
+  , defaultFunctionMacroDef
   , isConstant
   , isFunction
+  , extractConstant
+  , extractFunction
   , parsePreprocessorDefine
   , parsePreprocessorUndef
   ) where
@@ -29,6 +35,7 @@ module Haskell.Language.Lexer.Preprocessor
 import Control.Monad.Except.Ext
 import Data.Attoparsec.Text
 import Data.Char (isAlpha, isDigit)
+import Data.Maybe
 import Data.Semigroup ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -41,20 +48,46 @@ import Data.KeyMap (HasKey)
 import qualified Data.KeyMap as KM
 import Data.Symbols.MacroName
 
+data ConstantMacroDef = ConstantMacroDef
+  { cmdName :: !MacroName
+  , cmdBody :: !Text
+  } deriving (Eq, Ord, Show)
+
+instance Pretty ConstantMacroDef where
+  pretty ConstantMacroDef{cmdName, cmdBody} =
+    PP.hsep ["#define", pretty cmdName, pretty cmdBody]
+
+data FunctionMacroDef = FunctionMacroDef
+  { fmdName :: !MacroName
+  , fmdArgs :: ![MacroName]
+  , fmdBody :: !Text
+  } deriving (Eq, Ord, Show)
+
+defaultFunctionMacroDef :: FunctionMacroDef
+defaultFunctionMacroDef = FunctionMacroDef
+  { fmdName = mkMacroName mempty
+  , fmdArgs = []
+  , fmdBody = mempty
+  }
+
+instance Pretty FunctionMacroDef where
+  pretty FunctionMacroDef{fmdName, fmdArgs, fmdBody} =
+    PP.hsep
+      [ "#define"
+      , pretty fmdName
+      , PP.parens $ PP.hsep $ map ((<> ",") . pretty) fmdArgs
+      , pretty fmdBody
+      ]
+
 data PreprocessorMacro =
-    PreprocessorConstant
-      !MacroName -- ^ Name
-      !Text      -- ^ Value
-  | PreprocessorFunction
-      !MacroName -- ^ Name
-      ![Text]    -- ^ Arguments
-      !Text      -- ^ Body
+    PreprocessorConstant ConstantMacroDef
+  | PreprocessorFunction FunctionMacroDef
   deriving (Eq, Ord, Show)
 
 macroName :: PreprocessorMacro -> MacroName
 macroName = \case
-  PreprocessorConstant name _   -> name
-  PreprocessorFunction name _ _ -> name
+  PreprocessorConstant def -> cmdName def
+  PreprocessorFunction def -> fmdName def
 
 instance HasKey PreprocessorMacro where
   type Key PreprocessorMacro = MacroName
@@ -62,24 +95,24 @@ instance HasKey PreprocessorMacro where
 
 instance Pretty PreprocessorMacro where
   pretty = \case
-    PreprocessorConstant name value     ->
-      PP.hsep ["#define", pretty name, pretty value]
-    PreprocessorFunction name args body -> PP.hsep
-      [ "#define"
-      , pretty name
-      , PP.parens $ PP.hsep $ map ((<> ",") . pretty) args
-      , pretty body
-      ]
+    PreprocessorConstant def -> pretty def
+    PreprocessorFunction def -> pretty def
 
 isConstant :: PreprocessorMacro -> Bool
-isConstant = \case
-  PreprocessorConstant{} -> True
-  PreprocessorFunction{} -> False
+isConstant = isJust . extractConstant
 
 isFunction :: PreprocessorMacro -> Bool
-isFunction = \case
-  PreprocessorConstant{} -> False
-  PreprocessorFunction{} -> True
+isFunction = isJust . extractFunction
+
+extractConstant :: PreprocessorMacro -> Maybe ConstantMacroDef
+extractConstant = \case
+  PreprocessorConstant def -> Just def
+  PreprocessorFunction{}   -> Nothing
+
+extractFunction :: PreprocessorMacro -> Maybe FunctionMacroDef
+extractFunction = \case
+  PreprocessorConstant{}   -> Nothing
+  PreprocessorFunction def -> Just def
 
 -- | Parse "#define ..." directive
 parsePreprocessorDefine
@@ -114,9 +147,17 @@ pDefine = do
   skipMany1 pCppWS       <?> "space before macro body"
   body <- pCppBody       <?> "macro body"
   let name' = mkMacroName name
+      body' :: PreprocessorMacro
       body' = case args of
-        Nothing    -> PreprocessorConstant name' body
-        Just args' -> PreprocessorFunction name' args' body
+        Nothing    -> PreprocessorConstant ConstantMacroDef
+          { cmdName = name'
+          , cmdBody = body
+          }
+        Just args' -> PreprocessorFunction FunctionMacroDef
+          { fmdName = name'
+          , fmdArgs = args'
+          , fmdBody = body
+          }
   pure body'
 
 pUndef :: Parser MacroName
@@ -146,11 +187,11 @@ isLeadingCPPIdentifierChar c = case c of
 isCPPIdentifierChar :: Char -> Bool
 isCPPIdentifierChar c = isLeadingCPPIdentifierChar c || isDigit c
 
-pArguments :: Parser [Text]
+pArguments :: Parser [MacroName]
 pArguments = do
   _    <- char '('
   skipMany pCppWS
-  args <- (pCppIdentifier <* skipMany pCppWS) `sepBy` (char ',' *> skipMany pCppWS)
+  args <- (mkMacroName <$> pCppIdentifier <* skipMany pCppWS) `sepBy` (char ',' *> skipMany pCppWS)
   skipMany pCppWS
   _    <- char ')'
   pure args
@@ -160,13 +201,11 @@ pCppBody = stripTrailingNewline . removeComments . removeContinuationMarkers <$>
   where
     removeContinuationMarkers =
       T.replace "\\\r" "" . T.replace "\\\n" "" . T.replace "\\\r\n" ""
-    -- TODO: improve stripping to handle non-empty comments.
     removeComments xs =
       case T.splitOn "/*" xs of
         []   -> T.empty -- no occurrences of /*
         [y]  -> y       -- no occurrences of /*
         y:ys -> T.concat $ y : map (T.drop 2 . snd . T.breakOn "*/") ys
-      -- T.replace "/**/" ""
     stripTrailingNewline = T.dropWhileEnd isAsciiSpaceOrNewline
 
 -- pCppBody = T.concat <$> sepBy1 takeMany

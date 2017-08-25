@@ -19,6 +19,7 @@ module Haskell.Language.Lexer.Env
 
 import Haskell.Language.Lexer.Types (LiterateMode)
 
+-- | Environment for user rule predicates.
 data AlexEnv = AlexEnv
   { aeFilename     :: FilePath
   , aeLiterateMode :: LiterateMode
