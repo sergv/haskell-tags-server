@@ -114,7 +114,7 @@ analyzeImports imports qualifiers ts = do
   -- logDebug $ "[analyzeImports] ts =" <+> ppTokens ts
   res <- runMaybeT $ do
     -- Drop initial "import" keyword and {-# SOURCE #-} pragma, if any
-    (ts, importTarget)   <- case dropNLs ts of
+    (ts2, importTarget) <- case dropNLs ts of
       PImport : (d -> PSourcePragma : rest) -> pure (rest, HsBootModule)
       PImport :                       rest  -> pure (rest, VanillaModule)
       _                                     -> mzero
@@ -128,24 +128,24 @@ analyzeImports imports qualifiers ts = do
           PQualified : rest -> (rest, True)
           rest              -> (rest, False)
 
-        (ts', isQualified) = dropNLs >>> dropSafeImport >>>
+        (ts3, isQual) = dropNLs >>> dropSafeImport >>>
                              dropNLs >>> extractQualified >>>
-                             first (dropNLs >>> dropPackageImport) $ ts
+                             first (dropNLs >>> dropPackageImport) $ ts2
     -- Extract import name and renaming alias, if any
-    (ts'', name, qualName) <- case dropNLs ts' of
+    (ts4, name, qualName) <- case dropNLs ts3 of
       PName name : (d -> PAs : (d -> PName qualName : rest)) -> pure (rest, name, Just qualName)
       PName name :                                    rest   -> pure (rest, name, Nothing)
       _                                                      -> mzero
     -- Make sence of the data collected before
-    let qualType = case (isQualified, qualName) of
+    let qualType = case (isQual, qualName) of
           (True,  Nothing)        -> Qualified $ mkQual name
           (True,  Just qualName') -> Qualified $ mkQual qualName'
           (False, Nothing)        -> Unqualified
           (False, Just qualName') -> BothQualifiedAndUnqualified $ mkQual qualName'
-    pure (name, qualType, importTarget, ts'')
+    pure (name, qualType, importTarget, ts4)
   case res of
-    Nothing                                 -> pure (imports, qualifiers, ts)
-    Just (name, qualType, importTarget, ts) -> add name qualType importTarget ts
+    Nothing                                  -> pure (imports, qualifiers, ts)
+    Just (name, qualType, importTarget, ts5) -> add name qualType importTarget ts5
   where
     d      = dropNLs
     mkQual = mkImportQualifier . mkModuleName
@@ -203,9 +203,9 @@ analyzeImports imports qualifiers ts = do
           -> KeyMap (EntryWithChildren UnqualifiedSymbolName)
           -> [Token]
           -> m (ImportList, [Token])
-        findImportListEntries importType acc toks = do
+        findImportListEntries importType acc toks' = do
           -- logDebug $ "[findImportListEntries] toks =" <+> ppTokens toks
-          case dropNLs toks of
+          case dropNLs toks' of
             []                                                                ->
               pure (importList, [])
             PRParen : rest                                                    ->
@@ -330,8 +330,8 @@ analyzeExports importQualifiers ts = do
           entryWithChildren "name in export list" name rest
         PLParen : rest                                                    ->
           go entries reexports rest
-        toks                                                              ->
-          throwErrorWithCallStack $ "Unrecognized export list structure:" <+> ppTokens toks
+        toks'                                                             ->
+          throwErrorWithCallStack $ "Unrecognized export list structure:" <+> ppTokens toks'
       where
         exports :: ModuleExports
         exports = ModuleExports
@@ -391,12 +391,12 @@ analyzeChildren
 analyzeChildren listType toks =
   case dropNLs toks of
     []                                               -> (ChildrenAbsent, pure (Nothing, []))
-    toks@(PComma : _)                                -> (ChildrenAbsent, pure (Nothing, toks))
-    toks@(PRParen : _)                               -> (ChildrenAbsent, pure (Nothing, toks))
-    toks@(PName _ : _)                               -> (ChildrenAbsent, pure (Nothing, toks))
-    toks@(PModule : _)                               -> (ChildrenAbsent, pure (Nothing, toks))
-    toks@(PPattern : _)                              -> (ChildrenAbsent, pure (Nothing, toks))
-    toks@(PType : _)                                 -> (ChildrenAbsent, pure (Nothing, toks))
+    toks'@(PComma : _)                               -> (ChildrenAbsent, pure (Nothing, toks'))
+    toks'@(PRParen : _)                              -> (ChildrenAbsent, pure (Nothing, toks'))
+    toks'@(PName _ : _)                              -> (ChildrenAbsent, pure (Nothing, toks'))
+    toks'@(PModule : _)                              -> (ChildrenAbsent, pure (Nothing, toks'))
+    toks'@(PPattern : _)                             -> (ChildrenAbsent, pure (Nothing, toks'))
+    toks'@(PType : _)                                -> (ChildrenAbsent, pure (Nothing, toks'))
     -- PLParen : PName ".." : PRParen : rest            -> (ChildrenPresent, pure (Just VisibleAllChildren, rest))
     PLParen : PRParen : rest                         -> (ChildrenAbsent, pure (Nothing, rest))
     PLParen : rest@(PName name : _)
@@ -405,8 +405,8 @@ analyzeChildren listType toks =
     PLParen : rest@(PLParen : Pos _ (tokToName -> Just name) : PRParen : _)
       | isAsciiName name -> (ChildrenAbsent, pure (Nothing, toks))
       | otherwise        -> analyzeList rest
-    toks                                             ->
-      (ChildrenAbsent, throwErrorWithCallStack $ "Cannot handle children of" <+> listType <> ":" <+> ppTokens toks)
+    toks'                                            ->
+      (ChildrenAbsent, throwErrorWithCallStack $ "Cannot handle children of" <+> listType <> ":" <+> ppTokens toks')
   where
     analyzeList
       :: HasCallStack
@@ -417,7 +417,7 @@ analyzeChildren listType toks =
         mkVisibility
           :: (Set UnqualifiedSymbolName, WildcardPresence, t)
           -> (Maybe ChildrenVisibility, t)
-        mkVisibility (children, wildcard, toks) = (visibility, toks)
+        mkVisibility (children, wildcard, toks') = (visibility, toks')
           where
             visibility
               | S.null children =
@@ -449,8 +449,8 @@ analyzeChildren listType toks =
         | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
           extractChildren wildcardPresence (S.insert name' names) $ dropCommas rest
       PLParen : rest -> extractChildren wildcardPresence names $ dropNLs rest
-      toks           ->
-        (ChildrenAbsent, throwErrorWithCallStack $ "Unrecognized children list structure:" <+> ppTokens toks)
+      toks'          ->
+        (ChildrenAbsent, throwErrorWithCallStack $ "Unrecognized children list structure:" <+> ppTokens toks')
       where
         childrenPresence
           | S.null names =
@@ -460,14 +460,14 @@ analyzeChildren listType toks =
           | otherwise    = ChildrenPresent
 
 isAsciiName :: Text -> Bool
-isAsciiName = T.all pred
+isAsciiName = T.all check
   where
-    pred :: Char -> Bool
-    pred '\'' = True
-    pred '_'  = True
-    pred '#'  = True
-    pred '.'  = True
-    pred c    = isAlphaNum c
+    check :: Char -> Bool
+    check '\'' = True
+    check '_'  = True
+    check '#'  = True
+    check '.'  = True
+    check c    = isAlphaNum c
 
 newtype Tokens = Tokens [Token]
 
