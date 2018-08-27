@@ -3,13 +3,8 @@
 -- Module      :  Control.Monad.Filesystem.FileSearch
 -- Copyright   :  (c) Sergey Vinokurov 2016
 -- License     :  BSD3-style (see LICENSE)
---
 -- Maintainer  :  serg.foo@gmail.com
 -- Created     :  Thursday, 10 November 2016
--- Stability   :
--- Portability :
---
---
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE FlexibleContexts           #-}

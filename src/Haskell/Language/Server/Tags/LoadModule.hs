@@ -3,12 +3,7 @@
 -- Module      :  Server.Tags.LoadModule
 -- Copyright   :  (c) Sergey Vinokurov 2015
 -- License     :  BSD3-style (see LICENSE)
---
 -- Maintainer  :  serg.foo@gmail.com
--- Stability   :
--- Portability :
---
---
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE DoAndIfThenElse     #-}
@@ -436,11 +431,9 @@ quasiResolveImportSpecWithLoadsInProgress mainModuleName key modules importSpecs
 
 -- | Some tags should get extra children-parent relationships, that were not
 -- evident by looking at tag definitions alone.
---
 -- For instance, in ghc 8.0 exports can be of the form "module Mod(FooType(.., Foo', Bar,)) where",
 -- which means that additional pattern synonyms Foo' and Bar' are associated with
 -- FooType from now on.
---
 -- However, this effect should only be visible in module exports. Within module,
 -- there should be no such link between extra children and a parent.
 inferExtraParents :: UnresolvedModuleHeader -> Map UnqualifiedSymbolName (Set UnqualifiedSymbolName)

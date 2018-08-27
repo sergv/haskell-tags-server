@@ -3,13 +3,8 @@
 -- Module      :  Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions
 -- Copyright   :  (c) Sergey Vinokurov 2016
 -- License     :  BSD3-style (see LICENSE)
---
 -- Maintainer  :  serg.foo@gmail.com
 -- Created     :  Friday, 14 October 2016
--- Stability   :
--- Portability :
---
---
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE NamedFieldPuns    #-}

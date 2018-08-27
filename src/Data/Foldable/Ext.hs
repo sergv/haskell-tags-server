@@ -3,13 +3,8 @@
 -- Module      :  Data.Foldable.Ext
 -- Copyright   :  (c) Sergey Vinokurov 2016
 -- License     :  BSD3-style (see LICENSE)
---
 -- Maintainer  :  serg.foo@gmail.com
 -- Created     :  Sunday, 25 September 2016
--- Stability   :
--- Portability :
---
---
 ----------------------------------------------------------------------------
 
 module Data.Foldable.Ext

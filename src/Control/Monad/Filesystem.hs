@@ -3,13 +3,8 @@
 -- Module      :  Control.Monad.Filesystem
 -- Copyright   :  (c) Sergey Vinokurov 2016
 -- License     :  BSD3-style (see LICENSE)
---
 -- Maintainer  :  serg.foo@gmail.com
 -- Created     :  Sunday, 18 September 2016
--- Stability   :
--- Portability :
---
---
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE FlexibleContexts    #-}

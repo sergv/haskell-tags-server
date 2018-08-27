@@ -3,13 +3,8 @@
 -- Module      :  Module1
 -- Copyright   :  (c) Sergey Vinokurov 2016
 -- License     :  BSD3-style (see LICENSE)
---
 -- Maintainer  :  serg.foo@gmail.com
 -- Created     :  Wednesday,  2 November 2016
--- Stability   :
--- Portability :
---
---
 ----------------------------------------------------------------------------
 
 module Module1 where

@@ -3,13 +3,8 @@
 -- Module      :  Data.CompiledRegex
 -- Copyright   :  (c) Sergey Vinokurov 2016
 -- License     :  BSD3-style (see LICENSE)
---
 -- Maintainer  :  serg.foo@gmail.com
 -- Created     :  Tuesday, 16 August 2016
--- Stability   :
--- Portability :
---
---
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE FlexibleContexts    #-}

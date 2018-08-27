@@ -3,12 +3,7 @@
 -- Module      :  ModuleWithQualifiedModuleReexport
 -- Copyright   :  (c) Sergey Vinokurov 2015
 -- License     :  BSD3-style (see LICENSE)
---
 -- Maintainer  :  serg.foo@gmail.com
--- Stability   :
--- Portability :
---
---
 ----------------------------------------------------------------------------
 
 -- Does not export any names, see ‘https://ro-che.info/articles/2012-12-25-haskell-module-system-p1’ for details

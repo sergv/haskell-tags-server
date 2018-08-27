@@ -3,13 +3,8 @@
 -- Module      :  Data.ErrorMessage
 -- Copyright   :  (c) Sergey Vinokurov 2017
 -- License     :  BSD3-style (see LICENSE)
---
 -- Maintainer  :  serg.foo@gmail.com
 -- Created     :   5 June 2017
--- Stability   :
--- Portability :
---
---
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE NamedFieldPuns    #-}

@@ -3,13 +3,8 @@
 -- Module      :  Haskell.Language.Lexer.Preprocessor
 -- Copyright   :  (c) Sergey Vinokurov 2017
 -- License     :  BSD3-style (see LICENSE)
---
 -- Maintainer  :  serg.foo@gmail.com
 -- Created     :  27 May 2017
--- Stability   :
--- Portability :
---
---
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE ApplicativeDo     #-}

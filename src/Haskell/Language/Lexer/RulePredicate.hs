@@ -3,13 +3,8 @@
 -- Module      :  Haskell.Language.Lexer.RulePredicate
 -- Copyright   :  (c) Sergey Vinokurov 2017
 -- License     :  BSD3-style (see LICENSE)
---
 -- Maintainer  :  serg.foo@gmail.com
 -- Created     :  19 June 2017
--- Stability   :
--- Portability :
---
---
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE DeriveFunctor         #-}

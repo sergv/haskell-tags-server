@@ -3,13 +3,8 @@
 -- Module      :  Data.Symbols
 -- Copyright   :  (c) Sergey Vinokurov 2016
 -- License     :  BSD3-style (see LICENSE)
---
 -- Maintainer  :  serg.foo@gmail.com
 -- Created     :  Tuesday, 27 September 2016
--- Stability   :
--- Portability :
---
---
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -61,7 +56,6 @@ mkModuleName = ModuleName
 
 -- | Custom module name used for qualification. This is the XXX part of the
 -- import statement:
---
 -- import Foo.Bar as XXX
 -- import qualified Fizz.Buzz as XXX
 newtype ImportQualifier = ImportQualifier { getImportQualifier :: ModuleName }

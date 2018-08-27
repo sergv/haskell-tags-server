@@ -3,13 +3,8 @@
 -- Module      :  Control.Monad.Logging.DiscardLogs
 -- Copyright   :  (c) Sergey Vinokurov 2016
 -- License     :  BSD3-style (see LICENSE)
---
 -- Maintainer  :  serg.foo@gmail.com
 -- Created     :  Saturday, 24 September 2016
--- Stability   :
--- Portability :
---
---
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE DeriveFunctor              #-}

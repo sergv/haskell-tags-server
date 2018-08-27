@@ -3,12 +3,8 @@
 -- Module      :  Server.Tags
 -- Copyright   :  (c) Sergey Vinokurov 2016
 -- License     :  BSD3-style (see LICENSE)
---
 -- Maintainer  :  serg.foo@gmail.com
 -- Created     :  Monday, 15 August 2016
--- Stability   :
--- Portability :
---
 -- The actual server that handles tags
 ----------------------------------------------------------------------------
 

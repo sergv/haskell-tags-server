@@ -3,12 +3,7 @@
 -- Module      :  ServerTests
 -- Copyright   :  (c) Sergey Vinokurov 2015
 -- License     :  BSD3-style (see LICENSE)
---
 -- Maintainer  :  serg.foo@gmail.com
--- Stability   :
--- Portability :
---
---
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE DeriveFoldable      #-}
@@ -173,7 +168,7 @@ testData = GroupTest "server tests"
       , stWorkingDirectory = Directory "0000single_module"
       , stFile             = "SingleModule.hs"
       , stSymbol           = "foo"
-      , stExpectedResponse = Known "SingleModule.hs" 16 "Function"
+      , stExpectedResponse = Known "SingleModule.hs" 11 "Function"
       }
   , GroupTest "imports"
       [ withDirAndFile (Directory "0001module_with_imports") "ModuleWithImports.hs" $
@@ -182,39 +177,39 @@ testData = GroupTest "server tests"
                 [ ("name #1"
                   , "foo"
                   , Just "Imported1.foo"
-                  , Known "Imported1.hs" 18 "Function"
+                  , Known "Imported1.hs" 13 "Function"
                   )
                 , ("name #2"
                   , "bar"
                   , Just "Imported1.bar"
-                  , Known "Imported1.hs" 21 "Function"
+                  , Known "Imported1.hs" 16 "Function"
                   )
                 , ("operator"
                   , "$$"
                   , Just "Imported1.$$"
-                  , Known "Imported1.hs" 24 "Operator"
+                  , Known "Imported1.hs" 19 "Operator"
                   )
                 , ("type name"
                   , ":$$:"
                   , Just "Imported1.:$$:"
-                  , Known "Imported1.hs" 27 "Type"
+                  , Known "Imported1.hs" 22 "Type"
                   )
                 , ("constructor name"
                   , ":$$$:"
                   , Just "Imported1.:$$$:"
-                  , Known "Imported1.hs" 28 "Constructor"
+                  , Known "Imported1.hs" 23 "Constructor"
                   )
                 , ( "local def"
                   , "baz"
                   , Nothing
-                  , Known "ModuleWithImports.hs" 21 "Function"
+                  , Known "ModuleWithImports.hs" 16 "Function"
                   )
                 ]
             , GroupTest "explicit import list" $ map mkQualUnqualTest
                 [ ( "imported name"
                   , "foo2"
                   , Just "Imported2.foo2"
-                  , Known "Imported2.hs" 18 "Function"
+                  , Known "Imported2.hs" 13 "Function"
                   )
                 , ( "not imported name"
                   , "bar2"
@@ -224,17 +219,17 @@ testData = GroupTest "server tests"
                 , ( "imported operator"
                   , "$$*"
                   , Just "Imported2.$$*"
-                  , Known "Imported2.hs" 24 "Operator"
+                  , Known "Imported2.hs" 19 "Operator"
                   )
                 , ( "imported type name"
                   , ":$$*:"
                   , Just "Imported2.:$$*:"
-                  , Known "Imported2.hs" 27 "Type"
+                  , Known "Imported2.hs" 22 "Type"
                   )
                 , ( "imported constructor name"
                   , ":$$$*:"
                   , Just "Imported2.:$$$*:"
-                  , Known "Imported2.hs" 28 "Constructor"
+                  , Known "Imported2.hs" 23 "Constructor"
                   )
                 ]
             ]
@@ -243,34 +238,34 @@ testData = GroupTest "server tests"
           group "multiline import list"
             [ ("import #1"
               , "foo"
-              , Known "Imported1.hs" 18 "Function"
+              , Known "Imported1.hs" 13 "Function"
               )
             , ("import #2"
               , "bar"
-              , Known "Imported1.hs" 21 "Function"
+              , Known "Imported1.hs" 16 "Function"
               )
             , ( "import #3"
               , "foo2"
-              , Known "Imported2.hs" 18 "Function"
+              , Known "Imported2.hs" 13 "Function"
               )
             , ( "import #4"
               , "bar2"
-              , Known "Imported2.hs" 21 "Function"
+              , Known "Imported2.hs" 16 "Function"
               )
             , ( "local def in presence of wildcard import"
               , "baz"
-              , Known "ModuleWithMultilineImportList.hs" 26 "Function"
+              , Known "ModuleWithMultilineImportList.hs" 21 "Function"
               )
             ]
       , withDirAndFile (Directory "0001module_with_imports") "ModuleWithQualifiedImport.hs" $
           group "qualified import with alias"
             [ ("Imp.foo"
               , "Imp.foo"
-              , Known "Imported1.hs" 18 "Function"
+              , Known "Imported1.hs" 13 "Function"
               )
             , ("Imp.bar"
               , "Imp.bar"
-              , Known "Imported1.hs" 21 "Function"
+              , Known "Imported1.hs" 16 "Function"
               )
             , ("foo - unqualified query"
               , "foo"
@@ -282,18 +277,18 @@ testData = GroupTest "server tests"
               )
             , ( "local def"
               , "baz"
-              , Known "ModuleWithQualifiedImport.hs" 18 "Function"
+              , Known "ModuleWithQualifiedImport.hs" 13 "Function"
               )
             ]
       , withDirAndFile (Directory "0001module_with_imports") "ModuleWithQualifiedImportNoAlias.hs" $
           group "qualified import without alias"
             [ ("Imported1.foo"
               , "Imported1.foo"
-              , Known "Imported1.hs" 18 "Function"
+              , Known "Imported1.hs" 13 "Function"
               )
             , ("Imported1.bar"
               , "Imported1.bar"
-              , Known "Imported1.hs" 21 "Function"
+              , Known "Imported1.hs" 16 "Function"
               )
             , ("foo - unqualified query"
               , "foo"
@@ -305,22 +300,22 @@ testData = GroupTest "server tests"
               )
             , ( "local def"
               , "baz"
-              , Known "ModuleWithQualifiedImportNoAlias.hs" 18 "Function"
+              , Known "ModuleWithQualifiedImportNoAlias.hs" 13 "Function"
               )
             ]
       , withDirAndFile (Directory "0001module_with_imports") "ModuleWithImportsAndHiding.hs" $
           group "hiding"
             [ ("wildcard import #1"
               , "foo"
-              , Known "Imported1.hs" 18 "Function"
+              , Known "Imported1.hs" 13 "Function"
               )
             , ("wildcard import #2"
               , "bar"
-              , Known "Imported1.hs" 21 "Function"
+              , Known "Imported1.hs" 16 "Function"
               )
             , ( "import list - not hidden name"
               , "foo2"
-              , Known "Imported2.hs" 18 "Function"
+              , Known "Imported2.hs" 13 "Function"
               )
             , ( "import list - hidden name"
               , "bar2"
@@ -328,7 +323,7 @@ testData = GroupTest "server tests"
               )
             , ( "local def in presence of wildcard import"
               , "baz"
-              , Known "ModuleWithImportsAndHiding.hs" 19 "Function"
+              , Known "ModuleWithImportsAndHiding.hs" 14 "Function"
               )
             ]
       , withDirAndFile (Directory "0001module_with_imports") "ModuleWithEmptyImportList.hs" $
@@ -343,7 +338,7 @@ testData = GroupTest "server tests"
               )
             , ( "import list - imported name"
               , "foo2"
-              , Known "Imported2.hs" 18 "Function"
+              , Known "Imported2.hs" 13 "Function"
               )
             , ( "import list - not imported name"
               , "bar2"
@@ -351,7 +346,7 @@ testData = GroupTest "server tests"
               )
             , ( "local def in presence of wildcard import"
               , "baz"
-              , Known "ModuleWithEmptyImportList.hs" 19 "Function"
+              , Known "ModuleWithEmptyImportList.hs" 14 "Function"
               )
             ]
       ]
@@ -360,11 +355,11 @@ testData = GroupTest "server tests"
           group "vanilla export list"
             [ ( "import module with export list #1"
               , "foo"
-              , Known "ModuleWithExportList.hs" 16 "Function"
+              , Known "ModuleWithExportList.hs" 11 "Function"
               )
             , ( "import module with export list #2"
               , "bar"
-              , Known "ModuleWithExportList.hs" 19 "Function"
+              , Known "ModuleWithExportList.hs" 14 "Function"
               )
             , ( "import module with export list #3"
               , "baz"
@@ -372,11 +367,11 @@ testData = GroupTest "server tests"
               )
             , ( "import module with multiline export list #1"
               , "foo2"
-              , Known "ModuleWithMultilineExportList.hs" 20 "Function"
+              , Known "ModuleWithMultilineExportList.hs" 15 "Function"
               )
             , ( "import module with multiline export list #2"
               , "bar2"
-              , Known "ModuleWithMultilineExportList.hs" 23 "Function"
+              , Known "ModuleWithMultilineExportList.hs" 18 "Function"
               )
             , ( "import module with multiline export list #3"
               , "baz2"
@@ -387,34 +382,34 @@ testData = GroupTest "server tests"
           group "wildcard export list"
             [ ( "import exported name"
               , "Foo"
-              , Known "ModuleWithWildcardExport.hs" 19 "Type"
+              , Known "ModuleWithWildcardExport.hs" 14 "Type"
               )
             , ( "import wildcard-exported name #1"
               , "Bar"
-              , Known "ModuleWithWildcardExport.hs" 19 "Constructor"
+              , Known "ModuleWithWildcardExport.hs" 14 "Constructor"
               )
             , ( "import wildcard-exported name #2"
               , "Baz"
-              , Known "ModuleWithWildcardExport.hs" 20 "Constructor"
+              , Known "ModuleWithWildcardExport.hs" 15 "Constructor"
               )
             , ( "import wildcard-exported name #3"
               , "getBar"
-              , Known "ModuleWithWildcardExport.hs" 19 "Function"
+              , Known "ModuleWithWildcardExport.hs" 14 "Function"
               )
             , ( "import wildcard-exported name #4"
               , "getBaz"
-              , Known "ModuleWithWildcardExport.hs" 20 "Function"
+              , Known "ModuleWithWildcardExport.hs" 15 "Function"
               )
             ]
       , withDirAndFile (Directory "0002export_lists") "ModuleWithImportsThatHaveExportsList.hs" $
           group "explicit export list"
             [ ( "import exported name"
               , "Foo2"
-              , Known "ModuleWithExplicitExport.hs" 19 "Type"
+              , Known "ModuleWithExplicitExport.hs" 14 "Type"
               )
             , ( "import explicitly exported name #1"
               , "Bar2"
-              , Known "ModuleWithExplicitExport.hs" 19 "Constructor"
+              , Known "ModuleWithExplicitExport.hs" 14 "Constructor"
               )
             , ( "import explicitly exported name #2"
               , "Baz2"
@@ -422,7 +417,7 @@ testData = GroupTest "server tests"
               )
             , ( "import explicitly exported name #3"
               , "getBar2"
-              , Known "ModuleWithExplicitExport.hs" 19 "Function"
+              , Known "ModuleWithExplicitExport.hs" 14 "Function"
               )
             , ( "import explicitly exported name #4"
               , "getBaz2"
@@ -437,19 +432,19 @@ testData = GroupTest "server tests"
               )
             , ( "import re-exported name without qualification"
               , "foo"
-              , Known "ModuleWithExportList.hs" 16 "Function"
+              , Known "ModuleWithExportList.hs" 11 "Function"
               )
             , ( "import re-exported name without qualification #2"
               , "bar"
-              , Known "ModuleWithExportList.hs" 19 "Function"
+              , Known "ModuleWithExportList.hs" 14 "Function"
               )
             , ( "import re-exported name without qualification #3"
               , "foo2"
-              , Known "ModuleWithMultilineExportList.hs" 20 "Function"
+              , Known "ModuleWithMultilineExportList.hs" 15 "Function"
               )
             , ( "import re-exported name with qualification"
               , "bar2"
-              , Known "ModuleWithMultilineExportList.hs" 23 "Function"
+              , Known "ModuleWithMultilineExportList.hs" 18 "Function"
               )
             ]
       ]
@@ -468,27 +463,27 @@ testData = GroupTest "server tests"
       group "typeclass export"
         [ ( "name defined locally"
           , "foo"
-          , Known "MainModule.hs" 19 "Function"
+          , Known "MainModule.hs" 14 "Function"
           )
         , ( "typeclass member function"
           , "wrap"
-          , Known "ModuleWithTypeclass.hs" 25 "Function"
+          , Known "ModuleWithTypeclass.hs" 20 "Function"
           )
         , ( "associated public type family"
           , "TestFam"
-          , Known "ModuleWithTypeclass.hs" 23 "Family"
+          , Known "ModuleWithTypeclass.hs" 18 "Family"
           )
         , ( "imported constructor of public associated type"
           , "IntBox"
-          , Known "ModuleWithTypeclass.hs" 31 "Constructor"
+          , Known "ModuleWithTypeclass.hs" 26 "Constructor"
           )
         , ( "imported field accessor of public associated type"
           , "unIntBox"
-          , Known "ModuleWithTypeclass.hs" 32 "Function"
+          , Known "ModuleWithTypeclass.hs" 27 "Function"
           )
         , ( "associated private type family"
           , "PrivateFam"
-          , Known "ModuleWithTypeclass.hs" 24 "Family"
+          , Known "ModuleWithTypeclass.hs" 19 "Family"
           )
         , ( "imported constructor of private associated type"
           , "IntBoxPrivate"
@@ -506,30 +501,30 @@ testData = GroupTest "server tests"
                 group "A.hs"
                   [ ( "type defined locally in A"
                     , "TA"
-                    , Known "A.hs" 19 "Type"
+                    , Known "A.hs" 14 "Type"
                     )
                   , ( "function defined locally in A"
                     , "f"
-                    , Known "A.hs" 21 "Function"
+                    , Known "A.hs" 16 "Function"
                     )
                   , ( "type name imported into A"
                     , "TB"
-                    , Known "B.hs" 20 "Type"
+                    , Known "B.hs" 15 "Type"
                     )
                   , ( "function imported into A"
                     , "g"
-                    , Known "B.hs" 22 "Function"
+                    , Known "B.hs" 17 "Function"
                     )
                   ]
             , withFile "B.hs" $
                 group "B.hs"
                   [ ( "type defined locally in B"
                     , "TB"
-                    , Known "B.hs" 20 "Type"
+                    , Known "B.hs" 15 "Type"
                     )
                   , ( "function defined locally in B"
                     , "g"
-                    , Known "B.hs" 22 "Function"
+                    , Known "B.hs" 17 "Function"
                     )
                   , ( "type name imported into B"
                     , "TA"
@@ -546,30 +541,30 @@ testData = GroupTest "server tests"
                 group "AWithExportList.hs"
                   [ ( "type defined locally in AWithExportList"
                     , "TA"
-                    , Known "AWithExportList.hs" 19 "Type"
+                    , Known "AWithExportList.hs" 14 "Type"
                     )
                   , ( "function defined locally in AWithExportList"
                     , "f"
-                    , Known "AWithExportList.hs" 21 "Function"
+                    , Known "AWithExportList.hs" 16 "Function"
                     )
                   , ( "type name imported into AWithExportList"
                     , "TB"
-                    , Known "BWithExportList.hs" 20 "Type"
+                    , Known "BWithExportList.hs" 15 "Type"
                     )
                   , ( "function imported into AWithExportList"
                     , "g"
-                    , Known "BWithExportList.hs" 22 "Function"
+                    , Known "BWithExportList.hs" 17 "Function"
                     )
                   ]
             , withFile "BWithExportList.hs" $
                 group "BWithExportList.hs"
                   [ ( "type defined locally in BWithExportList"
                     , "TB"
-                    , Known "BWithExportList.hs" 20 "Type"
+                    , Known "BWithExportList.hs" 15 "Type"
                     )
                   , ( "function defined locally in BWithExportList"
                     , "g"
-                    , Known "BWithExportList.hs" 22 "Function"
+                    , Known "BWithExportList.hs" 17 "Function"
                     )
                   , ( "type name imported into BWithExportList"
                     , "TA"
@@ -588,15 +583,15 @@ testData = GroupTest "server tests"
             group groupName
               [ ( "Exported type"
                 , "FooTyp"
-                , Known "ModuleThatExportsPattern.hs" 19 "Type"
+                , Known "ModuleThatExportsPattern.hs" 14 "Type"
                 )
               , ( "Exported constructor 1"
                 , "Foo"
-                , Known "ModuleThatExportsPattern.hs" 20 "Constructor"
+                , Known "ModuleThatExportsPattern.hs" 15 "Constructor"
                 )
               , ( "Exported constructor 2"
                 , "Bar"
-                , Known "ModuleThatExportsPattern.hs" 21 "Constructor"
+                , Known "ModuleThatExportsPattern.hs" 16 "Constructor"
                 )
               , ( "Non-existent constructor"
                 , "Baz"
@@ -604,11 +599,11 @@ testData = GroupTest "server tests"
                 )
               , ( "Exported pattern 1"
                 , "Foo'"
-                , Known "ModuleThatExportsPattern.hs" 23 "Pattern"
+                , Known "ModuleThatExportsPattern.hs" 18 "Pattern"
                 )
               , ( "Exported pattern 2"
                 , "Baz'"
-                , Known "ModuleThatExportsPattern.hs" 24 "Pattern"
+                , Known "ModuleThatExportsPattern.hs" 19 "Pattern"
                 )
               ]
         | (file, groupName) <-
@@ -623,27 +618,27 @@ testData = GroupTest "server tests"
           group "A imports B with import list"
             [ ( "Local function 1"
               , "foo"
-              , Known "A.hs" 19 "Function"
+              , Known "A.hs" 14 "Function"
               )
             , ( "Local function 2"
               , "bar"
-              , Known "A.hs" 22 "Function"
+              , Known "A.hs" 17 "Function"
               )
             , ( "Local function 3"
               , "baz"
-              , Known "A.hs" 25 "Function"
+              , Known "A.hs" 20 "Function"
               )
              , ( "Imported visible type 1"
               , "FooTyp"
-              , Known "B.hs" 19 "Type"
+              , Known "B.hs" 14 "Type"
               )
             , ( "Imported visible constructor"
               , "Foo"
-              , Known "B.hs" 19 "Constructor"
+              , Known "B.hs" 14 "Constructor"
               )
             , ( "Imported visible type 2"
               , "BarTyp"
-              , Known "B.hs" 21 "Type"
+              , Known "B.hs" 16 "Type"
               )
             , ( "Imported hidden constructor"
               , "Bar"
@@ -662,35 +657,35 @@ testData = GroupTest "server tests"
           group "B imports A with import list"
             [ ( "Local type 1"
               , "FooTyp"
-              , Known "B.hs" 19 "Type"
+              , Known "B.hs" 14 "Type"
               )
             , ( "Local constructor 1"
               , "Foo"
-              , Known "B.hs" 19 "Constructor"
+              , Known "B.hs" 14 "Constructor"
               )
             , ( "Local type 2"
               , "BarTyp"
-              , Known "B.hs" 21 "Type"
+              , Known "B.hs" 16 "Type"
               )
             , ( "Local constructor 2"
               , "Bar"
-              , Known "B.hs" 21 "Constructor"
+              , Known "B.hs" 16 "Constructor"
               )
             , ( "Local type 3"
               , "BazTyp"
-              , Known "B.hs" 23 "Type"
+              , Known "B.hs" 18 "Type"
               )
             , ( "Local constructor 3"
               , "Baz"
-              , Known "B.hs" 23 "Constructor"
+              , Known "B.hs" 18 "Constructor"
               )
             , ( "Imported function 1"
               , "foo"
-              , Known "A.hs" 19 "Function"
+              , Known "A.hs" 14 "Function"
               )
             , ( "Imported function 2"
               , "bar"
-              , Known "A.hs" 22 "Function"
+              , Known "A.hs" 17 "Function"
               )
             , ( "Not imported function"
               , "baz"
@@ -701,27 +696,27 @@ testData = GroupTest "server tests"
           group "C imports D with import list"
             [ ( "Local function 1"
               , "foo"
-              , Known "C.hs" 19 "Function"
+              , Known "C.hs" 14 "Function"
               )
             , ( "Local function 2"
               , "bar"
-              , Known "C.hs" 22 "Function"
+              , Known "C.hs" 17 "Function"
               )
             , ( "Local function 3"
               , "baz"
-              , Known "C.hs" 25 "Function"
+              , Known "C.hs" 20 "Function"
               )
              , ( "Imported visible type 1"
               , "FooTyp"
-              , Known "D.hs" 19 "Type"
+              , Known "D.hs" 14 "Type"
               )
             , ( "Imported visible constructor"
               , "Foo"
-              , Known "D.hs" 19 "Constructor"
+              , Known "D.hs" 14 "Constructor"
               )
             , ( "Imported visible type 2"
               , "BarTyp"
-              , Known "D.hs" 21 "Type"
+              , Known "D.hs" 16 "Type"
               )
             , ( "Imported hidden constructor"
               , "Bar"
@@ -740,39 +735,39 @@ testData = GroupTest "server tests"
           group "D imports C without import list"
             [ ( "Local type 1"
               , "FooTyp"
-              , Known "D.hs" 19 "Type"
+              , Known "D.hs" 14 "Type"
               )
             , ( "Local constructor 1"
               , "Foo"
-              , Known "D.hs" 19 "Constructor"
+              , Known "D.hs" 14 "Constructor"
               )
             , ( "Local type 2"
               , "BarTyp"
-              , Known "D.hs" 21 "Type"
+              , Known "D.hs" 16 "Type"
               )
             , ( "Local constructor 2"
               , "Bar"
-              , Known "D.hs" 21 "Constructor"
+              , Known "D.hs" 16 "Constructor"
               )
             , ( "Local type 3"
               , "BazTyp"
-              , Known "D.hs" 23 "Type"
+              , Known "D.hs" 18 "Type"
               )
             , ( "Local constructor 3"
               , "Baz"
-              , Known "D.hs" 23 "Constructor"
+              , Known "D.hs" 18 "Constructor"
               )
             , ( "Imported function 1"
               , "foo"
-              , Known "C.hs" 19 "Function"
+              , Known "C.hs" 14 "Function"
               )
             , ( "Imported function 2"
               , "bar"
-              , Known "C.hs" 22 "Function"
+              , Known "C.hs" 17 "Function"
               )
             , ( "Imported function 3"
               , "baz"
-              , Known "C.hs" 25 "Function"
+              , Known "C.hs" 20 "Function"
               )
             ]
 
@@ -780,27 +775,27 @@ testData = GroupTest "server tests"
           group "E without export list imports F with import list"
             [ ( "Local function 1"
               , "foo"
-              , Known "E.hs" 19 "Function"
+              , Known "E.hs" 14 "Function"
               )
             , ( "Local function 2"
               , "bar"
-              , Known "E.hs" 22 "Function"
+              , Known "E.hs" 17 "Function"
               )
             , ( "Local function 3"
               , "baz"
-              , Known "E.hs" 25 "Function"
+              , Known "E.hs" 20 "Function"
               )
              , ( "Imported visible type 1"
               , "FooTyp"
-              , Known "F.hs" 19 "Type"
+              , Known "F.hs" 14 "Type"
               )
             , ( "Imported visible constructor"
               , "Foo"
-              , Known "F.hs" 19 "Constructor"
+              , Known "F.hs" 14 "Constructor"
               )
             , ( "Imported visible type 2"
               , "BarTyp"
-              , Known "F.hs" 21 "Type"
+              , Known "F.hs" 16 "Type"
               )
             , ( "Imported hidden constructor"
               , "Bar"
@@ -819,39 +814,39 @@ testData = GroupTest "server tests"
           group "F imports E without import list"
             [ ( "Local type 1"
               , "FooTyp"
-              , Known "F.hs" 19 "Type"
+              , Known "F.hs" 14 "Type"
               )
             , ( "Local constructor 1"
               , "Foo"
-              , Known "F.hs" 19 "Constructor"
+              , Known "F.hs" 14 "Constructor"
               )
             , ( "Local type 2"
               , "BarTyp"
-              , Known "F.hs" 21 "Type"
+              , Known "F.hs" 16 "Type"
               )
             , ( "Local constructor 2"
               , "Bar"
-              , Known "F.hs" 21 "Constructor"
+              , Known "F.hs" 16 "Constructor"
               )
             , ( "Local type 3"
               , "BazTyp"
-              , Known "F.hs" 23 "Type"
+              , Known "F.hs" 18 "Type"
               )
             , ( "Local constructor 3"
               , "Baz"
-              , Known "F.hs" 23 "Constructor"
+              , Known "F.hs" 18 "Constructor"
               )
             , ( "Imported function 1"
               , "foo"
-              , Known "E.hs" 19 "Function"
+              , Known "E.hs" 14 "Function"
               )
             , ( "Imported function 2"
               , "bar"
-              , Known "E.hs" 22 "Function"
+              , Known "E.hs" 17 "Function"
               )
             , ( "Imported function 3"
               , "baz"
-              , Known "E.hs" 25 "Function"
+              , Known "E.hs" 20 "Function"
               )
             ]
 
@@ -859,31 +854,31 @@ testData = GroupTest "server tests"
           group "G without export list imports H with import list"
             [ ( "Local function 1"
               , "foo"
-              , Known "G.hs" 19 "Function"
+              , Known "G.hs" 14 "Function"
               )
             , ( "Local function 2"
               , "bar"
-              , Known "G.hs" 22 "Function"
+              , Known "G.hs" 17 "Function"
               )
             , ( "Local function 3"
               , "baz"
-              , Known "G.hs" 25 "Function"
+              , Known "G.hs" 20 "Function"
               )
              , ( "Imported visible type 1"
               , "FooTyp"
-              , Known "H.hs" 19 "Type"
+              , Known "H.hs" 14 "Type"
               )
             , ( "Imported visible constructor 1"
               , "Foo"
-              , Known "H.hs" 19 "Constructor"
+              , Known "H.hs" 14 "Constructor"
               )
             , ( "Imported visible type 2"
               , "BarTyp"
-              , Known "H.hs" 21 "Type"
+              , Known "H.hs" 16 "Type"
               )
             , ( "Imported visible constructor 2"
               , "Bar"
-              , Known "H.hs" 21 "Constructor"
+              , Known "H.hs" 16 "Constructor"
               )
             , ( "Non-imported type"
               , "BazTyp"
@@ -898,35 +893,35 @@ testData = GroupTest "server tests"
           group "H imports G with import list"
             [ ( "Local type 1"
               , "FooTyp"
-              , Known "H.hs" 19 "Type"
+              , Known "H.hs" 14 "Type"
               )
             , ( "Local constructor 1"
               , "Foo"
-              , Known "H.hs" 19 "Constructor"
+              , Known "H.hs" 14 "Constructor"
               )
             , ( "Local type 2"
               , "BarTyp"
-              , Known "H.hs" 21 "Type"
+              , Known "H.hs" 16 "Type"
               )
             , ( "Local constructor 2"
               , "Bar"
-              , Known "H.hs" 21 "Constructor"
+              , Known "H.hs" 16 "Constructor"
               )
             , ( "Local type 3"
               , "BazTyp"
-              , Known "H.hs" 23 "Type"
+              , Known "H.hs" 18 "Type"
               )
             , ( "Local constructor 3"
               , "Baz"
-              , Known "H.hs" 23 "Constructor"
+              , Known "H.hs" 18 "Constructor"
               )
             , ( "Imported function 1"
               , "foo"
-              , Known "G.hs" 19 "Function"
+              , Known "G.hs" 14 "Function"
               )
             , ( "Imported function 2"
               , "bar"
-              , Known "G.hs" 22 "Function"
+              , Known "G.hs" 17 "Function"
               )
             , ( "Not imported function"
               , "baz"
@@ -942,23 +937,23 @@ testData = GroupTest "server tests"
           )
         , ( "Import name exported via module that reexports itself"
           , "test"
-          , Known "ModuleWithModuleReexport.hs" 20 "Function"
+          , Known "ModuleWithModuleReexport.hs" 15 "Function"
           )
         , ( "Name imported through module with vanilla module reexport #1"
           , "foo"
-          , Known "Module1.hs" 17 "Function"
+          , Known "Module1.hs" 12 "Function"
           )
         , ( "Name imported through module with vanilla module reexport #2"
           , "bar"
-          , Known "Module1.hs" 21 "Function"
+          , Known "Module1.hs" 16 "Function"
           )
         , ( "Name imported through module reexporting with alias #1"
           , "foo2"
-          , Known "Module2.hs" 18 "Function"
+          , Known "Module2.hs" 13 "Function"
           )
         , ( "Name imported through module reexporting with alias #2"
           , "bar2"
-          , Known "Module2.hs" 23 "Function"
+          , Known "Module2.hs" 18 "Function"
           )
         , ( "Private non-exported name"
           , "baz2"
