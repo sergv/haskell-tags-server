@@ -1054,7 +1054,7 @@ mkFindSymbolTest getConn ServerTest{stTestName, stWorkingDirectory, stFile, stSy
       Left err  ->
         assertFailure $ displayDocString $ ppShow err <> PP.line <> logs
       Right res -> do
-        actual <- relativizeFilepaths res
+        actual <- relativizePathsInResponse res
         let msg = docFromString $ "expected: " ++ show expected ++ "\n but got: " ++ show actual
         if responseType actual == responseType expected
         then
@@ -1078,8 +1078,8 @@ extractResponseError :: Term -> Maybe UTF8.ByteString
 extractResponseError (TupleTerm [AtomTerm "error", BinaryTerm msg]) = Just msg
 extractResponseError _                                              = Nothing
 
-relativizeFilepaths :: forall m. MonadBase IO m => Term -> m Term
-relativizeFilepaths term =
+relativizePathsInResponse :: forall m. MonadBase IO m => Term -> m Term
+relativizePathsInResponse term =
   case term of
     TupleTerm [a@(AtomTerm "loc_known"), loc] -> do
       loc' <- fixLoc loc
