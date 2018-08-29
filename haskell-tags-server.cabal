@@ -92,6 +92,7 @@ library
     Haskell.Language.Server.Tags.AnalyzeHeader
     Haskell.Language.Server.Tags.Types
   other-modules:
+    Control.Monad.EitherCPS
     Haskell.Language.Server.Tags.LoadModule
     Haskell.Language.Server.Tags.LoadFiles
     Haskell.Language.Server.Tags.Search

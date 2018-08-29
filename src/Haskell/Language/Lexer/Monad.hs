@@ -22,7 +22,7 @@ module Haskell.Language.Lexer.Monad
   ) where
 
 import Control.Applicative
-import Control.Monad.EitherK
+import Control.Monad.EitherCPS
 import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
@@ -34,7 +34,7 @@ import Haskell.Language.Lexer.Input
 import Haskell.Language.Lexer.State
 import Haskell.Language.Lexer.Types
 
-newtype AlexT m a = AlexT (EitherKT ErrorMessage (ReaderT AlexEnv (StateT AlexState m)) a)
+newtype AlexT m a = AlexT (EitherCPST ErrorMessage (ReaderT AlexEnv (StateT AlexState m)) a)
   deriving
     ( Functor
     , Applicative
@@ -57,7 +57,7 @@ runAlexT
 runAlexT filename mode code toplevelCode input (AlexT action) =
   flip evalStateT s $
   flip runReaderT env $
-  runEitherKT action (pure . Left) (pure . Right)
+  runEitherCPST action (pure . Left) (pure . Right)
   where
     s :: AlexState
     s   = mkAlexState (mkAlexInput input) code toplevelCode

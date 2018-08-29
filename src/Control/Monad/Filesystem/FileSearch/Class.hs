@@ -21,12 +21,12 @@ module Control.Monad.Filesystem.FileSearch.Class
   , findEntryFullPath
   ) where
 
+import Control.Monad.EitherCPS
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer
 
-import Control.Monad.EitherK
 import Data.Path
 
 data FindEntry = FindEntry
@@ -70,7 +70,7 @@ instance (MonadFileSearch m, Monoid w) => MonadFileSearch (WriterT w m) where
   findByPathSuffixSansExtension = lift . findByPathSuffixSansExtension
   findRec                       = lift . findRec
 
-instance MonadFileSearch m => MonadFileSearch (EitherKT e m) where
+instance MonadFileSearch m => MonadFileSearch (EitherCPST e m) where
   {-# INLINE findByPathSuffixSansExtension #-}
   {-# INLINE findRec                       #-}
   findByPathSuffixSansExtension = lift . findByPathSuffixSansExtension
