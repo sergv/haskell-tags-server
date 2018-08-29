@@ -121,11 +121,11 @@ mkQualUnqualTest (name, unqualSym, qualSym, response) =
         ]
 
 withDir
-  :: Directory            -- ^ Working directory under testDataDir
+  :: Directory           -- ^ Working directory under testDataDir
   -> TestSet
        ( String          -- ^ Test name
        , BaseName        -- ^ Filepath within the working directory
-       , UTF8.ByteString -- ^ Symbol to seacrh for
+       , UTF8.ByteString -- ^ Symbol to search for
        , BertResponse    -- ^ Expected response
        )
   -> TestSet ServerTest
@@ -142,13 +142,13 @@ withFile
   :: a                   -- ^ Filepath within the working directory
   -> TestSet
        ( String          -- ^ Test name
-       , UTF8.ByteString -- ^ Symbol to seacrh for
+       , UTF8.ByteString -- ^ Symbol to search for
        , BertResponse    -- ^ Expected response
        )
   -> TestSet
        ( String          -- ^ Test name
        , a               -- ^ Filepath within the working directory
-       , UTF8.ByteString -- ^ Symbol to seacrh for
+       , UTF8.ByteString -- ^ Symbol to search for
        , BertResponse    -- ^ Expected response
        )
 withFile file =
@@ -159,7 +159,7 @@ withDirAndFile
   -> BaseName            -- ^ Filepath within the working directory
   -> TestSet
        ( String          -- ^ Test name
-       , UTF8.ByteString -- ^ Symbol to seacrh for
+       , UTF8.ByteString -- ^ Symbol to search for
        , BertResponse    -- ^ Expected response
        )
   -> TestSet ServerTest
