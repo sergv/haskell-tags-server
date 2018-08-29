@@ -120,7 +120,7 @@ mkQualUnqualTest (name, unqualSym, qualSym, response) =
         , AtomicTest ("qualified", qualSym', response)
         ]
 
-withDir
+withWorkingDir
   :: Directory           -- ^ Working directory under testDataDir
   -> TestSet
        ( String          -- ^ Test name
@@ -129,7 +129,7 @@ withDir
        , BertResponse    -- ^ Expected response
        )
   -> TestSet ServerTest
-withDir dir =
+withWorkingDir dir =
   fmap $ \(name, file, sym, response) -> ServerTest
     { stTestName         = name
     , stWorkingDirectory = dir
@@ -164,7 +164,7 @@ withDirAndFile
        )
   -> TestSet ServerTest
 withDirAndFile dir file =
-  withDir dir . fmap (\(name, sym, response) -> (name, file, sym, response))
+  withWorkingDir dir . fmap (\(name, sym, response) -> (name, file, sym, response))
 
 testData :: TestSet ServerTest
 testData = GroupTest "server tests"
@@ -499,7 +499,7 @@ testData = GroupTest "server tests"
           , NotFound
           )
         ]
-  , withDir (Directory "0005import_cycle") $
+  , withWorkingDir (Directory "0005import_cycle") $
       GroupTest "import cycle"
         [ GroupTest "wildcard export lists"
             [ withFile "A.hs" $
@@ -582,7 +582,7 @@ testData = GroupTest "server tests"
                   ]
             ]
         ]
-  , withDir (Directory "0006export_pattern_with_type_ghc8.0") $
+  , withWorkingDir (Directory "0006export_pattern_with_type_ghc8.0") $
       GroupTest "export pattern along with type"
         [ withFile file $
             group groupName
@@ -617,7 +617,7 @@ testData = GroupTest "server tests"
             , ("ModuleWithSpecificImportList.hs", "import with specific import list")
             ]
         ]
-  , withDir (Directory "0007resolvable_import_cycle") $
+  , withWorkingDir (Directory "0007resolvable_import_cycle") $
       GroupTest "Resolvable import cycle"
         [ withFile "A.hs" $
           group "A imports B with import list"
