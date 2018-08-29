@@ -28,10 +28,10 @@ import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Prettyprint.Doc as PP
+import Data.Text.Prettyprint.Doc.Ext
 import Test.Tasty
 import Test.Tasty.HUnit
-import qualified Text.PrettyPrint.Leijen.Text as PP
 
 import Haskell.Language.Lexer (tokenize)
 import Haskell.Language.Lexer.FastTags (Token)
@@ -43,7 +43,6 @@ import qualified Data.SubkeyMap as SubkeyMap
 import Data.Symbols
 import Haskell.Language.Server.Tags.AnalyzeHeader
 import Haskell.Language.Server.Tags.Types
-import Text.PrettyPrint.Leijen.Text.Ext
 
 import TestUtils
 import Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions
@@ -1850,15 +1849,15 @@ doTest :: HasCallStack => Test -> TestTree
 doTest TestCase{testName, input, expectedResult} =
   testCase testName $ do
     let (res, logs) = runWriter $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runExceptT $ analyzeHeader =<< tokens
-        logsDoc     = "Logs, size " <> pretty (length logs) <> ":" PP.<$> PP.indent 2 (PP.vcat logs)
+        logsDoc     = "Logs, size " <> pretty (length logs) <> ":" <> PP.line <> PP.indent 2 (PP.vcat logs)
     case res of
-      Left msg               -> assertFailure $ displayDocString $ pretty msg PP.<$> logsDoc
+      Left msg               -> assertFailure $ displayDocString $ pretty msg <> PP.line <> logsDoc
       Right (Nothing, _)     -> assertFailure $ displayDocString $
-        "No header detected, but was expecting header" PP.<$> pretty expectedResult PP.<$> logsDoc
+        "No header detected, but was expecting header" <> PP.line <> pretty expectedResult <> PP.line <> logsDoc
       Right (Just header, _) -> do
-        let msg = ppDict "Headers are different" $
-              ("Input" :-> PP.dquotes (PP.text $ TL.fromStrict input)) :
-              [ name :-> ppAlist ["Actual" :-> x, "Expected" :-> y]
+        let msg = ppDictHeader "Headers are different" $
+              ("Input" :-> PP.dquotes (pretty input)) :
+              [ name :-> ppDictAssocList ["Actual" :-> x, "Expected" :-> y]
               | (name, different, x, y) <-
                 [ ( "ModuleName"
                   , mhModName header /= mhModName expectedResult
@@ -1872,19 +1871,19 @@ doTest TestCase{testName, input, expectedResult} =
                   )
                 , ( "ImportQualifiers"
                   , mhImportQualifiers header /= mhImportQualifiers expectedResult
-                  , ppMap $ ppNE <$> mhImportQualifiers header
-                  , ppMap $ ppNE <$> mhImportQualifiers expectedResult
+                  , ppMapWith pretty ppNE $ mhImportQualifiers header
+                  , ppMapWith pretty ppNE $ mhImportQualifiers expectedResult
                   )
                 , ( "Imports"
                   , mhImports header /= mhImports expectedResult
-                  , ppSubkeyMap $ ppNE <$> mhImports header
-                  , ppSubkeyMap $ ppNE <$> mhImports expectedResult
+                  , ppSubkeyMapWith pretty pretty ppNE $ mhImports header
+                  , ppSubkeyMapWith pretty pretty ppNE $ mhImports expectedResult
                   )
                 ]
               , different
               ]
         unless (header == expectedResult) $
-          assertFailure $ displayDocString $ msg PP.<$> logsDoc
+          assertFailure $ displayDocString $ msg <> PP.line <> logsDoc
   where
     tokens :: forall m. MonadError ErrorMessage m => m [Token]
     tokens = either throwError pure $ tokenize "test.hs" input

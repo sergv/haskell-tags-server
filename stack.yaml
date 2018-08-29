@@ -1,15 +1,13 @@
-# For more information, see: http://docs.haskellstack.org/en/stable/yaml_configuration.html
+resolver: lts-12.5
 
-# Specifies the GHC version and set of packages available (e.g., lts-3.5, nightly-2015-09-21, ghc-7.10.2)
-resolver: lts-9.0
-
-# Local packages, usually specified by relative directory name
 packages:
-- '.'
-- location: "/home/sergey/projects/haskell/projects/dev-tools/fast-tags/"
-  extra-dep: true
-- location: "/home/sergey/projects/haskell/projects/thirdparty/bert/"
-  extra-dep: true
+  - '.'
+
+extra-deps:
+  - "/home/sergey/projects/haskell/projects/dev-tools/fast-tags/"
+  - "/home/sergey/projects/haskell/projects/thirdparty/bert/"
+
+  - "/home/sergey/projects/haskell/projects/prettyprinter-combinators/"
 
 # # Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
 # extra-deps:

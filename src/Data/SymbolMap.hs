@@ -44,7 +44,7 @@ import qualified Data.Set as S
 import Prelude hiding (lookup)
 
 import Data.Symbols
-import Text.PrettyPrint.Leijen.Text.Ext
+import Data.Text.Prettyprint.Doc.Ext
 
 data SymbolMap = SymbolMap
   { -- | Map from children entities to parents containing them. E.g.
@@ -74,10 +74,10 @@ instance Monoid SymbolMap where
   mappend = (<>)
 
 instance Pretty SymbolMap where
-  pretty SymbolMap{smParentMap, smChildrenMap, smAllSymbols} = ppDict "SymbolMap"
-    [ "ParentMap"   :-> ppMap (ppSet <$> smParentMap)
-    , "ChildrenMap" :-> ppMap (ppSet <$> smChildrenMap)
-    , "AllSymbols"  :-> ppMap (ppNE <$> smAllSymbols)
+  pretty SymbolMap{smParentMap, smChildrenMap, smAllSymbols} = ppDictHeader "SymbolMap"
+    [ "ParentMap"   :-> ppMapWith pretty ppSet smParentMap
+    , "ChildrenMap" :-> ppMapWith pretty ppSet smChildrenMap
+    , "AllSymbols"  :-> ppMapWith pretty ppNE  smAllSymbols
     ]
 
 insert :: ResolvedSymbol -> SymbolMap -> SymbolMap

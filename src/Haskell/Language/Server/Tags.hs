@@ -37,8 +37,8 @@ import Control.Monad.Except.Ext
 import Control.Monad.Trans.Control
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup
-import Text.PrettyPrint.Leijen.Text ((<+>), pretty)
-import qualified Text.PrettyPrint.Leijen.Text as PP
+import Data.Text.Prettyprint.Doc as PP
+import Data.Text.Prettyprint.Doc.Ext ((<+>), pretty)
 
 import Data.Promise (Promise)
 import qualified Data.Promise as Promise
@@ -101,17 +101,17 @@ startTagsServer conf state = do
       -> Chan (Request, Promise (Either ErrorMessage Response))
       -> TagsServerState
       -> m ()
-    handleRequests lock reqChan state = do
-      state' <- handleReq reqChan state `onException` liftBase (putMVar lock state)
+    handleRequests lock reqChan serverState = do
+      state' <- handleReq reqChan serverState `onException` liftBase (putMVar lock serverState)
       handleRequests lock reqChan state'
     handleReq
       :: Chan (Request, Promise (Either ErrorMessage Response))
       -> TagsServerState
       -> m TagsServerState
-    handleReq reqChan state = do
+    handleReq reqChan serverState = do
       (request, responsePromise) <- liftBase $ readChan reqChan
       logDebug $ "[startTagsServer.handleReq] got request:" <+> pretty request
-      (response, state') <- runSearchT conf state $
+      (response, state') <- runSearchT conf serverState $
         case request of
           FindSymbol filename symbol -> do
             ensureFileExists filename

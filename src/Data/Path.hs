@@ -58,17 +58,17 @@ import Control.Monad.Base
 import Data.Coerce
 import Data.Function
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Semigroup
+import Data.Semigroup as Semigroup
 import Data.Semigroup.Foldable.Class (foldMap1)
 import Data.String
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Text.Prettyprint.Doc.Ext (Pretty(..))
 import Data.Time.Clock (UTCTime)
 import qualified System.Directory as Directory
 import qualified System.FilePath as FilePath
-import Text.PrettyPrint.Leijen.Text.Ext (Pretty(..))
 
--- | Absolute path, canonicalized and normalized. Provides strictest invariants
+-- | Absolute path, canonicalised and normalised. Provides strictest invariants
 -- but must be created in derivatives of IO monad.
 -- Invariant: does not end with \/.
 newtype FullPath = FullPath { unFullPath :: Text }
@@ -82,29 +82,35 @@ instance MonadBase IO m => MkFullPath FilePath.FilePath m where
     liftBase $
     FullPath . T.pack . FilePath.dropTrailingPathSeparator . FilePath.normalise <$> Directory.canonicalizePath path
 
-instance MkFullPath FilePath.FilePath m => MkFullPath Text m where
+-- MkFullPath FilePath.FilePath m
+instance MonadBase IO m => MkFullPath Text m where
   {-# INLINABLE mkFullPath #-}
   mkFullPath = mkFullPath . T.unpack
 
-instance MkFullPath Text m => MkFullPath PathFragment m where
+ -- MkFullPath Text m =>
+instance MonadBase IO m => MkFullPath PathFragment m where
   {-# INLINABLE mkFullPath #-}
   mkFullPath = mkFullPath . unPathFragment
 
 doesFileExist :: MonadBase IO m => FullPath -> m Bool
-doesFileExist = liftBase . Directory.doesFileExist . T.unpack . unFullPath
+doesFileExist =
+  liftBase . Directory.doesFileExist . T.unpack . unFullPath
 
 doesDirectoryExist :: MonadBase IO m => FullPath -> m Bool
-doesDirectoryExist = liftBase . Directory.doesDirectoryExist . T.unpack . unFullPath
+doesDirectoryExist =
+  liftBase . Directory.doesDirectoryExist . T.unpack . unFullPath
 
 getDirectoryContents :: MonadBase IO m => FullPath -> m [BasePath]
 getDirectoryContents (FullPath path) = liftBase $
   map mkBasePath <$> Directory.getDirectoryContents (T.unpack path)
 
 getModificationTime :: MonadBase IO m => FullPath -> m UTCTime
-getModificationTime = liftBase . Directory.getModificationTime . T.unpack . unFullPath
+getModificationTime =
+  liftBase . Directory.getModificationTime . T.unpack . unFullPath
 
 splitDirectories :: FullPath -> [PathFragment]
-splitDirectories = map (PathFragment . T.pack) . FilePath.splitDirectories . T.unpack . unFullPath
+splitDirectories =
+  map (PathFragment . T.pack) . FilePath.splitDirectories . T.unpack . unFullPath
 
 -- | Path fragment, possibly with some directories but without etxension.
 -- Invariant: does not start with \/, does not end with \/.
@@ -245,7 +251,7 @@ joinPath :: Text -> Text -> Text
 joinPath x y = x <> T.singleton FilePath.pathSeparator <> y
 
 addExt :: Text -> Text -> Text
-addExt path ext = path <> T.singleton FilePath.extSeparator <> ext
+addExt path ext = path <> T.singleton FilePath.extSeparator Semigroup.<> ext
 
 dropExt :: Text -> Text
 dropExt = T.pack . FilePath.dropExtension . T.unpack

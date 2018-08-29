@@ -21,12 +21,13 @@ import Test.Tasty.HUnit (testCase)
 
 import Control.Arrow (left)
 import Data.Text (Text)
+import qualified Data.Text.Prettyprint.Doc.Ext as PP
 
 import Data.ErrorMessage
 import Data.Symbols.MacroName (mkMacroName)
 import Haskell.Language.Lexer.Preprocessor
 import TestUtils
-import qualified Text.PrettyPrint.Leijen.Text.Ext as PP
+
 
 tests :: TestTree
 tests = testGroup "Preprocessor parsing tests"

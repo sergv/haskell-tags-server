@@ -12,9 +12,10 @@
 --
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE NamedFieldPuns    #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Data.CompiledRegex
   ( CompiledRegex
@@ -25,9 +26,8 @@ module Data.CompiledRegex
 
 import Control.Monad.Except.Ext
 import Data.Function (on)
-import qualified Data.Text.Lazy as TL
-import qualified Text.PrettyPrint.Leijen.Text as PP
-import Text.PrettyPrint.Leijen.Text.Ext ((<+>))
+import Data.Text.Prettyprint.Doc
+import Data.Text.Prettyprint.Doc.Show
 import Text.Regex.TDFA
 
 import Data.ErrorMessage
@@ -37,6 +37,9 @@ data CompiledRegex = CompiledRegex
   { source :: String
   , regex  :: Regex
   }
+
+instance Pretty CompiledRegex where
+  pretty = ppShow
 
 instance Show CompiledRegex where
   show CompiledRegex{source} = "CompiledRegex " ++ show source
@@ -52,8 +55,8 @@ compileRegex
   => Bool -> String -> m CompiledRegex
 compileRegex captureGroups src =
   case makeRegexOptsM compOpt execOpt src of
-    Left err -> throwErrorWithCallStack $
-      "Invalid regexp. Error:" <+> PP.text (TL.pack err)
+    Left (err :: String) -> throwErrorWithCallStack $
+      "Invalid regexp. Error:" <+> pretty err
     Right re -> pure CompiledRegex
       { source = src
       , regex  = re

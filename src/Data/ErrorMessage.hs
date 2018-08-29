@@ -18,20 +18,21 @@
 module Data.ErrorMessage (ErrorMessage(..)) where
 
 import Data.String
+import Data.Text.Prettyprint.Doc.Ext (Pretty(..), Doc)
+import qualified Data.Text.Prettyprint.Doc as PP
+import qualified Data.Text.Prettyprint.Doc.Ext as PP
+import Data.Void (Void, vacuous)
 import GHC.Stack
-import qualified Text.PrettyPrint.Leijen.Text as PP
-import Text.PrettyPrint.Leijen.Text.Ext (Pretty(..), Doc)
-import qualified Text.PrettyPrint.Leijen.Text.Ext as PP
 
 data ErrorMessage = ErrorMessage
-  { errorMessageBody      :: Doc
+  { errorMessageBody      :: Doc Void
   , errorMessageBacktrace :: CallStack
   }
 
 instance Pretty ErrorMessage where
   pretty ErrorMessage{errorMessageBody, errorMessageBacktrace} =
-    errorMessageBody PP.<$>
-    PP.nest 2 ("Backtrace:" PP.<$> PP.ppCallStack errorMessageBacktrace)
+    vacuous errorMessageBody <> PP.line <>
+    PP.nest 2 ("Backtrace:" <> PP.line <> PP.ppCallStack errorMessageBacktrace)
 
 instance IsString ErrorMessage where
   fromString msg = ErrorMessage

@@ -21,8 +21,8 @@ import Control.Applicative
 import Control.Monad
 import Control.Monad.Except
 import Data.Foldable (for_)
-import Data.Monoid
 import qualified Data.Set as S
+import Data.Text.Prettyprint.Doc.Ext
 import Network.Socket (PortNumber)
 import Options.Applicative
 import System.Directory
@@ -35,7 +35,6 @@ import Control.Monad.Logging.Simple
 import Data.Path (mkFullPath)
 import Haskell.Language.Server.BERT
 import Haskell.Language.Server.Tags
-import Text.PrettyPrint.Leijen.Text.Ext
 
 data ProgramConfig = ProgramConfig
   { cfgSourceDirectories :: [FilePath] -- ^ Directories with haskell files to index
@@ -108,12 +107,12 @@ main = do
                 , tssLoadsInProgress = mempty
                 }
   runSimpleLoggerT (Just Stderr) cfgDebugVerbosity $ do
-    logDebug $ ppDict "Staring server with search cfg"
+    logDebug $ ppDictHeader "Staring server with search cfg"
       [ "Search conf" :-> pretty (tsconfSearchDirs conf)
       ]
     result <- runExceptT $ startTagsServer conf state
     case result of
-      Left err         -> putDocLn $ pretty err
+      Left err         -> liftIO $ putDocLn $ pretty err
       Right tagsServer -> do
         bertServer <- runBertServer cfgPort $ tsRequestHandler tagsServer
         waitForBertServerStart bertServer

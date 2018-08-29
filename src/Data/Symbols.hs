@@ -43,24 +43,18 @@ import Control.Applicative
 import Data.Attoparsec.Text
 import qualified Data.Attoparsec.Text as Attoparsec
 import Data.Char (isUpper)
-import Data.Monoid
 import Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
-import qualified Text.PrettyPrint.Leijen.Text as PP
+import Data.Text.Prettyprint.Doc.Ext
 
 import Haskell.Language.Lexer.FastTags (Pos(..), TagVal(..), Type(..), SrcPos(..), Line(..))
 
 import Data.KeyMap (HasKey(..))
-import Text.PrettyPrint.Leijen.Text.Ext
 
 -- | e.g. Foo, Foo.Bar. Assume that this is not an import qualifier.
 -- Import qualifiers should be labeled as 'ImportQualifer'.
 newtype ModuleName = ModuleName { getModuleName :: Text }
-  deriving (Eq, Ord, Show)
-
-instance Pretty ModuleName where
-  pretty = PP.text . TL.fromStrict . getModuleName
+  deriving (Eq, Ord, Show, Pretty)
 
 mkModuleName :: Text -> ModuleName
 mkModuleName = ModuleName
@@ -78,10 +72,7 @@ mkImportQualifier = ImportQualifier
 
 -- | Name the @ResolvedSymbol@ refers to. Can be either qualified or unqualified.
 newtype SymbolName = SymbolName { getSymbolName :: Text }
-  deriving (Eq, Ord, Show)
-
-instance Pretty SymbolName where
-  pretty = PP.text . TL.fromStrict . getSymbolName
+  deriving (Eq, Ord, Show, Pretty)
 
 mkSymbolName :: Text -> SymbolName
 mkSymbolName = SymbolName
@@ -137,7 +128,7 @@ instance HasKey ResolvedSymbol where
 
 instance Pretty ResolvedSymbol where
   pretty sym@(ResolvedSymbol _) =
-    ppDict "ResolvedSymbol" $
+    ppDictHeader "ResolvedSymbol" $
       [ "name"     :-> pretty (resolvedSymbolName sym)
       , "type"     :-> ppType (resolvedSymbolType sym)
       ] ++
@@ -147,11 +138,12 @@ instance Pretty ResolvedSymbol where
       [ "position" :-> ppSrcPos (resolvedSymbolPosition sym)
       ]
     where
-      ppType :: Type -> Doc
-      ppType = showDoc
+      ppType :: Type -> Doc ann
+      ppType = ppShow
 
-      ppSrcPos :: SrcPos -> Doc
-      ppSrcPos (SrcPos file line _) = docFromString file <> ":" <> pretty (unLine line)
+      ppSrcPos :: SrcPos -> Doc ann
+      ppSrcPos (SrcPos file line _) =
+        docFromString file <> ":" <> pretty (unLine line)
 
 mkResolvedSymbol :: Pos TagVal -> ResolvedSymbol
 mkResolvedSymbol = ResolvedSymbol
@@ -169,4 +161,3 @@ resolvedSymbolParent (ResolvedSymbol (Pos _ (TagVal _ _ parent))) =
 
 resolvedSymbolPosition :: ResolvedSymbol -> SrcPos
 resolvedSymbolPosition (ResolvedSymbol (Pos pos _)) = pos
-

@@ -42,6 +42,8 @@ import Data.Semigroup
 import Data.Set (Set)
 import Prelude hiding (lookup, null)
 
+import Data.Text.Prettyprint.Doc.Combinators
+
 -- | Map than maintains sets of values that all share some key.
 -- Every value must be a member of 'HasKey' typeclass.
 newtype KeyMap a = KeyMap { unKeyMap :: M.Map (Key a) (NonEmpty a) }
@@ -49,6 +51,9 @@ newtype KeyMap a = KeyMap { unKeyMap :: M.Map (Key a) (NonEmpty a) }
 deriving instance (Eq a, Eq (Key a))     => Eq (KeyMap a)
 deriving instance (Ord a, Ord (Key a))   => Ord (KeyMap a)
 deriving instance (Show a, Show (Key a)) => Show (KeyMap a)
+
+instance (Pretty (Key a), Pretty a) => Pretty (KeyMap a) where
+  pretty = ppAssocList . M.toList . unKeyMap
 
 instance Ord (Key a) => Semigroup (KeyMap a) where
   KeyMap m <> KeyMap m' = KeyMap $ M.unionWith (<>) m m'

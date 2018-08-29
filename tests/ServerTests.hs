@@ -32,10 +32,11 @@ import qualified Data.ByteString.Lazy.UTF8 as UTF8
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Prettyprint.Doc as PP
+import Data.Text.Prettyprint.Doc.Ext
 import Network.Socket (PortNumber)
 import Test.Tasty
 import Test.Tasty.HUnit
-import qualified Text.PrettyPrint.Leijen.Text as PP
 
 import Data.BERT
 import Network.BERT.Client
@@ -46,7 +47,6 @@ import Data.Path
 import Haskell.Language.Server.BERT
 import Haskell.Language.Server.Tags
 import PortPool
-import Text.PrettyPrint.Leijen.Text.Ext
 
 import ServerTests.LogCollectingServer
 
@@ -1008,7 +1008,7 @@ reportErr = throwIO . ErrorCall
 
 connect :: IO PortPool -> PathFragment -> Set FullPath -> IO ServerConnection
 connect pool sourceDir dirTree =
-  -- Try to connect to server. If attempt succeeds then server is running
+  -- Try to connect to a server. If attempt succeeds then server is running
   -- and there's no need to run server ourselves.
   tryConnect defaultPort >>= either (const startLocalServer) (pure . ExistingServer)
   where
@@ -1020,7 +1020,7 @@ connect pool sourceDir dirTree =
         serv <- runExceptT $ mkLogCollectingServer conf port
         case serv of
           Left err -> throwIO $ ErrorCall $ displayDocString $
-            "Failed to start local server:" PP.<$> pretty err
+            "Failed to start local server:" <> PP.line <> pretty err
           Right serv' -> do
             waitUntilStart serv'
             conn <- tryConnect port
@@ -1049,25 +1049,24 @@ mkFindSymbolTest getConn ServerTest{stTestName, stWorkingDirectory, stFile, stSy
               ExistingServer _   -> pure mempty
               LocalServer serv _ -> do
                 logs <- getLogs serv
-                pure $ "Logs:" PP.<$> PP.indent 2 (PP.vcat logs)
+                pure $ "Logs:" <> PP.line <> PP.indent 2 (PP.vcat logs)
     case r of
       Left err  ->
-        assertFailure $ displayDocString $ showDoc err PP.<$> logs
+        assertFailure $ displayDocString $ ppShow err <> PP.line <> logs
       Right res -> do
         actual <- relativizeFilepaths res
         let msg = docFromString $ "expected: " ++ show expected ++ "\n but got: " ++ show actual
         if responseType actual == responseType expected
         then
           unless (actual == expected) $
-            assertFailure $ displayDocString $ msg PP.<$> showDoc logs
+            assertFailure $ displayDocString $ msg <> PP.line <> ppShow logs
         else
-          assertFailure $
+          assertFailure $ displayDocString $
             case extractResponseError actual of
               Nothing  ->
-                displayDocString $ msg PP.<$> logs
+                msg <> PP.line <> logs
               Just msg ->
-                displayDocString $
-                  "Error from server:" PP.<$> PP.nest 2 (docFromByteString msg) PP.<$> logs
+                "Error from server:" <> PP.line <> PP.nest 2 (docFromByteString msg) <> PP.line <> logs
         where
           expected = responseToTerm stExpectedResponse
 

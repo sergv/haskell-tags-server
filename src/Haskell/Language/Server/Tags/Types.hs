@@ -13,6 +13,7 @@
 
 {-# LANGUAGE DeriveFoldable    #-}
 {-# LANGUAGE DeriveFunctor     #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE LambdaCase        #-}
@@ -62,16 +63,16 @@ module Haskell.Language.Server.Tags.Types
 
 import Control.Monad.Except.Ext
 import Data.Char
-import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
+import Data.Text.Prettyprint.Doc.Ext
 import Data.Time.Clock (UTCTime(..))
 import Data.Traversable (for)
-import Text.PrettyPrint.Leijen.Text.Ext
+import GHC.Generics (Generic)
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
@@ -94,18 +95,18 @@ data Request =
     -- | Request to find all names that match a gived regexp, starting with module
     -- identified by file path.
   | FindSymbolByRegexp FullPath CompiledRegex
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 instance Pretty Request where
-  pretty = showDoc
+  pretty = ppGeneric
 
 data Response =
     Found (NonEmpty ResolvedSymbol)
   | NotFound SymbolName
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 instance Pretty Response where
-  pretty = showDoc
+  pretty = ppGeneric
 
 type RequestHandler = Request -> IO (Promise (Either ErrorMessage Response))
 
@@ -171,12 +172,12 @@ moduleNeedsReloading m = do
 
 instance Pretty a => Pretty (Module a) where
   pretty mod =
-    ppDict "Module"
-      [ "Name"          :-> pretty (mhModName (modHeader mod))
-      , "File"          :-> pretty (modFile mod)
-      , "Last modified" :-> showDoc (modLastModified mod)
-      , "Header"        :-> pretty (modHeader mod)
-      , "AllSymbols"    :-> pretty (modAllSymbols mod)
+    ppDictHeader "Module"
+      [ "Name"          --> mhModName $ modHeader mod
+      , "File"          --> modFile mod
+      , "Last modified" :-> ppShow $ modLastModified mod
+      , "Header"        --> modHeader mod
+      , "AllSymbols"    --> modAllSymbols mod
       ]
 
 -- | Handle for when particular module enters another module's scope.
@@ -186,14 +187,15 @@ data ImportKey = ImportKey
     ikImportTarget :: ImportTarget
     -- | Name of imported module
   , ikModuleName   :: ModuleName
-  } deriving (Eq, Ord, Show)
+  } deriving (Eq, Ord, Show, Generic)
 
 instance HasSubkey ImportKey where
   type Subkey ImportKey = ModuleName
   getSubkey = ikModuleName
 
 instance Pretty ImportKey where
-  pretty ik = "ImportKey" <+> pretty (ikImportTarget ik) <+> pretty (ikModuleName ik)
+  pretty ik =
+    "ImportKey" <+> pretty (ikImportTarget ik) <+> pretty (ikModuleName ik)
 
 data ModuleHeader a = ModuleHeader
   { mhModName          :: !ModuleName
@@ -213,16 +215,16 @@ type ResolvedModuleHeader   = ModuleHeader SymbolMap
 
 instance Pretty a => Pretty (ModuleHeader a) where
   pretty ModuleHeader{mhModName, mhExports, mhImportQualifiers, mhImports} =
-    ppDict "Module" $
+    ppDictHeader "Module" $
       [ "Name"             :-> pretty mhModName
       ] ++
       [ "Exports"          :-> pretty exports
       | Just exports <- [mhExports]
       ] ++
-      [ "ImportQualifiers" :-> ppMap (ppNE <$> mhImportQualifiers)
+      [ "ImportQualifiers" :-> ppMapWith pretty ppNE $ mhImportQualifiers
       | not $ M.null mhImportQualifiers
       ] ++
-      [ "Imports"          :-> ppSubkeyMap (ppNE <$> mhImports)
+      [ "Imports"          :-> ppSubkeyMapWith pretty pretty ppNE $ mhImports
       | not $ SubkeyMap.null mhImports
       ]
 
@@ -252,10 +254,10 @@ resolveQualifier qual ModuleHeader{mhImports, mhImportQualifiers} =
     qualifiedModName = getImportQualifier qual
 
 data ImportTarget = VanillaModule | HsBootModule
-  deriving (Eq, Ord, Show, Enum, Bounded)
+  deriving (Eq, Ord, Show, Enum, Bounded, Generic)
 
 instance Pretty ImportTarget where
-  pretty = showDoc
+  pretty = ppGeneric
 
 -- | Information about import statement
 data ImportSpec a = ImportSpec
@@ -269,11 +271,11 @@ type UnresolvedImportSpec = ImportSpec ()
 type ResolvedImportSpec   = ImportSpec SymbolMap
 
 instance Pretty a => Pretty (ImportSpec a) where
-  pretty spec = ppDict "ImportSpec" $
-    [ "ModuleName"    :-> pretty (ikModuleName $ ispecImportKey spec)
-    , "Qualification" :-> pretty (ispecQualification spec)
+  pretty spec = ppDictHeader "ImportSpec" $
+    [ "ModuleName"    --> ikModuleName $ ispecImportKey spec
+    , "Qualification" --> ispecQualification spec
     ] ++
-    [ "ImportList"    :-> pretty importList
+    [ "ImportList"    --> importList
     | Just importList <- [ispecImportList spec]
     ]
 
@@ -312,13 +314,10 @@ data ImportQualification =
     --
     -- import X as Y
   | BothQualifiedAndUnqualified ImportQualifier
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 instance Pretty ImportQualification where
-  pretty = \case
-    Qualified qual                   -> "Qualified" <+> pretty qual
-    Unqualified                      -> "Unqualified"
-    BothQualifiedAndUnqualified qual -> "BothQualifiedAndUnqualified" <+> pretty qual
+  pretty = ppGeneric
 
 hasQualifier :: ImportQualifier -> ImportQualification -> Bool
 hasQualifier qual = maybe False (== qual) . getQualifier
@@ -339,7 +338,10 @@ data ImportType =
     -- import Foo hiding (x, y(Bar), z)
     -- import Foo hiding ()
     Hidden
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
+
+instance Pretty ImportType where
+  pretty = ppGeneric
 
 -- | User-provided import/hiding list.
 data ImportList = ImportList
@@ -349,7 +351,7 @@ data ImportList = ImportList
 
 instance Pretty ImportList where
   pretty ImportList{ilImportType, ilEntries} =
-    ppFoldableWithHeader ("Import list[" <> showDoc ilImportType <> "]") $ toList ilEntries
+    ppFoldableHeader ("Import list[" <> pretty ilImportType <> "]") ilEntries
 
 data ModuleExports = ModuleExports
   { -- | Toplevel names exported from this particular module as specified in
@@ -359,15 +361,10 @@ data ModuleExports = ModuleExports
   , meReexports          :: Set ModuleName
     -- | Whether this module exports some entities that export all children.
   , meHasWildcardExports :: Bool
-  } deriving (Eq, Ord, Show)
+  } deriving (Eq, Ord, Show, Generic)
 
 instance Pretty ModuleExports where
-  pretty exports =
-    ppDict "ModuleExports"
-      [ "ExportedEntries"    :-> ppList (toList $ meExportedEntries exports)
-      , "Reexports"          :-> ppSet (meReexports exports)
-      , "HasWildcardExports" :-> pretty (meHasWildcardExports exports)
-      ]
+  pretty = ppGeneric
 
 instance Semigroup ModuleExports where
   (<>) (ModuleExports x y z) (ModuleExports x' y' z') =
@@ -380,19 +377,10 @@ instance Monoid ModuleExports where
 data EntryWithChildren name = EntryWithChildren
   { entryName               :: name
   , entryChildrenVisibility :: Maybe ChildrenVisibility
-  } deriving (Eq, Ord, Show)
+  } deriving (Eq, Ord, Show, Generic)
 
 instance Pretty name => Pretty (EntryWithChildren name) where
-  pretty = ppEntryWithChildren
-
-ppEntryWithChildren :: Pretty name => EntryWithChildren name -> Doc
-ppEntryWithChildren (EntryWithChildren name children) =
-  ppDict "EntryWithChildren" $
-    [ "Name"     :-> pretty name
-    ] ++
-    [ "Children" :-> pretty children'
-    | Just children' <- [children]
-    ]
+  pretty = ppGeneric
 
 mkEntryWithoutChildren :: a -> EntryWithChildren a
 mkEntryWithoutChildren name = EntryWithChildren name Nothing
@@ -411,12 +399,7 @@ data ChildrenVisibility =
     -- wildcard import, e.g.
     -- ErrorCall(..,ErrorCall)
   | VisibleAllChildrenPlusSome (Set UnqualifiedSymbolName)
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 instance Pretty ChildrenVisibility where
-  pretty = \case
-    VisibleAllChildren                  -> "VisibleAllChildren"
-    VisibleSpecificChildren children    ->
-      ppFoldableWithHeader "VisibleSpecificChildren" $ toList children
-    VisibleAllChildrenPlusSome children ->
-      ppFoldableWithHeader "VisibleAllChildrenPlusSome" $ toList children
+  pretty = ppGeneric

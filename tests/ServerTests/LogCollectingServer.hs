@@ -30,8 +30,9 @@ import Control.Monad.Catch
 import Control.Monad.Except.Ext
 import Control.Monad.Trans.Control
 import Data.Foldable (toList)
+import Data.Text.Prettyprint.Doc (Doc)
+import Data.Void (Void)
 import Network.Socket (PortNumber)
-import Text.PrettyPrint.Leijen.Text (Doc)
 
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging
@@ -41,7 +42,7 @@ import Haskell.Language.Server.BERT
 import Haskell.Language.Server.Tags
 
 data LogCollectingServer = LogCollectingServer
-  { lcsLogs       :: MVar [Doc]
+  { lcsLogs       :: MVar [Doc Void]
   , lcsTagsServer :: TagsServer
   , lcsBertServer :: BertServer
   }
@@ -51,11 +52,11 @@ mkLogCollectingServer
   => TagsServerConf -> PortNumber -> m LogCollectingServer
 mkLogCollectingServer conf port = do
   logOutputVar <- liftBase $ newMVar mempty
-  let log x = modifyMVar_ logOutputVar (pure . (x :))
-  tagsServer <- runSimpleLoggerT (Just (Custom (liftBase . log))) Debug
+  let addLogEntry x = modifyMVar_ logOutputVar (pure . (x :))
+  tagsServer <- runSimpleLoggerT (Just (Custom (liftBase . addLogEntry))) Debug
               $ startTagsServer conf emptyTagsServerState
   bertServer <- liftBase
-                  $ runSimpleLoggerT (Just (Custom log)) Debug
+                  $ runSimpleLoggerT (Just (Custom addLogEntry)) Debug
                   $ runBertServer port $ tsRequestHandler tagsServer
   pure LogCollectingServer
     { lcsLogs       = logOutputVar
@@ -75,5 +76,5 @@ stopLogCollectingServer LogCollectingServer{lcsTagsServer, lcsBertServer} = do
 waitUntilStart :: LogCollectingServer -> IO ()
 waitUntilStart = waitForBertServerStart . lcsBertServer
 
-getLogs :: LogCollectingServer -> IO [Doc]
+getLogs :: LogCollectingServer -> IO [Doc Void]
 getLogs serv = reverse . toList <$> readMVar (lcsLogs serv)

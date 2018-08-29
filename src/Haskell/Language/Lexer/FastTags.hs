@@ -17,5 +17,8 @@ module Haskell.Language.Lexer.FastTags
   , module FastTags.Tag
   ) where
 
-import FastTags.Tag (TagVal(..), Pos(..), UnstrippedTokens(..), Type(..), breakBlocks, unstrippedTokensOf, processTokens, stripNewlines, tokToName)
-import FastTags.Token (Line(..), SrcPos(..), TokenVal(..), increaseLine, PragmaType(..), Token, posFile, posLine, unLine)
+import FastTags.Tag (TagVal(..), Pos(..), UnstrippedTokens(..), Type(..), breakBlocks, unstrippedTokensOf, stripNewlines)
+import FastTags.Token (Line(..), SrcPos(..), TokenVal(..), increaseLine, Token, posFile, posLine, unLine)
+
+import FastTags.Tag (tokToName, processTokens)
+import FastTags.Token (PragmaType(..))

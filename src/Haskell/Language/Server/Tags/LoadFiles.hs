@@ -33,9 +33,9 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import qualified Data.Semigroup as Semigroup
 import qualified Data.Set as S
+import qualified Data.Text.Prettyprint.Doc as PP
+import Data.Text.Prettyprint.Doc.Ext
 import Data.Traversable
-import qualified Text.PrettyPrint.Leijen.Text as PP
-import Text.PrettyPrint.Leijen.Text.Ext
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
@@ -125,7 +125,7 @@ loadAllFilesIntoState conf = do
                     ]
                 Just unresolved -> do
                   let unresolvedMap = NEMap.fromNonEmpty $ (modFile &&& id) <$> unresolved
-                  logDebug $ "[loadAllFilesIntoState.doResolve] currentlyLoading =" <+> ppMap (ppNE . NEMap.keysNE <$> currentlyLoading)
+                  logDebug $ "[loadAllFilesIntoState.doResolve] currentlyLoading =" <+> ppMapWith pretty (ppNE . NEMap.keysNE) currentlyLoading
                   modify $ \s ->
                     s { rsLoadingModules = M.insert key unresolvedMap $ rsLoadingModules s }
                   logInfo $ "[loadAllFilesIntoState.doResolve] files: " <+> ppNE (modFile <$> unresolved)

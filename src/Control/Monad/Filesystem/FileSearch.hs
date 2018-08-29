@@ -42,8 +42,8 @@ import Data.Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
-import qualified Text.PrettyPrint.Leijen.Text as PP
-import Text.PrettyPrint.Leijen.Text.Ext
+import qualified Data.Text.Prettyprint.Doc as PP
+import Data.Text.Prettyprint.Doc.Ext
 
 import Control.Monad.Filesystem as MonadFS
 import Control.Monad.Filesystem.FileSearch.Class
@@ -72,7 +72,7 @@ instance Monoid SearchCfg where
 
 instance Pretty SearchCfg where
   pretty SearchCfg{shallowPaths, recursivePaths, ignoredDirs} =
-    ppDict "SearchCfg"
+    ppDictHeader "SearchCfg"
       [ "shallowPaths"   :-> ppSet shallowPaths
       , "recursivePaths" :-> ppSet recursivePaths
       , "ignoredDirs"    :-> ppSet ignoredDirs

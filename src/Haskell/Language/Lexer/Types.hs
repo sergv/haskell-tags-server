@@ -26,7 +26,7 @@ module Haskell.Language.Lexer.Types
   , LiterateStyle(..)
   ) where
 
-import Text.PrettyPrint.Leijen.Text.Ext (Pretty(..))
+import Data.Text.Prettyprint.Doc.Ext (Pretty(..))
 
 import Haskell.Language.Lexer.FastTags (Line, SrcPos(..))
 

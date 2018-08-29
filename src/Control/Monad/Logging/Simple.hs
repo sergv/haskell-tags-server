@@ -39,14 +39,15 @@ import Control.Monad.Reader
 import Control.Monad.Trans.Control
 import Data.Coerce
 import qualified Data.Text.Lazy.IO as TLIO
+import Data.Void (Void)
 import System.IO
 
 import Control.Monad.Filesystem
 import Control.Monad.Logging
-import Text.PrettyPrint.Leijen.Text.Ext
+import Data.Text.Prettyprint.Doc.Ext
 
 data SimpleLoggerCfg m = SimpleLoggerCfg
-  { logSink     :: Doc -> m ()
+  { logSink     :: Doc Void -> m ()
   , logSeverity :: Severity
   }
 
@@ -61,6 +62,7 @@ newtype SimpleLoggerT m a = SimpleLoggerT
     , MonadThrow
     , MonadCatch
     , MonadFS
+    , MonadIO
     )
 
 instance MonadTrans SimpleLoggerT where
@@ -82,9 +84,9 @@ instance (Monad m) => MonadLog (SimpleLoggerT m) where
       lift $ logSink msg
 
 data Destination m where
-  Stderr :: (MonadBase IO m) =>                  Destination m
-  Stdout :: (MonadBase IO m) =>                  Destination m
-  Custom ::                     (Doc -> m ()) -> Destination m
+  Stderr :: MonadBase IO m =>                       Destination m
+  Stdout :: MonadBase IO m =>                       Destination m
+  Custom ::                   (Doc Void -> m ()) -> Destination m
 
 runSimpleLoggerT
   :: forall m a. (Applicative m)

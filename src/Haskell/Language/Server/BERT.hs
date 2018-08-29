@@ -37,12 +37,12 @@ import qualified Data.ByteString.Lazy.Char8 as C8
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Monoid
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy.Encoding as TLE
+import Data.Text.Prettyprint.Doc.Ext
+import Data.Void (Void, vacuous)
 import Network.Socket
-import Text.PrettyPrint.Leijen.Text.Ext
 
 import Data.BERT
 import qualified Network.BERT.Server as BERT
@@ -63,13 +63,13 @@ defaultPort = 10000
 
 decodeUtf8
   :: (HasCallStack, MonadError ErrorMessage m)
-  => Doc -> UTF8.ByteString -> m T.Text
+  => Doc Void -> UTF8.ByteString -> m T.Text
 decodeUtf8 thing =
   either (throwErrorWithCallStack . mkErr) pure . TE.decodeUtf8' . C8.toStrict
   where
-    mkErr = (msg <+>) . showDoc
-    msg :: Doc
-    msg = "Invalid utf8 encoding of" <+> thing <> ":"
+    mkErr = (msg <+>) . ppShow
+    msg :: Doc ann
+    msg = "Invalid utf8 encoding of" <+> vacuous thing <> ":"
 
 -- | Bert transport that can be waiter for.
 data SynchronizedTransport = SynchronizedTransport
@@ -141,7 +141,7 @@ runBertServer port reqHandler = do
           response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
           BERT.Success <$> either throwError (pure . responseToTerm) response
         _                                    ->
-          throwErrorWithCallStack $ "Expected 2 arguments but got:" <+> showDoc args
+          throwErrorWithCallStack $ "Expected 2 arguments but got:" <+> ppShow args
     go' "haskell-tags-server" "find" args =
       case args of
         [BinaryTerm filename, BinaryTerm symbol] -> do
@@ -151,7 +151,7 @@ runBertServer port reqHandler = do
           response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
           BERT.Success <$> either throwError (pure . responseToTerm) response
         _                                    ->
-          throwErrorWithCallStack $ "Expected 2 arguments but got:" <+> showDoc args
+          throwErrorWithCallStack $ "Expected 2 arguments but got:" <+> ppShow args
     go' "haskell-tags-server" _ _ = pure BERT.NoSuchFunction
     go' _                     _ _ = pure BERT.NoSuchModule
 

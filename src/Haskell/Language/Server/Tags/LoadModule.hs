@@ -30,21 +30,23 @@ import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
 import qualified Control.Monad.State.Strict as SS
+
 import Data.Foldable.Ext
 import Data.Functor.Product (Product(..))
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe hiding (Maybe(Just))
-import Data.Semigroup
+import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Prettyprint.Doc as PP
+import Data.Text.Prettyprint.Doc.Combinators
+import Data.Text.Prettyprint.Doc.Ext
 import Data.Time.Clock (UTCTime)
 import Data.Traversable (for)
-import qualified Text.PrettyPrint.Leijen.Text as PP
-import Text.PrettyPrint.Leijen.Text.Ext
 
 import Haskell.Language.Lexer (tokenize)
 import Haskell.Language.Lexer.FastTags (Token, processTokens)
@@ -86,7 +88,7 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
       [ "Import cycle detected: import of"
       , PP.dquotes (pretty key)
       , "is already in progress."
-      , ppFoldableWithHeader "All imports in progress:" (ppNEMap <$> tssLoadsInProgress s)
+      , ppFoldableHeaderWith ppNEMap "All imports in progress:" $ tssLoadsInProgress s
       ]
   else do
     mods       <- case SubkeyMap.lookup key (tssLoadedModules s) of
@@ -99,7 +101,7 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
   where
     doLoad :: HasCallStack => ImportKey -> m (NonEmpty ResolvedModule)
     doLoad key@ImportKey{ikModuleName} = do
-      logInfo $ "[loadModule.doLoad] loading module" <+> showDoc ikModuleName
+      logInfo $ "[loadModule.doLoad] loading module" <+> ppShow ikModuleName
       case T.splitOn "." $ getModuleName ikModuleName of
         []     -> throwErrorWithCallStack $ "Invalid module name:" <+> pretty ikModuleName
         x : xs -> do
@@ -110,7 +112,7 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
                 HsBootModule  -> tsconfHsBootExtensions
           case filter ((`S.member` extensions) . takeExtension) candidates of
             []     -> throwErrorWithCallStack $
-              "Cannot load module " <> pretty ikModuleName <> ": no paths found"
+              "Cannot load module " <> pretty ikModuleName Semigroup.<> ": no paths found"
             p : ps -> traverse (loadModuleFromFile key Nothing) $ p :| ps
 
 reloadIfNecessary
@@ -122,7 +124,7 @@ reloadIfNecessary key m = do
   (needsReloading, modifTime) <- moduleNeedsReloading m
   if needsReloading
   then do
-    logInfo $ "[reloadIfNecessary] reloading module" <+> showDoc (mhModName $ modHeader m)
+    logInfo $ "[reloadIfNecessary] reloading module" <+> ppShow (mhModName $ modHeader m)
     loadModuleFromFile key (Just modifTime) (modFile m)
   else pure m
 
@@ -133,7 +135,7 @@ loadModuleFromFile
   -> FullPath
   -> m ResolvedModule
 loadModuleFromFile key@ImportKey{ikModuleName} modifTime filename = do
-  logInfo $ "[loadModuleFromFile] loading file " <> showDoc filename
+  logInfo $ "[loadModuleFromFile] loading file" <+> ppShow filename
   modifTime'    <- maybe (MonadFS.getModificationTime filename) pure modifTime
   source        <- MonadFS.readFile filename
   unresolvedMod <- loadModuleFromSource (Just ikModuleName) modifTime' filename source
@@ -194,16 +196,16 @@ makeModule suggestedModuleName modifTime filename tokens = do
       allSymbols     :: SymbolMap
       allSymbols     = SM.fromList syms
   unless (null errors) $
-    logError $ ppFoldableWithHeader
-      ("fast-tags errors while loading" <+> showDoc filename)
-      (map docFromString errors)
+    logError $ ppFoldableHeaderWith docFromString
+      ("fast-tags errors while loading" <+> ppShow filename)
+      errors
   case (suggestedModuleName, header) of
     (Just name, Just ModuleHeader{mhModName}) ->
       unless (name == mhModName) $
-        throwErrorWithCallStack $ ppDict "Module name in file differs from the expected module name"
-          [ "file"                 :-> pretty filename
-          , "module name in file"  :-> pretty mhModName
-          , "expected module name" :-> pretty name
+        throwErrorWithCallStack $ ppDictHeader "Module name in file differs from the expected module name"
+          [ "file"                 --> filename
+          , "module name in file"  --> mhModName
+          , "expected module name" --> name
           ]
     _ -> pure ()
   let moduleHeader :: UnresolvedModuleHeader
@@ -296,12 +298,12 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
     resolveSymbols Module{modHeader = header@ModuleHeader{mhImports, mhModName}, modAllSymbols} = do
       (resolvedImports, filteredNames) <- resolveImports mhImports
       logDebug $ "[resolveModule.resolveImports] analyzing export list of module" <+> pretty mhModName
-      logDebug $ "[resolveModule.resolveImports] resolved imports" PP.<$> pretty (ppSubkeyMap (ppNE <$> resolvedImports))
+      logDebug $ "[resolveModule.resolveImports] resolved imports" <> PP.line <> ppSubkeyMapWith pretty pretty ppNE resolvedImports
       case mhExports header of
         Nothing                                            ->
           pure (resolvedImports, modAllSymbols)
         Just ModuleExports{meExportedEntries, meReexports} -> do
-          logDebug $ "[resolveModule.resolveImports] meReexports =" <+> pretty (ppSet meReexports)
+          logDebug $ "[resolveModule.resolveImports] meReexports =" <+> ppSet meReexports
           let lt, gt :: Set ModuleName
               (lt, reexportsItself, gt) = S.splitMember mhModName meReexports
               -- Names exported via module reexports.
@@ -320,7 +322,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
               case M.lookup qualifier namesByNamespace of
                 Nothing -> throwErrorWithCallStack $ PP.hsep
                   [ "Internal error: export qualifier"
-                  , PP.dquotes $ showDoc qualifier
+                  , PP.dquotes $ ppShow qualifier
                   , "of entry"
                   , PP.dquotes $ pretty entry
                   , "has no corresponding qualified imports"
@@ -341,7 +343,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
               extra       = inferExtraParents header
               allSymbols' :: SymbolMap
               allSymbols' = SM.registerChildren extra allSymbols
-          logDebug $ "[resolveModule] extra parents =" <+> ppMap (ppSet <$> extra)
+          logDebug $ "[resolveModule] extra parents =" <+> ppMapWith pretty ppSet extra
           logDebug $ "[resolveModule] allSymbols' =" <+> pretty allSymbols'
           pure (resolvedImports, allSymbols')
 
@@ -401,7 +403,7 @@ quasiResolveImportSpecWithLoadsInProgress mainModuleName key modules importSpecs
                     unqualifiedExports' :: Set UnqualifiedSymbolName
                     unqualifiedExports' = S.mapMonotonic fromJust $ S.delete Nothing unqualifiedExports
                 if S.member Nothing unqualifiedExports
-                then throwErrorWithCallStack $ ppFoldableWithHeader
+                then throwErrorWithCallStack $ ppFoldableHeader
                   ("Cannot resolve import cycle: module" <+> pretty mhModName <+>
                    "reexports names from its imports:")
                   (filter isQualified $ toList exportedNames)
@@ -412,7 +414,7 @@ quasiResolveImportSpecWithLoadsInProgress mainModuleName key modules importSpecs
               where
                 exportedNames :: Set SymbolName
                 exportedNames = KM.keysSet meExportedEntries
-                errMsg = ppFoldableWithHeader
+                errMsg = ppFoldableHeader
                   ("Cannot resolve import cycle: module" <+> pretty mhModName <+>
                    "exports names not defined locally:")
                   (exportedNames `S.difference` localSymbolsNames)
@@ -428,7 +430,7 @@ quasiResolveImportSpecWithLoadsInProgress mainModuleName key modules importSpecs
           "Import cycle detected: module" <+> PP.dquotes (pretty mainModuleName) <+>
              "imports names from module" <+> PP.dquotes (pretty key) <+>
              "that are not defined there and thus cannot be simply resolved." <+>
-             ppFoldableWithHeader "Names:" importedNames
+             ppFoldableHeader "Names:" importedNames
     modify ((ispecQualification, names) :)
     pure $ spec { ispecImportedNames = names }
 
@@ -496,7 +498,7 @@ namesFromEntry moduleName importedMods allImportedNames (EntryWithChildren sym v
     childrenSymbols :: HasCallStack => m (Set UnqualifiedSymbolName)
     childrenSymbols =
       case SM.lookupChildren sym allImportedNames of
-        Nothing       -> throwErrorWithCallStack $ ppFoldableWithHeader
+        Nothing       -> throwErrorWithCallStack $ ppFoldableHeader
           ("Imported parent" <+> pretty sym <+> "not found in symbol map of imports of module" <+> pretty moduleName <> ":")
           importedMods
         Just children -> pure children

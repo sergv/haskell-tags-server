@@ -22,14 +22,15 @@ module Control.Monad.Except.Ext
 
 import Control.Monad.Except
 import qualified Control.Monad.Except as ExceptExport hiding (throwError)
+import Data.Text.Prettyprint.Doc.Ext
 import GHC.Stack (HasCallStack, callStack)
-import Text.PrettyPrint.Leijen.Text.Ext
+import Data.Void (Void)
 
 import Data.ErrorMessage
 
 throwErrorWithCallStack
   :: (HasCallStack, MonadError ErrorMessage m)
-  => Doc -> m a
+  => Doc Void -> m a
 throwErrorWithCallStack msg = throwError ErrorMessage
   { errorMessageBody      = msg
   , errorMessageBacktrace = callStack

@@ -24,7 +24,7 @@ import Control.Monad.State
 import Data.Char
 import Data.Foldable.Ext (toList, foldMapA, foldForA)
 import qualified Data.Text as T
-import Text.PrettyPrint.Leijen.Text.Ext
+import Data.Text.Prettyprint.Doc.Ext
 
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging
@@ -64,8 +64,8 @@ findInModule sym mod =
       resolvedSpecs <- resolveQualifier qualifier' header
       case resolvedSpecs of
         Nothing     ->
-          throwErrorWithCallStack $ "Qualifier" <+> showDoc qualifier' <+>
-            "not listed among module's import qualifiers:" <+> showDoc (mhImportQualifiers header)
+          throwErrorWithCallStack $ "Qualifier" <+> ppShow qualifier' <+>
+            "not listed among module's import qualifiers:" <+> ppShow (mhImportQualifiers header)
         Just specs ->
           lookUpInImportedModules sym' specs
   where

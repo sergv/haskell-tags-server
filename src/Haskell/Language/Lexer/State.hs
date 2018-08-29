@@ -55,13 +55,13 @@ module Haskell.Language.Lexer.State
 import Control.Monad.Except.Ext
 import Control.Monad.State
 import qualified Data.Map as M
-import Data.Semigroup
+import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import GHC.Stack (HasCallStack)
 import Lens.Micro
-import Text.PrettyPrint.Leijen.Text.Ext (Pretty(..), ppDict, MapEntry(..))
+import Data.Text.Prettyprint.Doc.Ext (Pretty(..), ppDictHeader, MapEntry(..))
 
 import Data.ErrorMessage
 import Data.KeyMap (KeyMap)
@@ -183,7 +183,7 @@ enterFunctionMacroDef
   -> m ()
 enterFunctionMacroDef FunctionMacroDef{fmdName, fmdArgs, fmdBody} realArgs = do
   unless (sameLength fmdArgs realArgs) $
-    throwErrorWithCallStack $ ppDict
+    throwErrorWithCallStack $ ppDictHeader
       "Macro definition and macro application have different number of arguments"
       [ "defined arguments" :-> pretty (show fmdArgs)
       , "real arguments"    :-> pretty (show realArgs)
@@ -206,7 +206,7 @@ addToCurrentMacroArg argPart =
   modify $ \s -> s
     { asMacroArgs = case asMacroArgs s of
         []     -> [argPart]
-        a : as -> a <> argPart : as
+        a : as -> a Semigroup.<> argPart : as
     }
 
 addNewMacroArg :: MonadState AlexState m => m ()

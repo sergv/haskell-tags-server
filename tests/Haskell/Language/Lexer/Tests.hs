@@ -24,8 +24,8 @@ import Data.Functor.Identity
 import Data.List (sort)
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Prettyprint.Doc.Ext as PP
 import GHC.Stack (HasCallStack)
-import qualified Text.PrettyPrint.Leijen.Text.Ext as PP
 
 import Haskell.Language.Lexer.FastTags (TokenVal(..), PragmaType(..), Token, TagVal(..), Pos(..), UnstrippedTokens(..), Type(..), SrcPos(..), Line(..))
 import qualified Haskell.Language.Lexer.FastTags as Tag
@@ -586,14 +586,14 @@ testTokenizeCppDefines = testGroup "#define"
           ==>
           [ Newline 0
           , Newline 0
+          , Newline 0
           , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
           , T "foo", T "x", Equals, T "x", Newline 0
-          , Newline 0
-          , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
+          , T "bar", DoubleColon, T "b", Arrow, T "b"
           , T "bar", T "y", Equals, T "y", Newline 0
           , Newline 0
           , Newline 0
-          , T "baz", DoubleColon, T "c", Arrow, T "c", Newline 0
+          , T "baz", DoubleColon, T "c", Arrow, T "c"
           , T "baz", T "z", Equals, T "z", Newline 0
           ]
       , testCase "Expand invalid function-like macro" $

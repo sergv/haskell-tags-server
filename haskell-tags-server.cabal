@@ -23,24 +23,26 @@ cabal-version:
 library
   build-depends:
     array,
-    attoparsec >=0.13.1.0,
-    base >=4,
-    bert >=1.2.2.5,
+    attoparsec >= 0.13.1.0,
+    base >= 4,
+    bert >= 1.2.2.5,
     bytestring,
     containers,
     directory,
     dlist,
-    exceptions >=0.8,
-    extra >=1.4.2,
-    fast-tags >=1.3,
+    exceptions >= 0.8,
+    extra >= 1.4.2,
+    fast-tags >= 1.3,
     filepath,
-    haskell-src-exts >=1.16,
+    haskell-src-exts >= 1.16,
     microlens,
-    monad-control >=1.0,
-    mtl >=2.2,
-    network >=2.6,
+    monad-control >= 1.0,
+    mtl >= 2.2,
+    network >= 2.6,
+    prettyprinter,
+    prettyprinter-combinators,
     profunctors >= 5.2,
-    regex-tdfa >=1.2.2,
+    regex-tdfa >= 1.2.2,
     regex-tdfa-text,
     semigroupoids,
     semigroups,
@@ -49,8 +51,7 @@ library
     time,
     transformers,
     transformers-base,
-    utf8-string >=0.3,
-    wl-pprint-text >=1.1.0.4
+    utf8-string >= 0.3
   exposed-modules:
     Control.Arrow.Ext
     Control.Monad.Ext
@@ -74,6 +75,7 @@ library
     Data.SymbolMap
     Data.Symbols
     Data.Symbols.MacroName
+    Data.Text.Prettyprint.Doc.Ext
     Haskell.Language.Lexer
     Haskell.Language.Lexer.Env
     Haskell.Language.Lexer.FastTags
@@ -89,7 +91,6 @@ library
     Haskell.Language.Server.Tags
     Haskell.Language.Server.Tags.AnalyzeHeader
     Haskell.Language.Server.Tags.Types
-    Text.PrettyPrint.Leijen.Text.Ext
   other-modules:
     Haskell.Language.Server.Tags.LoadModule
     Haskell.Language.Server.Tags.LoadFiles
@@ -173,19 +174,19 @@ test-suite test-haskell-tags-server
     monad-control,
     mtl,
     network,
+    prettyprinter,
     raw-strings-qq,
     regex-tdfa,
     regex-tdfa-text,
     semigroups,
     stm,
     haskell-tags-server,
-    tasty >=0.7,
-    tasty-hunit >=0.4,
+    tasty >= 0.7,
+    tasty-hunit >= 0.4,
     template-haskell,
     text,
     transformers-base,
-    utf8-string,
-    wl-pprint-text
+    utf8-string
   ghc-options:
     -Wall
     -fno-warn-type-defaults

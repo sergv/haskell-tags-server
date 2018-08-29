@@ -37,7 +37,10 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
-import qualified Text.PrettyPrint.Leijen.Text as PP
+import qualified Data.Text.Prettyprint.Doc as PP
+import Data.Text.Prettyprint.Doc.Combinators
+import Data.Text.Prettyprint.Doc.Ext
+import Data.Void (Void)
 
 import Haskell.Language.Lexer.FastTags
   (stripNewlines, UnstrippedTokens(..), tokToName, Pos(..), TokenVal(..), Token, posFile, posLine, unLine, TokenVal, PragmaType(..))
@@ -50,7 +53,6 @@ import Data.SubkeyMap (SubkeyMap)
 import qualified Data.SubkeyMap as SubkeyMap
 import Data.Symbols
 import Haskell.Language.Server.Tags.Types
-import Text.PrettyPrint.Leijen.Text.Ext
 
 analyzeHeader
   :: (MonadError ErrorMessage m, MonadLog m)
@@ -245,7 +247,7 @@ analyzeImports imports qualifiers ts = do
               { ilEntries    = acc
               , ilImportType = importType
               }
-            entryWithChildren :: Doc -> Text -> [Token] -> m (ImportList, [Token])
+            entryWithChildren :: Doc Void -> Text -> [Token] -> m (ImportList, [Token])
             entryWithChildren descr name rest = do
               (children, rest') <- snd $ analyzeChildren descr $ dropNLs rest
               name'             <- mkUnqualName name
@@ -339,7 +341,7 @@ analyzeExports importQualifiers ts = do
           , meReexports          = reexports
           , meHasWildcardExports = getAny $ foldMap exportsAllChildren entries
           }
-        entryWithChildren :: Doc -> Text -> [Token] -> m ModuleExports
+        entryWithChildren :: Doc Void -> Text -> [Token] -> m ModuleExports
         entryWithChildren listType name rest = do
           -- logDebug $ "[analyzeExports.entryWithChildren] rest =" <+> ppTokens rest
           (children, rest') <- snd $ analyzeChildren listType rest
@@ -387,7 +389,7 @@ instance Monoid WildcardPresence where
 
 analyzeChildren
   :: forall m. (HasCallStack, MonadError ErrorMessage m)
-  => Doc -> [Token] -> (ChildrenPresence, m (Maybe ChildrenVisibility, [Token]))
+  => Doc Void -> [Token] -> (ChildrenPresence, m (Maybe ChildrenVisibility, [Token]))
 analyzeChildren listType toks =
   case dropNLs toks of
     []                                               -> (ChildrenAbsent, pure (Nothing, []))
@@ -474,16 +476,16 @@ newtype Tokens = Tokens [Token]
 instance Pretty Tokens where
   pretty (Tokens [])       = "[]"
   pretty (Tokens ts@(t : _)) =
-    ppDict "Tokens"
-      [ "file"   :-> showDoc (posFile $ posOf t)
-      , "tokens" :-> ppList (map ppTokenVal ts)
+    ppDictHeader "Tokens"
+      [ "file"   :-> ppShow $ posFile $ posOf t
+      , "tokens" :-> ppListWith ppTokenVal ts
       ]
     where
-      ppTokenVal :: Pos TokenVal -> Doc
+      ppTokenVal :: Pos TokenVal -> Doc ann
       ppTokenVal (Pos pos tag) =
-        pretty (unLine (posLine pos)) <> PP.colon <> showDoc tag
+        pretty (unLine (posLine pos)) <> PP.colon <> ppShow tag
 
-ppTokens :: [Token] -> Doc
+ppTokens :: [Token] -> Doc ann
 ppTokens = pretty . Tokens . take 16
 
 -- | Drop prefix of newlines.

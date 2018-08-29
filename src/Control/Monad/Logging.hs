@@ -29,7 +29,8 @@ import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
 import qualified Control.Monad.State.Strict as SS
-import Text.PrettyPrint.Leijen.Text (Doc)
+import Data.Text.Prettyprint.Doc (Doc)
+import Data.Void (Void)
 
 data Severity = Debug | Info | Warning | Error
   deriving (Eq, Ord, Show)

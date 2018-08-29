@@ -21,12 +21,14 @@ import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
 import Data.Maybe (mapMaybe)
 import Data.Profunctor (lmap)
-import Data.Semigroup
+import Data.Semigroup as Semigroup
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
-import qualified Text.PrettyPrint.Leijen.Text as PP
-import Text.PrettyPrint.Leijen.Text.Ext (Doc, Pretty(..), (<+>), ppList)
+import qualified Data.Text.Prettyprint.Doc as PP
+import Data.Text.Prettyprint.Doc (Doc, Pretty(..), (<+>))
+import Data.Text.Prettyprint.Doc.Ext
+import Data.Void (Void)
 
 import Data.ErrorMessage
 import qualified Data.KeyMap as KM
@@ -510,10 +512,10 @@ tryRestoringContext = do
 
 errorAtLine
   :: (HasCallStack, MonadError ErrorMessage m, MonadState AlexState m)
-  => Doc -> m a
+  => Doc Void -> m a
 errorAtLine msg = do
   line <- gets (unLine . aiLine . asInput)
-  throwErrorWithCallStack $ pretty line <> ":" <+> msg
+  throwErrorWithCallStack $ pretty line Semigroup.<> ":" <+> msg
 
 startLiterateBird :: Monad m => AlexT m ()
 startLiterateBird = do
