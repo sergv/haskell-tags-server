@@ -20,7 +20,6 @@ module Data.MonoidalMap
 
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Semigroup
 
 newtype MonoidalMap k v = MonoidalMap { unMonoidalMap :: Map k v }
   deriving (Eq, Ord, Show)
@@ -28,7 +27,7 @@ newtype MonoidalMap k v = MonoidalMap { unMonoidalMap :: Map k v }
 instance (Ord k, Semigroup v) => Semigroup (MonoidalMap k v) where
   (<>) (MonoidalMap x) (MonoidalMap y) = MonoidalMap $ M.unionWith (<>) x y
 
-instance (Ord k, Semigroup v, Monoid v) => Monoid (MonoidalMap k v) where
+instance (Ord k, Semigroup v) => Monoid (MonoidalMap k v) where
   mempty = MonoidalMap mempty
   mappend = (<>)
 

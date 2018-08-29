@@ -38,7 +38,7 @@ import Control.Monad.Writer hiding ((<>))
 import Data.DList (DList)
 import qualified Data.DList as DL
 import Data.Maybe
-import Data.Semigroup
+import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
@@ -68,7 +68,7 @@ instance Semigroup SearchCfg where
 
 instance Monoid SearchCfg where
   mempty = SearchCfg mempty mempty mempty
-  mappend = (<>)
+  mappend = (Semigroup.<>)
 
 instance Pretty SearchCfg where
   pretty SearchCfg{shallowPaths, recursivePaths, ignoredDirs} =

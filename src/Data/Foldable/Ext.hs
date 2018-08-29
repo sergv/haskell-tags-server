@@ -20,7 +20,6 @@ module Data.Foldable.Ext
   ) where
 
 import Data.Foldable
-import Data.Semigroup
 
 newtype MonoidalLift f a = MonoidalLift { unMonoidalLift :: f a }
 
