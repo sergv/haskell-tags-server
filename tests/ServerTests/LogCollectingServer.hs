@@ -69,7 +69,7 @@ stopLogCollectingServer LogCollectingServer{lcsTagsServer, lcsBertServer} = do
 
 -- | Block current thread until server will be started and will listen on
 -- its port.
-waitUntilStart :: LogCollectingServer -> IO ()
+waitUntilStart :: MonadBase IO m => LogCollectingServer -> m ()
 waitUntilStart = waitForBertServerStart . lcsBertServer
 
 getLogs :: LogCollectingServer -> IO [Doc Void]

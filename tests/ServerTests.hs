@@ -18,10 +18,14 @@
 module ServerTests (tests) where
 
 import Control.Concurrent
-import Control.Exception
+import Control.Exception (IOException, throwIO, ErrorCall(..))
 import Control.Monad
 import Control.Monad.Base
+import Control.Monad.Catch
 import Control.Monad.Except
+import Control.Monad.Filesystem
+import Control.Monad.Trans.Control
+
 import qualified Data.ByteString.Lazy.Char8 as C8
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
 import Data.Set (Set)
@@ -29,6 +33,7 @@ import qualified Data.Set as S
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext
+import Data.Void (Void)
 import Network.Socket (PortNumber)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -978,13 +983,10 @@ tests =
     (\pool -> makeTestTree pool testData)
   where
     makeTestTree :: IO PortPool -> TestSet ServerTest -> TestTree
-    makeTestTree pool (GroupTest name xs) = testGroup name $ map (makeTestTree pool) xs
-    makeTestTree pool (AtomicTest serverTest) = makeTest pool serverTest
-
-    makeTest :: IO PortPool -> ServerTest -> TestTree
-    makeTest pool test@ServerTest{stWorkingDirectory} =
-      withResource (connect pool (unDirectory stWorkingDirectory) mempty) closeConnection $ \getConn ->
-        mkFindSymbolTest getConn test
+    makeTestTree pool = go
+      where
+        go (GroupTest name xs)     = testGroup name $ map go xs
+        go (AtomicTest serverTest) = mkFindSymbolTest pool serverTest
 
 data ServerConnection =
     ExistingServer TCP
@@ -998,72 +1000,82 @@ instance Transport ServerConnection where
     stopLogCollectingServer serv
     closeConnection tcp
 
-reportErr :: String -> IO a
-reportErr = throwIO . ErrorCall
+reportErr :: MonadBase IO m => Doc Void -> m a
+reportErr = liftBase . throwIO . ErrorCall . displayDocString
 
-connect :: IO PortPool -> PathFragment -> Set FullPath -> IO ServerConnection
-connect pool sourceDir dirTree =
+withConnection
+  :: forall m a. (MonadMask m, MonadBaseControl IO m, MonadFS m)
+  => IO PortPool
+  -> TagsServerConf
+  -> (ServerConnection -> m a)
+  -> m a
+withConnection pool conf f = do
   -- Try to connect to a server. If attempt succeeds then server is running
   -- and there's no need to run server ourselves.
-  tryConnect defaultPort >>= either (const startLocalServer) (pure . ExistingServer)
+  existing <- tryConnect defaultPort
+  case existing of
+    Right existing' ->
+      f (ExistingServer existing') `finally` liftBase (closeConnection existing')
+    Left  _reason   -> startLocalServer
   where
-    startLocalServer :: IO ServerConnection
+    startLocalServer :: m a
     startLocalServer = do
-      pool' <- pool
+      pool' <- liftBase pool
       withPort pool' $ \port -> do
-        conf <- mkTestsConfig sourceDir dirTree
         serv <- runExceptT $ mkLogCollectingServer conf port
         case serv of
-          Left err -> throwIO $ ErrorCall $ displayDocString $
+          Left err -> reportErr $
             "Failed to start local server:" <> PP.line <> pretty err
           Right serv' -> do
             waitUntilStart serv'
             conn <- tryConnect port
             case conn of
               Left err    -> reportErr $
-                "Failed to connect to locally started server\n" ++ show err
-              Right conn' ->
-                pure $ LocalServer serv' conn'
+                "Failed to connect to locally started server" <> PP.line <> ppShow err
+              Right conn' -> do
+                let server = LocalServer serv' conn'
+                f server `finally` liftBase (closeConnection server)
 
-    tryConnect :: PortNumber -> IO (Either IOException TCP)
+    tryConnect :: PortNumber -> m (Either IOException TCP)
     tryConnect port =
-      (Right <$> tcpClient "localhost" port) `catch` (pure . Left)
+      liftBase (Right <$> tcpClient "localhost" port) `catch` (pure . Left)
 
 mkFindSymbolTest
-  :: IO ServerConnection
+  :: IO PortPool
   -> ServerTest
   -> TestTree
-mkFindSymbolTest getConn ServerTest{stTestName, stWorkingDirectory, stFile, stSymbol, stExpectedResponse} =
-  testCase stTestName $ do
-    conn <- getConn
-    let path = pathFragmentToUTF8 $ testDataDir </> unDirectory stWorkingDirectory </> stFile
-    r    <- call conn "haskell-tags-server" "find" [ BinaryTerm path
-                                                   , BinaryTerm stSymbol
-                                                   ]
-    logs <- case conn of
-              ExistingServer _   -> pure mempty
-              LocalServer serv _ -> do
-                logs <- getLogs serv
-                pure $ "Logs:" <> PP.line <> PP.indent 2 (PP.vcat logs)
-    case r of
-      Left err  ->
-        assertFailure $ displayDocString $ ppShow err <> PP.line <> logs
-      Right res -> do
-        actual <- relativizePathsInResponse res
-        let msg = docFromString $ "expected: " ++ show expected ++ "\n but got: " ++ show actual
-        if responseType actual == responseType expected
-        then
-          unless (actual == expected) $
-            assertFailure $ displayDocString $ msg <> PP.line <> ppShow logs
-        else
-          assertFailure $ displayDocString $
-            case extractResponseError actual of
-              Nothing  ->
-                msg <> PP.line <> logs
-              Just msg ->
-                "Error from server:" <> PP.line <> PP.nest 2 (docFromByteString msg) <> PP.line <> logs
-        where
-          expected = responseToTerm stExpectedResponse
+mkFindSymbolTest pool ServerTest{stTestName, stWorkingDirectory, stFile, stSymbol, stExpectedResponse} =
+ testCase stTestName $ do
+    conf <- mkTestsConfig (unDirectory stWorkingDirectory) mempty
+    withConnection pool conf $ \conn -> do
+      let path = pathFragmentToUTF8 $ testDataDir </> unDirectory stWorkingDirectory </> stFile
+      r    <- call conn "haskell-tags-server" "find" [ BinaryTerm path
+                                                     , BinaryTerm stSymbol
+                                                     ]
+      logs <- case conn of
+                ExistingServer _   -> pure mempty
+                LocalServer serv _ -> do
+                  logs <- getLogs serv
+                  pure $ "Logs:" <> PP.line <> PP.indent 2 (PP.vcat logs)
+      case r of
+        Left err  ->
+          assertFailure $ displayDocString $ ppShow err <> PP.line <> logs
+        Right res -> do
+          actual <- relativizePathsInResponse res
+          let msg = docFromString $ "expected: " ++ show expected ++ "\n but got: " ++ show actual
+          if responseType actual == responseType expected
+          then
+            unless (actual == expected) $
+              assertFailure $ displayDocString $ msg <> PP.line <> logs
+          else
+            assertFailure $ displayDocString $
+              case extractResponseError actual of
+                Nothing   ->
+                  msg <> PP.line <> logs
+                Just msg' ->
+                  "Error from server:" <> PP.line <> PP.nest 2 (docFromByteString msg') <> PP.line <> logs
+          where
+            expected = responseToTerm stExpectedResponse
 
 responseType :: Term -> Maybe String
 responseType (TupleTerm (AtomTerm x : _)) = Just x

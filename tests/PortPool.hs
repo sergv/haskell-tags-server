@@ -20,6 +20,7 @@ module PortPool
 import Control.Concurrent
 import Control.Monad.Base
 import Control.Monad.Catch
+
 import Network.Socket (PortNumber)
 
 data PortPool = PortPool
@@ -51,5 +52,7 @@ getPort = liftBase . readChan . portPoolPorts
 restorePort :: MonadBase IO m => PortPool -> PortNumber -> m ()
 restorePort pool = liftBase . writeChan (portPoolPorts pool)
 
-withPort :: (MonadMask m, MonadBase IO m) => PortPool -> (PortNumber -> m a) -> m a
+withPort
+  :: (MonadMask m, MonadBase IO m)
+  => PortPool -> (PortNumber -> m a) -> m a
 withPort pool = bracket (getPort pool) (restorePort pool)
