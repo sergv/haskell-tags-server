@@ -16,7 +16,8 @@ import Prelude hiding (readFile)
 
 import Control.Monad.Except
 import Control.Monad.Reader
-import Control.Monad.State
+import qualified Control.Monad.State.Lazy as Lazy
+import qualified Control.Monad.State.Strict as Strict
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.IO
@@ -69,7 +70,7 @@ instance MonadFS m => MonadFS (ReaderT r m) where
   doesDirectoryExist   = lift . doesDirectoryExist
   getDirectoryContents = lift . getDirectoryContents
 
-instance MonadFS m => MonadFS (StateT s m) where
+instance MonadFS m => MonadFS (Lazy.StateT s m) where
   {-# INLINE getModificationTime  #-}
   {-# INLINE readFile             #-}
   {-# INLINE doesFileExist        #-}
@@ -81,3 +82,14 @@ instance MonadFS m => MonadFS (StateT s m) where
   doesDirectoryExist   = lift . doesDirectoryExist
   getDirectoryContents = lift . getDirectoryContents
 
+instance MonadFS m => MonadFS (Strict.StateT s m) where
+  {-# INLINE getModificationTime  #-}
+  {-# INLINE readFile             #-}
+  {-# INLINE doesFileExist        #-}
+  {-# INLINE doesDirectoryExist   #-}
+  {-# INLINE getDirectoryContents #-}
+  getModificationTime  = lift . getModificationTime
+  readFile             = lift . readFile
+  doesFileExist        = lift . doesFileExist
+  doesDirectoryExist   = lift . doesDirectoryExist
+  getDirectoryContents = lift . getDirectoryContents
