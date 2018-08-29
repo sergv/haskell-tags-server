@@ -35,29 +35,37 @@ import Data.Void (Void)
 data Severity = Debug | Info | Warning | Error
   deriving (Eq, Ord, Show)
 
-class (Monad m) => MonadLog m where
-  logDoc :: Severity -> Doc -> m ()
+class Monad m => MonadLog m where
+  logDoc :: Severity -> Doc Void -> m ()
 
-logError :: (MonadLog m) => Doc -> m ()
+{-# INLINE logError #-}
+logError :: MonadLog m => Doc Void -> m ()
 logError = logDoc Error
 
-logWarning :: (MonadLog m) => Doc -> m ()
+{-# INLINE logWarning #-}
+logWarning :: MonadLog m => Doc Void -> m ()
 logWarning = logDoc Warning
 
-logInfo :: (MonadLog m) => Doc -> m ()
+{-# INLINE logInfo #-}
+logInfo :: MonadLog m => Doc Void -> m ()
 logInfo = logDoc Info
 
-logDebug :: (MonadLog m) => Doc -> m ()
+{-# INLINE logDebug #-}
+logDebug :: MonadLog m => Doc Void -> m ()
 logDebug = logDoc Debug
 
-instance (MonadLog m) => MonadLog (ExceptT e m) where
+instance MonadLog m => MonadLog (ExceptT e m) where
+  {-# INLINE logDoc #-}
   logDoc s msg = lift $ logDoc s msg
 
-instance (MonadLog m) => MonadLog (ReaderT r m) where
+instance MonadLog m => MonadLog (ReaderT r m) where
+  {-# INLINE logDoc #-}
   logDoc s msg = lift $ logDoc s msg
 
-instance (MonadLog m) => MonadLog (StateT s m) where
+instance MonadLog m => MonadLog (StateT s m) where
+  {-# INLINE logDoc #-}
   logDoc s msg = lift $ logDoc s msg
 
-instance (MonadLog m) => MonadLog (SS.StateT s m) where
+instance MonadLog m => MonadLog (SS.StateT s m) where
+  {-# INLINE logDoc #-}
   logDoc s msg = lift $ logDoc s msg

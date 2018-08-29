@@ -47,31 +47,31 @@ class Monad m => MonadFileSearch m where
   findRec                       :: (FindEntry -> Maybe a) -> m [a]
 
 instance MonadFileSearch m => MonadFileSearch (ExceptT e m) where
-  {-# INLINABLE findByPathSuffixSansExtension #-}
-  {-# INLINABLE findRec                       #-}
+  {-# INLINE findByPathSuffixSansExtension #-}
+  {-# INLINE findRec                       #-}
   findByPathSuffixSansExtension = lift . findByPathSuffixSansExtension
   findRec                       = lift . findRec
 
 instance MonadFileSearch m => MonadFileSearch (StateT s m) where
-  {-# INLINABLE findByPathSuffixSansExtension #-}
-  {-# INLINABLE findRec                       #-}
+  {-# INLINE findByPathSuffixSansExtension #-}
+  {-# INLINE findRec                       #-}
   findByPathSuffixSansExtension = lift . findByPathSuffixSansExtension
   findRec                       = lift . findRec
 
 instance MonadFileSearch m => MonadFileSearch (ReaderT r m) where
-  {-# INLINABLE findByPathSuffixSansExtension #-}
-  {-# INLINABLE findRec                       #-}
+  {-# INLINE findByPathSuffixSansExtension #-}
+  {-# INLINE findRec                       #-}
   findByPathSuffixSansExtension = lift . findByPathSuffixSansExtension
   findRec                       = lift . findRec
 
 instance (MonadFileSearch m, Monoid w) => MonadFileSearch (WriterT w m) where
-  {-# INLINABLE findByPathSuffixSansExtension #-}
-  {-# INLINABLE findRec                       #-}
+  {-# INLINE findByPathSuffixSansExtension #-}
+  {-# INLINE findRec                       #-}
   findByPathSuffixSansExtension = lift . findByPathSuffixSansExtension
   findRec                       = lift . findRec
 
 instance MonadFileSearch m => MonadFileSearch (EitherKT e m) where
-  {-# INLINABLE findByPathSuffixSansExtension #-}
-  {-# INLINABLE findRec                       #-}
+  {-# INLINE findByPathSuffixSansExtension #-}
+  {-# INLINE findRec                       #-}
   findByPathSuffixSansExtension = lift . findByPathSuffixSansExtension
   findRec                       = lift . findRec

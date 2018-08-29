@@ -32,7 +32,7 @@ data PortPool = PortPool
   , portPoolCapacity :: !Int
   }
 
-newPortPool :: (MonadBase IO m) => Int -> PortNumber -> m PortPool
+newPortPool :: MonadBase IO m => Int -> PortNumber -> m PortPool
 newPortPool capacity startPort
   | startPort < 0 = error "Cannot create port pool with negative start port"
   | capacity  < 0 = error "Cannot create port pool with negative capacity"
@@ -50,10 +50,10 @@ newPortPool capacity startPort
     maxPort :: Int
     maxPort = 65535
 
-getPort :: (MonadBase IO m) => PortPool -> m PortNumber
+getPort :: MonadBase IO m => PortPool -> m PortNumber
 getPort = liftBase . readChan . portPoolPorts
 
-restorePort :: (MonadBase IO m) => PortPool -> PortNumber -> m ()
+restorePort :: MonadBase IO m => PortPool -> PortNumber -> m ()
 restorePort pool = liftBase . writeChan (portPoolPorts pool)
 
 withPort :: (MonadMask m, MonadBase IO m) => PortPool -> (PortNumber -> m a) -> m a

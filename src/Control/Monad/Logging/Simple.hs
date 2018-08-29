@@ -71,13 +71,13 @@ instance MonadTrans SimpleLoggerT where
 -- instance MonadTransControl SimpleLoggerT where
 --   type StT SimpleLoggerT a = StT (ReaderT (SimpleLoggerCfg m)) a
 
-instance (MonadBaseControl n m) => MonadBaseControl n (SimpleLoggerT m) where
+instance MonadBaseControl n m => MonadBaseControl n (SimpleLoggerT m) where
   type StM (SimpleLoggerT m) a = StM (ReaderT (SimpleLoggerCfg m) m) a
   liftBaseWith f = SimpleLoggerT $ liftBaseWith (\g -> f (g . unSimpleLoggerT))
   restoreM :: forall a. StM (SimpleLoggerT m) a -> SimpleLoggerT m a
   restoreM = coerce . (restoreM :: StM (ReaderT (SimpleLoggerCfg m) m) a -> ReaderT (SimpleLoggerCfg m) m a)
 
-instance (Monad m) => MonadLog (SimpleLoggerT m) where
+instance Monad m => MonadLog (SimpleLoggerT m) where
   logDoc severity msg = SimpleLoggerT $ do
     SimpleLoggerCfg{logSink, logSeverity} <- ask
     when (severity >= logSeverity) $
@@ -89,7 +89,7 @@ data Destination m where
   Custom ::                   (Doc Void -> m ()) -> Destination m
 
 runSimpleLoggerT
-  :: forall m a. (Applicative m)
+  :: forall m a. Applicative m
   => Maybe (Destination m)
   -> Severity
   -> SimpleLoggerT m a

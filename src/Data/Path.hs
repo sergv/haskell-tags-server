@@ -84,12 +84,12 @@ instance MonadBase IO m => MkFullPath FilePath.FilePath m where
 
 -- MkFullPath FilePath.FilePath m
 instance MonadBase IO m => MkFullPath Text m where
-  {-# INLINABLE mkFullPath #-}
+  {-# INLINE mkFullPath #-}
   mkFullPath = mkFullPath . T.unpack
 
  -- MkFullPath Text m =>
 instance MonadBase IO m => MkFullPath PathFragment m where
-  {-# INLINABLE mkFullPath #-}
+  {-# INLINE mkFullPath #-}
   mkFullPath = mkFullPath . unPathFragment
 
 doesFileExist :: MonadBase IO m => FullPath -> m Bool
@@ -128,7 +128,7 @@ mkPathFragment = PathFragment . unPathJoin . foldMap1 PathJoin
 class JoinPaths a b c | a b -> c where
   (</>) :: a -> b -> c
 
-  {-# INLINABLE (</>) #-}
+  {-# INLINE (</>) #-}
   default (</>) :: (Coercible a Text, Coercible b Text, Coercible c Text) => a -> b -> c
   (</>) = coerce joinPath
 
@@ -142,16 +142,16 @@ instance JoinPaths BaseName     PathFragment PathFragment
 instance JoinPaths BaseName     BaseName     PathFragment
 
 instance JoinPaths FullPath     BasePath     FullPath where
-  {-# INLINABLE (</>) #-}
+  {-# INLINE (</>) #-}
   (</>) p BasePath{bpFileName} = p </> bpFileName
 
 instance JoinPaths PathFragment BasePath     PathFragment where
-  {-# INLINABLE (</>) #-}
+  {-# INLINE (</>) #-}
   (</>) p BasePath{bpFileName} = p </> bpFileName
 
 class Contains a where
   isInfixOf :: Text -> a -> Bool
-  {-# INLINABLE isInfixOf #-}
+  {-# INLINE isInfixOf #-}
   default isInfixOf :: Coercible a Text => Text -> a -> Bool
   isInfixOf = coerce T.isInfixOf
 
@@ -168,7 +168,7 @@ mkExtension = Extension
 
 class AddExtension a where
   (<.>) :: a -> Extension -> a
-  {-# INLINABLE (<.>) #-}
+  {-# INLINE (<.>) #-}
   default (<.>) :: Coercible a Text => a -> Extension -> a
   (<.>) = coerce addExt
 
@@ -178,7 +178,7 @@ instance AddExtension BaseName
 
 class DropExtension a where
   dropExtension :: a -> a
-  {-# INLINABLE dropExtension #-}
+  {-# INLINE dropExtension #-}
   default dropExtension :: Coercible a Text => a -> a
   dropExtension = coerce dropExt
 
@@ -188,26 +188,26 @@ instance DropExtension BaseName
 
 class TakeFileName a where
   takeFileName :: a -> BaseName
-  {-# INLINABLE takeFileName #-}
+  {-# INLINE takeFileName #-}
   default takeFileName :: Coercible a Text => a -> BaseName
   takeFileName = coerce getFileName
 
 instance TakeFileName FullPath
 instance TakeFileName PathFragment
 instance TakeFileName BasePath where
-  {-# INLINABLE takeFileName #-}
+  {-# INLINE takeFileName #-}
   takeFileName = bpFileName
 
 class TakeExtension a where
   takeExtension :: a -> Extension
-  {-# INLINABLE takeExtension #-}
+  {-# INLINE takeExtension #-}
   default takeExtension :: Coercible a Text => a -> Extension
   takeExtension = coerce getExtension
 
 instance TakeExtension FullPath
 instance TakeExtension PathFragment
 instance TakeExtension BasePath where
-  {-# INLINABLE takeExtension #-}
+  {-# INLINE takeExtension #-}
   takeExtension = bpExtension
 
 -- | File basename without directory but with extension.

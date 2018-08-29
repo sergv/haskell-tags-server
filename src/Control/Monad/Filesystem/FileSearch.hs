@@ -93,13 +93,13 @@ runFileSearchT :: Monad m => SearchCfg -> FileSearchT m a -> m a
 runFileSearchT env (FileSearchT action) = runReaderT action env
 
 instance MonadTrans FileSearchT where
-  {-# INLINABLE lift #-}
+  {-# INLINE lift #-}
   lift = FileSearchT . lift
 
 instance MonadReader r m => MonadReader r (FileSearchT m) where
-  {-# INLINABLE ask #-}
+  {-# INLINE ask #-}
   ask = lift ask
-  {-# INLINABLE local #-}
+  {-# INLINE local #-}
   local f (FileSearchT action) = FileSearchT $ do
     env <- ask
     lift $ local f (runReaderT action env)

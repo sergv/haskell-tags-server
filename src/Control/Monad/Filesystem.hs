@@ -39,11 +39,11 @@ class Monad m => MonadFS m where
   getDirectoryContents :: FullPath -> m [BasePath]
 
 instance MonadFS IO where
-  {-# INLINABLE getModificationTime  #-}
-  {-# INLINABLE readFile             #-}
-  {-# INLINABLE doesFileExist        #-}
-  {-# INLINABLE doesDirectoryExist   #-}
-  {-# INLINABLE getDirectoryContents #-}
+  {-# INLINE getModificationTime  #-}
+  {-# INLINE readFile             #-}
+  {-# INLINE doesFileExist        #-}
+  {-# INLINE doesDirectoryExist   #-}
+  {-# INLINE getDirectoryContents #-}
   getModificationTime  = Path.getModificationTime
   readFile             = Data.Text.Lazy.IO.readFile . T.unpack . Path.unFullPath
   doesFileExist        = Path.doesFileExist
@@ -51,11 +51,11 @@ instance MonadFS IO where
   getDirectoryContents = Path.getDirectoryContents
 
 instance MonadFS m => MonadFS (ExceptT e m) where
-  {-# INLINABLE getModificationTime  #-}
-  {-# INLINABLE readFile             #-}
-  {-# INLINABLE doesFileExist        #-}
-  {-# INLINABLE doesDirectoryExist   #-}
-  {-# INLINABLE getDirectoryContents #-}
+  {-# INLINE getModificationTime  #-}
+  {-# INLINE readFile             #-}
+  {-# INLINE doesFileExist        #-}
+  {-# INLINE doesDirectoryExist   #-}
+  {-# INLINE getDirectoryContents #-}
   getModificationTime  = lift . getModificationTime
   readFile             = lift . readFile
   doesFileExist        = lift . doesFileExist
@@ -63,11 +63,11 @@ instance MonadFS m => MonadFS (ExceptT e m) where
   getDirectoryContents = lift . getDirectoryContents
 
 instance MonadFS m => MonadFS (ReaderT r m) where
-  {-# INLINABLE getModificationTime  #-}
-  {-# INLINABLE readFile             #-}
-  {-# INLINABLE doesFileExist        #-}
-  {-# INLINABLE doesDirectoryExist   #-}
-  {-# INLINABLE getDirectoryContents #-}
+  {-# INLINE getModificationTime  #-}
+  {-# INLINE readFile             #-}
+  {-# INLINE doesFileExist        #-}
+  {-# INLINE doesDirectoryExist   #-}
+  {-# INLINE getDirectoryContents #-}
   getModificationTime  = lift . getModificationTime
   readFile             = lift . readFile
   doesFileExist        = lift . doesFileExist
@@ -75,11 +75,11 @@ instance MonadFS m => MonadFS (ReaderT r m) where
   getDirectoryContents = lift . getDirectoryContents
 
 instance MonadFS m => MonadFS (StateT s m) where
-  {-# INLINABLE getModificationTime  #-}
-  {-# INLINABLE readFile             #-}
-  {-# INLINABLE doesFileExist        #-}
-  {-# INLINABLE doesDirectoryExist   #-}
-  {-# INLINABLE getDirectoryContents #-}
+  {-# INLINE getModificationTime  #-}
+  {-# INLINE readFile             #-}
+  {-# INLINE doesFileExist        #-}
+  {-# INLINE doesDirectoryExist   #-}
+  {-# INLINE getDirectoryContents #-}
   getModificationTime  = lift . getModificationTime
   readFile             = lift . readFile
   doesFileExist        = lift . doesFileExist

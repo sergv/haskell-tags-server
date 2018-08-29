@@ -12,7 +12,7 @@
 --
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Control.Monad.Except.Ext
   ( throwErrorWithCallStack
