@@ -32,7 +32,6 @@ module Haskell.Language.Lexer.State
   , alexEnterLatexCodeEnv
   , alexExitLiterateEnv
   , pushContext
-  , popContext
   , modifyCommentDepth
   , modifyQuasiquoterDepth
   , addMacroDef
@@ -119,25 +118,17 @@ mkAlexState input startCode toplevelCode = AlexState
 alexEnterBirdLiterateEnv :: MonadState AlexState m => m ()
 alexEnterBirdLiterateEnv = modify $ \s -> s { asLiterateStyle = Just Bird }
 
+{-# INLINE alexEnterLatexCodeEnv #-}
 alexEnterLatexCodeEnv :: MonadState AlexState m => m ()
 alexEnterLatexCodeEnv = modify $ \s -> s { asLiterateStyle = Just Latex }
 
+{-# INLINE alexExitLiterateEnv #-}
 alexExitLiterateEnv :: MonadState AlexState m => m ()
 alexExitLiterateEnv = modify $ \s -> s { asLiterateStyle = Nothing }
 
+{-# INLINE pushContext #-}
 pushContext :: MonadState AlexState m => Context -> m ()
 pushContext ctx = modify (\s -> s { asContextStack = ctx : asContextStack s })
-
-popContext
-  :: (HasCallStack, MonadState AlexState m, MonadError ErrorMessage m)
-  => m (Maybe Context)
-popContext = do
-  cs <- gets asContextStack
-  case cs of
-    []      -> pure Nothing
-    c : cs' -> do
-      modify $ \s -> s { asContextStack = cs' }
-      pure $ Just c
 
 modifyCommentDepth :: MonadState AlexState m => (Int -> Int) -> m Int
 modifyCommentDepth f = do
@@ -153,15 +144,18 @@ modifyQuasiquoterDepth f = do
   modify $ \s -> s { asQuasiquoterDepth = depth' }
   pure depth'
 
+{-# INLINE addMacroDef #-}
 addMacroDef :: MonadState AlexState m => PreprocessorMacro -> m ()
 addMacroDef macro =
   modify $ \s -> s { asDefines = KM.insert macro $ asDefines s }
 
+{-# INLINE removeMacroDef #-}
 removeMacroDef :: MonadState AlexState m => MacroName -> m ()
 removeMacroDef name =
   -- Mark name as undefined for later checks.
   modify $ \s -> s { asUndefinedMacro = S.insert name $ asUndefinedMacro s }
 
+{-# INLINE enterConstantMacroDef #-}
 enterConstantMacroDef
   :: (HasCallStack, MonadState AlexState m, MonadError ErrorMessage m)
   => ConstantMacroDef
@@ -171,6 +165,7 @@ enterConstantMacroDef ConstantMacroDef{cmdName, cmdBody} =
     asInputL . aiInputL %~
       InputStack.ExpandingConstant cmdName cmdBody (T.length cmdBody)
 
+{-# INLINE enterFunctionMacroDef #-}
 enterFunctionMacroDef
   :: (HasCallStack, MonadState AlexState m, MonadError ErrorMessage m)
   => FunctionMacroDef
@@ -196,6 +191,7 @@ sameLength []     _      = False
 sameLength _      []     = False
 sameLength (_:xs) (_:ys) = sameLength xs ys
 
+{-# INLINE addToCurrentMacroArg #-}
 addToCurrentMacroArg :: MonadState AlexState m => T.Text -> m ()
 addToCurrentMacroArg argPart =
   modify $ \s -> s
@@ -204,19 +200,23 @@ addToCurrentMacroArg argPart =
         a : as -> a Semigroup.<> argPart : as
     }
 
+{-# INLINE addNewMacroArg #-}
 addNewMacroArg :: MonadState AlexState m => m ()
 addNewMacroArg =
   modify $ \s -> s { asMacroArgs = T.empty : asMacroArgs s }
 
+{-# INLINE alexSetInput #-}
 alexSetInput :: MonadState AlexState m => AlexInput -> m ()
 alexSetInput input = modify $ \s -> s { asInput = input }
 
+{-# INLINE alexSetCode #-}
 alexSetCode :: MonadState AlexState m => AlexCode -> m ()
 alexSetCode code = modify $ \s -> s { asCode = code }
 
+{-# INLINE alexChangeToplevelCode #-}
 alexChangeToplevelCode :: MonadState AlexState m => AlexCode -> m ()
 alexChangeToplevelCode code = modify $ \s -> s { asToplevelCode = code }
 
+{-# INLINE alexSetToplevelCode #-}
 alexSetToplevelCode :: MonadState AlexState m => m ()
 alexSetToplevelCode = alexSetCode =<< gets asToplevelCode
-

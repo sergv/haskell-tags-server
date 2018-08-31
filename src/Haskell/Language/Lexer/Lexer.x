@@ -106,6 +106,10 @@ $octdigit   = [0-7]
 $hexdigit   = [0-9a-fA-F]
 @charescape = [\\] ( $charesc | $asclarge+ | "o" $octdigit+ | "x" $hexdigit+ )
 
+@float_number =  ( [\+\-]? ( $digit+ ( "." $digit+ )? | $digit* "." $digit+ ) ( [eE] [\+\-]? $digit* )? )
+
+@number = ( [\+\-]? $digit+ | 0 ([oO] $octdigit+ | [xX] $hexdigit ) | @float_number )
+
 @source_pragma = [Ss][Oo][Uu][Rr][Cc][Ee]
 
 $filename = [a-z A-Z 0-9 \- \_ \. \\]
@@ -390,8 +394,14 @@ $nl $space*             { \_ len -> pure $! one $! Newline $! len - 1 }
 "]"                     { kw RBracket }
 ")"                     { popRParen }
 "~"                     { kw Tilde }
--- semicolons are not used
-";"                     ;
+
+";"                     { kw Semicolon }
+
+[\\]                    { kw LambdaBackslash }
+
+-- Not interested in numbers, but it takes time to extract their text so
+-- it's quicker to just ignore them.
+@number                 { kw Number }
 
 @qualificationPrefix ( $ident+ | $symbol+ )
                         { \input len -> pure $ one $ T $ retrieveToken input len }
@@ -428,6 +438,7 @@ tokenizeM filename mode input =
     toplevelCode :: AlexCode
     toplevelCode = startCode
 
+-- TODO: add unsafe interleave here for producing tokens
 scanTokens :: (HasCallStack, Monad m) => AlexT m [Token]
 scanTokens = do
   toks <- alexMonadScan
@@ -500,15 +511,28 @@ pushLParen _ _ = do
   pure $ one LParen
 
 popRParen :: Monad m => AlexAction (AlexT m)
-popRParen _ _ = tryRestoringContext *> pure (one RParen)
+popRParen _ _ = do
+  cs <- gets asContextStack
+  case cs of
+    []      -> pure ()
+    c : cs' -> do
+      modify $ \s -> s { asContextStack = cs' }
+      case c of
+        CtxHaskell     -> alexSetToplevelCode
+        CtxQuasiquoter -> alexSetCode qqCode
+  pure (one RParen)
 
-tryRestoringContext :: Monad m => AlexT m ()
-tryRestoringContext = do
-  ctx <- popContext
-  case ctx of
-    Nothing             -> pure ()
-    Just CtxHaskell     -> alexSetToplevelCode
-    Just CtxQuasiquoter -> alexSetCode qqCode
+popContext
+  :: (HasCallStack, MonadState AlexState m, MonadError ErrorMessage m)
+  => m (Maybe Context)
+popContext = do
+  cs <- gets asContextStack
+  case cs of
+    []      -> pure Nothing
+    c : cs' -> do
+      modify $ \s -> s { asContextStack = cs' }
+      pure $ Just c
+
 
 errorAtLine
   :: (HasCallStack, MonadError ErrorMessage m, MonadState AlexState m)

@@ -32,8 +32,8 @@ import Data.Symbols.MacroName (MacroName)
 data InputType = OriginalSource | Macro
 
 -- | Abstraction of input text into a stream so that it can have macro
--- definitions. When macro is encountered, current stream is paused
--- and new stream out of the macro definition should be formed.
+-- definitions. When a macro is encountered, current stream is paused
+-- and a new stream should be formed out of the macro definition.
 data InputStack =
     OriginalSourceStack Text
   | ExpandingConstant
@@ -93,16 +93,16 @@ uncons = \case
     -- #define foo() bar
     -- x = foo()baz
     --
-    -- lex as
+    -- tokenise as
     -- [T "x", Equals, T "bar", T "baz"]
     Just (Macro, ' ', rest)
   ExpandingFunction name args txt n rest ->
     addInputType Macro . second (\txt' -> ExpandingFunction name args txt' (n - 1) rest) <$> T.uncons txt
   where
-    addInputType :: t -> (a,  b) -> (t, a, b)
+    addInputType :: t -> (a, b) -> (t, a, b)
     addInputType t (a, b) = (t, a, b)
 
--- | Check if @name@ refers to macro function we're currently expanding.
+-- | Check if @name@ refers to the macro function we're currently expanding.
 lookupMacroArg :: MacroName -> InputStack -> Maybe Text
 lookupMacroArg name = go
   where
