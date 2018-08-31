@@ -40,6 +40,7 @@ import Haskell.Language.Lexer.FastTags
   , SrcPos(..)
   , Line(..)
   , breakBlocks
+  , whereBlock
   , unstrippedTokensOf
   , processTokens
   )

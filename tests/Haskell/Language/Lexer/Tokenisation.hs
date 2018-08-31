@@ -26,6 +26,7 @@ tests = testGroup "Basic tokenisation"
   , testTokenizeWithNewlines
   , testStripComments
   , testBreakBlocks
+  , testWhereBlock
   , testProcess
   ]
 
@@ -70,14 +71,75 @@ testTokenize = testGroup "Tokenize"
   , "(\\err -> case err of Foo -> True; _ -> False)"
     ==>
     [LParen, T "\\", T "err", Arrow, KWCase, T "err", KWOf, T "Foo", Arrow, T "True", T "_", Arrow, T "False", RParen, Newline 0]
+
+  -- multiline string with \r
+  , "foo \"bar\\\r\n\
+    \  \\bar\" baz"        ==> [T "foo", String, T "baz", Newline 0]
+  -- multiline string with zero indentation
+  , "foo \"bar\\\r\n\
+    \\\bar\" baz"          ==> [T "foo", String, T "baz", Newline 0]
+  , "(\\err -> case err of Foo -> True; _ -> False)" ==>
+      [ LParen, LambdaBackslash, T "err", Arrow, KWCase, T "err", KWOf, T "Foo"
+      , Arrow, T "True", Semicolon, T "_", Arrow, T "False", RParen, Newline 0
+      ]
+  , "foo = \"foo\\n\\\r\n\
+    \  \\\" bar" ==> [T "foo", Equals, String, T "bar", Newline 0]
   , "foo = \"foo\\n\\\n\
-    \  \\\" bar"
+    \  \\x\" bar" ==>
+      [ T "foo", Equals, String, T "bar", Newline 0]
+
+  , "{-   ___   -}import Data.Char;main=putStr$do{c<-\"/1 AA A A;9+ )11929 )1191A 2C9A \";e\r\n\
+    \ {- {- | -} -}  {- {- || -} -}{- {- || -} -}{- {- || -} -} {--}.(`divMod`8).(+(-32)).ord$c};f(0,0)=\"\n\";f(m,n)=m?\"  \"++n?\"_/\"\r\n\
+    \{- {- | -} -}n?x=do{[1..n];x}                                    --- obfuscated\r\n\
+    \{-\\_/ on Fairbairn, with apologies to Chris Brown. Above is / Haskell 98 -}"
     ==>
-    [T "foo", Equals, String, T "bar", Newline 0]
-  , "foo = \"foo\\n\\\n\
-    \  \\x\" bar"
+    [ KWImport, T "Data.Char", Semicolon
+    , T "main", Equals , T "putStr", T "$", KWDo, LBrace, T "c", T "<-", String, Semicolon, T "e", Newline 4
+    , Dot, LParen, Backtick, T "divMod", Backtick, Number, RParen, Dot
+    , LParen, T "+", LParen, Number, RParen, RParen, Dot, T "ord", T "$", T "c", RBrace, Semicolon
+    , T "f", LParen, Number, Comma, Number, RParen, Equals, String, Semicolon
+    , T "f", LParen, T "m", Comma, T "n", RParen, Equals, T "m", T "?", String, T "++", T "n", T "?", String, Newline 0
+    , T "n", T "?", T "x", Equals, KWDo, LBrace, LBracket, Number, T "..", T "n", RBracket, Semicolon, T "x", RBrace, Newline 0, Newline 0
+    ]
+
+  , "one_hash, two_hash :: text_type\n\
+    \hash_prec :: Int -> Int\n\
+    \one_hash  = from_char '#'\n\
+    \two_hash  = from_string \"##\"\n\
+    \hash_prec = const 0"
     ==>
-    [T "foo", Equals, String, T "bar", Newline 0]
+    [ T "one_hash", Comma, T "two_hash", DoubleColon, T "text_type", Newline 0
+    , T "hash_prec", DoubleColon, T "Int", Arrow, T "Int", Newline 0
+    , T "one_hash", Equals, T "from_char", Character, Newline 0
+    , T "two_hash",  Equals, T "from_string", String, Newline 0
+    , T "hash_prec", Equals, T "const", Number, Newline 0
+    ]
+  , "showComplexFloat x 0.0 = showFFloat Nothing x \"\""
+    ==>
+    [T "showComplexFloat", T "x", Number, Equals, T "showFFloat", T "Nothing", T "x", String, Newline 0]
+  , "deriveJSON defaultOptions ''CI.CI"
+    ==>
+    [T "deriveJSON", T "defaultOptions", T "''CI.CI", Newline 0]
+  , "--:+: :+: :+:"
+    ==>
+    [T "--:+:", T ":+:", T ":+:", Newline 0]
+
+  , "\\x -> y" ==> [LambdaBackslash, T "x", Arrow, T "y", Newline 0]
+  , "precalcClosure0 :: Grammar -> Name -> RuleList\n\
+    \precalcClosure0 g = \n\
+    \\\n -> case lookup n info' of\n\
+    \\tNothing -> []\n\
+    \\tJust c  -> c\n\
+    \  where"
+    ==>
+    [ T "precalcClosure0", DoubleColon, T "Grammar", Arrow, T "Name", Arrow, T "RuleList", Newline 0
+    , T "precalcClosure0", T "g", Equals, Newline 0
+    , LambdaBackslash, T "n", Arrow, KWCase, T "lookup", T "n", T "info'", KWOf, Newline 1
+    , T "Nothing", Arrow, LBracket, RBracket, Newline 1
+    , T "Just", T "c", Arrow, T "c", Newline 2
+    , KWWhere, Newline 0
+    ]
+
   , tokenizeSplices
   , "import Foo hiding (Bar)"                ==>
     [KWImport, T "Foo", T "hiding", LParen, T "Bar", RParen, Newline 0]
@@ -96,20 +158,43 @@ testTokenize = testGroup "Tokenize"
       . tokenize' filename Vanilla
 
     tokenizeSplices = testGroup "Splices"
-      [ "$(foo)"                              ==>
+      [ "$(foo)"                                  ==>
         [SpliceStart, T "foo", RParen, Newline 0]
-      , "$(foo [| baz |])"                    ==>
+      , "$(foo [| baz |])"                        ==>
         [SpliceStart, T "foo", QuasiquoterStart, QuasiquoterEnd, RParen, Newline 0]
-      , "$(foo [bar| baz |])"                 ==>
+      , "$(foo ⟦ baz ⟧)"                          ==>
+        [ SpliceStart, T "foo", QuasiquoterStart, QuasiquoterEnd, RParen
+        , Newline 0
+        ]
+      , "$(foo [bar| baz |])"                     ==>
         [SpliceStart, T "foo", QuasiquoterStart, QuasiquoterEnd, RParen, Newline 0]
-      , "$(foo [bar| bar!\nbaz!\n $(baz) |])" ==>
+      , "$(foo [Foo.bar| baz ⟧)"                  ==>
+        [SpliceStart, T "foo", QuasiquoterStart, QuasiquoterEnd, RParen, Newline 0]
+      , "$(foo [$bar| baz |])"                    ==>
+        [SpliceStart, T "foo", QuasiquoterStart, QuasiquoterEnd, RParen, Newline 0]
+      , "$(foo [$Foo.bar| baz ⟧)"                 ==>
+        [SpliceStart, T "foo", QuasiquoterStart, QuasiquoterEnd, RParen, Newline 0]
+      , "$(foo [bar| bar!\nbaz!\n $(baz) |])"     ==>
         [SpliceStart, T "foo", QuasiquoterStart, SpliceStart, T "baz", RParen, QuasiquoterEnd, RParen, Newline 0]
+      , "$(foo [Foo.bar| bar!\nbaz!\n $(baz) ⟧)"  ==>
+        [ SpliceStart, T "foo", QuasiquoterStart, SpliceStart, T "baz"
+        , RParen, QuasiquoterEnd, RParen, Newline 0
+        ]
+      , "$(foo [$bar| bar!\nbaz!\n $(baz) |])"    ==>
+        [ SpliceStart, T "foo", QuasiquoterStart, SpliceStart, T "baz"
+        , RParen, QuasiquoterEnd, RParen, Newline 0
+        ]
+      , "$(foo [$Foo.bar| bar!\nbaz!\n $(baz) ⟧)" ==>
+        [ SpliceStart, T "foo", QuasiquoterStart, SpliceStart, T "baz"
+        , RParen, QuasiquoterEnd, RParen, Newline 0
+        ]
       ]
+
 
 testTokenizeWithNewlines :: TestTree
 testTokenizeWithNewlines = testGroup "Tokenize with newlines"
-  [ "1\n2\n"     ==> [Newline 0, T "1", Newline 0, T "2", Newline 0]
-  , " 11\n 11\n" ==> [Newline 1, T "11", Newline 1, T "11", Newline 0]
+  [ "x\ny\n"     ==> [Newline 0, T "x", Newline 0, T "y", Newline 0]
+  , " xx\n yy\n" ==> [Newline 1, T "xx", Newline 1, T "yy", Newline 0]
   , "foo bar baz"
     |=>
     []
@@ -205,6 +290,7 @@ testTokenizeWithNewlines = testGroup "Tokenize with newlines"
         map valOf
       . tokenize' filename mode
 
+
 testStripComments :: TestTree
 testStripComments = testGroup "Strip comments"
   [ "hello -- there"
@@ -261,6 +347,7 @@ testStripComments = testGroup "Strip comments"
     (==>) = makeTest f
     f = map valOf . tokenize' filename Vanilla
 
+
 testBreakBlocks :: TestTree
 testBreakBlocks = testGroup "Break blocks"
   [ testGroup "non-literate"
@@ -315,6 +402,45 @@ testBreakBlocks = testGroup "Break blocks"
       [ [T "aa"]
       , [T "aa"]
       ]
+
+    , "one_hash, two_hash :: text_type\n\
+      \hash_prec :: Int -> Int\n\
+      \one_hash  = from_char '#'\n\
+      \two_hash  = from_string \"##\"\n\
+      \hash_prec = const 0"
+      ==>
+      [ [T "one_hash", T "Comma", T "two_hash", T "DoubleColon", T "text_type"]
+      , [T "hash_prec", T "DoubleColon", T "Int", T "Arrow", T "Int"]
+      , [T "one_hash", T "Equals", T "from_char", T "Character"]
+      , [T "two_hash",  T "Equals", T "from_string", T "String"]
+      , [T "hash_prec", T "Equals", T "const", T "Number"]
+      ]
+    , "one_hash, two_hash :: text_type; \
+      \hash_prec :: Int -> Int; \
+      \one_hash  = from_char '#'; \
+      \two_hash  = from_string \"##\"; \
+      \hash_prec = const 0"
+      ==>
+      [ [T "one_hash", T "Comma", T "two_hash", T "DoubleColon", T "text_type"]
+      , [T "hash_prec", T "DoubleColon", T "Int", T "Arrow", T "Int"]
+      , [T "one_hash", T "Equals", T "from_char", T "Character"]
+      , [T "two_hash",  T "Equals", T "from_string", T "String"]
+      , [T "hash_prec", T "Equals", T "const", T "Number"]
+      ]
+    , "{\n\
+      \  data F f :: * ; -- foo\n\
+      \                  -- bar\n\
+      \                  -- baz\n\
+      \  mkF  :: f -> F f ; getF :: F f -> f ;\n\
+      \} ;"
+      ==>
+      [ [ Newline 2
+        , T "LBrace", T "KWData", T "F", T "f", T "DoubleColon", T "*", T "Semicolon", Newline 2
+        , T "mkF", T "DoubleColon", T "f", T "Arrow", T "F", T "f", T "Semicolon", Newline 2
+        , T "getF", T "DoubleColon", T "F", T "f", T "Arrow", T "f", T "Semicolon", Newline 0
+        , T "RBrace"
+        ]
+      ]
     ]
   , testGroup "literate"
     [ "> a\n\
@@ -346,7 +472,7 @@ testBreakBlocks = testGroup "Break blocks"
       \>  aa\n"
       |=>
       [[T "a", Newline 2, T "aa", Newline 2, T "aa"]]
-    ]
+   ]
   ]
   where
     (==>) = makeTest (f Vanilla)
@@ -356,6 +482,41 @@ testBreakBlocks = testGroup "Break blocks"
       . breakBlocks
       . UnstrippedTokens
       . tokenize' filename mode
+
+
+testWhereBlock :: TestTree
+testWhereBlock = testGroup "whereBlock"
+  [ "class A f where\n\
+    \  data F f :: * -- foo\n\
+    \                -- bar\n\
+    \                -- baz\n\
+    \  mkF  :: f -> F f\n\
+    \  getF :: F f -> f"
+    ==>
+    [ [T "KWData", T "F", T "f", T "DoubleColon", T "*"]
+    , [T "mkF", T "DoubleColon", T "f", T "Arrow", T "F", T "f"]
+    , [T "getF", T "DoubleColon", T "F", T "f", T "Arrow", T "f"]
+    ]
+  , "class A f where {\n\
+    \  data F f :: * ; -- foo\n\
+    \                  -- bar\n\
+    \                  -- baz\n\
+    \  mkF  :: f -> F f ;\n\
+    \  getF :: F f -> f ;\n\
+    \} ;"
+    ==>
+    [ [T "KWData", T "F", T "f", T "DoubleColon", T "*"]
+    , [T "mkF", T "DoubleColon", T "f", T "Arrow", T "F", T "f"]
+    , [T "getF", T "DoubleColon", T "F", T "f", T "Arrow", T "f"]
+    ]
+  ]
+  where
+    (==>) = makeTest f
+    f = map (map valOf . unstrippedTokensOf)
+      . whereBlock
+      . UnstrippedTokens
+      . tokenize' filename Vanilla
+
 
 testProcess :: TestTree
 testProcess = testGroup "Process"
@@ -396,34 +557,43 @@ testPrefixes = testGroup "Prefix tracking"
     ==>
     [ Pos (SrcPos fn 1 "") (TagVal "f" Function Nothing)
     , Pos (SrcPos fn 2 "") (TagVal "g" Function Nothing)
-    , Pos (SrcPos fn 3 "") (TagVal "C" Constructor (Just "D"))
     , Pos (SrcPos fn 3 "") (TagVal "D" Type Nothing)
+    , Pos (SrcPos fn 3 "") (TagVal "C" Constructor (Just "D"))
     , Pos (SrcPos fn 4 "") (TagVal "f" Function (Just "D"))
     ]
   , "instance Foo Bar where\n\
     \  newtype FooFam Bar = BarList [Int]"
     ==>
-    [ Pos (SrcPos fn 2 "") (TagVal "BarList" Constructor (Just "FooFam"))
+    [ Pos (SrcPos fn 2 "")
+          (TagVal "BarList" Constructor (Just "FooFam"))
     ]
   , "instance Foo Bar where\n\
     \  newtype FooFam Bar = BarList { getBarList :: [Int] }"
     ==>
-    [ Pos (SrcPos fn 2 "") (TagVal "BarList" Constructor (Just "FooFam"))
-    , Pos (SrcPos fn 2 "") (TagVal "getBarList" Function (Just "FooFam"))
+    [ Pos (SrcPos fn 2 "" )
+          (TagVal "BarList" Constructor (Just "FooFam"))
+    , Pos (SrcPos fn 2 "" )
+          (TagVal "getBarList" Function (Just "FooFam"))
     ]
   , "instance Foo Bar where\n\
     \  data (Ord a) => FooFam Bar a = BarList { getBarList :: [a] }\n\
     \                               | BarMap { getBarMap :: Map a Int }"
     ==>
-    [ Pos (SrcPos fn 2 "") (TagVal "BarList" Constructor (Just "FooFam"))
-    , Pos (SrcPos fn 2 "") (TagVal "getBarList" Function (Just "FooFam"))
-    , Pos (SrcPos fn 3 "") (TagVal "BarMap" Constructor (Just "FooFam"))
-    , Pos (SrcPos fn 3 "") (TagVal "getBarMap" Function (Just "FooFam"))
+    [ Pos (SrcPos fn 2 "")
+          (TagVal "BarList" Constructor (Just "FooFam"))
+    , Pos (SrcPos fn 2 "")
+          (TagVal "getBarList" Function (Just "FooFam"))
+    , Pos (SrcPos fn 3 "")
+          (TagVal "BarMap" Constructor (Just "FooFam"))
+    , Pos (SrcPos fn 3 "")
+          (TagVal "getBarMap" Function (Just "FooFam"))
     ]
   , "newtype instance FooFam Bar = BarList { getBarList :: [Int] }"
     ==>
-    [ Pos (SrcPos fn 1 "")              (TagVal "BarList" Constructor (Just "FooFam"))
-    , Pos (SrcPos fn 1 "") (TagVal "getBarList" Function (Just "FooFam"))
+    [ Pos (SrcPos fn 1 "")
+          (TagVal "BarList" Constructor (Just "FooFam"))
+    , Pos (SrcPos fn 1 "")
+          (TagVal "getBarList" Function (Just "FooFam"))
     ]
   , "data instance (Ord a) => FooFam Bar a = BarList { getBarList :: [a] }\n\
     \                                      | BarMap { getBarMap :: Map a Int }"
@@ -447,12 +617,14 @@ testData = testGroup "Data"
   -- Records.
   , "data Foo a = Bar { field :: Field }" ==> ["Bar", "Foo", "field"]
   , "data R = R { a::X, b::Y }"           ==> ["R", "R", "a", "b"]
+  , "data R = R { a, b::X }"              ==> ["R", "R", "a", "b"]
   , "data R = R { a∷X, b∷Y }"             ==> ["R", "R", "a", "b"]
+  , "data R = R { a, b∷X }"               ==> ["R", "R", "a", "b"]
   , "data R = R {\n\ta::X\n\t, b::Y\n\t}" ==> ["R", "R", "a", "b"]
   , "data R = R {\n\ta,b::X\n\t}"         ==> ["R", "R", "a", "b"]
-    -- Record operators
-    , "data Foo a b = (:*:) { foo :: a, bar :: b }" ==>
-        [":*:", "Foo", "bar", "foo"]
+  -- Record operators
+  , "data Foo a b = (:*:) { foo :: a, bar :: b }" ==>
+      [":*:", "Foo", "bar", "foo"]
 
   , "data R = R {\n\
     \    a :: !RealTime\n\
@@ -523,6 +695,7 @@ testData = testGroup "Data"
   , "newtype Eq a => X a = Add a"                                     ==> ["Add", "X"]
   , "newtype (Eq a) => X a = Add a"                                   ==> ["Add", "X"]
   , "newtype (Eq a, Ord a) => X a = Add a"                            ==> ["Add", "X"]
+  , "newtype () => X a = Add a"                                       ==> ["Add", "X"]
 
   , "newtype (u :*: v) z = X"                                         ==> [":*:", "X"]
   , "data (u :*: v) z = X"                                            ==> [":*:", "X"]
@@ -531,6 +704,10 @@ testData = testGroup "Data"
   , "newtype ((u :: (* -> *) -> *) :*: v) z = X"                      ==> [":*:", "X"]
   , "data ((u :: (* -> *) -> *) :*: v) z = X"                         ==> [":*:", "X"]
   , "type ((u :: (* -> *) -> *) :*: v) z = (u, v, z)"                 ==> [":*:"]
+
+  , "newtype () => ((u :: (* -> *) -> *) :*: v) z = X"                ==> [":*:", "X"]
+  , "data () => ((u :: (* -> *) -> *) :*: v) z = X"                   ==> [":*:", "X"]
+  , "type () => ((u :: (* -> *) -> *) :*: v) z = (u, v, z)"           ==> [":*:"]
 
   , "newtype (Eq (v z)) => ((u :: (* -> *) -> *) :*: v) z = X"        ==> [":*:", "X"]
   , "data (Eq (v z)) => ((u :: (* -> *) -> *) :*: v) z = X"           ==> [":*:", "X"]
@@ -592,7 +769,8 @@ testData = testGroup "Data"
   , "data Hadron a b = forall x y. Science { f :: [(x, y)], h :: b }"
     ==>
     ["Hadron", "Science", "f", "h"]
-  , "data Hadron a b = forall x y. Science { f :: [(Box x, Map x y)], h :: b }"
+  , "data Hadron a b = \
+    \forall x y. Science { f :: [(Box x, Map x y)], h :: b }"
     ==>
     ["Hadron", "Science", "f", "h"]
   , "data Hadron a b = forall x y. Science { f ∷ [(Box x, Map x y)], h ∷ b }"
@@ -624,6 +802,55 @@ testData = testGroup "Data"
     \  | [(Maybe b, Map b a, a)] `Bar` [(Maybe a, Map a b, b)]"
     ==>
     ["Bar", "Foo", "Test"]
+  , "data IO a = IO (World->(a,World))"
+    ==>
+    ["IO", "IO"]
+
+  , "data SubTransformTriple a =\n\
+    \        SubTransformTriple\n\
+    \           (forall sh. (Shape sh, Slice sh) => Transform (sh:.Int) a)\n\
+    \           (forall sh. (Shape sh, Slice sh) => Transform (sh:.Int) a)\n\
+    \           (forall sh. (Shape sh, Slice sh) => Transform (sh:.Int) a)"
+    ==>
+    ["SubTransformTriple", "SubTransformTriple"]
+
+  , "data TestCase \n\
+    \    = forall a prop . (Testable prop, Data a) \n\
+    \    => TestCase  (((String, a, a) -> Property) -> prop)\n\
+    \        deriving (Typeable)"
+    ==>
+    ["TestCase", "TestCase"]
+
+  , "-- | Binding List\n\
+    \data BindingList v a = Variable v => BindingList {source :: Source v a -- ^ the list's binding source\n\
+    \                                                , list   :: v [v a]    -- ^ the bound list\n\
+    \                                                , pos    :: v Int}     -- ^ the current position"
+    ==>
+    ["BindingList", "BindingList", "list", "pos", "source"]
+
+  , "data Tester a = Tester\n\
+    \    {(===) :: [String] -> a -> IO ()\n\
+    \    ,fails :: [String] -> IO ()\n\
+    \    ,isHelp :: [String] -> [String] -> IO ()\n\
+    \    ,isHelpNot :: [String] -> [String] -> IO ()\n\
+    \    ,isVersion :: [String] -> String -> IO ()\n\
+    \    ,isVerbosity :: [String] -> Verbosity -> IO ()\n\
+    \    ,completion :: [String] -> (Int,Int) -> [Complete] -> IO ()\n\
+    \    }"
+    ==>
+    ["===", "Tester", "Tester", "completion", "fails", "isHelp", "isHelpNot", "isVerbosity", "isVersion"]
+
+  , "data Tester a = Tester\n\
+    \    {(===) :: [String] -> a -> IO ()\n\
+    \    ,fails :: [String] -> IO ()\n\
+    \    ,isHelp, isHelpNot :: [String] -> [String] -> IO ()\n\
+    \    ,isVersion :: [String] -> String -> IO ()\n\
+    \    ,isVerbosity :: [String] -> Verbosity -> IO ()\n\
+    \    ,completion :: [String] -> (Int,Int) -> [Complete] -> IO ()\n\
+    \    }"
+    ==>
+    ["===", "Tester", "Tester", "completion", "fails", "isHelp", "isHelpNot", "isVerbosity", "isVersion"]
+
   ]
   where
     (==>) = testTagNames filename Vanilla
@@ -645,24 +872,24 @@ testGADT = testGroup "GADT"
   , "data Vec ix where\n\
     \  Nil   :: Int -> Foo Int\n\
     \  (:::) :: Int -> Vec Int -> Vec Int\n\
-    \  (.+.) :: Int -> Int -> Vec Int -> Vec Int\n"
+    \  (:+.) :: Int -> Int -> Vec Int -> Vec Int\n"
     ==>
-    [".+.", ":::", "Nil", "Vec"]
+    [":+.", ":::", "Nil", "Vec"]
   , "data Vec ix where\n\
     \  Nil   :: Int -> Foo Int\n\
     \  -- foo\n\
     \  (:::) :: Int -> Vec Int -> Vec Int\n\
     \-- bar\n\
-    \  (.+.) :: Int     -> \n\
+    \  (:+.) :: Int     -> \n\
     \           -- ^ baz\n\
     \           Int     -> \n\
     \           Vec Int -> \n\
     \Vec Int\n"
     ==>
-    [".+.", ":::", "Nil", "Vec"]
-    , "data NatSing (n :: Nat) where\n\
-      \  ZeroSing :: 'Zero\n\
-      \  SuccSing :: NatSing n -> NatSing ('Succ n)\n"
+    [":+.", ":::", "Nil", "Vec"]
+  , "data NatSing (n :: Nat) where\n\
+    \  ZeroSing :: 'Zero\n\
+    \  SuccSing :: NatSing n -> NatSing ('Succ n)\n"
     ==>
     ["NatSing", "SuccSing", "ZeroSing"]
   , "data Rec a where\n\
@@ -684,20 +911,24 @@ testGADT = testGroup "GADT"
 
 testFamilies :: TestTree
 testFamilies = testGroup "Families"
-  [ "type family X :: *\n"                                           ==> ["X"]
-  , "data family X :: * -> *\n"                                      ==> ["X"]
-  , "data family a ** b"                                             ==> ["**"]
+  [ "type family X :: *\n"      ==> ["X"]
+  , "data family X :: * -> *\n" ==> ["X"]
+  , "data family a ** b"        ==> ["**"]
 
-  , "type family a :<: b\n"                                          ==> [":<:"]
-  , "type family (a :: Nat) :<: (b :: Nat) :: Nat\n"                 ==> [":<:"]
-  , "type family (a :: Nat) `Family` (b :: Nat) :: Nat\n"            ==> ["Family"]
-  , "type family (m :: Nat) <=? (n :: Nat) :: Bool"                  ==> ["<=?"]
-  , "type family (m ∷ Nat) <=? (n ∷ Nat) ∷ Bool"                     ==> ["<=?"]
+  , "type family a :<: b\n"                               ==> [":<:"]
+  , "type family (a :: Nat) :<: (b :: Nat) :: Nat\n"      ==> [":<:"]
+  , "type family (a :: Nat) `Family` (b :: Nat) :: Nat\n" ==> ["Family"]
+  , "type family (m :: Nat) <=? (n :: Nat) :: Bool"       ==> ["<=?"]
+  , "type family (m ∷ Nat) <=? (n ∷ Nat) ∷ Bool"         ==> ["<=?"]
 
-  , "data instance X a b = Y a | Z { unZ :: b }"                     ==> ["Y", "Z", "unZ"]
-  , "data instance (Eq a, Eq b) => X a b = Y a | Z { unZ :: b }"     ==> ["Y", "Z", "unZ"]
-  , "data instance (Eq a, Eq b) => X a b = Y a | Z { pattern :: b }" ==> ["Y", "Z", "pattern"]
-  , "data instance XList Char = XCons !Char !(XList Char) | XNil"    ==> ["XCons", "XNil"]
+  , "data instance X a b = Y a | Z { unZ :: b }"                     ==>
+      ["Y", "Z", "unZ"]
+  , "data instance (Eq a, Eq b) => X a b = Y a | Z { unZ :: b }"     ==>
+      ["Y", "Z", "unZ"]
+  , "data instance (Eq a, Eq b) => X a b = Y a | Z { pattern :: b }" ==>
+      ["Y", "Z", "pattern"]
+  , "data instance XList Char = XCons !Char !(XList Char) | XNil"    ==>
+      ["XCons", "XNil"]
   , "newtype instance Cxt x => T [x] = A (B x) deriving (Z,W)"       ==> ["A"]
   , "type instance Cxt x => T [x] = A (B x)"                         ==> []
   , "data instance G [a] b where\n\
@@ -720,28 +951,195 @@ testFunctions = testGroup "Functions"
     "a,b::X"          ==> ["a", "b"]
   -- With an operator.
   , "(+), a :: X"     ==> ["+", "a"]
+  -- Unicode operator.
+  , "(•) :: X"        ==> ["•"]
   -- Don't get fooled by literals.
   , "1 :: Int"        ==> []
+  -- Don't confuse _ wildcard for an operator.
+  , "f :: Int -> Int\n\
+    \f _ = 1"         ==> ["f"]
 
   -- plain functions and operators
   , "(.::) :: X -> Y" ==> [".::"]
-  , "(:::) :: X -> Y" ==> [":::"]
+  , "(+::) :: X -> Y" ==> ["+::"]
   , "(->:) :: X -> Y" ==> ["->:"]
   , "(--+) :: X -> Y" ==> ["--+"]
   , "(=>>) :: X -> Y" ==> ["=>>"]
 
-  , "_g :: X -> Y"    ==> ["_g"]
+  -- Multi-line with semicolons at the end
+  , "one_hash, two_hash :: text_type;\n\
+    \hash_prec :: Int -> Int;\n\
+    \one_hash  = from_char '#';\n\
+    \two_hash  = from_string \"##\";\n\
+    \hash_prec = const 0"
+    ==>
+    ["hash_prec", "one_hash", "two_hash"]
+  -- Single-line separated by semicolons - e.g. result of a macro expansion
+  , "one_hash, two_hash :: text_type; \
+    \hash_prec :: Int -> Int; \
+    \one_hash  = from_char '#'; \
+    \two_hash  = from_string \"##\"; \
+    \hash_prec = const 0"
+    ==>
+    ["hash_prec", "one_hash", "two_hash"]
+
+  , "assertDataFormatError :: DecompressError -> IO String\n\
+    \assertDataFormatError (DataFormatError detail) = return detail\n\
+    \assertDataFormatError _                        = assertFailure \"expected DataError\"\n\
+    \                                              >> return \"\"\n"
+    ==>
+    ["assertDataFormatError"]
+
+  , "instance PartialComparison Double where\n\
+    \    type PartialCompareEffortIndicator Double = ()\n\
+    \    pCompareEff _ a b = Just $ toPartialOrdering $ Prelude.compare a b\n\
+    \--        case (isNaN a, isNaN b) of\n\
+    \--           (False, False) -> Just $ toPartialOrdering $ Prelude.compare a b  \n\
+    \--           (True, True) -> Just EQ\n\
+    \--           _ -> Just NC \n\
+    \    pCompareDefaultEffort _ = ()\n\
+    \\n\
+    \pComparePreludeCompare _ a b =\n\
+    \    Just $ toPartialOrdering $ Prelude.compare a b\n\
+    \\n\
+    \propPartialComparisonReflexiveEQ :: \n\
+    \    (PartialComparison t) =>\n\
+    \    t -> \n\
+    \    (PartialCompareEffortIndicator t) -> \n\
+    \    (UniformlyOrderedSingleton t) -> \n\
+    \    Bool\n\
+    \propPartialComparisonReflexiveEQ _ effort (UniformlyOrderedSingleton e) = \n\
+    \    case pCompareEff effort e e of Just EQ -> True; Nothing -> True; _ -> False"
+    ==>
+    ["pComparePreludeCompare", "propPartialComparisonReflexiveEQ"]
+
+  , "hexQuad :: Z.Parser Int\n\
+    \hexQuad = do\n\
+    \  s <- Z.take 4\n\
+    \  let hex n | w >= C_0 && w <= C_9 = w - C_0\n\
+    \            | w >= C_a && w <= C_f = w - 87\n\
+    \            | w >= C_A && w <= C_F = w - 55\n\
+    \            | otherwise          = 255\n\
+    \        where w = fromIntegral $ B.unsafeIndex s n\n\
+    \      a = hex 0; b = hex 1; c = hex 2; d = hex 3\n\
+    \  if (a .|. b .|. c .|. d) /= 255\n\
+    \    then return $! d .|. (c `shiftL` 4) .|. (b `shiftL` 8) .|. (a `shiftL` 12)\n\
+    \    else fail \"invalid hex escape\"\n"
+    ==>
+    ["hexQuad"]
+
+  -- Semicolon within instance does not produce toplevel tags
+  , "instance Path  T.Text      where readPath = Just; pathRep _ = typeRep (Proxy :: Proxy Text)"
+    ==>
+    []
+
+  , "prop_bounds2 o1 w1 o2 w2 = let n1 = fromW8 w1 ; n2 = fromW8 w2 ; bs = ((o1, o2), (o1 + n1, o2 + n2)) in bs == bounds (listArray bs (take ((n1 + 1) * (n2 + 1)) (cycle [False, True, True])))"
+    ==>
+    ["prop_bounds2"]
+
+  , "string :: String -> ReadP r String\n\
+    \-- ^ Parses and returns the specified string.\n\
+    \string this = do s <- look; scan this s\n\
+    \ where\n\
+    \  scan []     _               = do return this\n\
+    \  scan (x:xs) (y:ys) | x == y = do get >> scan xs ys\n\
+    \  scan _      _               = do pfail"
+    ==>
+    ["string"]
+
+  , "-- | Get every node of a tree, put it into a list.\n\
+    \climb :: Tree a -> [a]\n\
+    \climb x = case x of (Empty) -> [];(Branch a Empty b) -> a : climb b;\n\
+    \                    (Branch a b Empty) -> a : climb b;\n\
+    \                    (Branch a b d) -> a : climb b ++ climb d"
+    ==>
+    ["climb"]
+
+  , "addend hid a (NotM (App uid okh elr as)) = NotM $ App uid okh elr (f as)\n\
+    \ where f (NotM ALNil) = NotM $ ALCons hid a (NotM $ ALNil)\n\
+    \       f (NotM (ALCons hid a as)) = NotM $ ALCons hid a (f as)\n\
+    \       f _ = __IMPOSSIBLE__\n\
+    \addend _ _ _ = __IMPOSSIBLE__\n\
+    \copyarg _ = False"
+    ==>
+    ["addend", "copyarg"]
+
+  , "realWorldTc :: TyCon; \\\n\
+    \realWorldTc = mkTyCon3 \"ghc-prim\" \"GHC.Types\" \"RealWorld\"; \\\n\
+    \instance Typeable RealWorld where { typeOf _ = mkTyConApp realWorldTc [] }"
+    ==>
+    ["realWorldTc"]
+
+  , "(r `mkQ` br) a = _" ==> ["mkQ"]
+
+  , "_?_ = return unsafePerformIO" ==> ["?"]
+
+  , "(+) :: DebMap -> String -> DebianVersion\n\
+    \m + k = maybe (error (\"No version number for \" ++ show k ++ \" in \" ++ show (Map.map (maybe Nothing (Just . prettyDebianVersion)) m))) id (Map.findWithDefault Nothing k m)"
+    ==>
+    ["+"]
+
+  , "(!) :: DebMap -> String -> DebianVersion\n\
+    \_ ! k = maybe (error (\"No version number for \" ++ show k ++ \" in \" ++ show (Map.map (maybe Nothing (Just . prettyDebianVersion)) m))) id (Map.findWithDefault Nothing k m)"
+    ==>
+    ["!"]
+
+  , "(.) :: DebMap -> String -> DebianVersion\n\
+    \m . k = maybe (error (\"No version number for \" ++ show k ++ \" in \" ++ show (Map.map (maybe Nothing (Just . prettyDebianVersion)) m))) id (Map.findWithDefault Nothing k m)"
+    ==>
+    ["."]
+
+  , "(.) :: DebMap -> String -> DebianVersion\n\
+    \m . k x = maybe (error (\"No version number for \" ++ show k ++ \" in \" ++ show (Map.map (maybe Nothing (Just . prettyDebianVersion)) m))) id (Map.findWithDefault Nothing k m)"
+    ==>
+    ["."]
+
+  , "{- 123___ -}import Data.Char;main=putStr$do{c<-\"/1 AA A A;9+ )11929 )1191A 2C9A \";e\n\
+    \{-  |  -}    .(`divMod`8).(+(-32)).ord$c};f(0,0)=\"\n\";f(m,n)=m?\"  \"++n?\"_/\"\n\
+    \{-  |  -}n?x=do{[1..n];x}                                    --- obfuscated\n\
+    \{-\\_/ on Fairbairn, with apologies to Chris Brown. Above is / Haskell 98 -}"
+    ==>
+    ["?", "f", "main"]
+  , "{-   456___   -}import Data.Char;main=putStr$do{c<-\"/1 AA A A;9+ )11929 )1191A 2C9A \";e\n\
+    \ {- {- | -} -}  {- {- || -} -}{- {- || -} -}{- {- || -} -} {--}.(`divMod`8).(+(-32)).ord$c};f(0,0)=\"\n\";f(m,n)=m?\"  \"++n?\"_/\"\n\
+    \{- {- | -} -}n?x=do{[1..n];x}                                    --- obfuscated\n\
+    \{-\\_/ on Fairbairn, with apologies to Chris Brown. Above is / Haskell 98 -}"
+    ==>
+    ["?", "f", "main"]
+
+  , "showComplexFloat :: Double -> Double -> String\n\
+    \showComplexFloat x 0.0 = showFFloat Nothing x \"\"\n\
+    \showComplexFloat 0.0 y = showFFloat Nothing y \"i\"\n\
+    \showComplexFloat x y = (showFFloat Nothing x \"\") ++ (if y > 0 then \"+\" else \"\") ++ (showFFloat Nothing y \"i\")"
+    ==>
+    ["showComplexFloat"]
+
+  , "createAlert            :<|>\n\
+    \ getAlert              :<|>\n\
+    \ deleteAlert           :<|>\n\
+    \ setAlertStatus        :<|>\n\
+    \ tagAlert              :<|>\n\
+    \ untagAlert            :<|>\n\
+    \ updateAlertAttributes = client (Proxy :: Proxy AlertApi)"
+    ==>
+    ["createAlert"]
+
+  , "_g :: X -> Y" ==> ["_g"]
+  , "(f . g) x = f (g x)" ==> ["."]
   , toplevelFunctionsWithoutSignatures
   ]
   where
     (==>) = testTagNames filename Vanilla
-
-    toplevelFunctionsWithoutSignatures = testGroup "Toplevel functions without signatures"
-      [ "infix 5 |+|"  ==> []
+    toplevelFunctionsWithoutSignatures =
+      testGroup "Toplevel functions without signatures"
+      [ "$(return . map sumDeclaration $ [0..15])" ==> []
+      , "$( fmap (reverse . concat) . traverse prismsForSingleType $ [1..15] )" ==> []
+      , "T.makeInstances [2..6]\nx" ==> []
+      , "infix 5 |+|"  ==> []
       , "infixl 5 |+|" ==> []
       , "infixr 5 |+|" ==> []
       , "f = g"        ==> ["f"]
-        -- Relies on Repeatable
+      -- Relies on RepeatableTag.
       , "f :: a -> b -> a\n\
         \f x y = x"
         ==>
@@ -749,10 +1147,10 @@ testFunctions = testGroup "Functions"
       , "f x y = x"               ==> ["f"]
       , "f (x :+: y) z = x"       ==> ["f"]
       , "(x :+: y) `f` z = x"     ==> ["f"]
-      , "(x :+: y) :*: z = x"     ==> [":*:"]
-      , "((:+:) x y) :*: z = x"   ==> [":*:"]
-      , "(:*:) (x :+: y) z = x"   ==> [":*:"]
-      , "(:*:) ((:+:) x y) z = x" ==> [":*:"]
+      , "(x :+: y) *: z = x"     ==> ["*:"]
+      , "((:+:) x y) *: z = x"   ==> ["*:"]
+      , "(*:) (x :+: y) z = x"   ==> ["*:"]
+      , "(*:) ((:+:) x y) z = x" ==> ["*:"]
       , strictMatchTests
       , lazyMatchTests
       , atPatternsTests
@@ -775,11 +1173,16 @@ testFunctions = testGroup "Functions"
       , "(!) x y = x" ==> ["!"]
       , "--- my comment" ==> []
       , "foo :: Rec -> Bar\n\
-        \foo Rec{..} = Bar (recField + 1)" ==> ["foo"]
+        \foo Rec{..} = Bar (recField + 1)"
+        ==>
+        ["foo"]
       , "foo :: Rec -> Bar\n\
-        \foo Rec { bar = Baz {..}} = Bar (recField + 1)" ==> ["foo"]
+        \foo Rec { bar = Baz {..}} = Bar (recField + 1)"
+        ==>
+        ["foo"]
       -- Functions named "pattern"
       , "pattern :: Int -> String -> [Int]"           ==> ["pattern"]
+      , "pattern x () = x + x"                        ==> ["pattern"]
       , "pattern, foo :: Int -> String -> [Int]"      ==> ["foo", "pattern"]
       , "foo, pattern :: Int -> String -> [Int]"      ==> ["foo", "pattern"]
       , "foo, pattern, bar :: Int -> String -> [Int]" ==> ["bar", "foo", "pattern"]
@@ -791,17 +1194,17 @@ testFunctions = testGroup "Functions"
       , "f forall = forall + 1"                       ==> ["f"]
       ]
     strictMatchTests = testGroup "Strict match (!)"
-      [ "f !x y = x"                  ==> ["f"]
-      , "f x !y = x"                  ==> ["f"]
-      , "f !x !y = x"                 ==> ["f"]
-      , "f ! x y = x"                 ==> ["f"]
-        -- this one is a bit controversial but it seems to be the way ghc
-        -- parses it
-      , "f ! x = x"                   ==> ["f"]
-      , "(:*:) !(x :+: y) z = x"      ==> [":*:"]
-      , "(:*:) !(!x :+: !y) !z = x"   ==> [":*:"]
-      , "(:*:) !((:+:) x y) z = x"    ==> [":*:"]
-      , "(:*:) !((:+:) !x !y) !z = x" ==> [":*:"]
+      [ "f !x y = x"                 ==> ["f"]
+      , "f x !y = x"                 ==> ["f"]
+      , "f !x !y = x"                ==> ["f"]
+      , "f ! x y = x"                ==> ["f"]
+      -- this one is a bit controversial but it seems to be the way ghc
+      -- parses it
+      , "f ! x = x"                  ==> ["f"]
+      , "(*:) !(x :+: y) z = x"      ==> ["*:"]
+      , "(*:) !(!x :+: !y) !z = x"   ==> ["*:"]
+      , "(*:) !((:+:) x y) z = x"    ==> ["*:"]
+      , "(*:) !((:+:) !x !y) !z = x" ==> ["*:"]
       , "(!) :: a -> b -> a\n\
         \(!) x y = x"
         ==>
@@ -811,17 +1214,17 @@ testFunctions = testGroup "Functions"
       , "x ! y = x" ==> ["x"]
       ]
     lazyMatchTests = testGroup "Lazy match (~)"
-      [ "f ~x y = x"                  ==> ["f"]
-      , "f x ~y = x"                  ==> ["f"]
-      , "f ~x ~y = x"                 ==> ["f"]
-      , "f ~ x y = x"                 ==> ["f"]
-        -- this one is a bit controversial but it seems to be the way ghc
-        -- parses it
-      , "f ~ x = x"                   ==> ["f"]
-      , "(:*:) ~(x :+: y) z = x"      ==> [":*:"]
-      , "(:*:) ~(~x :+: ~y) ~z = x"   ==> [":*:"]
-      , "(:*:) ~((:+:) x y) z = x"    ==> [":*:"]
-      , "(:*:) ~((:+:) ~x ~y) ~z = x" ==> [":*:"]
+      [ "f ~x y = x"                 ==> ["f"]
+      , "f x ~y = x"                 ==> ["f"]
+      , "f ~x ~y = x"                ==> ["f"]
+      , "f ~ x y = x"                ==> ["f"]
+      -- this one is a bit controversial but it seems to be the way ghc
+      -- parses it
+      , "f ~ x = x"                  ==> ["f"]
+      , "(*:) ~(x :+: y) z = x"      ==> ["*:"]
+      , "(*:) ~(~x :+: ~y) ~z = x"   ==> ["*:"]
+      , "(*:) ~((:+:) x y) z = x"    ==> ["*:"]
+      , "(*:) ~((:+:) ~x ~y) ~z = x" ==> ["*:"]
       , "(~) :: a -> b -> a\n\
         \(~) x y = x"
         ==>
@@ -841,10 +1244,10 @@ testFunctions = testGroup "Functions"
       , "f z @ (x : zs @ xs) = z: [x: zs]"      ==> ["f"]
       , "f z @ (zz @x : zs @ xs) = z: [zz: zs]" ==> ["f"]
 
-      , "(:*:) zzz@(x :+: y) z = x"             ==> [":*:"]
-      , "(:*:) zzz@(zx@x :+: zy@y) zz@z = x"    ==> [":*:"]
-      , "(:*:) zzz@((:+:) x y) z = x"           ==> [":*:"]
-      , "(:*:) zzz@((:+:) zs@x zs@y) zz@z = x"  ==> [":*:"]
+      , "(*:) zzz@(x :+: y) z = x"             ==> ["*:"]
+      , "(*:) zzz@(zx@x :+: zy@y) zz@z = x"    ==> ["*:"]
+      , "(*:) zzz@((:+:) x y) z = x"           ==> ["*:"]
+      , "(*:) zzz@((:+:) zs@x zs@y) zz@z = x"  ==> ["*:"]
 
       , "f z@(!x) ~y = x"                       ==> ["f"]
       ]
@@ -870,9 +1273,7 @@ testClass = testGroup "Class"
   , "class (Eq a) => a :<: b where\n    f :: a -> b"               ==> [":<:", "f"]
   , "class (a ~ 'Foo) => a :<: b where\n    f :: a -> b"           ==> [":<:", "f"]
   , "class ('Foo ~ a) => a :<: b where\n    f :: a -> b"           ==> [":<:", "f"]
-  , "class a :<<<: b => a :<: b where\n    f :: a -> b"
-    ==>
-    [":<:", "f"]
+  , "class a :<<<: b => a :<: b where\n    f :: a -> b"            ==> [":<:", "f"]
   , "class (a :<<<: b) => a :<: b where\n    f :: a -> b"   ==> [":<:", "f"]
   , "class (a :<<<: b) ⇒ a :<: b where\n    f ∷ a → b"      ==> [":<:", "f"]
   , "class (Eq a, Ord b) => a :<: b where\n    f :: a -> b" ==> [":<:", "f"]
@@ -912,6 +1313,14 @@ testClass = testGroup "Class"
   , "class a ~~ b => (a :: k) ! (b :: k) | a -> b, b -> a"
     ==>
     ["!"]
+  , "class A f where {\n\
+    \  data F f :: * ; -- foo\n\
+    \                  -- bar\n\
+    \                  -- baz\n\
+    \  mkF  :: f -> F f ; getF :: F f -> f ;\n\
+    \} ;"
+    ==>
+    ["A", "F", "getF", "mkF"]
   ]
   where
     (==>) = testTagNames filename Vanilla
@@ -985,6 +1394,14 @@ testLiterate = testGroup "Literate"
     \\\end{code}"
     ==>
     ["C", "m", "n"]
+  , "> precalcClosure0 :: Grammar -> Name -> RuleList\n\
+    \> precalcClosure0 g = \n\
+    \>\t\\n -> case lookup n info' of\n\
+    \>\t\tNothing -> []\n\
+    \>\t\tJust c  -> c\n\
+    \>  where"
+    ==>
+    ["precalcClosure0"]
   ]
   where
     (==>) = makeTest f
