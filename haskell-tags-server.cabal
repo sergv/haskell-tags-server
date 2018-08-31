@@ -153,8 +153,10 @@ test-suite test-haskell-tags-server
     Main.hs
   other-modules:
     Control.Monad.Logging.DiscardLogs
-    Haskell.Language.Lexer.Tests
     Haskell.Language.Lexer.Preprocessor.Tests
+    Haskell.Language.Lexer.Tests
+    Haskell.Language.Lexer.Tokenisation
+    Haskell.Language.Lexer.TokenisationUtils
     Haskell.Language.Server.Tags.AnalyzeHeaderTests
     Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions
     Haskell.Language.Server.Tags.TypesTests
