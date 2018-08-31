@@ -5,6 +5,7 @@
 -- License     :  BSD3-style (see LICENSE)
 -- Maintainer  :  serg.foo@gmail.com
 -- Created     :  Monday, 15 August 2016
+--
 -- BERT frontend for tag server.
 ----------------------------------------------------------------------------
 
@@ -38,7 +39,7 @@ import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy.Encoding as TLE
 import Data.Text.Prettyprint.Doc.Ext
 import Data.Void (Void, vacuous)
-import Network.Socket
+import qualified Network.Socket as Network
 
 import Data.BERT
 import qualified Network.BERT.Server as BERT
@@ -54,7 +55,7 @@ import Data.Symbols
 import Haskell.Language.Lexer.FastTags (SrcPos(..), Type, Line(..))
 import Haskell.Language.Server.Tags.Types
 
-defaultPort :: PortNumber
+defaultPort :: Network.PortNumber
 defaultPort = 10000
 
 decodeUtf8
@@ -77,11 +78,11 @@ instance BERT.Server SynchronizedTransport where
   type ServerTransport SynchronizedTransport = BERT.TCP
   runServer SynchronizedTransport{stTransport, stStartedLock} handle = do
     let sock = BERT.getTcpListenSocket stTransport
-    listen sock sOMAXCONN
+    Network.listen sock Network.maxListenQueue
     setCondition stStartedLock
     forever $ do
-      (clientsock, _) <- accept sock
-      setSocketOption clientsock NoDelay 1
+      (clientsock, _) <- Network.accept sock
+      Network.setSocketOption clientsock Network.NoDelay 1
       handle $ BERT.TCP clientsock
   cleanup = BERT.cleanup . stTransport
 
@@ -100,7 +101,7 @@ waitForBertServerStart = waitForCondition . stStartedLock . bsTransport
 
 runBertServer
   :: forall m. (HasCallStack, MonadBase IO m, MonadBaseControl IO m, MonadLog m, StM m BERT.DispatchResult ~ BERT.DispatchResult)
-  => PortNumber
+  => Network.PortNumber
   -> RequestHandler
   -> m BertServer
 runBertServer port reqHandler = do
