@@ -121,7 +121,7 @@ $nl [^>]
 [\-][\-]+ / @nl         ;
 
 -- Strip preprocessor
-"#" $ws* ( "ifdef" | "endif" | "elif" | "else" | "define" | "if" | "undef" | "line" | "error" ) .* / @nl ;
+"#" $ws* ( "ifdef" | "endif" | "elif" | "else" | "define" | "if" | "undef" | "line" | "error" | "include" ) .* / @nl ;
 
 }
 
