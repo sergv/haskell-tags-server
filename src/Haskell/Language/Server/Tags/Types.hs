@@ -32,27 +32,11 @@ module Haskell.Language.Server.Tags.Types
   , UnresolvedModule
   , ResolvedModule
   , moduleNeedsReloading
-  , ImportKey(..)
   , ModuleHeader(..)
   , UnresolvedModuleHeader
   , ResolvedModuleHeader
   , resolveQualifier
-  , ImportTarget(..)
-  , ImportSpec(..)
-  , UnresolvedImportSpec
-  , ResolvedImportSpec
-  , importBringsUnqualifiedNames
-  , importBringQualifiedNames
-  , importBringsNamesQualifiedWith
-  , ImportQualification(..)
-  , hasQualifier
-  , getQualifier
-  , ImportType(..)
-  , ImportList(..)
   , ModuleExports(..)
-  , EntryWithChildren(..)
-  , mkEntryWithoutChildren
-  , ChildrenVisibility(..)
   ) where
 
 import Prelude hiding (mod)
@@ -75,14 +59,15 @@ import qualified Control.Monad.Filesystem as MonadFS
 import Control.Monad.Filesystem.FileSearch (SearchCfg(..), versionControlDirs)
 import Data.CompiledRegex
 import Data.ErrorMessage
-import Data.KeyMap (KeyMap, HasKey(..))
+import Data.KeyMap (KeyMap)
 import Data.Map.NonEmpty (NonEmptyMap)
 import Data.Path (FullPath, Extension)
 import Data.Promise (Promise)
-import Data.SubkeyMap (SubkeyMap, HasSubkey(..))
+import Data.SubkeyMap (SubkeyMap)
 import qualified Data.SubkeyMap as SubkeyMap
 import Data.SymbolMap (SymbolMap)
 import Data.Symbols
+import Haskell.Language.Server.Tags.Types.Imports
 
 -- | Types of user requests that can be handled.
 data Request =
@@ -176,23 +161,6 @@ instance Pretty a => Pretty (Module a) where
       , "AllSymbols"    --> modAllSymbols mod
       ]
 
--- | Handle for when particular module enters another module's scope.
-data ImportKey = ImportKey
-  { -- | Whether this import statement is annotated with {-# SOURCE #-} pragma.
-    -- This means that it refers to .hs-boot file, rather than vanilla .hs file.
-    ikImportTarget :: ImportTarget
-    -- | Name of imported module
-  , ikModuleName   :: ModuleName
-  } deriving (Eq, Ord, Show, Generic)
-
-instance HasSubkey ImportKey where
-  type Subkey ImportKey = ModuleName
-  getSubkey = ikModuleName
-
-instance Pretty ImportKey where
-  pretty ik =
-    "ImportKey" <+> pretty (ikImportTarget ik) <+> pretty (ikModuleName ik)
-
 -- | Result of analysing module's export list and any subsequent imports. E.g.
 --
 -- > module Foo (...) where
@@ -254,106 +222,6 @@ resolveQualifier qual ModuleHeader{mhImports, mhImportQualifiers} =
   where
     qualifiedModName = getImportQualifier qual
 
-data ImportTarget = VanillaModule | HsBootModule
-  deriving (Eq, Ord, Show, Enum, Bounded, Generic)
-
-instance Pretty ImportTarget where
-  pretty = ppGeneric
-
--- | Information about import statement
-data ImportSpec a = ImportSpec
-  { ispecImportKey     :: ImportKey
-  , ispecQualification :: ImportQualification
-  , ispecImportList    :: Maybe ImportList
-  , ispecImportedNames :: a
-  } deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
-
-type UnresolvedImportSpec = ImportSpec ()
-type ResolvedImportSpec   = ImportSpec SymbolMap
-
-instance Pretty a => Pretty (ImportSpec a) where
-  pretty spec = ppDictHeader "ImportSpec" $
-    [ "ModuleName"    --> ikModuleName $ ispecImportKey spec
-    , "Qualification" --> ispecQualification spec
-    ] ++
-    [ "ImportList"    --> importList
-    | Just importList <- [ispecImportList spec]
-    ]
-
-importBringsUnqualifiedNames :: ImportSpec a -> Bool
-importBringsUnqualifiedNames ImportSpec{ispecQualification} =
-  case ispecQualification of
-    Qualified _                   -> False
-    Unqualified                   -> True
-    BothQualifiedAndUnqualified _ -> True
-
-importBringQualifiedNames :: ImportSpec a -> Bool
-importBringQualifiedNames ImportSpec{ispecQualification} =
-  case ispecQualification of
-    Qualified _                   -> True
-    Unqualified                   -> False
-    BothQualifiedAndUnqualified _ -> True
-
-importBringsNamesQualifiedWith :: ImportSpec a -> ImportQualifier -> Bool
-importBringsNamesQualifiedWith ImportSpec{ispecQualification} q =
-  getQualifier ispecQualification == Just q
-
-data ImportQualification =
-    -- | Qualified import, e.g.
-    --
-    -- import qualified X as Y
-    --
-    -- The ModuleName field would store "Y" in this case.
-    --
-    -- import qualified X - field would store "X"
-    Qualified ImportQualifier
-    -- | Vanilla import, e.g.
-    --
-    -- import X
-  | Unqualified
-    -- | Vanilla import with explicit alias, e.g.
-    --
-    -- import X as Y
-  | BothQualifiedAndUnqualified ImportQualifier
-  deriving (Eq, Ord, Show, Generic)
-
-instance Pretty ImportQualification where
-  pretty = ppGeneric
-
-hasQualifier :: ImportQualifier -> ImportQualification -> Bool
-hasQualifier qual = maybe False (== qual) . getQualifier
-
-getQualifier :: ImportQualification -> Maybe ImportQualifier
-getQualifier (Qualified q)                   = Just q
-getQualifier Unqualified                     = Nothing
-getQualifier (BothQualifiedAndUnqualified q) = Just q
-
-data ImportType =
-    -- | Explicit import list of an import statement, e.g.
-    --
-    -- import Foo (x, y, z(Baz))
-    -- import Bar ()
-    Imported
-  | -- | Hiding import list
-    --
-    -- import Foo hiding (x, y(Bar), z)
-    -- import Foo hiding ()
-    Hidden
-  deriving (Eq, Ord, Show, Generic)
-
-instance Pretty ImportType where
-  pretty = ppGeneric
-
--- | User-provided import/hiding list.
-data ImportList = ImportList
-  { ilEntries    :: KeyMap (EntryWithChildren UnqualifiedSymbolName)
-  , ilImportType :: ImportType
-  } deriving (Eq, Ord, Show)
-
-instance Pretty ImportList where
-  pretty ImportList{ilImportType, ilEntries} =
-    ppFoldableHeader ("Import list[" <> pretty ilImportType <> "]") ilEntries
-
 data ModuleExports = ModuleExports
   { -- | Toplevel names exported from this particular module as specified in
     -- the header.
@@ -374,33 +242,3 @@ instance Semigroup ModuleExports where
 instance Monoid ModuleExports where
   mempty = ModuleExports mempty mempty False
   mappend = (<>)
-
-data EntryWithChildren name = EntryWithChildren
-  { entryName               :: name
-  , entryChildrenVisibility :: Maybe ChildrenVisibility
-  } deriving (Eq, Ord, Show, Generic)
-
-instance Pretty name => Pretty (EntryWithChildren name) where
-  pretty = ppGeneric
-
-mkEntryWithoutChildren :: a -> EntryWithChildren a
-mkEntryWithoutChildren name = EntryWithChildren name Nothing
-
-instance Ord a => HasKey (EntryWithChildren a) where
-  type Key (EntryWithChildren a) = a
-  getKey (EntryWithChildren name _) = name
-
-data ChildrenVisibility =
-    -- | Wildcard import/export, e.g. Foo(..)
-    VisibleAllChildren
-    -- | Import/export with explicit list of children, e.g. Foo(Bar, Baz), Quux(foo, bar).
-    -- Set is always non-empty.
-  | VisibleSpecificChildren (Set UnqualifiedSymbolName)
-    -- | Wildcard export with some things added in, so they'll be visible on
-    -- wildcard import, e.g.
-    -- ErrorCall(..,ErrorCall)
-  | VisibleAllChildrenPlusSome (Set UnqualifiedSymbolName)
-  deriving (Eq, Ord, Show, Generic)
-
-instance Pretty ChildrenVisibility where
-  pretty = ppGeneric

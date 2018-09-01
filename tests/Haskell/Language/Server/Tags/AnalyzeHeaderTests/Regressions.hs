@@ -25,6 +25,7 @@ import qualified Data.Text as T
 
 import Data.Symbols
 import Haskell.Language.Server.Tags.Types
+import Haskell.Language.Server.Tags.Types.Imports
 
 import qualified Data.KeyMap as KM
 import qualified Data.SubkeyMap as SubkeyMap

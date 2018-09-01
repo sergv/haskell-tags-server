@@ -17,7 +17,7 @@ module Haskell.Language.Server.Tags.LoadFiles
   ( loadAllFilesIntoState
   ) where
 
-import Prelude hiding (readFile)
+import Prelude hiding (mod, readFile)
 
 import Control.Arrow ((&&&))
 import Control.Monad.Catch
@@ -42,6 +42,7 @@ import qualified Data.Map.NonEmpty as NEMap
 import Data.Path
 import Haskell.Language.Server.Tags.LoadModule (loadModuleFromSource, resolveModule)
 import Haskell.Language.Server.Tags.Types
+import Haskell.Language.Server.Tags.Types.Imports
 
 -- todo: handle header files here
 classifyPath :: TagsServerConf -> FindEntry -> Maybe (ImportTarget, FullPath)

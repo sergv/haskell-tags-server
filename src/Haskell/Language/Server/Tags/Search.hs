@@ -29,6 +29,7 @@ import qualified Data.SymbolMap as SM
 import Data.Symbols
 import Haskell.Language.Server.Tags.LoadModule
 import Haskell.Language.Server.Tags.Types
+import Haskell.Language.Server.Tags.Types.Imports
 
 findSymbol
   :: (HasCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
