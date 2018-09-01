@@ -1380,7 +1380,9 @@ testInstance = testGroup "Instance"
 
 testLiterate :: TestTree
 testLiterate = testGroup "Literate"
-  [ "> class (X x) => C a b where\n>\tm :: a->b\n>\tn :: c\n"
+  [ "> class (X x) => C a b where\n\
+    \>\tm :: a->b\n\
+    \>\tn :: c\n"
     ==>
     ["C", "m", "n"]
   , "Test\n\
