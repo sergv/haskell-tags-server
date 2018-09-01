@@ -68,9 +68,6 @@ testTokenize = testGroup "Tokenize"
   -- multiline string
   , "foo \"bar\\\n\
     \  \\bar\" baz"        ==> [T "foo", String, T "baz", Newline 0]
-  , "(\\err -> case err of Foo -> True; _ -> False)"
-    ==>
-    [LParen, T "\\", T "err", Arrow, KWCase, T "err", KWOf, T "Foo", Arrow, T "True", T "_", Arrow, T "False", RParen, Newline 0]
 
   -- multiline string with \r
   , "foo \"bar\\\r\n\
