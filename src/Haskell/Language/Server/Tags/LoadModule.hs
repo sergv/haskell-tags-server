@@ -44,7 +44,7 @@ import Data.Time.Clock (UTCTime)
 import Data.Traversable (for)
 
 import Haskell.Language.Lexer (tokenize)
-import Haskell.Language.Lexer.FastTags (Token, processTokens)
+import Haskell.Language.Lexer.FastTags (Pos, ServerToken, processTokens)
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
@@ -181,7 +181,7 @@ makeModule
   => Maybe ModuleName -- ^ Suggested module name, will be used if source does not define it's own name.
   -> UTCTime
   -> FullPath
-  -> [Token]
+  -> [Pos ServerToken]
   -> m UnresolvedModule
 makeModule suggestedModuleName modifTime filename tokens = do
   (header, tokens') <- analyzeHeader tokens
@@ -197,7 +197,7 @@ makeModule suggestedModuleName modifTime filename tokens = do
   case (suggestedModuleName, header) of
     (Just name, Just ModuleHeader{mhModName}) ->
       unless (name == mhModName) $
-        throwErrorWithCallStack $ ppDictHeader "Module name in file differs from the expected module name"
+        throwErrorWithCallStack $ ppDictHeader "Module name within file differs from the expected module name"
           [ "file"                 --> filename
           , "module name in file"  --> mhModName
           , "expected module name" --> name

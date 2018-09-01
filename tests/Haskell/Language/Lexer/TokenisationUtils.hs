@@ -30,19 +30,18 @@ import qualified Haskell.Language.LexerSimple.Lexer as Lexer
 import TestUtils (makeTest)
 
 import Haskell.Language.Lexer.FastTags
-  ( TokenVal(..)
-  , PragmaType(..)
-  , Token
+  ( PragmaType(..)
+  , ServerToken(..)
   , TagVal(..)
   , Pos(..)
-  , UnstrippedTokens(..)
   , Type(..)
   , SrcPos(..)
   , Line(..)
   , breakBlocks
   , whereBlock
-  , unstrippedTokensOf
   , processTokens
+  , UnstrippedTokens(..)
+  , unstrippedTokensOf
   )
 
 filename :: FilePath
@@ -74,7 +73,7 @@ untag (Pos _ (TagVal name _ _)) = T.unpack name
 
 tokenize'
   :: HasCallStack
-  => FilePath -> LiterateLocation Void -> Text -> [Token]
+  => FilePath -> LiterateLocation Void -> Text -> [Pos ServerToken]
 tokenize' fn mode =
     either (error . PP.displayDocString . PP.pretty) id
   -- . runIdentity

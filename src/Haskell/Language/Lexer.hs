@@ -24,11 +24,11 @@ import Data.ErrorMessage
 -- import Haskell.Language.Lexer.Lexer (tokenizeM)
 -- import Haskell.Language.Lexer.Types (LiterateMode(..))
 
-import Haskell.Language.Lexer.FastTags (Token)
+import Haskell.Language.Lexer.FastTags
 import qualified Haskell.Language.LexerSimple.Lexer as SimpleLexer
 import Haskell.Language.LexerSimple.Types (LiterateLocation(..))
 
-tokenize :: HasCallStack => FilePath -> Text -> Either ErrorMessage [Token]
+tokenize :: HasCallStack => FilePath -> Text -> Either ErrorMessage [Pos ServerToken]
 -- tokenize filename = runIdentity . tokenizeM filename mode
   -- where
   --   mode :: LiterateMode

@@ -30,7 +30,12 @@
   - {name: [Data.Map], as: M}
   - {name: [Data.Set], as: S} # if you import Data.Set qualified, it must be as 'Set'
   - {name: [Data.Vector], as: V}
-  - {name: [FastTags.Tag, FastTags.Token], within: "Haskell.Language.Lexer.FastTags"}
+  -
+    name: [FastTags.Tag, FastTags.Token]
+    within:
+      [ "Haskell.Language.Lexer.FastTags"
+      , "Haskell.Language.Lexer.FastTags.TagValPatterns"
+      ]
 #  - {name: Control.Arrow, within: []} # Certain modules are banned entirely
 
 - functions:

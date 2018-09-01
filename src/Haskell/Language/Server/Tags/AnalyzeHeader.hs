@@ -38,7 +38,7 @@ import Data.Text.Prettyprint.Doc.Ext
 import Data.Void (Void)
 
 import Haskell.Language.Lexer.FastTags
-  (stripNewlines, UnstrippedTokens(..), tokToName, Pos(..), TokenVal(..), Token, posFile, posLine, unLine, TokenVal, PragmaType(..))
+  (stripNewlines, tokToName, Pos(..), ServerToken(..), TokenVal(..), posFile, posLine, unLine, PragmaType(..))
 
 import Control.Monad.Logging
 import Data.ErrorMessage
@@ -51,14 +51,14 @@ import Haskell.Language.Server.Tags.Types
 
 analyzeHeader
   :: (MonadError ErrorMessage m, MonadLog m)
-  => [Token]
-  -> m (Maybe UnresolvedModuleHeader, [Token])
+  => [Pos ServerToken]
+  -> m (Maybe UnresolvedModuleHeader, [Pos ServerToken])
 analyzeHeader ts =
   -- logDebug $ "[analyzeHeader] ts =" <+> ppTokens ts
-  case dropWhile ((/= KWModule) . valOf) ts of
-    Pos _ KWModule :
-      (dropNLs -> Pos _ (T modName) :
-        (break ((== KWWhere) . valOf) . dropNLs -> (exportList, Pos _ KWWhere : body))) -> do
+  case dropWhile ((/= Tok KWModule) . valOf) ts of
+    Pos _ (Tok KWModule) :
+      (dropNLs -> Pos _ (Tok (T modName)) :
+        (break ((== Tok KWWhere) . valOf) . dropNLs -> (exportList, Pos _ (Tok KWWhere) : body))) -> do
       (importSpecs, importQualifiers, body') <- analyzeImports mempty mempty body
       exports                                <- analyzeExports importQualifiers exportList
       let header = ModuleHeader
@@ -71,41 +71,41 @@ analyzeHeader ts =
       -- No header present.
     _ -> pure (Nothing, ts)
 
-pattern PImport       :: Pos TokenVal
-pattern PImport       <- Pos _ KWImport
-pattern PPattern      :: Pos TokenVal
-pattern PPattern      <- Pos _ (T "pattern")
-pattern PType         :: Pos TokenVal
-pattern PType         <- Pos _ KWType
-pattern PModule       :: Pos TokenVal
-pattern PModule       <- Pos _ KWModule
-pattern PString       :: Pos TokenVal
-pattern PString       <- Pos _ String
-pattern PQualified    :: Pos TokenVal
-pattern PQualified    <- Pos _ (T "qualified")
-pattern PName         :: Text -> Pos TokenVal
-pattern PName name    <- Pos _ (T name)
-pattern PAs           :: Pos TokenVal
-pattern PAs           <- Pos _ (T "as")
-pattern PHiding       :: Pos TokenVal
-pattern PHiding       <- Pos _ (T "hiding")
-pattern PLParen       :: Pos TokenVal
-pattern PLParen       <- Pos _ LParen
-pattern PRParen       :: Pos TokenVal
-pattern PRParen       <- Pos _ RParen
-pattern PComma        :: Pos TokenVal
-pattern PComma        <- Pos _ Comma
-pattern PSourcePragma :: Pos TokenVal
+pattern PImport       :: Pos ServerToken
+pattern PImport       <- Pos _ (Tok KWImport)
+pattern PPattern      :: Pos ServerToken
+pattern PPattern      <- Pos _ (Tok (T "pattern"))
+pattern PType         :: Pos ServerToken
+pattern PType         <- Pos _ (Tok KWType)
+pattern PModule       :: Pos ServerToken
+pattern PModule       <- Pos _ (Tok KWModule)
+pattern PString       :: Pos ServerToken
+pattern PString       <- Pos _ (Tok String)
+pattern PQualified    :: Pos ServerToken
+pattern PQualified    <- Pos _ (Tok (T "qualified"))
+pattern PName         :: Text -> Pos ServerToken
+pattern PName name    <- Pos _ (Tok (T name))
+pattern PAs           :: Pos ServerToken
+pattern PAs           <- Pos _ (Tok (T "as"))
+pattern PHiding       :: Pos ServerToken
+pattern PHiding       <- Pos _ (Tok (T "hiding"))
+pattern PLParen       :: Pos ServerToken
+pattern PLParen       <- Pos _ (Tok LParen)
+pattern PRParen       :: Pos ServerToken
+pattern PRParen       <- Pos _ (Tok RParen)
+pattern PComma        :: Pos ServerToken
+pattern PComma        <- Pos _ (Tok Comma)
+pattern PSourcePragma :: Pos ServerToken
 pattern PSourcePragma <- Pos _ (Pragma SourcePragma)
 
 analyzeImports
   :: forall m. (HasCallStack, MonadError ErrorMessage m, MonadLog m)
   => SubkeyMap ImportKey (NonEmpty UnresolvedImportSpec)
   -> Map ImportQualifier (NonEmpty ModuleName)
-  -> [Token]
+  -> [Pos ServerToken]
   -> m ( SubkeyMap ImportKey (NonEmpty UnresolvedImportSpec)
        , Map ImportQualifier (NonEmpty ModuleName)
-       , [Token]
+       , [Pos ServerToken]
        )
 analyzeImports imports qualifiers ts = do
   -- logDebug $ "[analyzeImports] ts =" <+> ppTokens ts
@@ -150,10 +150,10 @@ analyzeImports imports qualifiers ts = do
       :: Text
       -> ImportQualification
       -> ImportTarget
-      -> [Token]
+      -> [Pos ServerToken]
       -> m ( SubkeyMap ImportKey (NonEmpty UnresolvedImportSpec)
            , Map ImportQualifier (NonEmpty ModuleName)
-           , [Token]
+           , [Pos ServerToken]
            )
     add name qual importTarget toks = do
       (importList, toks') <- analyzeImportList toks
@@ -186,7 +186,7 @@ analyzeImports imports qualifiers ts = do
     -- - Foo_|_(Bar, Baz)
     -- - Foo_|_ hiding (Bar, Baz)
     -- - Quux_|_(..)
-    analyzeImportList :: [Token] -> m (Maybe ImportList, [Token])
+    analyzeImportList :: [Pos ServerToken] -> m (Maybe ImportList, [Pos ServerToken])
     analyzeImportList toks = do
       -- logDebug $ "[analyzeImpotrList] toks =" <+> ppTokens toks
       case dropNLs toks of
@@ -198,8 +198,8 @@ analyzeImports imports qualifiers ts = do
         findImportListEntries
           :: ImportType
           -> KeyMap (EntryWithChildren UnqualifiedSymbolName)
-          -> [Token]
-          -> m (ImportList, [Token])
+          -> [Pos ServerToken]
+          -> m (ImportList, [Pos ServerToken])
         findImportListEntries importType acc toks' = do
           -- logDebug $ "[findImportListEntries] toks =" <+> ppTokens toks
           case dropNLs toks' of
@@ -242,13 +242,13 @@ analyzeImports imports qualifiers ts = do
               { ilEntries    = acc
               , ilImportType = importType
               }
-            entryWithChildren :: Doc Void -> Text -> [Token] -> m (ImportList, [Token])
+            entryWithChildren :: Doc Void -> Text -> [Pos ServerToken] -> m (ImportList, [Pos ServerToken])
             entryWithChildren descr name rest = do
               (children, rest') <- snd $ analyzeChildren descr $ dropNLs rest
               name'             <- mkUnqualName name
               let newEntry = EntryWithChildren name' children
               findImportListEntries importType (KM.insert newEntry acc) $ dropCommas rest'
-            entryWithoutChildren :: Text -> [Token] -> m (ImportList, [Token])
+            entryWithoutChildren :: Text -> [Pos ServerToken] -> m (ImportList, [Pos ServerToken])
             entryWithoutChildren name rest = do
               name' <- mkUnqualName name
               let newEntry = mkEntryWithoutChildren name'
@@ -263,11 +263,11 @@ analyzeImports imports qualifiers ts = do
 analyzeExports
   :: forall m. (HasCallStack, MonadError ErrorMessage m, MonadLog m)
   => Map ImportQualifier (NonEmpty ModuleName)
-  -> [Token]
+  -> [Pos ServerToken]
   -> m (Maybe ModuleExports)
 analyzeExports importQualifiers ts = do
   -- logDebug $ "[analyzeExports] ts =" <+> ppTokens ts
-  case stripNewlines $ UnstrippedTokens ts of
+  case stripNewlines ts of
     []            -> pure Nothing
     PLParen : rest -> Just <$> go mempty mempty rest
     toks          ->
@@ -281,7 +281,7 @@ analyzeExports importQualifiers ts = do
     -- - module Data.Foo.Bar
     go :: KeyMap (EntryWithChildren SymbolName)
        -> Set ModuleName
-       -> [Token]
+       -> [Pos ServerToken]
        -> m ModuleExports
     go entries reexports toks = do
       -- logDebug $ "[analyzeExports.go] toks =" <+> ppTokens toks
@@ -336,13 +336,13 @@ analyzeExports importQualifiers ts = do
           , meReexports          = reexports
           , meHasWildcardExports = getAny $ foldMap exportsAllChildren entries
           }
-        entryWithChildren :: Doc Void -> Text -> [Token] -> m ModuleExports
+        entryWithChildren :: Doc Void -> Text -> [Pos ServerToken] -> m ModuleExports
         entryWithChildren listType name rest = do
           -- logDebug $ "[analyzeExports.entryWithChildren] rest =" <+> ppTokens rest
           (children, rest') <- snd $ analyzeChildren listType rest
           let newEntry = EntryWithChildren (mkSymbolName name) children
           consumeComma (KM.insert newEntry entries) reexports rest'
-        entryWithoutChildren :: Text -> [Token] -> m ModuleExports
+        entryWithoutChildren :: Text -> [Pos ServerToken] -> m ModuleExports
         entryWithoutChildren name rest = do
           -- logDebug $ "[analyzeExports.entryWithoutChildren] rest =" <+> ppTokens rest
           let newEntry = mkEntryWithoutChildren $ mkSymbolName name
@@ -359,13 +359,13 @@ analyzeExports importQualifiers ts = do
     consumeComma
       :: KeyMap (EntryWithChildren SymbolName)
       -> Set ModuleName
-      -> [Token]
+      -> [Pos ServerToken]
       -> m ModuleExports
     consumeComma entries reexports = go entries reexports . dropCommas
 
-isChildrenList :: [Token] -> Bool
+isChildrenList :: [Pos ServerToken] -> Bool
 isChildrenList toks =
-  case fst (analyzeChildren mempty toks :: (ChildrenPresence, Either ErrorMessage (Maybe ChildrenVisibility, [Token]))) of
+  case fst (analyzeChildren mempty toks :: (ChildrenPresence, Either ErrorMessage (Maybe ChildrenVisibility, [Pos ServerToken]))) of
     ChildrenPresent -> True
     ChildrenAbsent  -> False
 
@@ -384,7 +384,7 @@ instance Monoid WildcardPresence where
 
 analyzeChildren
   :: forall m. (HasCallStack, MonadError ErrorMessage m)
-  => Doc Void -> [Token] -> (ChildrenPresence, m (Maybe ChildrenVisibility, [Token]))
+  => Doc Void -> [Pos ServerToken] -> (ChildrenPresence, m (Maybe ChildrenVisibility, [Pos ServerToken]))
 analyzeChildren listType toks =
   case dropNLs toks of
     []                                               -> (ChildrenAbsent, pure (Nothing, []))
@@ -407,8 +407,8 @@ analyzeChildren listType toks =
   where
     analyzeList
       :: HasCallStack
-      => [Token]
-      -> (ChildrenPresence, m (Maybe ChildrenVisibility, [Token]))
+      => [Pos ServerToken]
+      -> (ChildrenPresence, m (Maybe ChildrenVisibility, [Pos ServerToken]))
     analyzeList = second (fmap mkVisibility) . extractChildren mempty mempty . dropNLs
       where
         mkVisibility
@@ -430,8 +430,8 @@ analyzeChildren listType toks =
       :: HasCallStack
       => WildcardPresence
       -> Set UnqualifiedSymbolName
-      -> [Token]
-      -> (ChildrenPresence, m (Set UnqualifiedSymbolName, WildcardPresence, [Token]))
+      -> [Pos ServerToken]
+      -> (ChildrenPresence, m (Set UnqualifiedSymbolName, WildcardPresence, [Pos ServerToken]))
     extractChildren wildcardPresence names = \case
       []                ->
         (childrenPresence, pure (names, wildcardPresence, []))
@@ -466,7 +466,7 @@ isAsciiName = T.all check
     check '.'  = True
     check c    = isAlphaNum c
 
-newtype Tokens = Tokens [Token]
+newtype Tokens = Tokens [Pos ServerToken]
 
 instance Pretty Tokens where
   pretty (Tokens [])       = "[]"
@@ -476,23 +476,23 @@ instance Pretty Tokens where
       , "tokens" :-> ppListWith ppTokenVal ts
       ]
     where
-      ppTokenVal :: Pos TokenVal -> Doc ann
-      ppTokenVal (Pos pos tag) =
-        pretty (unLine (posLine pos)) <> PP.colon <> ppShow tag
+      ppTokenVal :: Pos ServerToken -> Doc ann
+      ppTokenVal (Pos pos tok) =
+        pretty (unLine (posLine pos)) <> PP.colon <> pretty tok
 
-ppTokens :: [Token] -> Doc ann
+ppTokens :: [Pos ServerToken] -> Doc ann
 ppTokens = pretty . Tokens . take 16
 
 -- | Drop prefix of newlines.
-dropNLs :: [Token] -> [Token]
-dropNLs (Pos _ (Newline _) : ts) = dropNLs ts
-dropNLs ts                       = ts
+dropNLs :: [Pos ServerToken] -> [Pos ServerToken]
+dropNLs (Pos _ (Tok (Newline _)) : ts) = dropNLs ts
+dropNLs ts                             = ts
 
-dropCommas :: [Token] -> [Token]
+dropCommas :: [Pos ServerToken] -> [Pos ServerToken]
 dropCommas = go . dropNLs
   where
-    go (Pos _ Comma : ts) = dropCommas ts
-    go ts                 = ts
+    go (Pos _ (Tok Comma) : ts) = dropCommas ts
+    go ts                       = ts
 
 isVanillaTypeName  :: Text -> Bool
 isVanillaTypeName = maybe False (isUpper . fst) . T.uncons

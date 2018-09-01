@@ -29,7 +29,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import Haskell.Language.Lexer (tokenize)
-import Haskell.Language.Lexer.FastTags (Token)
+import Haskell.Language.Lexer.FastTags (Pos, ServerToken)
 
 import Control.Monad.Logging.Simple
 import Data.ErrorMessage
@@ -1880,5 +1880,5 @@ doTest TestCase{testName, input, expectedResult} =
         unless (header == expectedResult) $
           assertFailure $ displayDocString $ msg <> PP.line <> logsDoc
   where
-    tokens :: forall m. MonadError ErrorMessage m => m [Token]
+    tokens :: forall m. MonadError ErrorMessage m => m [Pos ServerToken]
     tokens = either throwError pure $ tokenize "test.hs" input

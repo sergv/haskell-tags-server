@@ -34,7 +34,7 @@ import Data.ErrorMessage
 import qualified Data.KeyMap as KM
 import Data.Symbols.MacroName (mkMacroName)
 import Haskell.Language.Lexer.Env
-import Haskell.Language.Lexer.FastTags (Token, TokenVal(..), Pos(..), PragmaType(..), unLine, valOf)
+import Haskell.Language.Lexer.FastTags (ServerToken(..), TokenVal(..), Pos(..), PragmaType(..), unLine, valOf)
 import Haskell.Language.Lexer.Input (AlexInput, aiInput, aiLine, alexInputPrevChar, alexGetByte, retrieveToken)
 import qualified Haskell.Language.Lexer.InputStack as InputStack
 import Haskell.Language.Lexer.Monad
@@ -128,10 +128,10 @@ $filename = [a-z A-Z 0-9 \- \_ \. \\]
 <literate> {
 ^ > $ws*
   / { runRulePredM' (lmap predAlexEnv isLiterate) }
-  { \_ len -> startLiterateBird  *> pure (one $! Newline $! len - 1) }
+  { \_ len -> startLiterateBird  *> pure (one $! Tok $! Newline $! len - 1) }
 ^ "\begin{code}" @nl
   / { runRulePredM' (lmap predAlexEnv isLiterate) }
-  { \_ len -> startLiterateLatex *> pure (one $! Newline $! len - 12) }
+  { \_ len -> startLiterateLatex *> pure (one $! Tok $! Newline $! len - 12) }
 (. | @nl)
   ;
 }
@@ -140,7 +140,7 @@ $filename = [a-z A-Z 0-9 \- \_ \. \\]
 
 @nl > $space*
   / { runRulePredM' (lmap predAlexEnv isLiterate) }
-  { \_ len -> pure $! one $! Newline $! len - 2 }
+  { \_ len -> pure $! one $! Tok $! Newline $! len - 2 }
 @nl [^>]
   / { runRulePredM' (isLiterate .&&&. isInBirdEnv) }
   { \_ _   -> endLiterate }
@@ -153,13 +153,13 @@ $filename = [a-z A-Z 0-9 \- \_ \. \\]
 -- Line comments and pragmas
 <0, macroDefined> {
 
-$nl $space*             { \_ len -> pure $! one $! Newline $! len - 1 }
+$nl $space*             { \_ len -> pure $! one $! Tok $! Newline $! len - 1 }
 
 [\-][\-]+ ~[$symbol $nl] .* ;
 [\-][\-]+ / $nl         ;
 
 -- Pragmas
-"{-#" $ws* @source_pragma $ws* "#-}" { kw $ Pragma SourcePragma }
+"{-#" $ws* @source_pragma $ws* "#-}" { \_ _ -> pure $! one $! Pragma SourcePragma }
 
 }
 
@@ -253,7 +253,7 @@ $nl $space*             { \_ len -> pure $! one $! Newline $! len - 1 }
       addMacroDef macro
       alexChangeToplevelCode macroDefinedCode
       alexSetCode macroDefinedCode
-      pure $ one $ Newline 0
+      pure $ one $ Tok $ Newline 0
   }
 
 -- #undef FOO
@@ -263,7 +263,7 @@ $nl $space*             { \_ len -> pure $! one $! Newline $! len - 1 }
   { \input len -> do
       name <- parsePreprocessorUndef $! retrieveToken input len
       removeMacroDef name
-      pure $ one $ Newline 0
+      pure $ one $ Tok $ Newline 0
   }
 
 }
@@ -359,8 +359,8 @@ $nl $space*             { \_ len -> pure $! one $! Newline $! len - 1 }
 "do"                    { kw KWDo }
 "else"                  { kw KWElse }
 "family"                { kw KWFamily }
-"forall"                { \_ _ -> pure $ one $ T "forall" }
-"∀"                     { \_ _ -> pure $ one $ T "forall" }
+"forall"                { \_ _ -> pure $ one $ Tok $ T "forall" }
+"∀"                     { \_ _ -> pure $ one $ Tok $ T "forall" }
 "foreign"               { kw KWForeign }
 "if"                    { kw KWIf }
 "import"                { kw KWImport }
@@ -373,7 +373,7 @@ $nl $space*             { \_ len -> pure $! one $! Newline $! len - 1 }
 "module"                { kw KWModule }
 "newtype"               { kw KWNewtype }
 "of"                    { kw KWOf }
-"pattern"               { \_ _ -> return $ one $ T "pattern" }
+"pattern"               { \_ _ -> return $ one $ Tok $ T "pattern" }
 "then"                  { kw KWThen }
 "type"                  { kw KWType }
 "where"                 { kw KWWhere }
@@ -404,7 +404,7 @@ $nl $space*             { \_ len -> pure $! one $! Newline $! len - 1 }
 @number                 { kw Number }
 
 @qualificationPrefix ( $ident+ | $symbol+ )
-                        { \input len -> pure $ one $ T $ retrieveToken input len }
+                        { \input len -> pure $ one $ Tok $ T $ retrieveToken input len }
 
 }
 
@@ -416,17 +416,17 @@ foo x = x
 -- -- Like (NonEmpty TokenVal)
 -- data SomeTokens = SomeTokens !TokenVal ![TokenVal]
 
-type AlexAction m = AlexInput -> Int -> m (NonEmpty TokenVal)
+type AlexAction m = AlexInput -> Int -> m (NonEmpty ServerToken)
 
 one :: a -> NonEmpty a
 one x = x :| []
 
 kw :: Applicative m => TokenVal -> AlexAction m
-kw tok = \_ _ -> pure $ one tok
+kw tok = \_ _ -> pure $ one $ Tok tok
 
 tokenizeM
   :: (HasCallStack, Monad m)
-  => FilePath -> LiterateMode -> Text -> m (Either ErrorMessage [Token])
+  => FilePath -> LiterateMode -> Text -> m (Either ErrorMessage [Pos ServerToken])
 tokenizeM filename mode input =
   runAlexT filename mode code toplevelCode input scanTokens
   where
@@ -439,20 +439,20 @@ tokenizeM filename mode input =
     toplevelCode = startCode
 
 -- TODO: add unsafe interleave here for producing tokens
-scanTokens :: (HasCallStack, Monad m) => AlexT m [Token]
+scanTokens :: (HasCallStack, Monad m) => AlexT m [Pos ServerToken]
 scanTokens = do
   toks <- alexMonadScan
   case valOf $ NE.last toks of
-    EOF -> return []
-    _   -> (toList toks <>) <$> scanTokens
+    Tok EOF -> pure []
+    _       -> (toList toks <>) <$> scanTokens
 
-alexMonadScan :: (HasCallStack, Monad m) => AlexT m (NonEmpty Token)
+alexMonadScan :: (HasCallStack, Monad m) => AlexT m (NonEmpty (Pos ServerToken))
 alexMonadScan = do
   filename <- asks aeFilename
   line     <- gets (aiLine . asInput)
   fmap (Pos (mkSrcPos filename line)) <$> continueScanning
 
-continueScanning :: forall m. (HasCallStack, Monad m) => AlexT m (NonEmpty TokenVal)
+continueScanning :: forall m. (HasCallStack, Monad m) => AlexT m (NonEmpty ServerToken)
 continueScanning = do
   env   <- ask
   state <- get
@@ -461,7 +461,7 @@ continueScanning = do
       scanResult = alexScanUser predEnv (asInput state) (unAlexCode (asCode state))
   toks <- case scanResult of
     AlexEOF                       ->
-      pure $ one EOF
+      pure $ one $ Tok EOF
     AlexError input               -> do
       state' <- get
       throwErrorWithCallStack $
@@ -476,39 +476,39 @@ continueScanning = do
       action (asInput state) tokLen
   pure toks
 
-startRecursiveComment :: Monad m => AlexT m (NonEmpty TokenVal)
+startRecursiveComment :: Monad m => AlexT m (NonEmpty ServerToken)
 startRecursiveComment = do
   void $ modifyCommentDepth (+1)
   alexSetCode commentCode
   continueScanning
 
-endRecursiveComment :: Monad m => AlexT m (NonEmpty TokenVal)
+endRecursiveComment :: Monad m => AlexT m (NonEmpty ServerToken)
 endRecursiveComment = do
   newDepth <- modifyCommentDepth (\x -> max 0 (x - 1))
   when (newDepth == 0) $
     alexSetToplevelCode
   continueScanning
 
-startQuasiquoter :: Monad m => AlexT m (NonEmpty TokenVal)
+startQuasiquoter :: Monad m => AlexT m (NonEmpty ServerToken)
 startQuasiquoter = do
   alexSetCode qqCode
-  pure $ one QuasiquoterStart
+  pure $ one $ Tok QuasiquoterStart
 
-startSplice :: Monad m => Context -> AlexT m (NonEmpty TokenVal)
+startSplice :: Monad m => Context -> AlexT m (NonEmpty ServerToken)
 startSplice ctx = do
   alexSetToplevelCode
   pushContext ctx
-  pure $ one SpliceStart
+  pure $ one $ Tok SpliceStart
 
-endQuasiquoter :: Monad m => AlexT m (NonEmpty TokenVal)
+endQuasiquoter :: Monad m => AlexT m (NonEmpty ServerToken)
 endQuasiquoter = do
   alexSetToplevelCode
-  pure $ one QuasiquoterEnd
+  pure $ one $ Tok QuasiquoterEnd
 
 pushLParen :: Monad m => AlexAction (AlexT m)
 pushLParen _ _ = do
   pushContext CtxHaskell
-  pure $ one LParen
+  pure $ one $ Tok LParen
 
 popRParen :: Monad m => AlexAction (AlexT m)
 popRParen _ _ = do
@@ -520,7 +520,7 @@ popRParen _ _ = do
       case c of
         CtxHaskell     -> alexSetToplevelCode
         CtxQuasiquoter -> alexSetCode qqCode
-  pure (one RParen)
+  pure $ one $ Tok RParen
 
 popContext
   :: (HasCallStack, MonadState AlexState m, MonadError ErrorMessage m)
@@ -551,7 +551,7 @@ startLiterateLatex = do
   alexSetToplevelCode
   alexEnterLatexCodeEnv
 
-endLiterate :: Monad m => AlexT m (NonEmpty TokenVal)
+endLiterate :: Monad m => AlexT m (NonEmpty ServerToken)
 endLiterate = do
   alexSetCode literateCode
   alexExitLiterateEnv
@@ -592,7 +592,7 @@ data PredEnv = PredEnv
 
 resolvePossibleMacroArgumentOrConstantMacro
   :: (HasCallStack, Monad m)
-  => AlexInput -> Text -> AlexT m (NonEmpty TokenVal)
+  => AlexInput -> Text -> AlexT m (NonEmpty ServerToken)
 resolvePossibleMacroArgumentOrConstantMacro input matchedText = do
   let macroName   = mkMacroName matchedText
   case InputStack.lookupMacroArg macroName $ aiInput input of
@@ -621,7 +621,7 @@ resolvePossibleMacroArgumentOrConstantMacro input matchedText = do
       case isConstantMacroDef of
         Nothing  ->
           -- Neither macro nor argument, return token for matched text.
-          pure $ one $ T matchedText
+          pure $ one $ Tok $ T matchedText
         Just def -> do
           enterConstantMacroDef def
           continueScanning
@@ -653,7 +653,7 @@ resolvePossibleFunctionMacroApplication input len = do
   case isFunctionMacroDef of
     Nothing  ->
       -- Not a function, but possibly a constant.
-      (<> one LParen) <$> resolvePossibleMacroArgumentOrConstantMacro input functionName
+      (<> one (Tok LParen)) <$> resolvePossibleMacroArgumentOrConstantMacro input functionName
     Just def -> do
       modify $ \s -> s
         { asCodeBeforeParsingMacroArgs = asCode s

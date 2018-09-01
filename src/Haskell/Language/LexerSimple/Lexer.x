@@ -94,10 +94,10 @@ $hexdigit   = [0-9a-fA-F]
 <literate> {
 ^ ">" $ws*
   -- / { isLiterateEnabled' }
-  { \_ len -> (Newline $! len - 1)  <$ startLiterateBird }
+  { \_ len -> (Tok $! Newline $! len - 1)  <$ startLiterateBird }
 ^ "\begin{code}" $nl
   -- / { isLiterateEnabled' }
-  { \_ len -> (Newline $! len - 12) <$ startLiterateLatex }
+  { \_ len -> (Tok $! Newline $! len - 12) <$ startLiterateLatex }
 (. | $nl)
   ;
 }
@@ -106,7 +106,7 @@ $hexdigit   = [0-9a-fA-F]
 
 $nl ">" $space*
   / { isLiterateEnabled' }
-  { \_ len -> pure $! Newline $! len - 2 }
+  { \_ len -> pure $! Tok $! Newline $! len - 2 }
 $nl [^>]
   / { isLiterateBirdOrOutside }
   { \_ _   -> endLiterate }
@@ -116,7 +116,7 @@ $nl [^>]
 
 
 [\\]? @nl $space* "{-"  { \input len -> startIndentationCounting (countInputSpace input len) }
-[\\]? @nl $space*       { \input len -> pure $ Newline $! (len - 1) - (case T.unsafeHead (aiInput input) of { '\\' -> 1; _ -> 0 }) }
+[\\]? @nl $space*       { \input len -> pure $! Tok $! Newline $! (len - 1) - (case T.unsafeHead (aiInput input) of { '\\' -> 1; _ -> 0 }) }
 [\-][\-]+ ~[$symbol $nl] .* ;
 [\-][\-]+ / @nl         ;
 
@@ -126,7 +126,7 @@ $nl [^>]
 }
 
 -- Pragmas
-<0> "{-#" $ws* @source_pragma $ws* "#-}" { kw $ Pragma SourcePragma }
+<0> "{-#" $ws* @source_pragma $ws* "#-}" { \_ _ -> pure $ Pragma SourcePragma }
 
 
 -- Comments
@@ -179,8 +179,8 @@ $space*                 { \_ len -> endIndentationCounting len }
 "do"                    { kw KWDo }
 "else"                  { kw KWElse }
 "family"                { kw KWFamily }
-"forall"                { \_ _ -> pure $ T "forall" }
-"∀"                     { \_ _ -> pure $ T "forall" }
+"forall"                { \_ _ -> pure $! Tok $! T "forall" }
+"∀"                     { \_ _ -> pure $! Tok $! T "forall" }
 "foreign"               { kw KWForeign }
 "if"                    { kw KWIf }
 "import"                { kw KWImport }
@@ -193,7 +193,7 @@ $space*                 { \_ len -> endIndentationCounting len }
 "module"                { kw KWModule }
 "newtype"               { kw KWNewtype }
 "of"                    { kw KWOf }
-"pattern"               { \_ _ -> pure $ T "pattern" }
+"pattern"               { \_ _ -> pure $! Tok $! T "pattern" }
 "then"                  { kw KWThen }
 "type"                  { kw KWType }
 "where"                 { kw KWWhere }
@@ -223,19 +223,20 @@ $space*                 { \_ len -> endIndentationCounting len }
 @number                 { kw Number }
 
 [\']* @qualificationPrefix ($ident | $large)+
-                        { \input len -> return $ T $ retrieveToken input len }
+                        { \input len -> pure $! Tok $! T $! retrieveToken input len }
 @qualificationPrefix $symbol+
-                        { \input len -> return $ T $ retrieveToken input len }
+                        { \input len -> pure $! Tok $! T $! retrieveToken input len }
 
 }
 
 {
 
-type AlexAction m = AlexInput -> Int -> m TokenVal
+type AlexAction m = AlexInput -> Int -> m ServerToken
 type AlexPred a = a -> AlexInput -> Int -> AlexInput -> Bool
 
+{-# INLINE kw #-}
 kw :: Applicative m => TokenVal -> AlexAction m
-kw tok = \_ _ -> pure tok
+kw tok = \_ _ -> pure $ Tok tok
 
 
 isLiterateEnabled'
@@ -263,7 +264,7 @@ isLiterateLatexOrOutside litLoc _inputBefore _len _inputAfter =
 
 tokenize
   :: HasCallStack
-  => FilePath -> LiterateLocation Void -> Text -> Either ErrorMessage [Token]
+  => FilePath -> LiterateLocation Void -> Text -> Either ErrorMessage [Pos ServerToken]
 tokenize filename litLoc input =
   runAlexM litLoc startCode' input $ scanTokens filename
   where
@@ -273,32 +274,32 @@ tokenize filename litLoc input =
       LiterateInside x -> absurd x
 
 -- TODO: add unsafe interleave here for producing tokens
-scanTokens :: HasCallStack => FilePath -> AlexM [Token]
+scanTokens :: HasCallStack => FilePath -> AlexM [Pos ServerToken]
 scanTokens filename = go []
   where
     go acc = do
-      nextTok <- alexScanTokenVal
+      nextTok <- continueScanning
       case nextTok of
-        EOF -> return $ reverse acc
-        _   -> do
+        Tok EOF -> return $ reverse acc
+        _       -> do
           -- Use input after reading token to get proper prefix that includes
           -- token we currently read.
           input <- gets asInput
           let !tok = Pos (mkSrcPos filename $! aiLine input) nextTok
           go (tok : acc)
 
-alexScanTokenVal :: HasCallStack => AlexM TokenVal
-alexScanTokenVal = do
+continueScanning :: HasCallStack => AlexM ServerToken
+continueScanning = do
   AlexState{asInput, asCode, asLiterateLoc} <- get
   go asCode asLiterateLoc asInput
   where
-    go :: AlexCode -> LiterateLocation LiterateStyle -> AlexInput -> AlexM TokenVal
+    go :: AlexCode -> LiterateLocation LiterateStyle -> AlexInput -> AlexM ServerToken
     go code litLoc = go'
       where
         go' input =
           case alexScanUser litLoc input (unAlexCode code) :: AlexReturn (AlexAction AlexM) of
             AlexEOF                              ->
-              pure EOF
+              pure $ Tok EOF
             AlexError AlexInput{aiLine, aiInput} -> do
               code <- gets asCode
               throwErrorWithCallStack $ "Lexical error while in state" <+> pretty code
@@ -309,46 +310,46 @@ alexScanTokenVal = do
             AlexToken input' tokLen action       ->
               alexSetInput input' *> action input tokLen
 
-startIndentationCounting :: HasCallStack => Int -> AlexM TokenVal
+startIndentationCounting :: HasCallStack => Int -> AlexM ServerToken
 startIndentationCounting !n = do
   modify (\s -> s { asIndentationSize = n, asCommentDepth = 1 })
   alexSetNextCode indentCommentCode
-  alexScanTokenVal
+  continueScanning
 
-endIndentationCounting :: Int -> AlexM TokenVal
+endIndentationCounting :: Int -> AlexM ServerToken
 endIndentationCounting !n = do
   addIndentationSize n
   alexSetNextCode startCode
-  Newline <$> gets asIndentationSize
+  Tok . Newline <$> gets asIndentationSize
 
-startIndentComment :: HasCallStack => AlexM TokenVal
+startIndentComment :: HasCallStack => AlexM ServerToken
 startIndentComment = do
   void $ modifyCommentDepth (+1)
   alexSetNextCode indentCommentCode
-  alexScanTokenVal
+  continueScanning
 
-startComment :: HasCallStack => AlexM TokenVal
+startComment :: HasCallStack => AlexM ServerToken
 startComment = do
   void $ modifyCommentDepth (+1)
   alexSetNextCode commentCode
-  alexScanTokenVal
+  continueScanning
 
-endComment :: HasCallStack => AlexCode -> AlexM TokenVal
+endComment :: HasCallStack => AlexCode -> AlexM ServerToken
 endComment nextCode = do
   newDepth <- modifyCommentDepth (\x -> x - 1)
   when (newDepth == 0) $
     alexSetNextCode nextCode
-  alexScanTokenVal
+  continueScanning
 
-startString :: HasCallStack => AlexM TokenVal
+startString :: HasCallStack => AlexM ServerToken
 startString =
-  alexSetNextCode stringCode *> alexScanTokenVal
+  alexSetNextCode stringCode *> continueScanning
 
-endString :: AlexCode -> AlexM TokenVal
+endString :: AlexCode -> AlexM ServerToken
 endString nextCode =
-  String <$ alexSetNextCode nextCode
+  Tok String <$ alexSetNextCode nextCode
 
-startQuasiquoter :: AlexInput -> Int -> AlexM TokenVal
+startQuasiquoter :: AlexInput -> Int -> AlexM ServerToken
 startQuasiquoter _ n
   | n == 2 = startUnconditionalQuasiQuoter
 startQuasiquoter AlexInput{aiInput, aiAbsPos} _ = do
@@ -363,26 +364,26 @@ startQuasiquoter AlexInput{aiInput, aiAbsPos} _ = do
     -- No chance of quasi-quote closing till the end of current file.
     -- Assume that file ought to be well-formed and treat currently
     -- matched input
-    Nothing -> pure LBracket
+    Nothing -> pure $ Tok LBracket
     Just _  -> startUnconditionalQuasiQuoter
 
-startUnconditionalQuasiQuoter :: AlexM TokenVal
+startUnconditionalQuasiQuoter :: AlexM ServerToken
 startUnconditionalQuasiQuoter =
-  QuasiquoterStart <$ alexSetNextCode qqCode
+  Tok QuasiquoterStart <$ alexSetNextCode qqCode
 
-startSplice :: Context -> AlexM TokenVal
+startSplice :: Context -> AlexM ServerToken
 startSplice ctx = do
   alexSetNextCode startCode
   pushContext ctx
-  pure SpliceStart
+  pure $ Tok SpliceStart
 
-endQuasiquoter :: AlexCode -> AlexM TokenVal
+endQuasiquoter :: AlexCode -> AlexM ServerToken
 endQuasiquoter nextCode =
-  QuasiquoterEnd <$ alexSetNextCode nextCode
+  Tok QuasiquoterEnd <$ alexSetNextCode nextCode
 
 pushLParen :: AlexAction AlexM
 pushLParen _ _ =
-  LParen <$ pushContext CtxHaskell
+  Tok LParen <$ pushContext CtxHaskell
 
 popRParen :: AlexAction AlexM
 popRParen _ _ = do
@@ -394,7 +395,7 @@ popRParen _ _ = do
       alexSetNextCode $ case c of
         CtxHaskell     -> startCode
         CtxQuasiquoter -> qqCode
-  pure RParen
+  pure $ Tok RParen
 
 {-# INLINE errorAtLine #-}
 errorAtLine
@@ -414,11 +415,11 @@ startLiterateLatex = do
   alexSetNextCode startCode
   alexEnterLiterateLatexEnv
 
-endLiterate :: AlexM TokenVal
+endLiterate :: AlexM ServerToken
 endLiterate = do
   alexSetNextCode literateCode
   alexExitLiterateEnv
-  alexScanTokenVal
+  continueScanning
 
 -- Known codes
 

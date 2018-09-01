@@ -81,8 +81,11 @@ library
     Haskell.Language.LexerSimple.Types
 
     Haskell.Language.Lexer
-    Haskell.Language.Lexer.Env
     Haskell.Language.Lexer.FastTags
+    Haskell.Language.Lexer.FastTags.TagValPatterns
+    Haskell.Language.Lexer.Types
+
+    Haskell.Language.Lexer.Env
     Haskell.Language.Lexer.InputStack
     Haskell.Language.Lexer.Input
     Haskell.Language.Lexer.Lexer
@@ -90,7 +93,6 @@ library
     Haskell.Language.Lexer.Preprocessor
     Haskell.Language.Lexer.RulePredicate
     Haskell.Language.Lexer.State
-    Haskell.Language.Lexer.Types
 
     Haskell.Language.Server.BERT
     Haskell.Language.Server.Tags

@@ -16,7 +16,8 @@ import Data.List (sort)
 import Data.Text (Text)
 
 import Haskell.Language.Lexer (LiterateLocation(..))
-
+import Haskell.Language.Lexer.FastTags (stripServerTokens)
+import Haskell.Language.Lexer.FastTags.TagValPatterns
 import Haskell.Language.Lexer.TokenisationUtils
 import TestUtils (makeTest)
 
@@ -149,7 +150,7 @@ testTokenise = testGroup "Tokenise"
   ]
   where
     (==>) = makeTest f
-    f :: Text -> [TokenVal]
+    f :: Text -> [ServerToken]
     f = tail -- strip uninteresting initial newline
       . map valOf
       . tokenize' filename Vanilla
@@ -517,9 +518,10 @@ testBreakBlocks = testGroup "Break blocks"
     (==>) = makeTest (f Vanilla)
     (|=>) = makeTest (f LiterateOutside)
     f mode =
-        map (map valOf . unstrippedTokensOf)
+        map (map (Tok . valOf) . unstrippedTokensOf)
       . breakBlocks
       . UnstrippedTokens
+      . stripServerTokens
       . tokenize' filename mode
 
 
@@ -551,9 +553,10 @@ testWhereBlock = testGroup "whereBlock"
   ]
   where
     (==>) = makeTest f
-    f = map (map valOf . unstrippedTokensOf)
+    f = map (map (Tok . valOf) . unstrippedTokensOf)
       . whereBlock
       . UnstrippedTokens
+      . stripServerTokens
       . tokenize' filename Vanilla
 
 

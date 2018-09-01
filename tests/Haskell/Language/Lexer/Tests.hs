@@ -18,6 +18,7 @@ import Data.List (sort)
 
 import Haskell.Language.Lexer (LiterateLocation(..))
 
+import Haskell.Language.Lexer.FastTags.TagValPatterns
 import qualified Haskell.Language.Lexer.Tokenisation as Tokenisation
 import Haskell.Language.Lexer.TokenisationUtils
 import TestUtils (makeAssertion, makeTest)
@@ -800,4 +801,3 @@ testFullPipeline = testGroup "Full processing pipeline"
     f' = sort
        . concatMap (\(i, t) -> fst $ processTokens $ tokenize' ("fn" ++ show i) Vanilla t)
        . zip [0..]
-
