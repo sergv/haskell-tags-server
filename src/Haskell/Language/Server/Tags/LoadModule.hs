@@ -65,6 +65,7 @@ import Data.Symbols
 import Haskell.Language.Server.Tags.AnalyzeHeader
 import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports
+import Haskell.Language.Server.Tags.Types.Modules
 
 defaultModuleName :: ModuleName
 defaultModuleName = mkModuleName "Main"

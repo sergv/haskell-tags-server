@@ -47,8 +47,8 @@ import qualified Data.KeyMap as KM
 import Data.SubkeyMap (SubkeyMap)
 import qualified Data.SubkeyMap as SubkeyMap
 import Data.Symbols
-import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports
+import Haskell.Language.Server.Tags.Types.Modules
 
 analyzeHeader
   :: (MonadError ErrorMessage m, MonadLog m)

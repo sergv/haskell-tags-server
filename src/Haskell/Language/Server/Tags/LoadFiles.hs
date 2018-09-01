@@ -43,6 +43,7 @@ import Data.Path
 import Haskell.Language.Server.Tags.LoadModule (loadModuleFromSource, resolveModule)
 import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports
+import Haskell.Language.Server.Tags.Types.Modules
 
 -- todo: handle header files here
 classifyPath :: TagsServerConf -> FindEntry -> Maybe (ImportTarget, FullPath)
@@ -86,24 +87,24 @@ loadAllFilesIntoState conf = do
         , rsLoadedModules  = mempty
         }
       checkLoadingModules
-        :: forall m. (MonadState ResolveState m)
+        :: forall n. MonadState ResolveState n
         => ImportKey
-        -> m (Maybe (NonEmpty UnresolvedModule))
+        -> n (Maybe (NonEmpty UnresolvedModule))
       checkLoadingModules key = do
         s <- get
         pure $ NEMap.elemsNE <$> M.lookup key (rsLoadingModules s)
 
       doResolve
-        :: forall m. (HasCallStack, MonadState ResolveState m, MonadError ErrorMessage m, MonadLog m)
+        :: forall n. (HasCallStack, MonadState ResolveState n, MonadError ErrorMessage n, MonadLog n)
         => ImportKey
-        -> m (NonEmpty ResolvedModule)
+        -> n (NonEmpty ResolvedModule)
       doResolve key = do
         logInfo $ "[loadAllFilesIntoState.doResolve] Resolving" <+> PP.dquotes (pretty key)
-        state <- get
-        case M.lookup key $ rsLoadedModules state of
+        resolveState <- get
+        case M.lookup key $ rsLoadedModules resolveState of
           Just resolved -> pure resolved
           Nothing       -> do
-            let currentlyLoading = rsLoadingModules state
+            let currentlyLoading = rsLoadingModules resolveState
             if M.member key currentlyLoading
             then
               throwErrorWithCallStack $ PP.hsep
@@ -124,7 +125,7 @@ loadAllFilesIntoState conf = do
                   logDebug $ "[loadAllFilesIntoState.doResolve] currentlyLoading =" <+> ppMapWith pretty (ppNE . NEMap.keysNE) currentlyLoading
                   modify $ \s ->
                     s { rsLoadingModules = M.insert key unresolvedMap $ rsLoadingModules s }
-                  logInfo $ "[loadAllFilesIntoState.doResolve] files: " <+> ppNE (modFile <$> unresolved)
+                  logInfo $ "[loadAllFilesIntoState.doResolve] files:" <+> ppNE (modFile <$> unresolved)
                   resolved <- traverse (resolveModule checkLoadingModules doResolve) unresolved
                   modify $ \s -> s
                     { rsLoadingModules =
@@ -138,5 +139,3 @@ loadAllFilesIntoState conf = do
   flip evalStateT initState $
     flip M.traverseWithKey unresolvedModulesMap $ \importKey _ ->
       doResolve importKey
-
-
