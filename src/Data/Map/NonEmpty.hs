@@ -33,7 +33,7 @@ import qualified Data.Map as M
 import Data.Semigroup
 import Prelude hiding (lookup)
 
--- | Map that always contains at least one key-value pair.
+-- | A map that always contains at least one key-value pair.
 data NonEmptyMap k v =
   -- Invariant: map never contains root key stored in the constructor itself.
   NonEmptyMap k v (Map k v)

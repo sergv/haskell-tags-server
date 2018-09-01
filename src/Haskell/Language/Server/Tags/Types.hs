@@ -11,7 +11,6 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
@@ -55,6 +54,8 @@ module Haskell.Language.Server.Tags.Types
   , mkEntryWithoutChildren
   , ChildrenVisibility(..)
   ) where
+
+import Prelude hiding (mod)
 
 import Control.Monad.Except.Ext
 import Data.Char
@@ -192,6 +193,11 @@ instance Pretty ImportKey where
   pretty ik =
     "ImportKey" <+> pretty (ikImportTarget ik) <+> pretty (ikModuleName ik)
 
+-- | Result of analysing module's export list and any subsequent imports. E.g.
+--
+-- > module Foo (...) where
+-- > import Bar
+-- > import qualified Baz hiding (frob)
 data ModuleHeader a = ModuleHeader
   { mhModName          :: !ModuleName
     -- | Exports of a module. Nothing - everything is exported
