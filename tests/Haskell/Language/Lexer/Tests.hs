@@ -16,7 +16,7 @@ import Test.Tasty.HUnit (testCase)
 
 import Data.List (sort)
 
-import Haskell.Language.Lexer (LiterateMode(..))
+import Haskell.Language.Lexer (LiterateLocation(..))
 
 import qualified Haskell.Language.Lexer.Tokenisation as Tokenisation
 import Haskell.Language.Lexer.TokenisationUtils
@@ -25,12 +25,12 @@ import TestUtils (makeAssertion, makeTest)
 tests :: TestTree
 tests = testGroup "Lexer tests"
   [ Tokenisation.tests
-  , testTokenizeCpp
+  -- , testTokenizeCpp
   , testFullPipeline
   ]
 
-testTokenizeCpp :: TestTree
-testTokenizeCpp = testGroup "Tokenize with preprocessor"
+_testTokenizeCpp :: TestTree
+_testTokenizeCpp = testGroup "Tokenize with preprocessor"
   [ testTokenizeCppDefines
   , testTokenizeCppConditionals
   , testTokenizeCppDefinesWithinConditionals

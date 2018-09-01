@@ -433,7 +433,7 @@ tokenizeM filename mode input =
     code :: AlexCode
     code = case mode of
       Vanilla  -> startCode
-      Literate -> literateStartCode
+      Literate -> literateCode
     -- Use 'startCode' as a toplevel until a macro will be defined.
     toplevelCode :: AlexCode
     toplevelCode = startCode
@@ -561,9 +561,6 @@ endLiterate = do
 
 startCode :: AlexCode
 startCode = AlexCode 0
-
-literateStartCode :: AlexCode
-literateStartCode = literateCode
 
 literateCode :: AlexCode
 literateCode = AlexCode literate

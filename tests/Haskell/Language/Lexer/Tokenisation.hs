@@ -15,23 +15,23 @@ import Test.Tasty
 import Data.List (sort)
 import Data.Text (Text)
 
-import Haskell.Language.Lexer (LiterateMode(..))
+import Haskell.Language.Lexer (LiterateLocation(..))
 
 import Haskell.Language.Lexer.TokenisationUtils
 import TestUtils (makeTest)
 
 tests :: TestTree
 tests = testGroup "Basic tokenisation"
-  [ testTokenize
-  , testTokenizeWithNewlines
+  [ testTokenise
+  , testTokeniseWithNewlines
   , testStripComments
   , testBreakBlocks
   , testWhereBlock
   , testProcess
   ]
 
-testTokenize :: TestTree
-testTokenize = testGroup "Tokenize"
+testTokenise :: TestTree
+testTokenise = testGroup "Tokenise"
   [ "xyz  -- abc"          ==> [T "xyz", Newline 0]
   , "xyz  --- abc"         ==> [T "xyz", Newline 0]
   , "  {-   foo -}"        ==> [Newline 0]
@@ -42,7 +42,7 @@ testTokenize = testGroup "Tokenize"
   , "  {-# INLINE #-}"     ==> [Newline 0]
   , "a::b->c"              ==> [T "a", DoubleColon, T "b", Arrow, T "c", Newline 0]
   , "a∷b→c"                ==> [T "a", DoubleColon, T "b", Arrow, T "c", Newline 0]
-  , "x{-\n  bc#-}\n"       ==> [T "x", Newline 0]
+  , "x{-\n  bc#-}\n"       ==> [T "x", Newline 0, Newline 0]
   , "X.Y"                  ==> [T "X.Y", Newline 0]
   , "a=>b"                 ==> [T "a", Implies, T "b", Newline 0]
   , "a ⇒ b"                ==> [T "a", Implies, T "b", Newline 0]
@@ -137,7 +137,7 @@ testTokenize = testGroup "Tokenize"
     , KWWhere, Newline 0
     ]
 
-  , tokenizeSplices
+  , tokeniseSplices
   , "import Foo hiding (Bar)"                ==>
     [KWImport, T "Foo", T "hiding", LParen, T "Bar", RParen, Newline 0]
   , "import {-# SOURCE #-} Foo hiding (Bar)" ==>
@@ -154,7 +154,7 @@ testTokenize = testGroup "Tokenize"
       . map valOf
       . tokenize' filename Vanilla
 
-    tokenizeSplices = testGroup "Splices"
+    tokeniseSplices = testGroup "Splices"
       [ "$(foo)"                                  ==>
         [SpliceStart, T "foo", RParen, Newline 0]
       , "$(foo [| baz |])"                        ==>
@@ -188,101 +188,144 @@ testTokenize = testGroup "Tokenize"
       ]
 
 
-testTokenizeWithNewlines :: TestTree
-testTokenizeWithNewlines = testGroup "Tokenize with newlines"
-  [ "x\ny\n"     ==> [Newline 0, T "x", Newline 0, T "y", Newline 0]
-  , " xx\n yy\n" ==> [Newline 1, T "xx", Newline 1, T "yy", Newline 0]
-  , "foo bar baz"
-    |=>
-    []
-  , "foo bar baz\nquux fizz buzz"
-    |=>
-    []
-  , "> foo = 1"
-    |=>
-    [Newline 1, T "foo", Equals, T "1", Newline 0]
-  , "This is a factorial function\n\
-    \\n\
-    \> factorial :: Integer -> Integer\n\
-    \> factorial 0 = 1\n\
-    \> factorial n = \n\
-    \>   n * (factorial $ n - 1)\n\
-    \\n\
-    \And that's it !"
-    |=>
-    -- TODO: maybe keep track of minimal newline indent across whole file
-    -- and subtract it from all newlines at the end?
-    [ Newline 1
-    , T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 1
-    , T "factorial", T "0", Equals, T "1", Newline 1
-    , T "factorial", T "n", Equals, Newline 3
-    , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", T "1", RParen, Newline 0
+testTokeniseWithNewlines :: TestTree
+testTokeniseWithNewlines = testGroup "Tokenise with newlines"
+  [ testGroup "Vanilla"
+    [ "x\ny\n"     ==> [Newline 0, T "x", Newline 0, T "y", Newline 0, Newline 0]
+    , " xx\n yy\n" ==> [Newline 1, T "xx", Newline 1, T "yy", Newline 0, Newline 0]
+    , "\n\
+      \class (X x) => C a b where\n\
+      \\tm :: a->b\n\
+      \\tn :: c\n"
+      ==>
+      [ Newline 0
+      , Newline 0
+      , KWClass, LParen, T "X", T "x", RParen, Implies, T "C", T "a", T "b", KWWhere, Newline 1
+      , T "m", DoubleColon, T "a", Arrow, T "b", Newline 1
+      , T "n", DoubleColon, T "c"
+      , Newline 0
+      , Newline 0
+      ]
     ]
-  , "This is a factorial function\n\
-    \\n\
-    \> factorial :: Integer -> Integer\n\
-    \> factorial 0 = 1\n\
-    \> factorial n = \n\
-    \>   n * (factorial $ n - 1)\n\
-    \\n\
-    \And another function:\n\
-    \\n\
-    \> foo :: a -> a\n\
-    \> foo x = x"
-    |=>
-    -- TODO: maybe keep track of minimal newline indent across whole file
-    -- and subtract it from all newlines at the end?
-    [ Newline 1
-    , T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 1
-    , T "factorial", T "0", Equals, T "1", Newline 1
-    , T "factorial", T "n", Equals, Newline 3
-    , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", T "1", RParen, Newline 0
-    , Newline 1
-    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 1
-    , T "foo", T "x", Equals, T "x", Newline 0
-    ]
-  , "This is a factorial function\n\
-    \\\begin{code}\n\
-    \factorial :: Integer -> Integer\n\
-    \factorial 0 = 1\n\
-    \factorial n = \n\
-    \  n * (factorial $ n - 1)\n\
-    \\\end{code}\n\
-    \And that's it !"
-    |=>
-    [ Newline 1
-    , T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 0
-    , T "factorial", T "0", Equals, T "1", Newline 0
-    , T "factorial", T "n", Equals, Newline 2
-    , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", T "1", RParen, Newline 0
-    ]
-  , "This is a factorial function\n\
-    \\\begin{code}\n\
-    \factorial :: Integer -> Integer\n\
-    \factorial 0 = 1\n\
-    \factorial n = \n\
-    \  n * (factorial $ n - 1)\n\
-    \\\end{code}\n\
-    \But that's not it yet! Here's another function:\n\
-    \\\begin{code}\n\
-    \foo :: a -> a\n\
-    \foo x = x\n\
-    \\\end{code}\n\
-    \And that's it !"
-    |=>
-    [ Newline 1
-    , T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 0
-    , T "factorial", T "0", Equals, T "1", Newline 0
-    , T "factorial", T "n", Equals, Newline 2
-    , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", T "1", RParen, Newline 0
-    , Newline 1
-    , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
-    , T "foo", T "x", Equals, T "x", Newline 0
+  , testGroup "Literate"
+    [ "foo bar baz"
+      |=>
+      []
+    , "foo bar baz\nquux fizz buzz"
+      |=>
+      []
+    , "> foo = 1"
+      |=>
+      [Newline 1, T "foo", Equals, Number, Newline 0]
+    , "This is a factorial function\n\
+      \\n\
+      \> factorial :: Integer -> Integer\n\
+      \> factorial 0 = 1\n\
+      \> factorial n = \n\
+      \>   n * (factorial $ n - 1)\n\
+      \\n\
+      \And that's it !"
+      |=>
+      -- TODO: maybe keep track of minimal newline indent across whole file
+      -- and subtract it from all newlines at the end?
+      [ Newline 1
+      , T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 1
+      , T "factorial", Number, Equals, Number, Newline 1
+      , T "factorial", T "n", Equals, Newline 3
+      , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", Number, RParen, Newline 0
+      ]
+    , "This is a factorial function\n\
+      \\n\
+      \> factorial :: Integer -> Integer\n\
+      \> factorial 0 = 1\n\
+      \> factorial n = \n\
+      \>   n * (factorial $ n - 1)\n\
+      \\n\
+      \And another function:\n\
+      \\n\
+      \> foo :: a -> a\n\
+      \> foo x = x"
+      |=>
+      -- TODO: maybe keep track of minimal newline indent across whole file
+      -- and subtract it from all newlines at the end?
+      [ Newline 1
+      , T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 1
+      , T "factorial", Number, Equals, Number, Newline 1
+      , T "factorial", T "n", Equals, Newline 3
+      , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", Number, RParen, Newline 0
+      , Newline 1
+      , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 1
+      , T "foo", T "x", Equals, T "x", Newline 0
+      ]
+    , "This is a factorial function\n\
+      \\\begin{code}\n\
+      \factorial :: Integer -> Integer\n\
+      \factorial 0 = 1\n\
+      \factorial n = \n\
+      \  n * (factorial $ n - 1)\n\
+      \\\end{code}\n\
+      \And that's it !"
+      |=>
+      [ Newline 1
+      , T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 0
+      , T "factorial", Number, Equals, Number, Newline 0
+      , T "factorial", T "n", Equals, Newline 2
+      , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", Number, RParen, Newline 0
+      ]
+    , "This is a 'factorial' function\n\
+      \\\begin{code}\n\
+      \factorial :: Integer -> Integer\n\
+      \factorial 0 = 1\n\
+      \factorial n = \n\
+      \  n * (factorial $ n - 1)\n\
+      \\\end{code}\n\
+      \But that's not it yet! Here's another function:\n\
+      \\\begin{code}\n\
+      \foo :: a -> a\n\
+      \foo x = x\n\
+      \\\end{code}\n\
+      \And that's it !"
+      |=>
+      [ Newline 1
+      , T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 0
+      , T "factorial", Number, Equals, Number, Newline 0
+      , T "factorial", T "n", Equals, Newline 2
+      , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", Number, RParen, Newline 0
+      , Newline 1
+      , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
+      , T "foo", T "x", Equals, T "x", Newline 0
+      ]
+    , "Test\n\
+      \\\begin{code}\n\
+      \class (X x) => C a b where\n\
+      \  m :: a->b\n\
+      \  n :: c\n\
+      \\\end{code}"
+      |=>
+      [ Newline 1
+      , KWClass, LParen, T "X", T "x", RParen, Implies, T "C", T "a", T "b", KWWhere, Newline 2
+      , T "m", DoubleColon, T "a", Arrow, T "b", Newline 2
+      , T "n", DoubleColon, T "c"
+      , Newline 0
+      ]
+    , "Test\n\
+      \\\begin{code}\n\
+      \class (X x) => C a b where\n\
+      \\tm :: a->b\n\
+      \\tn :: c\n\
+      \\\end{code}"
+      |=>
+      [ Newline 1
+      , KWClass, LParen, T "X", T "x", RParen, Implies, T "C", T "a", T "b", KWWhere, Newline 1
+      , T "m", DoubleColon, T "a", Arrow, T "b", Newline 1
+      , T "n", DoubleColon, T "c"
+      , Newline 0
+      ]
     ]
   ]
   where
     (==>) = makeTest (f Vanilla)
-    (|=>) = makeTest (f Literate)
+    (|=>) = makeTest (f LiterateOutside)
     f mode =
         map valOf
       . tokenize' filename mode
@@ -305,7 +348,7 @@ testStripComments = testGroup "Strip comments"
     [Newline 0, T "hello", Newline 0, T "fred", Newline 0]
   , "{-# LANG #-} hello {- there {- nested -} comment -} fred"
     ==>
-    [Newline 0, T "hello", T "fred", Newline 0]
+    [Newline 1, T "hello", T "fred", Newline 0]
   , "hello {-\n\
     \there\n\
     \------}\n\
@@ -347,7 +390,7 @@ testStripComments = testGroup "Strip comments"
 
 testBreakBlocks :: TestTree
 testBreakBlocks = testGroup "Break blocks"
-  [ testGroup "non-literate"
+  [ testGroup "Vanilla"
     [ "a\n\
       \b\n"
       ==>
@@ -406,11 +449,11 @@ testBreakBlocks = testGroup "Break blocks"
       \two_hash  = from_string \"##\"\n\
       \hash_prec = const 0"
       ==>
-      [ [T "one_hash", T "Comma", T "two_hash", T "DoubleColon", T "text_type"]
-      , [T "hash_prec", T "DoubleColon", T "Int", T "Arrow", T "Int"]
-      , [T "one_hash", T "Equals", T "from_char", T "Character"]
-      , [T "two_hash",  T "Equals", T "from_string", T "String"]
-      , [T "hash_prec", T "Equals", T "const", T "Number"]
+      [ [T "one_hash", Comma, T "two_hash", DoubleColon, T "text_type"]
+      , [T "hash_prec", DoubleColon, T "Int", Arrow, T "Int"]
+      , [T "one_hash", Equals, T "from_char", Character]
+      , [T "two_hash",  Equals, T "from_string", String]
+      , [T "hash_prec", Equals, T "const", Number]
       ]
     , "one_hash, two_hash :: text_type; \
       \hash_prec :: Int -> Int; \
@@ -418,11 +461,11 @@ testBreakBlocks = testGroup "Break blocks"
       \two_hash  = from_string \"##\"; \
       \hash_prec = const 0"
       ==>
-      [ [T "one_hash", T "Comma", T "two_hash", T "DoubleColon", T "text_type"]
-      , [T "hash_prec", T "DoubleColon", T "Int", T "Arrow", T "Int"]
-      , [T "one_hash", T "Equals", T "from_char", T "Character"]
-      , [T "two_hash",  T "Equals", T "from_string", T "String"]
-      , [T "hash_prec", T "Equals", T "const", T "Number"]
+      [ [T "one_hash", Comma, T "two_hash", DoubleColon, T "text_type"]
+      , [T "hash_prec", DoubleColon, T "Int", Arrow, T "Int"]
+      , [T "one_hash", Equals, T "from_char", Character]
+      , [T "two_hash",  Equals, T "from_string", String]
+      , [T "hash_prec", Equals, T "const", Number]
       ]
     , "{\n\
       \  data F f :: * ; -- foo\n\
@@ -431,15 +474,14 @@ testBreakBlocks = testGroup "Break blocks"
       \  mkF  :: f -> F f ; getF :: F f -> f ;\n\
       \} ;"
       ==>
-      [ [ Newline 2
-        , T "LBrace", T "KWData", T "F", T "f", T "DoubleColon", T "*", T "Semicolon", Newline 2
-        , T "mkF", T "DoubleColon", T "f", T "Arrow", T "F", T "f", T "Semicolon", Newline 2
-        , T "getF", T "DoubleColon", T "F", T "f", T "Arrow", T "f", T "Semicolon", Newline 0
-        , T "RBrace"
+      [ [ LBrace, Newline 2, KWData, T "F", T "f", DoubleColon, T "*", Semicolon, Newline 2
+        , T "mkF", DoubleColon, T "f", Arrow, T "F", T "f", Semicolon
+        , T "getF", DoubleColon, T "F", T "f", Arrow, T "f", Semicolon, Newline 0
+        , RBrace
         ]
       ]
     ]
-  , testGroup "literate"
+  , testGroup "Literate"
     [ "> a\n\
       \>\n\
       \>\n\
@@ -473,7 +515,7 @@ testBreakBlocks = testGroup "Break blocks"
   ]
   where
     (==>) = makeTest (f Vanilla)
-    (|=>) = makeTest (f Literate)
+    (|=>) = makeTest (f LiterateOutside)
     f mode =
         map (map valOf . unstrippedTokensOf)
       . breakBlocks
@@ -490,9 +532,9 @@ testWhereBlock = testGroup "whereBlock"
     \  mkF  :: f -> F f\n\
     \  getF :: F f -> f"
     ==>
-    [ [T "KWData", T "F", T "f", T "DoubleColon", T "*"]
-    , [T "mkF", T "DoubleColon", T "f", T "Arrow", T "F", T "f"]
-    , [T "getF", T "DoubleColon", T "F", T "f", T "Arrow", T "f"]
+    [ [KWData, T "F", T "f", DoubleColon, T "*"]
+    , [T "mkF", DoubleColon, T "f", Arrow, T "F", T "f"]
+    , [T "getF", DoubleColon, T "F", T "f", Arrow, T "f"]
     ]
   , "class A f where {\n\
     \  data F f :: * ; -- foo\n\
@@ -502,9 +544,9 @@ testWhereBlock = testGroup "whereBlock"
     \  getF :: F f -> f ;\n\
     \} ;"
     ==>
-    [ [T "KWData", T "F", T "f", T "DoubleColon", T "*"]
-    , [T "mkF", T "DoubleColon", T "f", T "Arrow", T "F", T "f"]
-    , [T "getF", T "DoubleColon", T "F", T "f", T "Arrow", T "f"]
+    [ [KWData, T "F", T "f", DoubleColon, T "*"]
+    , [T "mkF", DoubleColon, T "f", Arrow, T "F", T "f"]
+    , [T "getF", DoubleColon, T "F", T "f", Arrow, T "f"]
     ]
   ]
   where
@@ -554,8 +596,8 @@ testPrefixes = testGroup "Prefix tracking"
     ==>
     [ Pos (SrcPos fn 1 "") (TagVal "f" Function Nothing)
     , Pos (SrcPos fn 2 "") (TagVal "g" Function Nothing)
-    , Pos (SrcPos fn 3 "") (TagVal "D" Type Nothing)
     , Pos (SrcPos fn 3 "") (TagVal "C" Constructor (Just "D"))
+    , Pos (SrcPos fn 3 "") (TagVal "D" Type Nothing)
     , Pos (SrcPos fn 4 "") (TagVal "f" Function (Just "D"))
     ]
   , "instance Foo Bar where\n\
@@ -1404,7 +1446,7 @@ testLiterate = testGroup "Literate"
   ]
   where
     (==>) = makeTest f
-    f = sort . map untag . fst . processTokens . tokenize' "fn.lhs" Literate
+    f = sort . map untag . fst . processTokens . tokenize' "fn.lhs" LiterateOutside
 
 testPatterns :: TestTree
 testPatterns = testGroup "Patterns"

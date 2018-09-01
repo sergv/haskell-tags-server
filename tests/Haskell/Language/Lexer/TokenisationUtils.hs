@@ -18,15 +18,15 @@ module Haskell.Language.Lexer.TokenisationUtils
 import Test.Tasty
 
 import Control.Arrow (first)
-import Data.Functor.Identity
 import Data.List (sort)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Prettyprint.Doc.Ext as PP
+import Data.Void (Void)
 import GHC.Stack (HasCallStack)
 
-import Haskell.Language.Lexer (LiterateMode(..))
-import qualified Haskell.Language.Lexer as Lexer
+import Haskell.Language.Lexer (LiterateLocation(..))
+import qualified Haskell.Language.LexerSimple.Lexer as Lexer
 import TestUtils (makeTest)
 
 import Haskell.Language.Lexer.FastTags
@@ -50,7 +50,7 @@ filename = "fn.hs"
 
 testFullTagsWithoutPrefixes
   :: HasCallStack
-  => FilePath -> LiterateMode -> Text -> [Pos TagVal] -> TestTree
+  => FilePath -> LiterateLocation Void -> Text -> [Pos TagVal] -> TestTree
 testFullTagsWithoutPrefixes fn mode = \source tags ->
   makeTest (first sort . processTokens . tokenize' fn mode) source (tags, warnings)
   where
@@ -59,7 +59,7 @@ testFullTagsWithoutPrefixes fn mode = \source tags ->
 
 testTagNames
   :: HasCallStack
-  => FilePath -> LiterateMode -> Text -> [String] -> TestTree
+  => FilePath -> LiterateLocation Void -> Text -> [String] -> TestTree
 testTagNames fn mode source tags =
   makeTest process source (tags, warnings)
   where
@@ -74,15 +74,16 @@ untag (Pos _ (TagVal name _ _)) = T.unpack name
 
 tokenize'
   :: HasCallStack
-  => FilePath -> LiterateMode -> Text -> [Token]
+  => FilePath -> LiterateLocation Void -> Text -> [Token]
 tokenize' fn mode =
     either (error . PP.displayDocString . PP.pretty) id
-  . runIdentity
-  . Lexer.tokenizeM fn mode
+  -- . runIdentity
+  -- . Lexer.tokenizeM fn mode
+  . Lexer.tokenize fn mode
 
 -- tokenize''
 --   :: FilePath
---   -> LiterateMode
+--   -> LiterateLocation Void
 --   -> [(PathFragment, Text)]
 --   -> Text
 --   -> [Token]

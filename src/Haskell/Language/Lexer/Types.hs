@@ -25,6 +25,7 @@ import Data.Text.Prettyprint.Doc.Ext (Pretty(..))
 
 import Haskell.Language.Lexer.FastTags (Line, SrcPos(..))
 
+{-# INLINE mkSrcPos #-}
 mkSrcPos :: FilePath -> Line -> SrcPos
 mkSrcPos filename line = SrcPos
   { posFile   = filename

@@ -76,6 +76,10 @@ library
     Data.Symbols
     Data.Symbols.MacroName
     Data.Text.Prettyprint.Doc.Ext
+
+    Haskell.Language.LexerSimple.Lexer
+    Haskell.Language.LexerSimple.Types
+
     Haskell.Language.Lexer
     Haskell.Language.Lexer.Env
     Haskell.Language.Lexer.FastTags
@@ -87,6 +91,7 @@ library
     Haskell.Language.Lexer.RulePredicate
     Haskell.Language.Lexer.State
     Haskell.Language.Lexer.Types
+
     Haskell.Language.Server.BERT
     Haskell.Language.Server.Tags
     Haskell.Language.Server.Tags.AnalyzeHeader
