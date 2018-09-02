@@ -100,7 +100,7 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
   where
     doLoad :: HasCallStack => m (NonEmpty ResolvedModule)
     doLoad = do
-      logInfo $ "[loadModule.doLoad] loading module" <+> ppShow ikModuleName
+      logInfo $ "[loadModule.doLoad] loading module" <+> pretty ikModuleName
       case T.splitOn "." $ getModuleName ikModuleName of
         []     -> throwErrorWithCallStack $ "Invalid module name:" <+> pretty ikModuleName
         x : xs -> do
@@ -123,7 +123,7 @@ reloadIfNecessary key m = do
   (needsReloading, modifTime) <- moduleNeedsReloading m
   if needsReloading
   then do
-    logInfo $ "[reloadIfNecessary] reloading module" <+> ppShow (mhModName $ modHeader m)
+    logInfo $ "[reloadIfNecessary] reloading module" <+> pretty (mhModName $ modHeader m)
     loadModuleFromFile key (Just modifTime) (modFile m)
   else pure m
 
@@ -134,7 +134,7 @@ loadModuleFromFile
   -> FullPath
   -> m ResolvedModule
 loadModuleFromFile key@ImportKey{ikModuleName} modifTime filename = do
-  logInfo $ "[loadModuleFromFile] loading file" <+> ppShow filename
+  logInfo $ "[loadModuleFromFile] loading file" <+> pretty filename
   modifTime'    <- maybe (MonadFS.getModificationTime filename) pure modifTime
   source        <- MonadFS.readFile filename
   unresolvedMod <- loadModuleFromSource (Just ikModuleName) modifTime' filename source
@@ -196,7 +196,7 @@ makeModule suggestedModuleName modifTime filename tokens = do
       allSymbols     = SM.fromList syms
   unless (null errors) $
     logError $ ppFoldableHeaderWith docFromString
-      ("fast-tags errors while loading" <+> ppShow filename)
+      ("fast-tags errors while loading" <+> pretty filename)
       errors
   case (suggestedModuleName, header) of
     (Just name, Just ModuleHeader{mhModName}) ->
@@ -321,7 +321,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
               case M.lookup qualifier namesByNamespace of
                 Nothing -> throwErrorWithCallStack $ PP.hsep
                   [ "Internal error: export qualifier"
-                  , PP.dquotes $ ppShow qualifier
+                  , PP.dquotes $ pretty qualifier
                   , "of entry"
                   , PP.dquotes $ pretty entry
                   , "has no corresponding qualified imports"

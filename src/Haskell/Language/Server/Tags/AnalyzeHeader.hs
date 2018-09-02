@@ -473,7 +473,7 @@ instance Pretty Tokens where
   pretty (Tokens [])       = "[]"
   pretty (Tokens ts@(t : _)) =
     ppDictHeader "Tokens"
-      [ "file"   :-> ppShow $ posFile $ posOf t
+      [ "file"   :-> pretty $ posFile $ posOf t
       , "tokens" :-> ppListWith ppTokenVal ts
       ]
     where

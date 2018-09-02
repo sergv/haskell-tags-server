@@ -1031,7 +1031,7 @@ withConnection pool conf f = do
             conn <- tryConnect port
             case conn of
               Left err    -> reportErr $
-                "Failed to connect to locally started server" <> PP.line <> ppShow err
+                "Failed to connect to a locally started server:" <> PP.line <> ppShow err
               Right conn' -> do
                 let server = LocalServer serv' conn'
                 f server `finally` liftBase (closeConnection server)
