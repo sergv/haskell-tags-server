@@ -964,11 +964,11 @@ testData = GroupTest "server tests"
           , "baz2"
           , NotFound
           )
-        , ( "Name imported through qualiifed module reexporting #1"
+        , ( "Name imported through qualified module reexporting #1"
           , "foo3"
           , NotFound
           )
-        , ( "Name imported through qualiifed module reexporting #2"
+        , ( "Name imported through qualified module reexporting #2"
           , "bar3"
           , NotFound
           )
