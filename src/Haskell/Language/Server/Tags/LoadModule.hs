@@ -19,6 +19,8 @@ module Haskell.Language.Server.Tags.LoadModule
   , resolveModule
   ) where
 
+import Prelude hiding (mod)
+
 import Control.Arrow ((&&&), first)
 import Control.Monad.Except (throwError)
 import Control.Monad.Except.Ext
@@ -88,16 +90,16 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
       , ppFoldableHeaderWith ppNEMap "All imports in progress:" $ tssLoadsInProgress s
       ]
   else do
-    mods       <- case SubkeyMap.lookup key (tssLoadedModules s) of
-                    Nothing   -> doLoad key
-                    Just mods -> for mods (reloadIfNecessary key)
-    modify (\s -> s { tssLoadedModules   = SubkeyMap.insert key mods $ tssLoadedModules s })
+    mods <- case SubkeyMap.lookup key (tssLoadedModules s) of
+      Nothing   -> doLoad
+      Just mods -> for mods (reloadIfNecessary key)
+    modify (\s' -> s' { tssLoadedModules   = SubkeyMap.insert key mods $ tssLoadedModules s' })
     loadedMods <- gets (SubkeyMap.keys . tssLoadedModules)
     logDebug $ "[loadModule] loaded modules:" <+> ppList loadedMods
     pure mods
   where
-    doLoad :: HasCallStack => ImportKey -> m (NonEmpty ResolvedModule)
-    doLoad key@ImportKey{ikModuleName} = do
+    doLoad :: HasCallStack => m (NonEmpty ResolvedModule)
+    doLoad = do
       logInfo $ "[loadModule.doLoad] loading module" <+> ppShow ikModuleName
       case T.splitOn "." $ getModuleName ikModuleName of
         []     -> throwErrorWithCallStack $ "Invalid module name:" <+> pretty ikModuleName
@@ -256,7 +258,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
            , [(ImportQualification, SymbolMap)]
            )
     resolveImports imports = do
-      logDebug $ "[resolveModule.resolveImports] analyzing imports of module" <+> pretty (mhModName header)
+      logDebug $ "[resolveModule.resolveImports] analysing imports of module" <+> pretty (mhModName header)
       SS.runStateT (SubkeyMap.traverseWithKey resolveImport imports) []
       where
         resolveImport
@@ -279,12 +281,12 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
               for importSpecs $ \spec -> do
                 (qual, symMap) <- filterVisibleNames (mhModName header) importedMods importedNames spec
                 -- Record which names enter current module's scope under certain
-                -- qualification from import spec we're currently analyzing.
+                -- qualification from import spec we're currently analysing.
                 modify ((qual, symMap) :)
                 pure $ spec { ispecImportedNames = symMap }
             -- Non-standard code path for breaking import cycles: imported module
             -- is already being loaded. In order to break infinite loop, we must
-            -- analyze it here and get all the names we interested in, whithout
+            -- analyse it here and get all the names we interested in, whithout
             -- resolving the module!
             Just modules ->
               quasiResolveImportSpecWithLoadsInProgress (mhModName header) key modules importSpecs
@@ -294,7 +296,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
       => UnresolvedModule -> m (SubkeyMap ImportKey (NonEmpty ResolvedImportSpec), SymbolMap)
     resolveSymbols Module{modHeader = header@ModuleHeader{mhImports, mhModName}, modAllSymbols} = do
       (resolvedImports, filteredNames) <- resolveImports mhImports
-      logDebug $ "[resolveModule.resolveImports] analyzing export list of module" <+> pretty mhModName
+      logDebug $ "[resolveModule.resolveImports] analysing export list of module" <+> pretty mhModName
       logDebug $ "[resolveModule.resolveImports] resolved imports" <> PP.line <> ppSubkeyMapWith pretty pretty ppNE resolvedImports
       case mhExports header of
         Nothing                                            ->
