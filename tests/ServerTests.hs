@@ -973,6 +973,33 @@ testData = GroupTest "server tests"
           , NotFound
           )
         ]
+  , withDirAndFile (Directory "0009empty_export_list_is_wildcard") "MainModule.hs" $
+      group "Empty export list is treated as export all wildcard"
+        [ ( "Non-exported name #1"
+          , "Foo"
+          , Known "ModuleWithEmptyExportList.hs" 11 "Type"
+          )
+        , ( "Non-exported name #2"
+          , "Bar"
+          , Known "ModuleWithEmptyExportList.hs" 12 "Constructor"
+          )
+        , ( "Non-exported name #3"
+          , "Baz"
+          , Known "ModuleWithEmptyExportList.hs" 15 "Type"
+          )
+        , ( "Non-exported name #4"
+          , "Quux"
+          , Known "ModuleWithEmptyExportList.hs" 16 "Constructor"
+          )
+        , ( "Non-exported name #5"
+          , "frob"
+          , Known "ModuleWithEmptyExportList.hs" 20 "Function"
+          )
+        , ( "Non-existing name"
+          , "frobnicate"
+          , NotFound
+          )
+        ]
   ]
 
 tests :: TestTree

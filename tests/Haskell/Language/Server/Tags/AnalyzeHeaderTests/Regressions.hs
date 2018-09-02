@@ -40,7 +40,7 @@ aesonHeaderTest = TestCase
   , input          = aesonHeader
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Data.Aeson.TH"
-      , mhExports          = Just ModuleExports
+      , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList $
               [ EntryWithChildren
                   { entryName               = mkSymbolName name
@@ -389,7 +389,7 @@ unixCompatHeaderTest = TestCase
   , input          = unixCompatHeader
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "System.PosixCompat.Types"
-      , mhExports          = Just ModuleExports
+      , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList $
               [ EntryWithChildren
                   { entryName               = mkSymbolName name

@@ -265,13 +265,14 @@ analyzeExports
   :: forall m. (HasCallStack, MonadError ErrorMessage m, MonadLog m)
   => Map ImportQualifier (NonEmpty ModuleName)
   -> [Pos ServerToken]
-  -> m (Maybe ModuleExports)
+  -> m (ModuleExportSpec ModuleExports)
 analyzeExports importQualifiers ts = do
   -- logDebug $ "[analyzeExports] ts =" <+> ppTokens ts
   case stripNewlines ts of
-    []            -> pure Nothing
-    PLParen : rest -> Just <$> go mempty mempty rest
-    toks          ->
+    []                    -> pure NoExports
+    PLParen : PRParen : _ -> pure EmptyExports
+    PLParen : rest        -> SpecificExports <$> go mempty mempty rest
+    toks                  ->
       throwErrorWithCallStack $ "Unrecognized shape of export list:" <+> ppTokens toks
   where
     -- Analyze comma-separated list of entries like

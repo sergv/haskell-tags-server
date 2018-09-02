@@ -52,7 +52,7 @@ simpleHeaderTest = TestCase
       "module Foo where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Foo"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = mempty
       }
@@ -66,7 +66,7 @@ moduleWithUnqualifiedImportTest = TestCase
       \import Imported1"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithUnqualifiedImport"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -90,7 +90,7 @@ moduleWithUnqualifiedSourceImportTest = TestCase
       \import {-# SOURCE #-} Imported1"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithUnqualifiedImport"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -114,7 +114,7 @@ moduleWithUnqualifiedSafeImportTest = TestCase
       \import safe Imported1"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithUnqualifiedImport"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -138,7 +138,7 @@ moduleWithPatternImportTest = TestCase
       \import Imported1 (pattern Pat)"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithPatternImport"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -170,7 +170,7 @@ moduleWithUnqualifiedImportAndEmptyImportListTest = TestCase
       \import Imported1 ()"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -197,7 +197,7 @@ moduleWithUnqualifiedImportAndEmptyHiddenImportListTest = TestCase
       \import Imported1 hiding ()"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -224,7 +224,7 @@ moduleWithUnqualifiedImportAndSingletonImportListTest = TestCase
       \import Imported1 (foo)"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -256,7 +256,7 @@ moduleWithUnqualifiedImportAndNonemptyImportListTest = TestCase
       \import Imported1 (foo, bar, baz)"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -297,7 +297,7 @@ moduleWithUnqualifiedImportAndNonemptyImportListWithDifferentVisibilitiesTest = 
       \import Imported1 (foo, Bar(..), Baz(Quux, Fizz), type Typ, type (++), pattern Pat, pattern (:++), (:$:), (:$$:)(..), (:$$*:)((:$$$*:), (:$$$**:)))"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -371,7 +371,7 @@ moduleWithQualifiedImportTest = TestCase
       \import qualified Imported1"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithQualifiedImport"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = M.fromList
           [ ( mkImportQualifier $ mkModuleName "Imported1"
             , neSingleton $ mkModuleName "Imported1"
@@ -401,7 +401,7 @@ moduleWithQualifiedSafeAndPackageImportTest = TestCase
       \import safe qualified \"foobar\" Imported1"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithQualifiedImport"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = M.fromList
           [ ( mkImportQualifier $ mkModuleName "Imported1"
             , neSingleton $ mkModuleName "Imported1"
@@ -430,7 +430,7 @@ moduleWithQualifiedImportAndAliasTest = TestCase
       \import qualified Imported1 as Imp"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithQualifiedImportAndAlias"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = M.fromList
           [ ( mkImportQualifier $ mkModuleName "Imp"
             , neSingleton $ mkModuleName "Imported1"
@@ -459,7 +459,7 @@ moduleWithImportAndAliasTest = TestCase
       \import Imported1 as Imp"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithImportAndAlias"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = M.fromList
           [ ( mkImportQualifier $ mkModuleName "Imp"
             , neSingleton $ mkModuleName "Imported1"
@@ -488,7 +488,7 @@ moduleWithImportAndAliasAndHidingImportListTest = TestCase
       \import Imported1 as Imp hiding (Foo(..), bar, Quux(Baz))"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithImportAndAliasAandHidingImportList"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = M.fromList
           [ ( mkImportQualifier $ mkModuleName "Imp"
             , neSingleton $ mkModuleName "Imported1"
@@ -537,7 +537,7 @@ moduleWithImportOfSpeciallyNamedOperatorsTest = TestCase
       \import Imported1 ((.), (!), (~), (.+.))"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithImportOfSpeciallyNamedOperators"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -581,7 +581,7 @@ moduleWithImportOfPatternFuncTest = TestCase
       \import Imported1 (pattern)"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -613,7 +613,7 @@ moduleWithImportOfManyFuncsAndPatternFuncTest = TestCase
       \import Imported1 (Foo(..), pattern, (++), Bar)"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -657,7 +657,7 @@ moduleWithoutCommasAndPatternFuncImportBeforeOperator = TestCase
       \import Imported1 (Foo(..) pattern (++) Bar)"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -701,7 +701,7 @@ moduleWithoutCommasAndPatternFuncImportBeforeConstructorWithChildren = TestCase
       \import Imported1 (pattern Foo(..) (++) Bar)"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -745,7 +745,7 @@ moduleWithoutCommasAndPatternFuncImportBeforeOperatorConstructorWithChildren = T
       \import Imported1 (pattern (:++)(..) (++) Bar)"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -789,7 +789,7 @@ moduleWithoutCommasAndSeveralPatternImports = TestCase
       \import Imported1 (Foo(..) pattern (:++) Bar pattern Baz)"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -833,7 +833,7 @@ moduleWithAmbigousImportList = TestCase
       \import Imported1 (Foo (:$$:)(..) Bar (:$$$:)(X) Baz (:?:) (:+:)((:++:)))"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -893,7 +893,7 @@ moduleWithImportListWithoutCommas = TestCase
       \import Imported1 (foo Bar(..) Baz(Quux, Fizz) (:$:) (:$$:)(..) (:$$*:)((:$$$*:), (:$$$**:)) pattern Pat pattern (:++))"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -959,7 +959,7 @@ moduleWithImportsThatHaveChildrenListWithoutCommas = TestCase
       \import Imported1 (Baz(Quux, Fizz), (:$$*:)((:$$$*:) (:$$$**:)))"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -1008,7 +1008,7 @@ moduleWithUnbalancedParensInImportList = TestCase
       \  )"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -1061,7 +1061,7 @@ moduleWithUnbalancedParensInImportChildrenList = TestCase
       \  )"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
           [ neSingleton ImportSpec
@@ -1101,11 +1101,7 @@ moduleWithEmptyExportsTest = TestCase
       "module ModuleWithEmptyExport () where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithEmptyExport"
-      , mhExports          = Just ModuleExports
-          { meExportedEntries    = mempty
-          , meReexports          = mempty
-          , meHasWildcardExports = False
-          }
+      , mhExports          = EmptyExports
       , mhImportQualifiers = mempty
       , mhImports          = mempty
       }
@@ -1118,7 +1114,7 @@ moduleWithQuaifiedExportsTest = TestCase
       "module ModuleWithEmptyExport (Foo.bar, Baz.Quux(..)) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithEmptyExport"
-      , mhExports          = Just ModuleExports
+      , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
                   { entryName               = mkSymbolName "Foo.bar"
@@ -1144,7 +1140,7 @@ moduleWithExportsTest = TestCase
       "module ModuleWithExport (foo, Bar(..), Baz(Quux, Fizz), Frob(.., Frob', Frob''), pattern Pat, pattern (:!:), module Frob, type Typ, type (++), (:$:), (:$$:)(..), (:$$*:)((:$$$*:), (:$$$**:))) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
-      , mhExports          = Just ModuleExports
+      , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
                   { entryName               = mkSymbolName "foo"
@@ -1256,7 +1252,7 @@ moduleWithMultilineExportsTest = TestCase
       \   where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
-      , mhExports          = Just ModuleExports
+      , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
                   { entryName               = mkSymbolName "foo"
@@ -1319,7 +1315,7 @@ moduleWithExportsOfSpeciallyNamedOperatorsTest = TestCase
       "module ModuleWithExport ((.), (!), (~), (.+.), (Test..||.)) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
-      , mhExports          = Just ModuleExports
+      , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
                   { entryName               = mkSymbolName "."
@@ -1357,7 +1353,7 @@ moduleStarExports = TestCase
       "module Data.Kind ( Type, Constraint, type (*), type (★) ) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Data.Kind"
-      , mhExports          = Just ModuleExports
+      , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
                   { entryName               = mkSymbolName name
@@ -1380,7 +1376,7 @@ moduleWithExportOfPatternFuncTest = TestCase
       "module ModuleWithExport (pattern) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
-      , mhExports          = Just ModuleExports
+      , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
                   { entryName               = mkSymbolName "pattern"
@@ -1402,7 +1398,7 @@ moduleWithExportOfManyFuncsAndPatternFuncTest = TestCase
       "module ModuleWithExport (Foo(..), pattern, (++), Bar) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
-      , mhExports          = Just ModuleExports
+      , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
                   { entryName               = mkSymbolName "Foo"
@@ -1437,7 +1433,7 @@ moduleWithoutCommasAndPatternFuncExportBeforeOperator = TestCase
       "module ModuleWithExport (Foo(..) pattern (++) Bar) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
-      , mhExports          = Just ModuleExports
+      , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
                   { entryName               = mkSymbolName "Foo"
@@ -1472,7 +1468,7 @@ moduleWithoutCommasAndPatternFuncExportBeforeConstructorWithChildren = TestCase
       "module ModuleWithExport (pattern Foo(..) (++) Bar) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
-      , mhExports          = Just ModuleExports
+      , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
                   { entryName               = mkSymbolName "Foo"
@@ -1507,7 +1503,7 @@ moduleWithoutCommasAndPatternFuncExportBeforeOperatorConstructorWithChildren = T
       "module ModuleWithExport (pattern (:++)(..) (++) Bar) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
-      , mhExports          = Just ModuleExports
+      , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
                   { entryName               = mkSymbolName ":++"
@@ -1542,7 +1538,7 @@ moduleWithoutCommasAndSeveralPatternExports = TestCase
       "module ModuleWithExport (Foo(..) pattern (:++) Bar pattern Baz) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
-      , mhExports          = Just ModuleExports
+      , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
                   { entryName               = mkSymbolName "Foo"
@@ -1575,7 +1571,7 @@ moduleWithExportListWithoutCommasTest = TestCase
       "module ModuleWithExport (foo Bar(..) Baz(Quux, Fizz) pattern Pat pattern (:!:) module Frob (:$:) (:$$:)(..) module Bazzz (:$$*:)((:$$$*:), (:$$$**:)) module Quuxxx) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
-      , mhExports          = Just ModuleExports
+      , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
                   { entryName               = mkSymbolName "foo"
@@ -1634,7 +1630,7 @@ moduleWithExportListWithoutCommasAndStructuresAfterNameWithoutChildrenTest = Tes
       "module ModuleWithExport (foo module Foo (++) module Bar baz pattern Baz quux type Quux pattern Pat module Patterns) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
-      , mhExports          = Just ModuleExports
+      , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
                   { entryName               = mkSymbolName name
@@ -1667,7 +1663,7 @@ moduleWithUnbalancedParensInExportList = TestCase
       \  ) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
-      , mhExports          = Just ModuleExports
+      , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
                   { entryName               = mkSymbolName "Foo"
@@ -1710,7 +1706,7 @@ moduleWithUnbalancedParensInExportChildrenList = TestCase
       \  ) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
-      , mhExports          = Just ModuleExports
+      , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
                   { entryName               = mkSymbolName "Foo"
@@ -1741,7 +1737,7 @@ moduleWithExportsThatHaveChildrenListWithoutCommasTest = TestCase
       "module ModuleWithExport (Bar(..), Baz(Quux Fizz), (:$:), (:$$*:)((:$$$*:) (:$$$**:))) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
-      , mhExports          = Just ModuleExports
+      , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
                   { entryName               = mkSymbolName "Bar"

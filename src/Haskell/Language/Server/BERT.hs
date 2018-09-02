@@ -25,6 +25,8 @@ module Haskell.Language.Server.BERT
   , runBertServer
   ) where
 
+import Prelude hiding (mod)
+
 import Control.Concurrent
 import Control.Monad.Base
 import Control.Monad.Except (throwError)

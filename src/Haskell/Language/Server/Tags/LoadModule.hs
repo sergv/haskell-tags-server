@@ -226,7 +226,7 @@ makeModule suggestedModuleName modifTime filename tokens = do
       { mhModName          = fromMaybe defaultModuleName suggestedModuleName
       , mhImports          = mempty
       , mhImportQualifiers = mempty
-      , mhExports          = Nothing
+      , mhExports          = NoExports
       }
 
 resolveModule
@@ -236,15 +236,19 @@ resolveModule
   -> UnresolvedModule
   -> m ResolvedModule
 resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
-  logDebug $ "[resolveModule] resolving names of module" <+> pretty (mhModName header)
+  logDebug $ "[resolveModule] resolving names of module" <+> pretty (mhModName unresHeader)
   (imports, symbols) <- resolveSymbols mod
+  logDebug $ ppDictHeader ("[resolveModule] Resolved items for module" <+> pretty (mhModName unresHeader))
+    [ "imports"                          :-> ppSubkeyMapWith pretty pretty ppNE imports
+    , "all symbols exported by a module" --> symbols
+    ]
   pure $ mod
-    { modHeader           = header { mhImports = imports }
+    { modHeader           = unresHeader { mhImports = imports }
     , modAllExportedNames = symbols
     }
   where
-    header :: UnresolvedModuleHeader
-    header = modHeader mod
+    unresHeader :: UnresolvedModuleHeader
+    unresHeader = modHeader mod
     expandImportQualification :: forall a. (ImportQualification, a) -> [(Maybe ImportQualifier, a)]
     expandImportQualification = \case
       (Unqualified, x)                   -> [(Nothing, x)]
@@ -258,7 +262,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
            , [(ImportQualification, SymbolMap)]
            )
     resolveImports imports = do
-      logDebug $ "[resolveModule.resolveImports] analysing imports of module" <+> pretty (mhModName header)
+      logDebug $ "[resolveModule.resolveImports] analysing imports of module" <+> pretty (mhModName unresHeader)
       SS.runStateT (SubkeyMap.traverseWithKey resolveImport imports) []
       where
         resolveImport
@@ -279,7 +283,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
                   importedMods :: NonEmpty ModuleName
                   importedMods = mhModName . modHeader <$> modules
               for importSpecs $ \spec -> do
-                (qual, symMap) <- filterVisibleNames (mhModName header) importedMods importedNames spec
+                (qual, symMap) <- filterVisibleNames (mhModName unresHeader) importedMods importedNames spec
                 -- Record which names enter current module's scope under certain
                 -- qualification from import spec we're currently analysing.
                 modify ((qual, symMap) :)
@@ -289,7 +293,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
             -- analyse it here and get all the names we interested in, whithout
             -- resolving the module!
             Just modules ->
-              quasiResolveImportSpecWithLoadsInProgress (mhModName header) key modules importSpecs
+              quasiResolveImportSpecWithLoadsInProgress (mhModName unresHeader) key modules importSpecs
 
     resolveSymbols
       :: HasCallStack
@@ -299,9 +303,11 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
       logDebug $ "[resolveModule.resolveImports] analysing export list of module" <+> pretty mhModName
       logDebug $ "[resolveModule.resolveImports] resolved imports" ## ppSubkeyMapWith pretty pretty ppNE resolvedImports
       case mhExports header of
-        Nothing                                            ->
+        NoExports                                                     ->
           pure (resolvedImports, modAllSymbols)
-        Just ModuleExports{meExportedEntries, meReexports} -> do
+        EmptyExports                                                  ->
+          pure (resolvedImports, modAllSymbols)
+        SpecificExports ModuleExports{meExportedEntries, meReexports} -> do
           logDebug $ "[resolveModule.resolveImports] meReexports =" <+> ppSet meReexports
           let lt, gt :: Set ModuleName
               (lt, reexportsItself, gt) = S.splitMember mhModName meReexports
@@ -342,8 +348,8 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
               extra       = inferExtraParents header
               allSymbols' :: SymbolMap
               allSymbols' = SM.registerChildren extra allSymbols
-          logDebug $ "[resolveModule] extra parents =" <+> ppMapWith pretty ppSet extra
-          logDebug $ "[resolveModule] allSymbols' =" <+> pretty allSymbols'
+          logDebug $ "[resolveModule.resolveSymbols] inferred extra parents =" ##
+            ppMapWith pretty ppSet extra
           pure (resolvedImports, allSymbols')
 
 resolveReexports
@@ -394,8 +400,9 @@ quasiResolveImportSpecWithLoadsInProgress mainModuleName key modules importSpecs
       Nothing ->
         foldForA modules' $ \(Module{modHeader = ModuleHeader{mhExports, mhModName}, modAllSymbols}, localSymbolsNames) ->
           case mhExports of
-            Nothing -> pure modAllSymbols
-            Just ModuleExports{meExportedEntries}
+            NoExports    -> pure modAllSymbols
+            EmptyExports -> pure modAllSymbols
+            SpecificExports ModuleExports{meExportedEntries}
               | exportedNames `S.isSubsetOf` localSymbolsNames -> do
                 let unqualifiedExports :: Set (Maybe UnqualifiedSymbolName)
                     unqualifiedExports  = S.map mkUnqualifiedSymbolName exportedNames
@@ -435,11 +442,16 @@ quasiResolveImportSpecWithLoadsInProgress mainModuleName key modules importSpecs
 
 -- | Some tags should get extra children-parent relationships, that were not
 -- evident by looking at tag definitions alone.
--- For instance, in ghc 8.0 exports can be of the form "module Mod(FooType(.., Foo', Bar,)) where",
+-- For instance, in ghc 8.0 exports can be of the form
+--
+-- > module Mod(FooType(.., Foo', Bar,)) where
+--
 -- which means that additional pattern synonyms Foo' and Bar' are associated with
--- FooType from now on.
--- However, this effect should only be visible in module exports. Within module,
--- there should be no such link between extra children and a parent.
+-- @FooType@ from now on.
+--
+-- However, this effect should only be visible in module exports.
+-- Within module, there should be no such link between extra children
+-- and a parent.
 inferExtraParents :: UnresolvedModuleHeader -> Map UnqualifiedSymbolName (Set UnqualifiedSymbolName)
 inferExtraParents ModuleHeader{mhExports} = M.fromListWith (<>) entries
   where

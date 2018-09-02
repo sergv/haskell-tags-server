@@ -99,6 +99,7 @@ insert sym m = SymbolMap
       Nothing -> Just $ S.singleton x
       Just xs -> Just $ S.insert x xs
 
+-- | Add extra child-parent relationships into a map.
 registerChildren
   :: Map UnqualifiedSymbolName (Set UnqualifiedSymbolName) -- ^ Map from parents to children
   -> SymbolMap

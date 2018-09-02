@@ -27,6 +27,7 @@ module Haskell.Language.Server.Tags.Types.Modules
   , UnresolvedModuleHeader
   , ResolvedModuleHeader
   , resolveQualifier
+  , ModuleExportSpec(..)
   , ModuleExports(..)
   ) where
 
@@ -104,7 +105,7 @@ instance Pretty a => Pretty (Module a) where
 data ModuleHeader a = ModuleHeader
   { mhModName          :: !ModuleName
     -- | Exports of a module. Nothing - everything is exported
-  , mhExports          :: !(Maybe ModuleExports)
+  , mhExports          :: !(ModuleExportSpec ModuleExports)
     -- | Mapping from qualifiers to original module names. Single qualifier
     -- may be used for several modules.
   , mhImportQualifiers :: !(Map ImportQualifier (NonEmpty ModuleName))
@@ -123,7 +124,7 @@ instance Pretty a => Pretty (ModuleHeader a) where
       [ "Name"             :-> pretty mhModName
       ] ++
       [ "Exports"          :-> pretty exports
-      | Just exports <- [mhExports]
+      | SpecificExports exports <- [mhExports]
       ] ++
       [ "ImportQualifiers" :-> ppMapWith pretty ppNE $ mhImportQualifiers
       | not $ M.null mhImportQualifiers
@@ -157,13 +158,25 @@ resolveQualifier qual ModuleHeader{mhImports, mhImportQualifiers} =
   where
     qualifiedModName = getImportQualifier qual
 
+data ModuleExportSpec a =
+    -- | Export list completely absent.
+    NoExports
+  | -- | Export list specifies no entries.
+    EmptyExports
+  | -- | Exprort list specifies entries.
+    SpecificExports a
+  deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
+
+instance Pretty a => Pretty (ModuleExportSpec a) where
+  pretty = ppGeneric
+
 data ModuleExports = ModuleExports
   { -- | Toplevel names exported from this particular module as specified in
     -- the header.
     meExportedEntries    :: KeyMap (EntryWithChildren SymbolName)
     -- | Module name here refer to real modules only.
   , meReexports          :: Set ModuleName
-    -- | Whether this module exports some entities that export all children.
+    -- | Whether this module exports any entities that export all children.
   , meHasWildcardExports :: Bool
   } deriving (Eq, Ord, Show, Generic)
 

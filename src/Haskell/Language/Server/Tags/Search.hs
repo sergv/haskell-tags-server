@@ -77,7 +77,7 @@ findInModule sym mod =
 
 lookUpInImportedModules
   :: forall m f. (HasCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => (Foldable f)
+  => Foldable f
   => UnqualifiedSymbolName
   -> f ResolvedImportSpec
   -> m [ResolvedSymbol]
