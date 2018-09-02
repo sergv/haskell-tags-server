@@ -94,7 +94,7 @@ insert sym m = SymbolMap
     addToNE x = \case
       Nothing -> Just $ x :| []
       Just xs -> Just $ NE.cons x xs
-    addToSet :: (Ord a) => a -> Maybe (Set a) -> Maybe (Set a)
+    addToSet :: Ord a => a -> Maybe (Set a) -> Maybe (Set a)
     addToSet x = \case
       Nothing -> Just $ S.singleton x
       Just xs -> Just $ S.insert x xs
@@ -149,34 +149,27 @@ fromList syms = SymbolMap
 leaveNames :: SymbolMap -> Set UnqualifiedSymbolName -> SymbolMap
 leaveNames SymbolMap{smParentMap, smChildrenMap, smAllSymbols} syms =
   SymbolMap
-    { smParentMap   = (`S.intersection` syms) <$> (smParentMap `M.intersection` syms')
-    , smChildrenMap = (`S.intersection` syms) <$> (smChildrenMap `M.intersection` syms')
-    , smAllSymbols  = smAllSymbols `M.intersection` syms'
+    { smParentMap   = (`S.intersection` syms) <$> (smParentMap   `M.restrictKeys` syms)
+    , smChildrenMap = (`S.intersection` syms) <$> (smChildrenMap `M.restrictKeys` syms)
+    , smAllSymbols  = smAllSymbols `M.restrictKeys` syms
     }
-  where
-    syms' :: Map UnqualifiedSymbolName ()
-    syms' = M.fromSet (const ()) syms
 
 removeNames :: SymbolMap -> Set UnqualifiedSymbolName -> SymbolMap
 removeNames SymbolMap{smParentMap, smChildrenMap, smAllSymbols} syms =
   SymbolMap
-    { smParentMap   = (`S.difference` syms) <$> (smParentMap `M.difference` syms')
-    , smChildrenMap = (`S.difference` syms) <$> (smChildrenMap `M.difference` syms')
-    , smAllSymbols  = smAllSymbols `M.difference` syms'
+    { smParentMap   = (S.\\ syms) <$> (smParentMap   `M.withoutKeys` syms)
+    , smChildrenMap = (S.\\ syms) <$> (smChildrenMap `M.withoutKeys` syms)
+    , smAllSymbols  = smAllSymbols `M.withoutKeys` syms
     }
-  where
-    syms' :: Map UnqualifiedSymbolName ()
-    syms' = M.fromSet (const ()) syms
 
+-- TODO: this function is the same as 'removeNames'. Confirm whether it
+-- corresponds to its function.
 intersectAgainst :: SymbolMap -> Set UnqualifiedSymbolName -> SymbolMap
 intersectAgainst SymbolMap{smParentMap, smChildrenMap, smAllSymbols} names = SymbolMap
-  { smParentMap   = (`S.difference` names) <$> (smParentMap `M.difference` namesMap)
-  , smChildrenMap = (`S.difference` names) <$> (smChildrenMap `M.difference` namesMap)
-  , smAllSymbols  = smAllSymbols `M.difference` namesMap
+  { smParentMap   = (S.\\ names) <$> (smParentMap   `M.withoutKeys` names)
+  , smChildrenMap = (S.\\ names) <$> (smChildrenMap `M.withoutKeys` names)
+  , smAllSymbols  = smAllSymbols `M.withoutKeys` names
   }
-  where
-    namesMap :: Map UnqualifiedSymbolName ()
-    namesMap = M.fromSet (const ()) names
 
 keysSet :: SymbolMap -> Set UnqualifiedSymbolName
 keysSet = M.keysSet . smAllSymbols
