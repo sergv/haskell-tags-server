@@ -905,6 +905,19 @@ testData = testGroup "Data"
     \    | EmptyR"
     ==>
     [":>", "EmptyR", "ViewR"]
+
+  , "data [] a = [] | a : [a]"
+    ==> [":", "[]", "[]"]
+  , "data () = ()"
+    ==> ["()", "()"]
+  , "data (,) a b = (,) a b"
+    ==> ["(,)", "(,)"]
+  , "data (,,) a b c = (,,) a b c"
+    ==> ["(,,)", "(,,)"]
+  , "data (a, b) = (a, b)"
+    ==> ["(,)", "(,)"]
+  , "data (a, b, c) = (a, b, c)"
+    ==> ["(,,)", "(,,)"]
   ]
   where
     (==>) = testTagNames filename Vanilla
