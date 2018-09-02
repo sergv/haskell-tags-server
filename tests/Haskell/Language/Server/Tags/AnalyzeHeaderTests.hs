@@ -1908,6 +1908,42 @@ moduleWithUnbalancedParensInExportChildrenList = TestCase
       }
   }
 
+moduleWithDuplicateModuleName :: Test
+moduleWithDuplicateModuleName = TestCase
+  { testName       = "Module duplicate module name"
+  , input          =
+      "#if FOO\n\
+      \module Test\n\
+      \#else\n\
+      \module Test\n\
+      \#endif\n\
+      \  ( Foo( X, Y, Z)\n\
+      \  , Bar\n\
+      \  ) where"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = SpecificExports ModuleExports
+          { meExportedEntries    = KM.fromList
+              [ EntryWithChildren
+                  { entryName               = mkSymbolName "Foo"
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                      [ mkUnqualSymName "X"
+                      , mkUnqualSymName "Y"
+                      , mkUnqualSymName "Z"
+                      ]
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Bar"
+                  , entryChildrenVisibility = Nothing
+                  }
+              ]
+          , meReexports          = mempty
+          , meHasWildcardExports = False
+          }
+      , mhImportQualifiers = mempty
+      , mhImports          = mempty
+      }
+  }
 
 moduleWithExportsThatHaveChildrenListWithoutCommasTest :: Test
 moduleWithExportsThatHaveChildrenListWithoutCommasTest = TestCase
@@ -2018,6 +2054,7 @@ tests = testGroup "Header analysis tests"
         , doTest moduleWithExportListWithoutCommasAndStructuresAfterNameWithoutChildrenTest
         , doTest moduleWithUnbalancedParensInExportList
         , doTest moduleWithUnbalancedParensInExportChildrenList
+        , doTest moduleWithDuplicateModuleName
         ]
     ]
   ]

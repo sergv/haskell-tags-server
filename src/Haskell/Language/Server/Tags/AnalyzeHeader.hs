@@ -244,7 +244,7 @@ analyzeImports imports qualifiers ts = do
               (_, remaining) <- findImportListEntries importType mempty $ dropCommas rest
               pure (AssumedWildcardImportList, remaining)
             rest                                                              ->
-              throwErrorWithCallStack $ "Unrecognised shape of import list:" <+> ppTokens rest
+              throwErrorWithCallStack $ "Unrecognised shape of import list:" ## ppTokens rest
           where
             importList :: ImportList
             importList = ImportList
@@ -281,11 +281,13 @@ analyzeExports
 analyzeExports importQualifiers ts = do
   -- logDebug $ "[analyzeExports] ts =" <+> ppTokens ts
   case stripNewlines ts of
-    []                    -> pure NoExports
-    PLParen : PRParen : _ -> pure EmptyExports
-    PLParen : rest        -> SpecificExports <$> go mempty mempty rest
-    toks                  ->
-      throwErrorWithCallStack $ "Unrecognised shape of export list:" <+> ppTokens toks
+    []                        -> pure NoExports
+    -- Drop any other module declarations that could have arisen thanks to e.g. CPP.
+    PModule : PName _ : rest -> analyzeExports importQualifiers rest
+    PLParen : PRParen : _    -> pure EmptyExports
+    PLParen : rest           -> SpecificExports <$> go mempty mempty rest
+    toks                     ->
+      throwErrorWithCallStack $ "Unrecognised shape of export list:" ## ppTokens toks
   where
     -- Analyze comma-separated list of entries like
     -- - Foo
