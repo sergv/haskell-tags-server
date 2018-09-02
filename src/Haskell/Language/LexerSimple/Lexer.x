@@ -170,6 +170,8 @@ $space*                 { \_ len -> endIndentationCounting len }
 -- Vanilla tokens
 <0> {
 
+"#{" [^\}]+ "}"         { \_ _ -> pure HSC2HS }
+
 "case"                  { kw KWCase }
 "class"                 { kw KWClass }
 "data"                  { kw KWData }

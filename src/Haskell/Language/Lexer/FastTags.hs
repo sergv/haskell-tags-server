@@ -51,8 +51,9 @@ instance Pretty PragmaType where
 
 data ServerToken =
     Pragma !PragmaType
+  | HSC2HS -- Any HSC2HS directive
   | Tok !TokenVal
-  | Error
+  -- | Error
   deriving (Eq, Ord, Show, Generic)
 
 instance Pretty ServerToken where

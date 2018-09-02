@@ -51,7 +51,7 @@ import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
 
 analyzeHeader
-  :: (MonadError ErrorMessage m, MonadLog m)
+  :: (HasCallStack, MonadError ErrorMessage m, MonadLog m)
   => [Pos ServerToken]
   -> m (Maybe UnresolvedModuleHeader, [Pos ServerToken])
 analyzeHeader ts =
@@ -172,7 +172,7 @@ analyzeImports imports qualifiers ts = do
         qualifiers' = case getQualifier qual of
                         Just q  -> M.insertWith (<>) q (modName :| []) qualifiers
                         Nothing -> qualifiers
-        mkNewSpec :: Maybe ImportList -> UnresolvedImportSpec
+        mkNewSpec :: ImportListSpec ImportList -> UnresolvedImportSpec
         mkNewSpec importList = ImportSpec
           { ispecImportKey     = ImportKey
               { ikModuleName   = modName
@@ -187,27 +187,27 @@ analyzeImports imports qualifiers ts = do
     -- - Foo_|_(Bar, Baz)
     -- - Foo_|_ hiding (Bar, Baz)
     -- - Quux_|_(..)
-    analyzeImportList :: [Pos ServerToken] -> m (Maybe ImportList, [Pos ServerToken])
+    analyzeImportList :: [Pos ServerToken] -> m (ImportListSpec ImportList, [Pos ServerToken])
     analyzeImportList toks = do
       -- logDebug $ "[analyzeImpotrList] toks =" <+> ppTokens toks
       case dropNLs toks of
-        []                                    -> pure (Nothing, toks)
-        PHiding : (dropNLs -> PLParen : rest) -> first Just <$> findImportListEntries Hidden mempty (dropNLs rest)
-        PLParen : rest                        -> first Just <$> findImportListEntries Imported mempty (dropNLs rest)
-        _                                     -> pure (Nothing, toks)
+        []                                    -> pure (NoImportList, toks)
+        PHiding : (dropNLs -> PLParen : rest) -> findImportListEntries Hidden mempty (dropNLs rest)
+        PLParen : rest                        -> findImportListEntries Imported mempty (dropNLs rest)
+        _                                     -> pure (NoImportList, toks)
       where
         findImportListEntries
           :: ImportType
           -> KeyMap (EntryWithChildren UnqualifiedSymbolName)
           -> [Pos ServerToken]
-          -> m (ImportList, [Pos ServerToken])
+          -> m (ImportListSpec ImportList, [Pos ServerToken])
         findImportListEntries importType acc toks' = do
           -- logDebug $ "[findImportListEntries] toks =" <+> ppTokens toks
           case dropNLs toks' of
             []                                                                ->
-              pure (importList, [])
+              pure (SpecificImports importList, [])
             PRParen : rest                                                    ->
-              pure (importList, rest)
+              pure (SpecificImports importList, rest)
             -- Type import
             PType : PName name : rest                                         ->
               entryWithoutChildren name rest
@@ -235,21 +235,30 @@ analyzeImports imports qualifiers ts = do
               entryWithChildren "name in import list" name rest
             PLParen : rest                                                    ->
               findImportListEntries importType acc rest
+            Pos _ HSC2HS : rest                                               -> do
+              -- We cannot run hsc2hs here so we'll conservatively
+              -- assume that everything is imported from a module.
+              (_, remaining) <- findImportListEntries importType mempty $ dropCommas rest
+              pure (AssumedWildcardImportList, remaining)
             rest                                                              ->
-              throwErrorWithCallStack $ "Unrecognized shape of import list:" <+> ppTokens rest
+              throwErrorWithCallStack $ "Unrecognised shape of import list:" <+> ppTokens rest
           where
             importList :: ImportList
             importList = ImportList
               { ilEntries    = acc
               , ilImportType = importType
               }
-            entryWithChildren :: Doc Void -> Text -> [Pos ServerToken] -> m (ImportList, [Pos ServerToken])
+            entryWithChildren
+              :: Doc Void
+              -> Text
+              -> [Pos ServerToken]
+              -> m (ImportListSpec ImportList, [Pos ServerToken])
             entryWithChildren descr name rest = do
               (children, rest') <- snd $ analyzeChildren descr $ dropNLs rest
               name'             <- mkUnqualName name
               let newEntry = EntryWithChildren name' children
               findImportListEntries importType (KM.insert newEntry acc) $ dropCommas rest'
-            entryWithoutChildren :: Text -> [Pos ServerToken] -> m (ImportList, [Pos ServerToken])
+            entryWithoutChildren :: Text -> [Pos ServerToken] -> m (ImportListSpec ImportList, [Pos ServerToken])
             entryWithoutChildren name rest = do
               name' <- mkUnqualName name
               let newEntry = mkEntryWithoutChildren name'
@@ -273,7 +282,7 @@ analyzeExports importQualifiers ts = do
     PLParen : PRParen : _ -> pure EmptyExports
     PLParen : rest        -> SpecificExports <$> go mempty mempty rest
     toks                  ->
-      throwErrorWithCallStack $ "Unrecognized shape of export list:" <+> ppTokens toks
+      throwErrorWithCallStack $ "Unrecognised shape of export list:" <+> ppTokens toks
   where
     -- Analyze comma-separated list of entries like
     -- - Foo
@@ -330,7 +339,7 @@ analyzeExports importQualifiers ts = do
         PLParen : rest                                                    ->
           go entries reexports rest
         toks'                                                             ->
-          throwErrorWithCallStack $ "Unrecognized export list structure:" <+> ppTokens toks'
+          throwErrorWithCallStack $ "Unrecognised export list structure:" <+> ppTokens toks'
       where
         exports :: ModuleExports
         exports = ModuleExports
@@ -449,7 +458,7 @@ analyzeChildren listType toks =
           extractChildren wildcardPresence (S.insert name' names) $ dropCommas rest
       PLParen : rest -> extractChildren wildcardPresence names $ dropNLs rest
       toks'          ->
-        (ChildrenAbsent, throwErrorWithCallStack $ "Unrecognized children list structure:" <+> ppTokens toks')
+        (ChildrenAbsent, throwErrorWithCallStack $ "Unrecognised children list structure:" <+> ppTokens toks')
       where
         childrenPresence
           | S.null names =

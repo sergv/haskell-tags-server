@@ -391,42 +391,44 @@ quasiResolveImportSpecWithLoadsInProgress mainModuleName key modules importSpecs
       importsLocalSymbolsNames :: Set UnqualifiedSymbolName
       importsLocalSymbolsNames = SM.keysSet importsLocalSymbolsMap
   for importSpecs $ \spec@ImportSpec{ispecQualification, ispecImportList} -> do
+    let importAll =
+          foldForA modules' $ \(Module{modHeader = ModuleHeader{mhExports, mhModName}, modAllSymbols}, localSymbolsNames) ->
+            case mhExports of
+              NoExports    -> pure modAllSymbols
+              EmptyExports -> pure modAllSymbols
+              SpecificExports ModuleExports{meExportedEntries}
+                | exportedNames `S.isSubsetOf` localSymbolsNames -> do
+                  let unqualifiedExports :: Set (Maybe UnqualifiedSymbolName)
+                      unqualifiedExports  = S.map mkUnqualifiedSymbolName exportedNames
+                      unqualifiedExports' :: Set UnqualifiedSymbolName
+                      unqualifiedExports' = S.mapMonotonic fromJust $ S.delete Nothing unqualifiedExports
+                  if S.member Nothing unqualifiedExports
+                  then throwErrorWithCallStack $ ppFoldableHeader
+                    ("Cannot resolve import cycle: module" <+> pretty mhModName <+>
+                     "reexports names from its imports:")
+                    (filter isQualified $ toList exportedNames)
+                  else
+                    pure $ modAllSymbols `SM.intersectAgainst` unqualifiedExports'
+                | otherwise ->
+                  throwErrorWithCallStack errMsg
+                where
+                  exportedNames :: Set SymbolName
+                  exportedNames = KM.keysSet meExportedEntries
+                  errMsg = ppFoldableHeader
+                    ("Cannot resolve import cycle: module" <+> pretty mhModName <+>
+                     "exports names not defined locally:")
+                    (exportedNames `S.difference` localSymbolsNames)
     names <- case ispecImportList of
       -- If there's no import list then ensure that either
       -- 1. There's no export list and therefore all exported names
       -- must be defined locally.
       -- 2. There's an export list but it exports *only* names
       -- defined locally.
-      Nothing ->
-        foldForA modules' $ \(Module{modHeader = ModuleHeader{mhExports, mhModName}, modAllSymbols}, localSymbolsNames) ->
-          case mhExports of
-            NoExports    -> pure modAllSymbols
-            EmptyExports -> pure modAllSymbols
-            SpecificExports ModuleExports{meExportedEntries}
-              | exportedNames `S.isSubsetOf` localSymbolsNames -> do
-                let unqualifiedExports :: Set (Maybe UnqualifiedSymbolName)
-                    unqualifiedExports  = S.map mkUnqualifiedSymbolName exportedNames
-                    unqualifiedExports' :: Set UnqualifiedSymbolName
-                    unqualifiedExports' = S.mapMonotonic fromJust $ S.delete Nothing unqualifiedExports
-                if S.member Nothing unqualifiedExports
-                then throwErrorWithCallStack $ ppFoldableHeader
-                  ("Cannot resolve import cycle: module" <+> pretty mhModName <+>
-                   "reexports names from its imports:")
-                  (filter isQualified $ toList exportedNames)
-                else
-                  pure $ modAllSymbols `SM.intersectAgainst` unqualifiedExports'
-              | otherwise ->
-                throwErrorWithCallStack errMsg
-              where
-                exportedNames :: Set SymbolName
-                exportedNames = KM.keysSet meExportedEntries
-                errMsg = ppFoldableHeader
-                  ("Cannot resolve import cycle: module" <+> pretty mhModName <+>
-                   "exports names not defined locally:")
-                  (exportedNames `S.difference` localSymbolsNames)
+      NoImportList              -> importAll
+      AssumedWildcardImportList -> importAll
       -- If there's an import list then try resolving all imported
       -- names among local definitions af the imported module.
-      Just ImportList{ilEntries} -> do
+      SpecificImports ImportList{ilEntries} -> do
         let importedNames = KM.keysSet ilEntries
         if importedNames `S.isSubsetOf` importsLocalSymbolsNames
         then do
@@ -476,9 +478,11 @@ filterVisibleNames
   -> m (ImportQualification, SymbolMap)
 filterVisibleNames moduleName importedMods allImportedNames ImportSpec{ispecQualification, ispecImportList} = do
   visibleNames <- case ispecImportList of
-    Nothing                                  ->
+    NoImportList                                        ->
       pure allImportedNames
-    Just ImportList{ilImportType, ilEntries} -> do
+    AssumedWildcardImportList                           ->
+      pure allImportedNames
+    SpecificImports ImportList{ilImportType, ilEntries} -> do
       let f = case ilImportType of
                 Imported -> SM.leaveNames
                 Hidden   -> SM.removeNames

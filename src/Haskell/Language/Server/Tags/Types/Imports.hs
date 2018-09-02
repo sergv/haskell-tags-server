@@ -26,6 +26,7 @@ module Haskell.Language.Server.Tags.Types.Imports
   , ImportQualification(..)
   , hasQualifier
   , getQualifier
+  , ImportListSpec(..)
   , ImportType(..)
   , ImportList(..)
   , EntryWithChildren(..)
@@ -70,7 +71,7 @@ instance Pretty ImportTarget where
 data ImportSpec a = ImportSpec
   { ispecImportKey     :: ImportKey
   , ispecQualification :: ImportQualification
-  , ispecImportList    :: Maybe ImportList
+  , ispecImportList    :: ImportListSpec ImportList
   , ispecImportedNames :: a
   } deriving (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
 
@@ -142,6 +143,17 @@ data ImportType =
   deriving (Eq, Ord, Show, Generic)
 
 instance Pretty ImportType where
+  pretty = ppGeneric
+
+data ImportListSpec a =
+    NoImportList
+    -- | When we canot precisely analyse an import list it's
+    -- conservatively defaulted to "import all".
+  | AssumedWildcardImportList
+  | SpecificImports a
+  deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
+
+instance Pretty a => Pretty (ImportListSpec a) where
   pretty = ppGeneric
 
 -- | User-provided import/hiding list.

@@ -75,7 +75,7 @@ moduleWithUnqualifiedImportTest = TestCase
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Nothing
+              , ispecImportList    = NoImportList
               , ispecImportedNames = ()
               }
           ]
@@ -99,7 +99,7 @@ moduleWithUnqualifiedSourceImportTest = TestCase
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Nothing
+              , ispecImportList    = NoImportList
               , ispecImportedNames = ()
               }
           ]
@@ -123,7 +123,7 @@ moduleWithUnqualifiedSafeImportTest = TestCase
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Nothing
+              , ispecImportList    = NoImportList
               , ispecImportedNames = ()
               }
           ]
@@ -147,7 +147,7 @@ moduleWithPatternImportTest = TestCase
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Pat"
@@ -179,7 +179,7 @@ moduleWithUnqualifiedImportAndEmptyImportListTest = TestCase
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = mempty
                   , ilImportType = Imported
                   }
@@ -206,7 +206,7 @@ moduleWithUnqualifiedImportAndEmptyHiddenImportListTest = TestCase
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = mempty
                   , ilImportType = Hidden
                   }
@@ -233,7 +233,7 @@ moduleWithUnqualifiedImportAndSingletonImportListTest = TestCase
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "foo"
@@ -265,7 +265,7 @@ moduleWithUnqualifiedImportAndNonemptyImportListTest = TestCase
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "foo"
@@ -306,7 +306,7 @@ moduleWithUnqualifiedImportAndNonemptyImportListWithDifferentVisibilitiesTest = 
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "foo"
@@ -385,7 +385,7 @@ moduleWithQualifiedImportTest = TestCase
                   }
               , ispecQualification =
                   Qualified $ mkImportQualifier $ mkModuleName "Imported1"
-              , ispecImportList    = Nothing
+              , ispecImportList    = NoImportList
               , ispecImportedNames = ()
               }
           ]
@@ -415,7 +415,7 @@ moduleWithQualifiedSafeAndPackageImportTest = TestCase
                   }
               , ispecQualification =
                   Qualified $ mkImportQualifier $ mkModuleName "Imported1"
-              , ispecImportList    = Nothing
+              , ispecImportList    = NoImportList
               , ispecImportedNames = ()
               }
           ]
@@ -444,7 +444,7 @@ moduleWithQualifiedImportAndAliasTest = TestCase
                   }
               , ispecQualification =
                   Qualified $ mkImportQualifier $ mkModuleName "Imp"
-              , ispecImportList    = Nothing
+              , ispecImportList    = NoImportList
               , ispecImportedNames = ()
               }
           ]
@@ -473,7 +473,7 @@ moduleWithImportAndAliasTest = TestCase
                   }
               , ispecQualification =
                   BothQualifiedAndUnqualified $ mkImportQualifier $ mkModuleName "Imp"
-              , ispecImportList    = Nothing
+              , ispecImportList    = NoImportList
               , ispecImportedNames = ()
               }
           ]
@@ -502,7 +502,7 @@ moduleWithImportAndAliasAndHidingImportListTest = TestCase
                   }
               , ispecQualification =
                   BothQualifiedAndUnqualified $ mkImportQualifier $ mkModuleName "Imp"
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Foo"
@@ -546,7 +546,7 @@ moduleWithImportOfSpeciallyNamedOperatorsTest = TestCase
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "."
@@ -590,7 +590,7 @@ moduleWithImportOfPatternFuncTest = TestCase
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "pattern"
@@ -622,7 +622,7 @@ moduleWithImportOfManyFuncsAndPatternFuncTest = TestCase
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Foo"
@@ -666,7 +666,7 @@ moduleWithoutCommasAndPatternFuncImportBeforeOperator = TestCase
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Foo"
@@ -710,7 +710,7 @@ moduleWithoutCommasAndPatternFuncImportBeforeConstructorWithChildren = TestCase
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Foo"
@@ -754,7 +754,7 @@ moduleWithoutCommasAndPatternFuncImportBeforeOperatorConstructorWithChildren = T
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName ":++"
@@ -798,7 +798,7 @@ moduleWithoutCommasAndSeveralPatternImports = TestCase
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Foo"
@@ -842,7 +842,7 @@ moduleWithAmbigousImportList = TestCase
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Foo"
@@ -902,7 +902,7 @@ moduleWithImportListWithoutCommas = TestCase
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "foo"
@@ -968,7 +968,7 @@ moduleWithImportsThatHaveChildrenListWithoutCommas = TestCase
                   , ikModuleName   = mkModuleName "Imported1"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Baz"
@@ -1017,7 +1017,7 @@ moduleWithUnbalancedParensInImportList = TestCase
                   , ikModuleName   = mkModuleName "Mod"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Foo"
@@ -1070,7 +1070,7 @@ moduleWithUnbalancedParensInImportChildrenList = TestCase
                   , ikModuleName   = mkModuleName "Mod"
                   }
               , ispecQualification = Unqualified
-              , ispecImportList    = Just ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Foo"
@@ -1092,6 +1092,121 @@ moduleWithUnbalancedParensInImportChildrenList = TestCase
           ]
       }
   }
+
+moduleWithSingleHSC2HSDirectiveInImportList :: Test
+moduleWithSingleHSC2HSDirectiveInImportList = TestCase
+  { testName       = "Module with single hsc2hs directive in import list"
+  , input          =
+      "module Test where \n\
+      \import Mod\n\
+      \  ( #{type int64_t} \n\
+      \  )"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = NoExports
+      , mhImportQualifiers = mempty
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Mod"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = AssumedWildcardImportList
+              , ispecImportedNames = ()
+              }
+          ]
+      }
+  }
+
+moduleWithSomeHSC2HSDirectivesInImportList1 :: Test
+moduleWithSomeHSC2HSDirectivesInImportList1 = TestCase
+  { testName       = "Module with some hsc2hs directives in import list #1"
+  , input          =
+      "module Test where \n\
+      \import Mod\n\
+      \  ( Foo\n\
+      \  , #{type int64_t} \n\
+      \  , Bar \n\
+      \  , #{type baz_t} \n\
+      \  )"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = NoExports
+      , mhImportQualifiers = mempty
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Mod"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = AssumedWildcardImportList
+              , ispecImportedNames = ()
+              }
+          ]
+      }
+  }
+
+moduleWithSomeHSC2HSDirectivesInImportList2 :: Test
+moduleWithSomeHSC2HSDirectivesInImportList2 = TestCase
+  { testName       = "Module with some hsc2hs directives in import list #2"
+  , input          =
+      "module Test where \n\
+      \import Mod\n\
+      \  ( Foo\n\
+      \  , #{type int64_t} \n\
+      \  , #{type baz_t} \n\
+      \  , Bar \n\
+      \  )"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = NoExports
+      , mhImportQualifiers = mempty
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Mod"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = AssumedWildcardImportList
+              , ispecImportedNames = ()
+              }
+          ]
+      }
+  }
+
+moduleWithSomeHSC2HSDirectivesInImportList3 :: Test
+moduleWithSomeHSC2HSDirectivesInImportList3 = TestCase
+  { testName       = "Module with some hsc2hs directives in import list #3"
+  , input          =
+      "module Test where \n\
+      \import Mod\n\
+      \  ( pattern Foo\n\
+      \  , #{type int64_t} \n\
+      \  , pattern Bar \n\
+      \  , Frob(..) \n\
+      \  , #{type baz_t} \n\
+      \  )"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = NoExports
+      , mhImportQualifiers = mempty
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Mod"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = AssumedWildcardImportList
+              , ispecImportedNames = ()
+              }
+          ]
+      }
+  }
+
 
 
 moduleWithEmptyExportsTest :: Test
@@ -1809,6 +1924,10 @@ tests = testGroup "Header analysis tests"
         , doTest moduleWithImportsThatHaveChildrenListWithoutCommas
         , doTest moduleWithUnbalancedParensInImportList
         , doTest moduleWithUnbalancedParensInImportChildrenList
+        , doTest moduleWithSingleHSC2HSDirectiveInImportList
+        , doTest moduleWithSomeHSC2HSDirectivesInImportList1
+        , doTest moduleWithSomeHSC2HSDirectivesInImportList2
+        , doTest moduleWithSomeHSC2HSDirectivesInImportList3
         ]
     , importRegressionTests
     ]

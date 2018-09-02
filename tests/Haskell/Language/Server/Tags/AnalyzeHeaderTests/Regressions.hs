@@ -88,7 +88,7 @@ aesonHeaderTest = TestCase
           | (modName, qual, imported) <-
               [ ( "Control.Applicative"
                 , Unqualified
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName name
                         , entryChildrenVisibility = Nothing
@@ -98,7 +98,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Control.Monad"
                 , Unqualified
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName name
                         , entryChildrenVisibility = Nothing
@@ -108,7 +108,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Control.Monad"
                 , Unqualified
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName name
                         , entryChildrenVisibility = Nothing
@@ -118,7 +118,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Data.Aeson"
                 , Unqualified
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName name
                         , entryChildrenVisibility = Nothing
@@ -130,7 +130,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Data.Aeson.Types"
                 , Unqualified
-                , Just $
+                , SpecificImports $
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName name
                         , entryChildrenVisibility = Nothing
@@ -146,7 +146,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Data.Aeson.Types.Internal"
                 , Unqualified
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName "Encoding"
                         , entryChildrenVisibility = Just VisibleAllChildren
@@ -155,7 +155,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Data.Bool"
                 , Unqualified
-                , Just $
+                , SpecificImports $
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName "Bool"
                         , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
@@ -173,7 +173,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Data.Either"
                 , Unqualified
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName "Either"
                         , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
@@ -185,7 +185,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Data.Eq"
                 , Unqualified
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName "=="
                         , entryChildrenVisibility = Nothing
@@ -194,7 +194,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Data.Function"
                 , Unqualified
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName name
                         , entryChildrenVisibility = Nothing
@@ -204,7 +204,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Data.Functor"
                 , Unqualified
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName "fmap"
                         , entryChildrenVisibility = Nothing
@@ -213,7 +213,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Data.Int"
                 , Unqualified
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName "Int"
                         , entryChildrenVisibility = Nothing
@@ -222,7 +222,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Data.List"
                 , Unqualified
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName name
                         , entryChildrenVisibility = Nothing
@@ -236,7 +236,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Data.Maybe"
                 , Unqualified
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName "Maybe"
                         , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
@@ -252,7 +252,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Data.Monoid"
                 , Unqualified
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName name
                         , entryChildrenVisibility = Nothing
@@ -262,11 +262,11 @@ aesonHeaderTest = TestCase
                 )
               , ( "Language.Haskell.TH"
                 , Unqualified
-                , Nothing
+                , NoImportList
                 )
               , ( "Language.Haskell.TH.Syntax"
                 , Unqualified
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName "VarStrictType"
                         , entryChildrenVisibility = Nothing
@@ -275,7 +275,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Prelude"
                 , Unqualified
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName name
                         , entryChildrenVisibility = Nothing
@@ -287,7 +287,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Prelude"
                 , Unqualified
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName "drop"
                         , entryChildrenVisibility = Nothing
@@ -296,7 +296,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Text.Printf"
                 , Unqualified
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName "printf"
                         , entryChildrenVisibility = Nothing
@@ -305,7 +305,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Text.Show"
                 , Unqualified
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName "show"
                         , entryChildrenVisibility = Nothing
@@ -314,19 +314,19 @@ aesonHeaderTest = TestCase
                 )
               , ( "Data.Aeson"
                 , Qualified $ mkImportQualifier $ mkModuleName "A"
-                , Nothing
+                , NoImportList
                 )
               , ( "Data.Aeson.Encode.Builder"
                 , Qualified $ mkImportQualifier $ mkModuleName "E"
-                , Nothing
+                , NoImportList
                 )
               , ( "Data.Aeson.Encode.Functions"
                 , Qualified $ mkImportQualifier $ mkModuleName "E"
-                , Nothing
+                , NoImportList
                 )
               , ( "Data.HashMap.Strict"
                 , Qualified $ mkImportQualifier $ mkModuleName "H"
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName name
                         , entryChildrenVisibility = Nothing
@@ -336,7 +336,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Data.Set"
                 , Qualified $ mkImportQualifier $ mkModuleName "Set"
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName name
                         , entryChildrenVisibility = Nothing
@@ -348,7 +348,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Data.Text"
                 , Qualified $ mkImportQualifier $ mkModuleName "T"
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName name
                         , entryChildrenVisibility = Nothing
@@ -358,7 +358,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Data.Vector"
                 , Qualified $ mkImportQualifier $ mkModuleName "V"
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName name
                         , entryChildrenVisibility = Nothing
@@ -370,7 +370,7 @@ aesonHeaderTest = TestCase
                 )
               , ( "Data.Vector.Mutable"
                 , Qualified $ mkImportQualifier $ mkModuleName "VM"
-                , Just
+                , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName name
                         , entryChildrenVisibility = Nothing
@@ -418,7 +418,7 @@ unixCompatHeaderTest = TestCase
                   BothQualifiedAndUnqualified $
                   mkImportQualifier $
                   mkModuleName "AllPosixTypesButFileID"
-              , ispecImportList    = Just $ ImportList
+              , ispecImportList    = SpecificImports ImportList
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "FileID"
