@@ -91,7 +91,7 @@ instance Pretty a => Pretty (Module a) where
     ppDictHeader "Module"
       [ "Name"          --> mhModName $ modHeader mod
       , "File"          --> modFile mod
-      , "Last modified" :-> ppShow $ modLastModified mod
+      , "Last modified" :-> docFromString $ show $ modLastModified mod
       , "Header"        --> modHeader mod
       , "AllSymbols"    --> modAllSymbols mod
       ]
