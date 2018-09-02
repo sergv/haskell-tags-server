@@ -14,6 +14,7 @@ import Control.Monad.Except.Ext
 import Control.Monad.State.Strict
 import qualified Data.IntSet as IS
 import Data.Text (Text)
+import qualified Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext (Pretty(..), Doc, (<+>), (##))
 import qualified Data.Text as T
 import qualified Data.Text.Unsafe as T
@@ -85,6 +86,13 @@ $hexdigit   = [0-9a-fA-F]
 
 @source_pragma = [Ss][Oo][Uu][Rr][Cc][Ee]
 
+@cpp_ws          = ( $ascspace | [\\] @nl )
+@cpp_opt_ws      = @cpp_ws*
+@cpp_nonempty_ws = ( $ascspace @cpp_ws* | @cpp_ws* $ascspace )
+-- NB must include newline so that full line will be replaced by a Newline token.
+-- We'll strip trailing newline during parsing so it won't cause any troubles.
+@define_body     = ( [^\\$nl] | [\\] @nl )+ @nl
+
 :-
 
 -- Can skip whitespace everywhere since it does not affect meaning in any
@@ -100,8 +108,22 @@ $hexdigit   = [0-9a-fA-F]
 ^ "\begin{code}" $nl
   -- / { isLiterateEnabled' }
   { \_ len -> (Tok $! Newline $! len - 12) <$ startLiterateLatex }
-(. | $nl)
-  ;
+(. | $nl) ;
+}
+
+-- Analyse "#if 0" constructs used in e.g. GHC.Base
+<0> {
+"#" @cpp_opt_ws "if" @cpp_opt_ws "0" (@cpp_nonempty_ws .*)? { \_ _ -> startPreprocessorStripping }
+
+-- Strip preprocessor
+"#" @cpp_opt_ws ( "if" | "ifdef" | "endif" | "elif" | "else" | "define" | "undef" | "line" | "error" | "include" ) .* ;
+}
+
+<stripCpp> {
+"#" @cpp_opt_ws ( "ifdef" | "if" ) .*  { \_ _ -> startPreprocessorStripping }
+"#" @cpp_opt_ws "endif" .*             { \_ _ -> endPreprocessorStripping   }
+"#" @cpp_opt_ws ( "elif" | "else" | "define" | "undef" | "line" | "error" | "include" ) .* ;
+(. | $nl) ;
 }
 
 <0> {
@@ -121,9 +143,6 @@ $nl [^>]
 [\\]? @nl $space*       { \input len -> pure $! Tok $! Newline $! (len - 1) - (case T.unsafeHead (aiInput input) of { '\\' -> 1; _ -> 0 }) }
 [\-][\-]+ ~[$symbol $nl] .* ;
 [\-][\-]+ / @nl         ;
-
--- Strip preprocessor
-"#" $ws* ( "ifdef" | "endif" | "elif" | "else" | "define" | "if" | "undef" | "line" | "error" | "include" ) .* / @nl ;
 
 }
 
@@ -311,7 +330,7 @@ continueScanning = do
               code <- gets asCode
               throwErrorWithCallStack $ "Lexical error while in state" <+> pretty code
                 <+> "at line" <+>
-                pretty (unLine aiLine) <> ":" ## pretty (T.take 40 aiInput)
+                pretty (unLine aiLine) <> ":" ## PP.squotes (pretty (T.take 40 aiInput))
             AlexSkip input' _                    ->
               go' input'
             AlexToken input' tokLen action       ->
@@ -333,6 +352,19 @@ startIndentComment :: HasCallStack => AlexM ServerToken
 startIndentComment = do
   void $ modifyCommentDepth (+1)
   alexSetNextCode indentCommentCode
+  continueScanning
+
+startPreprocessorStripping :: HasCallStack => AlexM ServerToken
+startPreprocessorStripping = do
+  void $ modifyPreprocessorDepth (+1)
+  alexSetNextCode stripCppCode
+  continueScanning
+
+endPreprocessorStripping :: HasCallStack => AlexM ServerToken
+endPreprocessorStripping = do
+  newDepth <- modifyPreprocessorDepth (\x -> x - 1)
+  when (newDepth == 0) $
+    alexSetNextCode startCode
   continueScanning
 
 startComment :: HasCallStack => AlexM ServerToken
@@ -437,7 +469,8 @@ endLiterate = do
 {-# INLINE indentCommentCode #-}
 {-# INLINE indentCountCode   #-}
 {-# INLINE literateCode      #-}
-startCode, qqCode, stringCode, commentCode, indentCommentCode, indentCountCode, literateCode :: AlexCode
+{-# INLINE stripCppCode      #-}
+startCode, qqCode, stringCode, commentCode, indentCommentCode, indentCountCode, literateCode, stripCppCode :: AlexCode
 startCode         = AlexCode 0
 qqCode            = AlexCode qq
 stringCode        = AlexCode string
@@ -445,5 +478,6 @@ commentCode       = AlexCode comment
 indentCommentCode = AlexCode indentComment
 indentCountCode   = AlexCode indentCount
 literateCode      = AlexCode literate
+stripCppCode      = AlexCode stripCpp
 
 }

@@ -1580,6 +1580,140 @@ moduleWithQualifiedOperatorChildrenExportTest = TestCase
       }
   }
 
+moduleWithDisabledSectionTest1 :: Test
+moduleWithDisabledSectionTest1 = TestCase
+  { testName       = "Module header with a part guarded by #if 0"
+  , input          =
+      "module Test\n\
+      \  (\n\
+      \    Foo( X, Y, Z)\n\
+      \#if 0\n\
+      \  , Bar\n\
+      \#endif\n\
+      \  , Baz\n\
+      \  ) where"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = SpecificExports ModuleExports
+          { meExportedEntries    = KM.fromList
+              [ EntryWithChildren
+                  { entryName               = mkSymbolName "Foo"
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                      [ mkUnqualSymName "X"
+                      , mkUnqualSymName "Y"
+                      , mkUnqualSymName "Z"
+                      ]
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Baz"
+                  , entryChildrenVisibility = Nothing
+                  }
+              ]
+          , meReexports          = mempty
+          , meHasWildcardExports = False
+          }
+      , mhImportQualifiers = mempty
+      , mhImports          = mempty
+      }
+  }
+
+moduleWithDisabledSectionTest2 :: Test
+moduleWithDisabledSectionTest2 = TestCase
+  { testName       = "Module header with a part guarded by a multiline #if 0"
+  , input          =
+      "module Test\n\
+      \  (\n\
+      \    Foo( X, Y, Z)\n\
+      \#if  \\\n\
+      \           0\n\
+      \  , Bar\n\
+      \#endif\n\
+      \  , Baz\n\
+      \  ) where"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = SpecificExports ModuleExports
+          { meExportedEntries    = KM.fromList
+              [ EntryWithChildren
+                  { entryName               = mkSymbolName "Foo"
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                      [ mkUnqualSymName "X"
+                      , mkUnqualSymName "Y"
+                      , mkUnqualSymName "Z"
+                      ]
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Baz"
+                  , entryChildrenVisibility = Nothing
+                  }
+              ]
+          , meReexports          = mempty
+          , meHasWildcardExports = False
+          }
+      , mhImportQualifiers = mempty
+      , mhImports          = mempty
+      }
+  }
+
+
+moduleWithDisabledAndEnabledSectionsTest :: Test
+moduleWithDisabledAndEnabledSectionsTest = TestCase
+  { testName       = "Module header with a part guarded by #if 0 and some parts guarded by #if <nonzero>"
+  , input          =
+      "module Test\n\
+      \  (\n\
+      \    Foo( X, Y, Z)\n\
+      \#if 0\n\
+      \  , Bar\n\
+      \#endif\n\
+      \  , Baz\n\
+      \#if 10\n\
+      \  , Quux\n\
+      \#endif\n\
+      \#if 01\n\
+      \  , Fizz\n\
+      \#endif\n\
+      \#if 101\n\
+      \  , Buzz\n\
+      \#endif\n\
+      \  ) where"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = SpecificExports ModuleExports
+          { meExportedEntries    = KM.fromList
+              [ EntryWithChildren
+                  { entryName               = mkSymbolName "Foo"
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                      [ mkUnqualSymName "X"
+                      , mkUnqualSymName "Y"
+                      , mkUnqualSymName "Z"
+                      ]
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Baz"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Quux"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Fizz"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Buzz"
+                  , entryChildrenVisibility = Nothing
+                  }
+              ]
+          , meReexports          = mempty
+          , meHasWildcardExports = False
+          }
+      , mhImportQualifiers = mempty
+      , mhImports          = mempty
+      }
+  }
+
 moduleWithExportOfPatternFuncTest :: Test
 moduleWithExportOfPatternFuncTest = TestCase
   { testName       = "Export of \"pattern\" function"
@@ -1940,8 +2074,8 @@ moduleWithUnbalancedParensInExportChildrenList = TestCase
       }
   }
 
-moduleWithDuplicateModuleName :: Test
-moduleWithDuplicateModuleName = TestCase
+moduleWithDuplicateModuleNameTest :: Test
+moduleWithDuplicateModuleNameTest = TestCase
   { testName       = "Module duplicate module name"
   , input          =
       "#if FOO\n\
@@ -2073,6 +2207,9 @@ tests = testGroup "Header analysis tests"
     , doTest moduleWithTypeExportsTest1
     , doTest moduleWithTypeExportsTest2
     , doTest moduleWithQualifiedOperatorChildrenExportTest
+    , doTest moduleWithDisabledSectionTest1
+    , doTest moduleWithDisabledSectionTest2
+    , doTest moduleWithDisabledAndEnabledSectionsTest
     , testGroup "pattern as a function name"
         [ doTest moduleWithExportOfPatternFuncTest
         , doTest moduleWithExportOfManyFuncsAndPatternFuncTest
@@ -2087,7 +2224,7 @@ tests = testGroup "Header analysis tests"
         , doTest moduleWithExportListWithoutCommasAndStructuresAfterNameWithoutChildrenTest
         , doTest moduleWithUnbalancedParensInExportList
         , doTest moduleWithUnbalancedParensInExportChildrenList
-        , doTest moduleWithDuplicateModuleName
+        , doTest moduleWithDuplicateModuleNameTest
         ]
     ]
   ]

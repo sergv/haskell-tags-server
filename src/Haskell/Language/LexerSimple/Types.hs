@@ -21,6 +21,7 @@ module Haskell.Language.LexerSimple.Types
   , pushContext
   , modifyCommentDepth
   , modifyQuasiquoterDepth
+  , modifyPreprocessorDepth
   , retrieveToken
   , addIndentationSize
   , calculateQuasiQuoteEnds
@@ -116,10 +117,12 @@ data AlexState = AlexState
   , asCommentDepth              :: {-# UNPACK #-} !Int
   , asQuasiquoterDepth          :: {-# UNPACK #-} !Int
   , asIndentationSize           :: {-# UNPACK #-} !Int
-  -- | Whether we're in bird-style or latex-style literate environment
+    -- | Whether we're in bird-style or latex-style literate environment
   , asLiterateLoc               :: !(LiterateLocation LiterateStyle)
   , asContextStack              :: [Context]
   , asPositionsOfQuasiQuoteEnds :: !(Maybe IntSet)
+    -- | How many directives deep are we.
+  , asPreprocessorDepth         :: {-# UNPACK #-} !Int
   } deriving (Show, Eq, Ord)
 
 mkAlexState :: LiterateLocation Void -> AlexCode -> AlexInput -> AlexState
@@ -132,6 +135,7 @@ mkAlexState litLoc startCode input = AlexState
   , asLiterateLoc               = vacuous litLoc
   , asContextStack              = []
   , asPositionsOfQuasiQuoteEnds = Nothing
+  , asPreprocessorDepth         = 0
   }
 
 {-# INLINE alexEnterBirdLiterateEnv #-}
@@ -167,6 +171,14 @@ modifyQuasiquoterDepth f = do
   depth <- gets asQuasiquoterDepth
   let depth' = f depth
   modify $ \s -> s { asQuasiquoterDepth = depth' }
+  return depth'
+
+{-# INLINE modifyPreprocessorDepth #-}
+modifyPreprocessorDepth :: MonadState AlexState m => (Int -> Int) -> m Int
+modifyPreprocessorDepth f = do
+  depth <- gets asPreprocessorDepth
+  let depth' = f depth
+  modify $ \s -> s { asPreprocessorDepth = depth' }
   return depth'
 
 {-# INLINE retrieveToken #-}
