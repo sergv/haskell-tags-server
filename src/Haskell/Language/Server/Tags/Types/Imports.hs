@@ -72,19 +72,13 @@ data ImportSpec a = ImportSpec
   , ispecQualification :: ImportQualification
   , ispecImportList    :: Maybe ImportList
   , ispecImportedNames :: a
-  } deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
+  } deriving (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
 
 type UnresolvedImportSpec = ImportSpec ()
 type ResolvedImportSpec   = ImportSpec SymbolMap
 
 instance Pretty a => Pretty (ImportSpec a) where
-  pretty spec = ppDictHeader "ImportSpec" $
-    [ "ModuleName"    --> ikModuleName $ ispecImportKey spec
-    , "Qualification" --> ispecQualification spec
-    ] ++
-    [ "ImportList"    --> importList
-    | Just importList <- [ispecImportList spec]
-    ]
+  pretty = ppGeneric
 
 importBringsUnqualifiedNames :: ImportSpec a -> Bool
 importBringsUnqualifiedNames ImportSpec{ispecQualification} =
