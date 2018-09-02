@@ -1548,6 +1548,38 @@ moduleWithTypeExportsTest2 = TestCase
       }
   }
 
+moduleWithQualifiedOperatorChildrenExportTest :: Test
+moduleWithQualifiedOperatorChildrenExportTest = TestCase
+  { testName       = "Export qualified children operator"
+  , input          =
+      "module ModuleWithQualifiedOperatorChildrenExports\n\
+      \  ( (Foo.+)\n\
+      \  , Foo.Bar((Foo.<><>))\n\
+      \  )\n\
+      \  where"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "ModuleWithQualifiedOperatorChildrenExports"
+      , mhExports          = SpecificExports ModuleExports
+          { meExportedEntries    = KM.fromList
+              [ EntryWithChildren
+                  { entryName               = mkSymbolName "Foo.+"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Foo.Bar"
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                      [ mkUnqualSymName "<><>"
+                      ]
+                  }
+              ]
+          , meReexports          = mempty
+          , meHasWildcardExports = False
+          }
+      , mhImportQualifiers = mempty
+      , mhImports          = mempty
+      }
+  }
+
 moduleWithExportOfPatternFuncTest :: Test
 moduleWithExportOfPatternFuncTest = TestCase
   { testName       = "Export of \"pattern\" function"
@@ -2040,6 +2072,7 @@ tests = testGroup "Header analysis tests"
     , doTest moduleStarExports
     , doTest moduleWithTypeExportsTest1
     , doTest moduleWithTypeExportsTest2
+    , doTest moduleWithQualifiedOperatorChildrenExportTest
     , testGroup "pattern as a function name"
         [ doTest moduleWithExportOfPatternFuncTest
         , doTest moduleWithExportOfManyFuncsAndPatternFuncTest

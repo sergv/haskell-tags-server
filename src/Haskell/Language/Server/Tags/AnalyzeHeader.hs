@@ -413,17 +413,17 @@ analyzeChildren listType toks =
     -- PLParen : PName ".." : PRParen : rest            -> (ChildrenPresent, pure (Just VisibleAllChildren, rest))
     PLParen : PRParen : rest                         -> (ChildrenAbsent, pure (Nothing, rest))
     PLParen : rest@(PAnyName name : _)
-      | isAsciiName name -> analyzeList rest
-      | otherwise        -> (ChildrenAbsent, pure (Nothing, toks))
+      | isNonOperatorName name -> analyzeList rest
+      | otherwise              -> (ChildrenAbsent, pure (Nothing, toks))
     PLParen : rest@(PType : PAnyName name : _)
-      | isAsciiName name -> analyzeList rest
-      | otherwise        -> (ChildrenAbsent, pure (Nothing, toks))
+      | isNonOperatorName name -> analyzeList rest
+      | otherwise              -> (ChildrenAbsent, pure (Nothing, toks))
     PLParen : rest@(PLParen : PAnyName name : PRParen : _)
-      | not $ isAsciiName name -> analyzeList rest
-      | otherwise             -> (ChildrenAbsent, pure (Nothing, toks))
+      | not $ isNonOperatorName name -> analyzeList rest
+      | otherwise                   -> (ChildrenAbsent, pure (Nothing, toks))
     PLParen : rest@(PType : PLParen : PAnyName name : PRParen : _)
-      | not $ isAsciiName name -> analyzeList rest
-      | otherwise             -> (ChildrenAbsent, pure (Nothing, toks))
+      | not $ isNonOperatorName name -> analyzeList rest
+      | otherwise                   -> (ChildrenAbsent, pure (Nothing, toks))
     toks'                                            ->
       (ChildrenAbsent, throwErrorWithCallStack $ "Cannot handle children of" <+> listType <> ":" ## ppTokens toks')
   where
@@ -455,28 +455,26 @@ analyzeChildren listType toks =
       -> [Pos ServerToken]
       -> (ChildrenPresence, m (Set UnqualifiedSymbolName, WildcardPresence, [Pos ServerToken]))
     extractChildren wildcardPresence names = \case
-      []                ->
+      []                                               ->
         (childrenPresence, pure (names, wildcardPresence, []))
-      PRParen : rest    ->
+      PRParen : rest                                   ->
         (childrenPresence, pure (names, wildcardPresence, rest))
-      PType : PName name : rest
-        | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
-          extractChildren wildcardPresence (S.insert name' names) $ dropCommas rest
-      PType : PLParen : PAnyName name : PRParen : rest
-        | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
-          extractChildren wildcardPresence (S.insert name' names) $ dropCommas rest
-      PName ".." : rest ->
+      PType : PName name : rest                        ->
+        extractChildren wildcardPresence (S.insert (stripQualifiedPart name) names) $ dropCommas rest
+      PType : PLParen : PAnyName name : PRParen : rest ->
+        extractChildren wildcardPresence (S.insert (stripQualifiedPart name) names) $ dropCommas rest
+      PName ".." : rest                                ->
         extractChildren (wildcardPresence <> WildcardPresent) names $ dropCommas rest
-      PAnyName name : rest
-        | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
-          extractChildren wildcardPresence (S.insert name' names) $ dropCommas rest
-      PLParen : PAnyName name : PRParen : rest
-        | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
-          extractChildren wildcardPresence (S.insert name' names) $ dropCommas rest
-      PLParen : rest -> extractChildren wildcardPresence names $ dropNLs rest
-      toks'          ->
+      PAnyName name : rest                             ->
+        extractChildren wildcardPresence (S.insert (stripQualifiedPart name) names) $ dropCommas rest
+      PLParen : PAnyName name : PRParen : rest         ->
+        extractChildren wildcardPresence (S.insert (stripQualifiedPart name) names) $ dropCommas rest
+      PLParen : rest                                   -> extractChildren wildcardPresence names $ dropNLs rest
+      toks'                                            ->
         (ChildrenAbsent, throwErrorWithCallStack $ "Unrecognised children list structure:" ## ppTokens toks')
       where
+        stripQualifiedPart :: Text -> UnqualifiedSymbolName
+        stripQualifiedPart = snd . splitQualifiedPart . mkSymbolName
         childrenPresence
           | S.null names =
             case wildcardPresence of
@@ -484,8 +482,9 @@ analyzeChildren listType toks =
               WildcardAbsent  -> ChildrenAbsent
           | otherwise    = ChildrenPresent
 
-isAsciiName :: Text -> Bool
-isAsciiName = T.all check
+isNonOperatorName :: Text -> Bool
+isNonOperatorName =
+  T.all check . unqualSymNameText . snd . splitQualifiedPart . mkSymbolName
   where
     check :: Char -> Bool
     check '\'' = True

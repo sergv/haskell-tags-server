@@ -22,6 +22,7 @@ module Data.Symbols
   , getSymbolName
   , mkSymbolName
   , UnqualifiedSymbolName
+  , unqualSymNameText
   , getUnqualifiedSymbolName
   , isQualified
   , mkUnqualifiedSymbolName
@@ -77,6 +78,9 @@ newtype UnqualifiedSymbolName = UnqualifiedSymbolName { getUnqualifiedSymbolName
 
 instance Pretty UnqualifiedSymbolName where
   pretty = pretty . getUnqualifiedSymbolName
+
+unqualSymNameText :: UnqualifiedSymbolName -> Text
+unqualSymNameText = getSymbolName . getUnqualifiedSymbolName
 
 isQualified :: SymbolName -> Bool
 isQualified name = case mkUnqualifiedSymbolName name of
