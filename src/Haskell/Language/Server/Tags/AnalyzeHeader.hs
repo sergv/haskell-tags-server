@@ -72,32 +72,32 @@ analyzeHeader ts =
       -- No header present.
     _ -> pure (Nothing, ts)
 
-pattern PImport       :: Pos ServerToken
-pattern PImport       <- Pos _ (Tok KWImport)
-pattern PPattern      :: Pos ServerToken
-pattern PPattern      <- Pos _ (Tok (T "pattern"))
-pattern PType         :: Pos ServerToken
-pattern PType         <- Pos _ (Tok KWType)
-pattern PModule       :: Pos ServerToken
-pattern PModule       <- Pos _ (Tok KWModule)
-pattern PString       :: Pos ServerToken
-pattern PString       <- Pos _ (Tok String)
-pattern PQualified    :: Pos ServerToken
-pattern PQualified    <- Pos _ (Tok (T "qualified"))
-pattern PName         :: Text -> Pos ServerToken
-pattern PName name    <- Pos _ (Tok (T name))
 pattern PAs           :: Pos ServerToken
 pattern PAs           <- Pos _ (Tok (T "as"))
-pattern PHiding       :: Pos ServerToken
-pattern PHiding       <- Pos _ (Tok (T "hiding"))
-pattern PLParen       :: Pos ServerToken
-pattern PLParen       <- Pos _ (Tok LParen)
-pattern PRParen       :: Pos ServerToken
-pattern PRParen       <- Pos _ (Tok RParen)
 pattern PComma        :: Pos ServerToken
 pattern PComma        <- Pos _ (Tok Comma)
+pattern PHiding       :: Pos ServerToken
+pattern PHiding       <- Pos _ (Tok (T "hiding"))
+pattern PImport       :: Pos ServerToken
+pattern PImport       <- Pos _ (Tok KWImport)
+pattern PLParen       :: Pos ServerToken
+pattern PLParen       <- Pos _ (Tok LParen)
+pattern PModule       :: Pos ServerToken
+pattern PModule       <- Pos _ (Tok KWModule)
+pattern PName         :: Text -> Pos ServerToken
+pattern PName name    <- Pos _ (Tok (T name))
+pattern PPattern      :: Pos ServerToken
+pattern PPattern      <- Pos _ (Tok (T "pattern"))
+pattern PQualified    :: Pos ServerToken
+pattern PQualified    <- Pos _ (Tok (T "qualified"))
+pattern PRParen       :: Pos ServerToken
+pattern PRParen       <- Pos _ (Tok RParen)
 pattern PSourcePragma :: Pos ServerToken
 pattern PSourcePragma <- Pos _ (Pragma SourcePragma)
+pattern PString       :: Pos ServerToken
+pattern PString       <- Pos _ (Tok String)
+pattern PType         :: Pos ServerToken
+pattern PType         <- Pos _ (Tok KWType)
 
 pattern PAnyName      :: Text -> Pos ServerToken
 pattern PAnyName name <- Pos _ (tokToName -> Just name)
