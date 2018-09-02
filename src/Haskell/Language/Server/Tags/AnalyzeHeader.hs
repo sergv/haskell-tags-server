@@ -99,6 +99,9 @@ pattern PComma        <- Pos _ (Tok Comma)
 pattern PSourcePragma :: Pos ServerToken
 pattern PSourcePragma <- Pos _ (Pragma SourcePragma)
 
+pattern PAnyName      :: Text -> Pos ServerToken
+pattern PAnyName name <- Pos _ (tokToName -> Just name)
+
 analyzeImports
   :: forall m. (HasCallStack, MonadError ErrorMessage m, MonadLog m)
   => SubkeyMap ImportKey (NonEmpty UnresolvedImportSpec)
@@ -407,14 +410,20 @@ analyzeChildren listType toks =
     toks'@(PType : _)                                -> (ChildrenAbsent, pure (Nothing, toks'))
     -- PLParen : PName ".." : PRParen : rest            -> (ChildrenPresent, pure (Just VisibleAllChildren, rest))
     PLParen : PRParen : rest                         -> (ChildrenAbsent, pure (Nothing, rest))
-    PLParen : rest@(PName name : _)
+    PLParen : rest@(PAnyName name : _)
       | isAsciiName name -> analyzeList rest
       | otherwise        -> (ChildrenAbsent, pure (Nothing, toks))
-    PLParen : rest@(PLParen : Pos _ (tokToName -> Just name) : PRParen : _)
-      | isAsciiName name -> (ChildrenAbsent, pure (Nothing, toks))
-      | otherwise        -> analyzeList rest
+    PLParen : rest@(PType : PAnyName name : _)
+      | isAsciiName name -> analyzeList rest
+      | otherwise        -> (ChildrenAbsent, pure (Nothing, toks))
+    PLParen : rest@(PLParen : PAnyName name : PRParen : _)
+      | not $ isAsciiName name -> analyzeList rest
+      | otherwise             -> (ChildrenAbsent, pure (Nothing, toks))
+    PLParen : rest@(PType : PLParen : PAnyName name : PRParen : _)
+      | not $ isAsciiName name -> analyzeList rest
+      | otherwise             -> (ChildrenAbsent, pure (Nothing, toks))
     toks'                                            ->
-      (ChildrenAbsent, throwErrorWithCallStack $ "Cannot handle children of" <+> listType <> ":" <+> ppTokens toks')
+      (ChildrenAbsent, throwErrorWithCallStack $ "Cannot handle children of" <+> listType <> ":" ## ppTokens toks')
   where
     analyzeList
       :: HasCallStack
@@ -448,17 +457,23 @@ analyzeChildren listType toks =
         (childrenPresence, pure (names, wildcardPresence, []))
       PRParen : rest    ->
         (childrenPresence, pure (names, wildcardPresence, rest))
-      PName ".." : rest ->
-        extractChildren (wildcardPresence <> WildcardPresent) names $ dropCommas rest
-      PName name : rest
+      PType : PName name : rest
         | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
           extractChildren wildcardPresence (S.insert name' names) $ dropCommas rest
-      PLParen : Pos _ (tokToName -> Just name) : PRParen : rest
+      PType : PLParen : PAnyName name : PRParen : rest
+        | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
+          extractChildren wildcardPresence (S.insert name' names) $ dropCommas rest
+      PName ".." : rest ->
+        extractChildren (wildcardPresence <> WildcardPresent) names $ dropCommas rest
+      PAnyName name : rest
+        | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
+          extractChildren wildcardPresence (S.insert name' names) $ dropCommas rest
+      PLParen : PAnyName name : PRParen : rest
         | Just name' <- mkUnqualifiedSymbolName $ mkSymbolName name ->
           extractChildren wildcardPresence (S.insert name' names) $ dropCommas rest
       PLParen : rest -> extractChildren wildcardPresence names $ dropNLs rest
       toks'          ->
-        (ChildrenAbsent, throwErrorWithCallStack $ "Unrecognised children list structure:" <+> ppTokens toks')
+        (ChildrenAbsent, throwErrorWithCallStack $ "Unrecognised children list structure:" ## ppTokens toks')
       where
         childrenPresence
           | S.null names =

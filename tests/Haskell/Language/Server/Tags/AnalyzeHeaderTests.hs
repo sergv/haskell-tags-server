@@ -1484,6 +1484,70 @@ moduleStarExports = TestCase
       }
   }
 
+moduleWithTypeExportsTest1 :: Test
+moduleWithTypeExportsTest1 = TestCase
+  { testName       = "Exports type children"
+  , input          =
+      "module ModuleWithTypeExports\n\
+      \  ( Foo\n\
+      \  , Bar(type Baz)\n\
+      \  )\n\
+      \  where"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "ModuleWithTypeExports"
+      , mhExports          = SpecificExports ModuleExports
+          { meExportedEntries    = KM.fromList
+              [ EntryWithChildren
+                  { entryName               = mkSymbolName "Foo"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "Bar"
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                      [ mkUnqualSymName "Baz"
+                      ]
+                  }
+              ]
+          , meReexports          = mempty
+          , meHasWildcardExports = False
+          }
+      , mhImportQualifiers = mempty
+      , mhImports          = mempty
+      }
+  }
+
+moduleWithTypeExportsTest2 :: Test
+moduleWithTypeExportsTest2 = TestCase
+  { testName       = "Export type operator children"
+  , input          =
+      "module ModuleWithTypeOpExports\n\
+      \  ( (+)\n\
+      \  , (**)(type (!!))\n\
+      \  )\n\
+      \  where"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "ModuleWithTypeOpExports"
+      , mhExports          = SpecificExports ModuleExports
+          { meExportedEntries    = KM.fromList
+              [ EntryWithChildren
+                  { entryName               = mkSymbolName "+"
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = mkSymbolName "**"
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                      [ mkUnqualSymName "!!"
+                      ]
+                  }
+              ]
+          , meReexports          = mempty
+          , meHasWildcardExports = False
+          }
+      , mhImportQualifiers = mempty
+      , mhImports          = mempty
+      }
+  }
+
 moduleWithExportOfPatternFuncTest :: Test
 moduleWithExportOfPatternFuncTest = TestCase
   { testName       = "Export of \"pattern\" function"
@@ -1938,6 +2002,8 @@ tests = testGroup "Header analysis tests"
     , doTest moduleWithMultilineExportsTest
     , doTest moduleWithExportsOfSpeciallyNamedOperatorsTest
     , doTest moduleStarExports
+    , doTest moduleWithTypeExportsTest1
+    , doTest moduleWithTypeExportsTest2
     , testGroup "pattern as a function name"
         [ doTest moduleWithExportOfPatternFuncTest
         , doTest moduleWithExportOfManyFuncsAndPatternFuncTest
