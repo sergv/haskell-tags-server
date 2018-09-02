@@ -8,6 +8,7 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes       #-}
 
 module Haskell.Language.Lexer.Tests (tests) where
 
@@ -15,6 +16,7 @@ import Test.Tasty
 import Test.Tasty.HUnit (testCase)
 
 import Data.List (sort)
+import Data.Text (Text)
 
 import Haskell.Language.Lexer (LiterateLocation(..))
 
@@ -22,42 +24,69 @@ import Haskell.Language.Lexer.FastTags.TagValPatterns
 import qualified Haskell.Language.Lexer.Tokenisation as Tokenisation
 import Haskell.Language.Lexer.TokenisationUtils
 import TestUtils (makeAssertion, makeTest)
+import qualified Text.RawString.QQ as QQ
 
 tests :: TestTree
 tests = testGroup "Lexer tests"
   [ Tokenisation.tests
-  -- , testTokenizeCpp
+  , testTokenizeCpp
   , testFullPipeline
   ]
 
-_testTokenizeCpp :: TestTree
-_testTokenizeCpp = testGroup "Tokenize with preprocessor"
-  [ testTokenizeCppDefines
-  , testTokenizeCppConditionals
-  , testTokenizeCppDefinesWithinConditionals
-  -- , testWithIncludes
-  --     "Just two includes"
-  --     "#include <foo.h>\n\
-  --     \\n\
-  --     \#include \"bar.h\"\n"
-  --     [ Newline 0
-  --     , Newline 0
-  --     , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
-  --     , T "foo", T "x", Equals, T "x", Newline 0
-  --     , Newline 0
-  --     , T "bar", DoubleColon, T "b", Arrow, T "b", Newline 0
-  --     , T "bar", T "y", Equals, T "y", Newline 0
-  --     , Newline 0
-  --     , Newline 0
-  --     , T "baz", DoubleColon, T "c", Arrow, T "c", Newline 0
-  --     , T "baz", T "z", Equals, T "z", Newline 0
-  --     ]
+testTokenizeCpp :: TestTree
+testTokenizeCpp = testGroup "Tokenize with preprocessor"
+  [ testCase "Stripping of #define" $
+    "#define FOO foo\n\
+    \bar :: a -> a\n\
+    \bar x = x"
+    ==>
+    [ Newline 0
+    , Newline 0
+    , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
+    , T "bar", T "x", Equals, T "x", Newline 0
+    ]
+  , testCase "Stripping of multi-line #define #1" $
+    "#define \\\n\
+    \    FOO \\\n\
+    \  foo\n\
+    \bar :: a -> a\n\
+    \bar x = x"
+    ==>
+    [ Newline 0
+    , Newline 0
+    , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
+    , T "bar", T "x", Equals, T "x", Newline 0
+    ]
+  , testCase "Stripping of multi-line #define #2" $
+    "#define FOO(T) \\\n\
+    \{- hello there -} ;\\\n\
+    \foo :: T -> T ;\\\n\
+    \foo x = x\n\
+    \bar :: a -> a\n\
+    \bar x = x"
+    ==>
+    [ Newline 0
+    , Newline 0
+    , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
+    , T "bar", T "x", Equals, T "x", Newline 0
+    ]
+  , testCase "Regression in 'text-show' package" $
+    textShowSource
+    ==>
+    [ Newline 0
+    , Newline 0
+    , Newline 0
+    , Newline 0
+    , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
+    , T "bar", T "x", Equals, T "x", Newline 0
+    ]
   ]
+  where
+    (==>) = makeAssertion f
+    f = map valOf . tokenize' filename Vanilla
 
--- testWithIncludes :: Stirng ->
-
-testTokenizeCppDefines :: TestTree
-testTokenizeCppDefines = testGroup "#define"
+_testTokenizeCppDefines :: TestTree
+_testTokenizeCppDefines = testGroup "#define"
   [ constants
   , functions
   , concatenation
@@ -620,8 +649,8 @@ testTokenizeCppDefines = testGroup "#define"
           ]
       ]
 
-testTokenizeCppConditionals :: TestTree
-testTokenizeCppConditionals = testGroup "Conditionals"
+_testTokenizeCppConditionals :: TestTree
+_testTokenizeCppConditionals = testGroup "Conditionals"
   [ testCase "Expand #ifdef-#endif" $
       "#ifdef FOO\n\
       \foo :: a -> a\n\
@@ -689,8 +718,8 @@ testTokenizeCppConditionals = testGroup "Conditionals"
     (==>) = makeAssertion f
     f = map valOf . tokenize' filename Vanilla
 
-testTokenizeCppDefinesWithinConditionals :: TestTree
-testTokenizeCppDefinesWithinConditionals =
+_testTokenizeCppDefinesWithinConditionals :: TestTree
+_testTokenizeCppDefinesWithinConditionals =
   testGroup "Defines within conditionals"
     [ testCase "Define same constant within conditional branches" $
         "#if defined(FOO)\n\
@@ -801,3 +830,25 @@ testFullPipeline = testGroup "Full processing pipeline"
     f' = sort
        . concatMap (\(i, t) -> fst $ processTokens $ tokenize' ("fn" ++ show i) Vanilla t)
        . zip [0..]
+
+textShowSource :: Text
+textShowSource =
+    [QQ.r|
+#define GTEXT_SHOW(text_type,show_funs,no_show_funs,show1_funs,one_hash,two_hash,hash_prec,gtext_show,gshow_prec,gtext_show_con,gshow_prec_con,show_prec,lift_show_prec,show_space,show_paren,show_list_with,from_char,from_string) \
+{- | A 'show_funs' value either stores nothing (for 'TextShow') or it stores            \
+the two function arguments that show occurrences of the type parameter (for             \
+'TextShow1').                                                                           \
+                                                                                        \
+/Since: 3.4/                                                                            \
+-};                                                                                     \
+data show_funs arity a where {                                                          \
+    no_show_funs :: show_funs Zero a                                                    \
+  ; show1_funs   :: (Int -> a -> text_type) -> ([a] -> text_type) -> show_funs One a    \
+ } deriving Typeable;                                                                   \
+                                                                                        \
+instance Contravariant (show_funs arity) where {                                        \
+    contramap _ no_show_funs       = no_show_funs                                       \
+  ; contramap f (show1_funs sp sl) = show1_funs (\p -> sp p . f) (sl . map f)
+
+bar :: a -> a
+bar x = x|]

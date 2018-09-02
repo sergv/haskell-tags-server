@@ -82,16 +82,14 @@ $hexdigit   = [0-9a-fA-F]
 
 @float_number =  ( [\+\-]? ( $digit+ ( "." $digit+ )? | $digit* "." $digit+ ) ( [eE] [\+\-]? $digit* )? )
 
-@number = ( [\+\-]? $digit+ | 0 ([oO] $octdigit+ | [xX] $hexdigit ) | @float_number )
+@number = ( [\+\-]? $digit+ | 0 ( [oO] $octdigit+ | [xX] $hexdigit ) | @float_number )
 
 @source_pragma = [Ss][Oo][Uu][Rr][Cc][Ee]
 
 @cpp_ws          = ( $ascspace | [\\] @nl )
 @cpp_opt_ws      = @cpp_ws*
 @cpp_nonempty_ws = ( $ascspace @cpp_ws* | @cpp_ws* $ascspace )
--- NB must include newline so that full line will be replaced by a Newline token.
--- We'll strip trailing newline during parsing so it won't cause any troubles.
-@define_body     = ( [^\\$nl] | [\\] @nl )+ @nl
+@define_body     = ( [^ \\ $nl]+ | [\\] ( @nl | . ) )+ @nl
 
 :-
 
@@ -116,7 +114,10 @@ $hexdigit   = [0-9a-fA-F]
 "#" @cpp_opt_ws "if" @cpp_opt_ws "0" (@cpp_nonempty_ws .*)? { \_ _ -> startPreprocessorStripping }
 
 -- Strip preprocessor
-"#" @cpp_opt_ws ( "if" | "ifdef" | "endif" | "elif" | "else" | "define" | "undef" | "line" | "error" | "include" ) .* ;
+"#" @cpp_opt_ws "define" @define_body
+  { kw (Newline 0) }
+
+"#" @cpp_opt_ws ( "if" | "ifdef" | "endif" | "elif" | "else" | "undef" | "line" | "error" | "include" ) .* ;
 }
 
 <stripCpp> {
