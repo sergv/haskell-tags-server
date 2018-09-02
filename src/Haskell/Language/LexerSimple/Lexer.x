@@ -71,6 +71,9 @@ $ident     = [$ident_nonsym $ident_syms]
 @doublecolon = ( "::" | "∷" )
 @implies     = ( "=>" | "⇒" )
 
+@lbanana     = ( "(|" | ⦇ )
+@rbanana     = ( "|)" | ⦈ )
+
 $charesc    = [a b f n r t v \\ \" \' \&]
 $octdigit   = [0-7]
 $hexdigit   = [0-9a-fA-F]
@@ -227,6 +230,9 @@ $space*                 { \_ len -> endIndentationCounting len }
                         { \input len -> pure $! Tok $! T $! retrieveToken input len }
 @qualificationPrefix $symbol+
                         { \input len -> pure $! Tok $! T $! retrieveToken input len }
+
+@lbanana / ~[$symbol]   { \_ _ -> pure LBanana }
+@rbanana                { \_ _ -> pure RBanana }
 
 }
 
