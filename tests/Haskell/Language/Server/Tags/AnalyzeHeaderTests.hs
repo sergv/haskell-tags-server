@@ -1845,11 +1845,11 @@ doTest :: HasCallStack => Test -> TestTree
 doTest TestCase{testName, input, expectedResult} =
   testCase testName $ do
     let (res, logs) = runWriter $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runExceptT $ analyzeHeader =<< tokens
-        logsDoc     = "Logs, size " <> pretty (length logs) <> ":" <> PP.line <> PP.indent 2 (PP.vcat logs)
+        logsDoc     = "Logs, size " <> pretty (length logs) <> ":" ## PP.indent 2 (PP.vcat logs)
     case res of
-      Left msg               -> assertFailure $ displayDocString $ pretty msg <> PP.line <> logsDoc
+      Left msg               -> assertFailure $ displayDocString $ pretty msg ## logsDoc
       Right (Nothing, _)     -> assertFailure $ displayDocString $
-        "No header detected, but was expecting header" <> PP.line <> pretty expectedResult <> PP.line <> logsDoc
+        "No header detected, but was expecting header" ## pretty expectedResult ## logsDoc
       Right (Just header, _) -> do
         let msg = ppDictHeader "Headers are different" $
               ("Input" :-> PP.dquotes (pretty input)) :
@@ -1879,7 +1879,7 @@ doTest TestCase{testName, input, expectedResult} =
               , different
               ]
         unless (header == expectedResult) $
-          assertFailure $ displayDocString $ msg <> PP.line <> logsDoc
+          assertFailure $ displayDocString $ msg ## logsDoc
   where
     tokens :: forall m. MonadError ErrorMessage m => m [Pos ServerToken]
     tokens = either throwError pure $ tokenize "test.hs" input

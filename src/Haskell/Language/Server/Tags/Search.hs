@@ -13,13 +13,14 @@
 
 module Haskell.Language.Server.Tags.Search (findSymbol) where
 
+import Prelude hiding (mod)
+
 import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Char
 import Data.Foldable.Ext (toList, foldMapA, foldForA)
 import qualified Data.Text as T
-import qualified Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext
 
 import Control.Monad.Filesystem (MonadFS)
@@ -63,7 +64,7 @@ findInModule sym mod =
       case resolvedSpecs of
         Nothing     ->
           throwErrorWithCallStack $ "Qualifier" <+> pretty qualifier' <+>
-            "not listed among module's import qualifiers:" <> PP.line <>
+            "not listed among module's import qualifiers:" ##
             ppMapWith pretty ppNE (mhImportQualifiers header)
         Just specs ->
           lookUpInImportedModules sym' specs

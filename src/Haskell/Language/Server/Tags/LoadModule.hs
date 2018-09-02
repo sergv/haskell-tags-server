@@ -297,7 +297,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
     resolveSymbols Module{modHeader = header@ModuleHeader{mhImports, mhModName}, modAllSymbols} = do
       (resolvedImports, filteredNames) <- resolveImports mhImports
       logDebug $ "[resolveModule.resolveImports] analysing export list of module" <+> pretty mhModName
-      logDebug $ "[resolveModule.resolveImports] resolved imports" <> PP.line <> ppSubkeyMapWith pretty pretty ppNE resolvedImports
+      logDebug $ "[resolveModule.resolveImports] resolved imports" ## ppSubkeyMapWith pretty pretty ppNE resolvedImports
       case mhExports header of
         Nothing                                            ->
           pure (resolvedImports, modAllSymbols)

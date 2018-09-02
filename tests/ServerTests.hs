@@ -1025,13 +1025,13 @@ withConnection pool conf f = do
         serv <- runExceptT $ mkLogCollectingServer conf port
         case serv of
           Left err -> reportErr $
-            "Failed to start local server:" <> PP.line <> pretty err
+            "Failed to start local server:" ## pretty err
           Right serv' -> do
             waitUntilStart serv'
             conn <- tryConnect port
             case conn of
               Left err    -> reportErr $
-                "Failed to connect to a locally started server:" <> PP.line <> ppShow err
+                "Failed to connect to a locally started server:" ## ppShow err
               Right conn' -> do
                 let server = LocalServer serv' conn'
                 f server `finally` liftBase (closeConnection server)
@@ -1056,24 +1056,24 @@ mkFindSymbolTest pool ServerTest{stTestName, stWorkingDirectory, stFile, stSymbo
                 ExistingServer _   -> pure mempty
                 LocalServer serv _ -> do
                   logs <- getLogs serv
-                  pure $ "Logs:" <> PP.line <> PP.indent 2 (PP.vcat logs)
+                  pure $ "Logs:" ## PP.indent 2 (PP.vcat logs)
       case r of
         Left err  ->
-          assertFailure $ displayDocString $ ppShow err <> PP.line <> logs
+          assertFailure $ displayDocString $ ppShow err ## logs
         Right res -> do
           actual <- relativizePathsInResponse res
           let msg = docFromString $ "expected: " ++ show expected ++ "\n but got: " ++ show actual
           if responseType actual == responseType expected
           then
             unless (actual == expected) $
-              assertFailure $ displayDocString $ msg <> PP.line <> logs
+              assertFailure $ displayDocString $ msg ## logs
           else
             assertFailure $ displayDocString $
               case extractResponseError actual of
                 Nothing   ->
-                  msg <> PP.line <> logs
+                  msg ## logs
                 Just msg' ->
-                  "Error from server:" <> PP.line <> PP.nest 2 (docFromByteString msg') <> PP.line <> logs
+                  "Error from server:" ## PP.nest 2 (docFromByteString msg') ## logs
           where
             expected = responseToTerm stExpectedResponse
 

@@ -13,9 +13,7 @@
 module Data.ErrorMessage (ErrorMessage(..)) where
 
 import Data.String
-import Data.Text.Prettyprint.Doc.Ext (Pretty(..), Doc)
-import qualified Data.Text.Prettyprint.Doc as PP
-import qualified Data.Text.Prettyprint.Doc.Ext as PP
+import Data.Text.Prettyprint.Doc.Ext
 import Data.Void (Void, vacuous)
 import GHC.Stack
 
@@ -26,11 +24,12 @@ data ErrorMessage = ErrorMessage
 
 instance Pretty ErrorMessage where
   pretty ErrorMessage{errorMessageBody, errorMessageBacktrace} =
-    vacuous errorMessageBody <> PP.line <>
-    PP.nest 2 ("Backtrace:" <> PP.line <> PP.ppCallStack errorMessageBacktrace)
+    vacuous errorMessageBody ##
+      "Backtrace:" ##
+        ppCallStack errorMessageBacktrace
 
 instance IsString ErrorMessage where
   fromString msg = ErrorMessage
-    { errorMessageBody      = PP.docFromString msg
+    { errorMessageBody      = docFromString msg
     , errorMessageBacktrace = callStack
     }

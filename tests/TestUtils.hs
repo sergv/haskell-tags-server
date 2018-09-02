@@ -21,11 +21,9 @@ module TestUtils
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe
 import qualified Data.Text as T
-import qualified Data.Text.Prettyprint.Doc as PP
-import qualified Data.Text.Prettyprint.Doc.Ext as PP
+import Data.Text.Prettyprint.Doc.Ext
 import Test.Tasty (TestTree)
 import Test.Tasty.HUnit (Assertion, testCase, assertBool, assertFailure)
-
 
 import Data.ErrorMessage
 import Data.Symbols
@@ -60,8 +58,8 @@ makeAssertion'
   => (a -> Either ErrorMessage b) -> a -> b -> Assertion
 makeAssertion' f x expected =
   case f x of
-    Left msg     -> assertFailure $ PP.displayDocString $
-      "Got error message:" <> PP.line <> PP.pretty msg
+    Left msg     -> assertFailure $ displayDocString $
+      "Got error message:" ## pretty msg
     Right actual -> assertBool msg (actual == expected)
       where
         msg = concat

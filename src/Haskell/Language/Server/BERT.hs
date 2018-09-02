@@ -117,7 +117,7 @@ runBertServer port reqHandler = do
   where
     go :: HasCallStack => String -> String -> [Term] -> m BERT.DispatchResult
     go mod func args = do
-      logDebug $ "[runBertServer.go] got request" <+> pretty mod <> ":" <> pretty func
+      logDebug $ "[runBertServer.go] got request" <+> pretty mod <> ":" ## pretty func
       res <- runExceptT $ go' mod func args
       case res of
         Left err ->
@@ -138,7 +138,8 @@ runBertServer port reqHandler = do
           response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
           BERT.Success <$> either throwError (pure . responseToTerm) response
         _                                    ->
-          throwErrorWithCallStack $ "Expected 2 arguments but got:" <+> ppShow args
+          throwErrorWithCallStack $
+            "Expected 2 arguments but got:" ## ppShow args
     go' "haskell-tags-server" "find" args =
       case args of
         [BinaryTerm filename, BinaryTerm symbol] -> do
@@ -148,7 +149,8 @@ runBertServer port reqHandler = do
           response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
           BERT.Success <$> either throwError (pure . responseToTerm) response
         _                                    ->
-          throwErrorWithCallStack $ "Expected 2 arguments but got:" <+> ppShow args
+          throwErrorWithCallStack $
+            "Expected 2 arguments but got:" ## ppShow args
     go' "haskell-tags-server" _ _ = pure BERT.NoSuchFunction
     go' _                     _ _ = pure BERT.NoSuchModule
 

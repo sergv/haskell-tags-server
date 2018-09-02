@@ -14,8 +14,7 @@ import Control.Monad.Except.Ext
 import Control.Monad.State.Strict
 import qualified Data.IntSet as IS
 import Data.Text (Text)
-import Data.Text.Prettyprint.Doc (Pretty(..), Doc, (<+>))
-import qualified Data.Text.Prettyprint.Doc as PP
+import Data.Text.Prettyprint.Doc.Ext (Pretty(..), Doc, (<+>), (##))
 import qualified Data.Text as T
 import qualified Data.Text.Unsafe as T
 import Data.Void (Void, absurd)
@@ -304,7 +303,7 @@ continueScanning = do
               code <- gets asCode
               throwErrorWithCallStack $ "Lexical error while in state" <+> pretty code
                 <+> "at line" <+>
-                pretty (unLine aiLine) <> ":" <> PP.line <> pretty (T.take 40 aiInput)
+                pretty (unLine aiLine) <> ":" ## pretty (T.take 40 aiInput)
             AlexSkip input' _                    ->
               go' input'
             AlexToken input' tokLen action       ->

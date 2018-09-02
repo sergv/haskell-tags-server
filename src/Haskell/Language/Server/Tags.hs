@@ -34,7 +34,7 @@ import Control.Monad.Trans.Control
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup
 import Data.Text.Prettyprint.Doc as PP
-import Data.Text.Prettyprint.Doc.Ext ((<+>), pretty)
+import Data.Text.Prettyprint.Doc.Ext (Pretty(..), (<+>), (##))
 
 import Data.Promise (Promise)
 import qualified Data.Promise as Promise
@@ -106,7 +106,7 @@ startTagsServer conf state = do
       -> m TagsServerState
     handleReq reqChan serverState = do
       (request, responsePromise) <- liftBase $ readChan reqChan
-      logDebug $ "[startTagsServer.handleReq] got request:" <+> pretty request
+      logDebug $ "[startTagsServer.handleReq] got request:" ## pretty request
       (response, state') <- runSearchT conf serverState $
         case request of
           FindSymbol filename symbol -> do
