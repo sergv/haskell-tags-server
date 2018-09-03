@@ -341,7 +341,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
                 [ if reexportsItself then modAllSymbols else mempty
                 , reexports
                 , fold
-                $ M.intersectionWith SM.leaveNames namesByNamespace
+                $ M.intersectionWith SM.keepNames namesByNamespace
                 $ MM.unMonoidalMap exportedNames
                 ]
               extra       :: Map UnqualifiedSymbolName (Set UnqualifiedSymbolName)
@@ -484,7 +484,7 @@ filterVisibleNames moduleName importedMods allImportedNames ImportSpec{ispecQual
       pure allImportedNames
     SpecificImports ImportList{ilImportType, ilEntries} -> do
       let f = case ilImportType of
-                Imported -> SM.leaveNames
+                Imported -> SM.keepNames
                 Hidden   -> SM.removeNames
       importedNames <- foldMapA (namesFromEntry moduleName importedMods allImportedNames) ilEntries
       pure $ f allImportedNames importedNames

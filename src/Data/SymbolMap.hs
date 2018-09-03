@@ -20,7 +20,7 @@ module Data.SymbolMap
   , lookupChildren
   , member
   , fromList
-  , leaveNames
+  , keepNames
   , removeNames
   , intersectAgainst
   , keysSet
@@ -147,8 +147,8 @@ fromList syms = SymbolMap
     symbolsWithParents :: [(UnqualifiedSymbolName, UnqualifiedSymbolName)]
     symbolsWithParents = mapMaybe (\sym -> (resolvedSymbolName sym,) <$> resolvedSymbolParent sym) syms
 
-leaveNames :: SymbolMap -> Set UnqualifiedSymbolName -> SymbolMap
-leaveNames SymbolMap{smParentMap, smChildrenMap, smAllSymbols} syms =
+keepNames :: SymbolMap -> Set UnqualifiedSymbolName -> SymbolMap
+keepNames SymbolMap{smParentMap, smChildrenMap, smAllSymbols} syms =
   SymbolMap
     { smParentMap   = (`S.intersection` syms) <$> (smParentMap   `M.restrictKeys` syms)
     , smChildrenMap = (`S.intersection` syms) <$> (smChildrenMap `M.restrictKeys` syms)
