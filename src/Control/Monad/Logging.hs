@@ -24,6 +24,7 @@ import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
 import qualified Control.Monad.State.Strict as SS
+import Control.Monad.Writer
 import Data.Text.Prettyprint.Doc (Doc)
 import Data.Void (Void)
 
@@ -51,16 +52,20 @@ logDebug = logDoc Debug
 
 instance MonadLog m => MonadLog (ExceptT e m) where
   {-# INLINE logDoc #-}
-  logDoc s msg = lift $ logDoc s msg
+  logDoc s = lift . logDoc s
 
 instance MonadLog m => MonadLog (ReaderT r m) where
   {-# INLINE logDoc #-}
-  logDoc s msg = lift $ logDoc s msg
+  logDoc s = lift . logDoc s
 
 instance MonadLog m => MonadLog (StateT s m) where
   {-# INLINE logDoc #-}
-  logDoc s msg = lift $ logDoc s msg
+  logDoc s = lift . logDoc s
+
+instance (MonadLog m, Monoid w) => MonadLog (WriterT w m) where
+  {-# INLINE logDoc #-}
+  logDoc s = lift . logDoc s
 
 instance MonadLog m => MonadLog (SS.StateT s m) where
   {-# INLINE logDoc #-}
-  logDoc s msg = lift $ logDoc s msg
+  logDoc s = lift . logDoc s
