@@ -12,7 +12,6 @@
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections       #-}
 
 module Haskell.Language.Server.Tags.LoadModule
   ( loadModule
@@ -27,7 +26,7 @@ import Control.Monad.Except (throwError)
 import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
-import qualified Control.Monad.State.Strict as SS
+import Control.Monad.Writer
 
 import Data.Foldable.Ext
 import Data.Functor.Product (Product(..))
@@ -265,13 +264,13 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
            )
     resolveImports imports = do
       logDebug $ "[resolveModule.resolveImports] analysing imports of module" <+> pretty (mhModName unresHeader)
-      SS.runStateT (SubkeyMap.traverseWithKey resolveImport imports) []
+      runWriterT (SubkeyMap.traverseWithKey resolveImport imports)
       where
         resolveImport
           :: HasCallStack
           => ImportKey
           -> NonEmpty UnresolvedImportSpec
-          -> SS.StateT [(ImportQualification, SymbolMap)] m (NonEmpty ResolvedImportSpec)
+          -> WriterT [(ImportQualification, SymbolMap)] m (NonEmpty ResolvedImportSpec)
         resolveImport key importSpecs = do
           logDebug $ "[resolveModule.resolveImports.resolveImport] resolving import" <+> pretty key
           isBeingLoaded <- lift $ checkIfModuleIsAlreadyBeingLoaded key
@@ -288,7 +287,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
                 (qual, symMap) <- filterVisibleNames (mhModName unresHeader) importedMods importedNames spec
                 -- Record which names enter current module's scope under certain
                 -- qualification from import spec we're currently analysing.
-                modify ((qual, symMap) :)
+                tell [(qual, symMap)]
                 pure $ spec { ispecImportedNames = symMap }
             -- Non-standard code path for breaking import cycles: imported module
             -- is already being loaded. In order to break infinite loop, we must
@@ -408,69 +407,60 @@ resolveReexports resolvedImports modNames =
 -- 2. Module may reexport arbitrary names, but we're only importing names
 -- defined locally in the module.
 quasiResolveImportSpecWithLoadsInProgress
-  :: (HasCallStack, MonadState [(ImportQualification, SymbolMap)] m, MonadError ErrorMessage m, Traversable t)
-  => ModuleName
-  -> ImportKey
+  :: forall m t. (HasCallStack, MonadWriter [(ImportQualification, SymbolMap)] m, MonadError ErrorMessage m, Traversable t)
+  => ModuleName                -- ^ Module we're currently analysing.
+  -> ImportKey                 -- ^ Import of the main module that caused the cycle.
   -> NonEmpty UnresolvedModule -- ^ Modules in progress that are being loaded and are going to be anayzed here
   -> t UnresolvedImportSpec    -- ^ Import specs to resolve
   -> m (t ResolvedImportSpec)
 quasiResolveImportSpecWithLoadsInProgress mainModuleName key modules importSpecs = do
-  let modules' :: NonEmpty (UnresolvedModule, Set SymbolName)
-      modules' = (id &&& S.mapMonotonic getUnqualifiedSymbolName . SM.keysSet . modAllSymbols) <$> modules
-      importsLocalSymbolsMap :: SymbolMap
-      importsLocalSymbolsMap = foldMap (modAllSymbols . fst) modules'
-      importsLocalSymbolsNames :: Set UnqualifiedSymbolName
-      importsLocalSymbolsNames = SM.keysSet importsLocalSymbolsMap
+  let modules' :: NonEmpty (UnresolvedModule, Set UnqualifiedSymbolName)
+      modules' = (id &&& SM.keysSet . modAllSymbols) <$> modules
   for importSpecs $ \spec@ImportSpec{ispecQualification, ispecImportList} -> do
-    let importAll =
+    let processImports :: Maybe (Set UnqualifiedSymbolName) -> m SymbolMap
+        processImports expectedNames =
           foldForA modules' $ \(Module{modHeader = ModuleHeader{mhExports, mhModName}, modAllSymbols}, localSymbolsNames) ->
             case mhExports of
               NoExports    -> pure modAllSymbols
               EmptyExports -> pure modAllSymbols
               SpecificExports ModuleExports{meExportedEntries}
-                | exportedNames `S.isSubsetOf` localSymbolsNames -> do
-                  let unqualifiedExports :: Set (Maybe UnqualifiedSymbolName)
-                      unqualifiedExports  = S.map mkUnqualifiedSymbolName exportedNames
-                      unqualifiedExports' :: Set UnqualifiedSymbolName
-                      unqualifiedExports' = S.mapMonotonic fromJust $ S.delete Nothing unqualifiedExports
-                  if S.member Nothing unqualifiedExports
-                  then throwErrorWithCallStack $ ppFoldableHeader
-                    ("Cannot resolve import cycle: module" <+> pretty mhModName <+>
-                     "reexports names from its imports:")
-                    (filter isQualified $ toList exportedNames)
-                  else
-                    pure $ modAllSymbols `SM.intersectAgainst` unqualifiedExports'
+                | S.size unqualifiedExports == S.size exportedNames ->
+                  case expectedNames of
+                    Nothing -> pure $ modAllSymbols `SM.intersectAgainst` unqualifiedExports
+                    Just expected
+                      | expected `S.isSubsetOf` unqualifiedExports
+                      -> pure $ modAllSymbols `SM.intersectAgainst` expected
+                      | otherwise
+                      -> pure mempty -- This module could not have been imported in reality - discard it.
                 | otherwise ->
                   throwErrorWithCallStack errMsg
                 where
+                  unqualifiedExports :: Set UnqualifiedSymbolName
+                  unqualifiedExports
+                    = S.mapMonotonic fromJust
+                    $ S.delete Nothing
+                    $ S.map mkUnqualifiedSymbolName exportedNames
+
                   exportedNames :: Set SymbolName
                   exportedNames = KM.keysSet meExportedEntries
                   errMsg = ppFoldableHeader
-                    ("Cannot resolve import cycle: module" <+> pretty mhModName <+>
-                     "exports names not defined locally:")
-                    (exportedNames `S.difference` localSymbolsNames)
+                    ("Cannot resolve import cycle: module" <+> PP.dquotes (pretty mainModuleName) <+> "imports names from" <+> pretty key <>
+                     ", but the import" <+> pretty mhModName <+> "exports names that are not defined locally:")
+                    (exportedNames `S.difference` S.mapMonotonic getUnqualifiedSymbolName localSymbolsNames)
     names <- case ispecImportList of
-      -- If there's no import list then ensure that either
+      -- If there's no import list then ensure that either:
       -- 1. There's no export list and therefore all exported names
       -- must be defined locally.
       -- 2. There's an export list but it exports *only* names
       -- defined locally.
-      NoImportList              -> importAll
-      AssumedWildcardImportList -> importAll
-      -- If there's an import list then try resolving all imported
-      -- names among local definitions of the imported module.
+      NoImportList              -> processImports Nothing
+      AssumedWildcardImportList -> processImports Nothing
       SpecificImports ImportList{ilEntries} -> do
         let importedNames = KM.keysSet ilEntries
-        if importedNames `S.isSubsetOf` importsLocalSymbolsNames
-        then do
-          let resolvedNames = importsLocalSymbolsMap `SM.intersectAgainst` importedNames
-          pure resolvedNames
-        else throwErrorWithCallStack $
-          "Import cycle detected: module" <+> PP.dquotes (pretty mainModuleName) <+>
-             "imports names from module" <+> PP.dquotes (pretty key) <+>
-             "that are not defined there and thus cannot be simply resolved." <+>
-             ppFoldableHeader "Names:" importedNames
-    modify ((ispecQualification, names) :)
+        processImports $ Just importedNames
+    -- Record which names enter current module's scope under certain
+    -- qualification from import spec we're currently analysing.
+    tell [(ispecQualification, names)]
     pure $ spec { ispecImportedNames = names }
 
 -- | Some tags should get extra children-parent relationships, that were not
