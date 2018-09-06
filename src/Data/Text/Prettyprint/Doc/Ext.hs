@@ -24,6 +24,7 @@ module Data.Text.Prettyprint.Doc.Ext
   , ppKeyMapWith
   , ppSubkeyMapWith
   , ppNEMap
+  , ppMonoidalMapWith
   , docFromByteString
 
   , module Data.Text.Prettyprint.Doc.Combinators
@@ -47,6 +48,8 @@ import Data.KeyMap (KeyMap)
 import qualified Data.KeyMap as KM
 import Data.Map.NonEmpty (NonEmptyMap)
 import qualified Data.Map.NonEmpty as NEMap
+import Data.MonoidalMap (MonoidalMap)
+import qualified Data.MonoidalMap as MM
 import Data.SubkeyMap (SubkeyMap)
 import qualified Data.SubkeyMap as SubkeyMap
 
@@ -76,6 +79,12 @@ ppSubkeyMapWith ppKey ppSubKey ppVal sm = ppDictHeader "SubkeyMap"
 ppNEMap :: (Pretty k, Pretty v) => NonEmptyMap k v -> Doc ann
 ppNEMap = ppAssocList . toList . NEMap.toNonEmpty
 
+ppMonoidalMapWith
+  :: (k -> Doc ann)
+  -> (v -> Doc ann)
+  -> MonoidalMap k v
+  -> Doc ann
+ppMonoidalMapWith k v = ppMapWith k v . MM.unMonoidalMap
 
 show' :: Show a => a -> T.Text
 show' = T.pack . show

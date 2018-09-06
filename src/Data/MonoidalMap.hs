@@ -7,12 +7,19 @@
 -- Created     :  Wednesday, 28 September 2016
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Data.MonoidalMap
   ( MonoidalMap
   , singleton
   , unMonoidalMap
+  , lookup
+  , findWithDefault
   ) where
 
+import Prelude hiding (lookup)
+
+import Data.Coerce
 import Data.Map (Map)
 import qualified Data.Map as M
 
@@ -28,3 +35,9 @@ instance (Ord k, Semigroup v) => Monoid (MonoidalMap k v) where
 
 singleton :: k -> v -> MonoidalMap k v
 singleton k v = MonoidalMap $ M.singleton k v
+
+lookup :: forall k v. Ord k => k -> MonoidalMap k v -> Maybe v
+lookup = coerce (M.lookup :: k -> Map k v -> Maybe v)
+
+findWithDefault :: forall k v. Ord k => v -> k -> MonoidalMap k v -> v
+findWithDefault = coerce (M.findWithDefault :: v -> k -> Map k v -> v)

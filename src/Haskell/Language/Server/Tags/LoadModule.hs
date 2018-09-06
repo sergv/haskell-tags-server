@@ -12,6 +12,7 @@
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
 
 module Haskell.Language.Server.Tags.LoadModule
   ( loadModule
@@ -47,6 +48,7 @@ import Data.Traversable (for)
 
 import Haskell.Language.Lexer (tokenize)
 import Haskell.Language.Lexer.FastTags (Pos, ServerToken, processTokens)
+import qualified Haskell.Language.Lexer.FastTags as FastTags
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
@@ -230,7 +232,7 @@ makeModule suggestedModuleName modifTime filename tokens = do
       }
 
 resolveModule
-  :: forall m. (HasCallStack, MonadError ErrorMessage m, MonadLog m)
+  :: forall m. (HasCallStack, MonadError ErrorMessage m, MonadReader TagsServerConf m, MonadLog m)
   => (ImportKey -> m (Maybe (NonEmpty UnresolvedModule)))
   -> (ImportKey -> m (NonEmpty ResolvedModule))
   -> UnresolvedModule
@@ -308,23 +310,28 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
         EmptyExports                                                  ->
           pure (resolvedImports, modAllSymbols)
         SpecificExports ModuleExports{meExportedEntries, meReexports} -> do
-          logDebug $ "[resolveModule.resolveImports] meReexports =" <+> ppSet meReexports
+          logDebug $ "[resolveModule.resolveImports] reexports of module" <+> pretty mhModName <> ":" ## ppSet meReexports
           let lt, gt :: Set ModuleName
               (lt, reexportsItself, gt) = S.splitMember mhModName meReexports
               -- Names exported via module reexports.
               reexports :: SymbolMap
               reexports = resolveReexports resolvedImports $ Pair lt gt
-              namesByNamespace :: Map (Maybe ImportQualifier) SymbolMap
-              namesByNamespace = M.fromListWith (<>)
-                               $ (Nothing, modAllSymbols)
-                               : concatMap expandImportQualification filteredNames
+              -- Names defined in current module grouped by their
+              -- qualifier (a "namespace").
+              moduleNamesByNamespace :: Map (Maybe ImportQualifier) SymbolMap
+              moduleNamesByNamespace
+                = M.fromListWith (<>)
+                $ (Nothing, modAllSymbols)
+                : concatMap expandImportQualification filteredNames
               modulesInScope :: [ModuleName]
               modulesInScope = map ikModuleName $ SubkeyMap.keys mhImports
           -- Names exported from current module, grouped by export qualifier.
-          (exportedNames :: MonoidalMap (Maybe ImportQualifier) (Set UnqualifiedSymbolName)) <-
+          (exportedNames :: MonoidalMap (Maybe ImportQualifier) (Map UnqualifiedSymbolName ResolvedSymbol)) <-
             foldForA meExportedEntries $ \entry -> do
-              let (qualifier, name) = splitQualifiedPart $ entryName entry
-              case M.lookup qualifier namesByNamespace of
+              let (name, PosAndType pos typ)   = entryName entry
+                  name' :: UnqualifiedSymbolName
+                  (qualifier, name') = splitQualifiedPart name
+              case M.lookup qualifier moduleNamesByNamespace of
                 Nothing -> throwErrorWithCallStack $ PP.hsep
                   [ "Internal error: export qualifier"
                   , PP.dquotes $ pretty qualifier
@@ -333,16 +340,29 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
                   , "has no corresponding qualified imports"
                   ]
                 Just sm -> do
-                  names <- namesFromEntry mhModName modulesInScope sm $ entry { entryName = name }
+                  childrenNames <- childrenNamesFromEntry mhModName modulesInScope sm $ name' <$ entry
+                  let childrenType :: FastTags.Type
+                      childrenType = case typ of
+                        FastTags.Type   -> FastTags.Constructor
+                        FastTags.Family -> FastTags.Type
+                        typ'            -> typ'
+                      names :: Map UnqualifiedSymbolName ResolvedSymbol
+                      names
+                        = M.insert name' (mkResolvedSymbolFromParts pos name' typ Nothing)
+                        $ M.fromSet (\childName -> mkResolvedSymbolFromParts pos childName childrenType (Just name')) childrenNames
                   pure $ MM.singleton qualifier names
-
+          let filteredExports :: SymbolMap
+              filteredExports
+                = fold
+                $ M.intersectionWith SM.keepNames moduleNamesByNamespace
+                $ fmap M.keysSet
+                $ MM.unMonoidalMap exportedNames
+          logDebug $ "[resolveSymbols] exportedNames =" ## ppMonoidalMapWith pretty ppMap exportedNames
           let allSymbols  :: SymbolMap
               allSymbols  = mconcat
                 [ if reexportsItself then modAllSymbols else mempty
                 , reexports
-                , fold
-                $ M.intersectionWith SM.keepNames namesByNamespace
-                $ MM.unMonoidalMap exportedNames
+                , filteredExports
                 ]
               extra       :: Map UnqualifiedSymbolName (Set UnqualifiedSymbolName)
               extra       = inferExtraParents header
@@ -350,7 +370,18 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
               allSymbols' = SM.registerChildren extra allSymbols
           logDebug $ "[resolveModule.resolveSymbols] inferred extra parents =" ##
             ppMapWith pretty ppSet extra
-          pure (resolvedImports, allSymbols')
+          -- Names from default namespace that are exported but not
+          -- imported/defined locally. We default them to tags that
+          -- come from the corresponding export list.
+          let unresolvedExports :: SymbolMap
+              unresolvedExports
+                = SM.fromList
+                $ M.elems
+                $ M.withoutKeys
+                    (MM.findWithDefault mempty Nothing exportedNames :: Map UnqualifiedSymbolName ResolvedSymbol)
+                    (SM.keysSet allSymbols')
+          logDebug $ "[resolveSymbols] unresolved exports for" <+> pretty mhModName <+> "=" ## pretty unresolvedExports
+          pure (resolvedImports, allSymbols' <> unresolvedExports)
 
 resolveReexports
   :: (Foldable f, Foldable g)
@@ -427,7 +458,7 @@ quasiResolveImportSpecWithLoadsInProgress mainModuleName key modules importSpecs
       NoImportList              -> importAll
       AssumedWildcardImportList -> importAll
       -- If there's an import list then try resolving all imported
-      -- names among local definitions af the imported module.
+      -- names among local definitions of the imported module.
       SpecificImports ImportList{ilEntries} -> do
         let importedNames = KM.keysSet ilEntries
         if importedNames `S.isSubsetOf` importsLocalSymbolsNames
@@ -460,19 +491,19 @@ inferExtraParents ModuleHeader{mhExports} = M.fromListWith (<>) entries
     entries :: [(UnqualifiedSymbolName, Set UnqualifiedSymbolName)]
     entries =
       foldFor mhExports $ \ModuleExports{meExportedEntries} ->
-        foldFor meExportedEntries $ \EntryWithChildren{entryName, entryChildrenVisibility} ->
+        foldFor meExportedEntries $ \EntryWithChildren{entryName = (name, _), entryChildrenVisibility} ->
           case entryChildrenVisibility of
             Just VisibleAllChildren                         -> mempty
             Just (VisibleSpecificChildren _)                -> mempty
             Just (VisibleAllChildrenPlusSome extraChildren) ->
-              [(snd $ splitQualifiedPart entryName, extraChildren)]
+              [(snd $ splitQualifiedPart name, M.keysSet extraChildren)]
             Nothing                                         -> mempty
 
--- | Find out which names and under qualification come out of an import spec.
+-- | Find out which names under qualification come out of an import spec.
 filterVisibleNames
-  :: (HasCallStack, MonadError ErrorMessage m, Foldable f)
+  :: (HasCallStack, MonadError ErrorMessage m, MonadReader TagsServerConf m, Foldable f)
   => ModuleName
-  -> f ModuleName
+  -> f ModuleName         -- ^ Imported modules for error reporting.
   -> SymbolMap            -- ^ All names from the set of imports.
   -> UnresolvedImportSpec -- ^ Import spec for this particular set of imports.
   -> m (ImportQualification, SymbolMap)
@@ -486,33 +517,48 @@ filterVisibleNames moduleName importedMods allImportedNames ImportSpec{ispecQual
       let f = case ilImportType of
                 Imported -> SM.keepNames
                 Hidden   -> SM.removeNames
-      importedNames <- foldMapA (namesFromEntry moduleName importedMods allImportedNames) ilEntries
+      importedNames <- foldMapA (allNamesFromEntry moduleName importedMods allImportedNames) ilEntries
       pure $ f allImportedNames importedNames
   pure (ispecQualification, visibleNames)
 
 -- | Get names referred to by @EntryWithChildren@ given a @SymbolMap@
 -- of names currently in scope.
-namesFromEntry
-  :: forall m f. (HasCallStack, MonadError ErrorMessage m, Foldable f)
+allNamesFromEntry
+  :: forall m f ann. (HasCallStack, MonadError ErrorMessage m, MonadReader TagsServerConf m, Foldable f)
   => ModuleName
-  -> f ModuleName
+  -> f ModuleName -- ^ Imported modules for error reporting.
   -> SymbolMap
-  -> EntryWithChildren UnqualifiedSymbolName
+  -> EntryWithChildren ann UnqualifiedSymbolName
   -> m (Set UnqualifiedSymbolName)
-namesFromEntry moduleName importedMods allImportedNames (EntryWithChildren sym visibility) =
+allNamesFromEntry moduleName importedMods allImportedNames entry@(EntryWithChildren sym _) =
   S.insert sym <$>
+  childrenNamesFromEntry moduleName importedMods allImportedNames entry
+
+-- | Get only children names referred to by @EntryWithChildren@ given
+-- a @SymbolMap@ of names currently in scope.
+childrenNamesFromEntry
+  :: forall m f ann. (HasCallStack, MonadError ErrorMessage m, MonadReader TagsServerConf m, Foldable f)
+  => ModuleName
+  -> f ModuleName -- ^ Imported modules for error reporting.
+  -> SymbolMap
+  -> EntryWithChildren ann UnqualifiedSymbolName
+  -> m (Set UnqualifiedSymbolName)
+childrenNamesFromEntry moduleName importedMods allImportedNames (EntryWithChildren sym visibility) =
   case visibility of
     Nothing                                         -> pure mempty
     Just VisibleAllChildren                         -> childrenSymbols
-    Just (VisibleSpecificChildren children)         -> pure children
+    Just (VisibleSpecificChildren children)         -> pure $ M.keysSet children
     Just (VisibleAllChildrenPlusSome extraChildren) ->
-      (extraChildren <>) <$> childrenSymbols
+      (M.keysSet extraChildren <>) <$> childrenSymbols
   where
     childrenSymbols :: HasCallStack => m (Set UnqualifiedSymbolName)
-    childrenSymbols =
-      case SM.lookupChildren sym allImportedNames of
-        Nothing       -> throwErrorWithCallStack $ ppFoldableHeader
-          ("Imported parent" <+> pretty sym <+> "not found in symbol map of imports of module" <+> pretty moduleName <> ":")
-          importedMods
-        Just children -> pure children
-
+    childrenSymbols = do
+      nameResolution <- asks tsconfNameResolution
+      case (nameResolution, SM.lookupChildren sym allImportedNames) of
+        (NameResolutionStrict, Nothing)       ->
+          throwErrorWithCallStack $ ppFoldableHeader
+            ("Imported symbol with children" <+> PP.squotes (pretty sym) <+>
+             "not found in the imports symbol map for the module" <+> PP.squotes (pretty moduleName) <> ":")
+            importedMods
+        (NameResolutionLax,    Nothing)       -> pure mempty
+        (_,                    Just children) -> pure children

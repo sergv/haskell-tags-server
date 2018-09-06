@@ -10,6 +10,7 @@
 {-# LANGUAGE DeriveFunctor     #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
@@ -34,7 +35,7 @@ module Haskell.Language.Server.Tags.Types.Imports
   , ChildrenVisibility(..)
   ) where
 
-import Data.Set (Set)
+import Data.Map (Map)
 import Data.Text.Prettyprint.Doc.Ext
 import GHC.Generics (Generic)
 
@@ -158,7 +159,7 @@ instance Pretty a => Pretty (ImportListSpec a) where
 
 -- | User-provided import/hiding list.
 data ImportList = ImportList
-  { ilEntries    :: KeyMap (EntryWithChildren UnqualifiedSymbolName)
+  { ilEntries    :: KeyMap (EntryWithChildren () UnqualifiedSymbolName)
   , ilImportType :: ImportType
   } deriving (Eq, Ord, Show)
 
@@ -166,32 +167,36 @@ instance Pretty ImportList where
   pretty ImportList{ilImportType, ilEntries} =
     ppFoldableHeader ("Import list[" <> pretty ilImportType <> "]") ilEntries
 
-data EntryWithChildren name = EntryWithChildren
+data EntryWithChildren childAnn name = EntryWithChildren
   { entryName               :: name
-  , entryChildrenVisibility :: Maybe ChildrenVisibility
-  } deriving (Eq, Ord, Show, Generic)
+  , entryChildrenVisibility :: Maybe (ChildrenVisibility childAnn)
+  } deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
 
-instance Pretty name => Pretty (EntryWithChildren name) where
+instance (Pretty ann, Pretty name) => Pretty (EntryWithChildren ann name) where
   pretty = ppGeneric
 
-mkEntryWithoutChildren :: a -> EntryWithChildren a
+mkEntryWithoutChildren :: a -> EntryWithChildren ann a
 mkEntryWithoutChildren name = EntryWithChildren name Nothing
 
-instance Ord a => HasKey (EntryWithChildren a) where
-  type Key (EntryWithChildren a) = a
-  getKey (EntryWithChildren name _) = name
+instance HasKey (EntryWithChildren ann UnqualifiedSymbolName) where
+  type Key (EntryWithChildren ann UnqualifiedSymbolName) = UnqualifiedSymbolName
+  getKey = entryName
 
-data ChildrenVisibility =
+instance HasKey (EntryWithChildren ann SymbolName) where
+  type Key (EntryWithChildren ann SymbolName) = SymbolName
+  getKey = entryName
+
+data ChildrenVisibility ann =
     -- | Wildcard import/export, e.g. Foo(..)
     VisibleAllChildren
     -- | Import/export with explicit list of children, e.g. Foo(Bar, Baz), Quux(foo, bar).
     -- Set is always non-empty.
-  | VisibleSpecificChildren (Set UnqualifiedSymbolName)
+  | VisibleSpecificChildren (Map UnqualifiedSymbolName ann)
     -- | Wildcard export with some things added in, so they'll be visible on
     -- wildcard import, e.g.
     -- ErrorCall(..,ErrorCall)
-  | VisibleAllChildrenPlusSome (Set UnqualifiedSymbolName)
-  deriving (Eq, Ord, Show, Generic)
+  | VisibleAllChildrenPlusSome (Map UnqualifiedSymbolName ann)
+  deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
 
-instance Pretty ChildrenVisibility where
+instance Pretty a => Pretty (ChildrenVisibility a) where
   pretty = ppGeneric

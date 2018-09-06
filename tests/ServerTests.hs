@@ -435,7 +435,7 @@ testData = GroupTest "server tests"
               , "baz"
               , NotFound
               )
-            , ( "import re-exported name without qualification"
+            , ( "import re-exported name without qualification #1"
               , "foo"
               , Known "ModuleWithExportList.hs" 11 "Function"
               )
@@ -1000,6 +1000,102 @@ testData = GroupTest "server tests"
           , NotFound
           )
         ]
+  , GroupTest "Import of module that defines some entities via macro"
+    [ withDirAndFile (Directory "0010exported_name_defined_via_macro") groupModule $
+        group groupName
+          [ ( "Type defined via macro #1"
+            , "ViaMacroWithWildcardChildren"
+            , Known "Definitions.hs" 12 "Type"
+            )
+          , ( "Wildcard-exported constructor defined via macro #1.1"
+            , "MWWC1"
+            , NotFound
+            )
+          , ( "Wildcard-exported constructor defined via macro #1.2"
+            , "MWWC2"
+            , NotFound
+            )
+
+          , ( "Type defined via macro #2"
+            , "ViaMacroWithExplicitChildren"
+            , Known "Definitions.hs" 13 "Type"
+            )
+          , ( "Unexported constructor defined via macro #2.1"
+            , "MWEC1"
+            , NotFound
+            )
+          , ( "Explicitly exported constructor defined via macro #2.2"
+            , "MWEC2"
+            , Known "Definitions.hs" 13 "Constructor"
+            )
+
+          , ( "Type defined via macro #3"
+            , "ViaMacroNoChildren"
+            , Known "Definitions.hs" 14 "Type"
+            )
+          , ( "Unexported constructor defined via macro #3.1"
+            , "MNC1"
+            , NotFound
+            )
+          , ( "Unexported constructor defined via macro #3.2"
+            , "MNC2"
+            , NotFound
+            )
+
+          , ( "Function defined via macro"
+            , "viaMacro"
+            , Known "Definitions.hs" 15 "Function"
+            )
+
+          , ( "Vanilla type #1"
+            , "ViaDefWithWildcardChildren"
+            , Known "Definitions.hs" 34 "Type"
+            )
+          , ( "Vanilla wildcard-exported constructor #1"
+            , "DWWC1"
+            , Known "Definitions.hs" 35 "Constructor"
+            )
+          , ( "Vanilla wildcard-exported constructor #2"
+            , "DWWC2"
+            , Known "Definitions.hs" 36 "Constructor"
+            )
+
+          , ( "Vanilla type #2"
+            , "ViaDefWithExplicitChildren"
+            , Known "Definitions.hs" 39 "Type"
+            )
+          , ( "Vanilla unexported constructor #2.1"
+            , "DWEC1"
+            , NotFound
+            )
+          , ( "Vanilla explicitly exported constructor"
+            , "DWEC2"
+            , Known "Definitions.hs" 41 "Constructor"
+            )
+
+          , ( "Vanilla type #3"
+            , "ViaDefNoChildren"
+            , Known "Definitions.hs" 44 "Type"
+            )
+          , ( "Vanilla unexported constructor #3.1"
+            , "DNC1"
+            , NotFound
+            )
+          , ( "Vanilla unexported constructor #3.2"
+            , "DNC2"
+            , NotFound
+            )
+
+          , ( "Vanilla function"
+            , "viaDef"
+            , Known "Definitions.hs" 51 "Function"
+            )
+          ]
+    | (groupName, groupModule) <-
+      [ ("Direct import", "ImportDirectly.hs")
+      , ("Via reexport", "ImportViaReexport.hs")
+      ]
+    ]
   ]
 
 tests :: TestTree

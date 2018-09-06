@@ -37,9 +37,9 @@ newtype SearchT m a = SearchM (ExceptT ErrorMessage (StateT TagsServerState (Rea
     )
 
 runSearchT :: TagsServerConf -> TagsServerState -> SearchT m a -> m (Either ErrorMessage a, TagsServerState)
-runSearchT conf state (SearchM action)
+runSearchT conf serverState (SearchM action)
   = flip runReaderT conf
-  $ flip runStateT state
+  $ flip runStateT serverState
   $ runExceptT action
 
 

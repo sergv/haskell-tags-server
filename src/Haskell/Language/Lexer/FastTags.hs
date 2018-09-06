@@ -8,6 +8,7 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE NamedFieldPuns     #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
@@ -65,6 +66,17 @@ deriving instance Generic TokenVal
 
 instance Pretty TokenVal where
   pretty = ppGeneric
+
+instance Pretty SrcPos where
+  pretty SrcPos{posFile, posLine} = pretty posFile <> ":" <> pretty (unLine posLine)
+
+deriving instance Generic (Pos a)
+
+instance Pretty a => Pretty (Pos a) where
+  pretty = ppGeneric
+
+instance Pretty Type where
+  pretty = ppShow
 
 tokToName :: ServerToken -> Maybe Text
 tokToName (Tok ExclamationMark) = Just "!"

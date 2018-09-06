@@ -29,16 +29,21 @@ module Data.Symbols
   , splitQualifiedPart
   , ResolvedSymbol
   , mkResolvedSymbol
+  , mkResolvedSymbolFromParts
   , resolvedSymbolName
   , resolvedSymbolType
   , resolvedSymbolParent
   , resolvedSymbolPosition
+    -- -- * Reexports
+  -- , SrcPos(..)
+  -- Type(..)
   ) where
 
 import Control.Applicative
 import Data.Attoparsec.Text
 import qualified Data.Attoparsec.Text as Attoparsec
 import Data.Char (isUpper)
+import Data.Coerce
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc.Ext
@@ -80,7 +85,7 @@ instance Pretty UnqualifiedSymbolName where
   pretty = pretty . getUnqualifiedSymbolName
 
 unqualSymNameText :: UnqualifiedSymbolName -> Text
-unqualSymNameText = getSymbolName . getUnqualifiedSymbolName
+unqualSymNameText = coerce
 
 isQualified :: SymbolName -> Bool
 isQualified name = case mkUnqualifiedSymbolName name of
@@ -145,6 +150,15 @@ instance Pretty ResolvedSymbol where
 
 mkResolvedSymbol :: Pos TagVal -> ResolvedSymbol
 mkResolvedSymbol = ResolvedSymbol
+
+mkResolvedSymbolFromParts
+  :: SrcPos                      -- ^ Position
+  -> UnqualifiedSymbolName       -- ^ Symbol name
+  -> Type                        -- ^ Type of entity symbol will refer to
+  -> Maybe UnqualifiedSymbolName -- ^ Optional parent
+  -> ResolvedSymbol
+mkResolvedSymbolFromParts pos name typ parent =
+  ResolvedSymbol $ Pos pos $ TagVal (unqualSymNameText name) typ (unqualSymNameText <$> parent)
 
 resolvedSymbolName :: ResolvedSymbol -> UnqualifiedSymbolName
 resolvedSymbolName (ResolvedSymbol (Pos _ (TagVal name _ _))) =

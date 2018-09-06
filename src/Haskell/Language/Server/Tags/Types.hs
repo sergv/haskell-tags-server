@@ -18,6 +18,7 @@ module Haskell.Language.Server.Tags.Types
   , Response(..)
   , RequestHandler
     -- * Tag server types
+  , NameResolutionStrictness(..)
   , TagsServerConf(..)
   , defaultTagsServerConf
   , TagsServerState(..)
@@ -64,6 +65,21 @@ instance Pretty Response where
 
 type RequestHandler = Request -> IO (Promise (Either ErrorMessage Response))
 
+
+-- | Whether to ignore some issues when resolving names.
+data NameResolutionStrictness =
+    -- | Default: use for day-to-day lookups, ignores some errors but
+    -- this allows to analyse more modules e.g. the ones that define
+    -- names with preprocessor/Tempate Haskell.
+    NameResolutionLax
+  | -- | Do not ignore following events:
+    -- 1. A module exports a name with children but no definition of children can be found.
+    NameResolutionStrict
+  deriving (Eq, Ord, Show, Bounded, Enum, Generic)
+
+instance Pretty NameResolutionStrictness where
+  pretty = ppGeneric
+
 data TagsServerConf = TagsServerConf
   { tsconfSearchDirs        :: SearchCfg
   , tsconfVanillaExtensions :: Set Extension
@@ -71,6 +87,7 @@ data TagsServerConf = TagsServerConf
     -- | Whether to read and compute tags lazily or read them all at once when
     -- server starts.
   , tsconfEagerTagging      :: Bool
+  , tsconfNameResolution    :: NameResolutionStrictness
   } deriving (Eq, Ord, Show)
 
 defaultTagsServerConf :: TagsServerConf
@@ -79,14 +96,15 @@ defaultTagsServerConf = TagsServerConf
   , tsconfVanillaExtensions = S.fromList [".hs", ".lhs", ".hsc", ".chs"]
   , tsconfHsBootExtensions  = S.fromList [".hs-boot", ".lhs-boot"]
   , tsconfEagerTagging      = False
+  , tsconfNameResolution    = NameResolutionLax
   }
 
--- | Server state that may change while processing request.
+-- | Server state that may change while a request is processed.
 data TagsServerState = TagsServerState
   { -- | Single module name can refer to multiple modules.
     tssLoadedModules   :: !(SubkeyMap ImportKey (NonEmpty ResolvedModule))
-    -- | Set of modules we started loading. Used mainly for detecting import
-    -- cycles.
+    -- | Set of modules we started loading. Mainly used for detecting
+    -- import cycles.
   , tssLoadsInProgress :: !(Map ImportKey (NonEmptyMap FullPath UnresolvedModule))
   } deriving (Eq, Ord, Show)
 

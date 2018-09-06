@@ -72,13 +72,14 @@ startTagsServer
   -> TagsServerState
   -> m TagsServer
 startTagsServer conf state = do
-  state' <- if tsconfEagerTagging conf
-            then do
-              logDebug "[startTagsServer] collecting tags eagerly"
-              modules <- loadAllFilesIntoState conf
-              logDebug $ "[startTagsServer] finished collecting tags eagerly, processed" <+> pretty (getSum $ foldMap (Sum . length) modules) <+> "modules"
-              pure $ state { tssLoadedModules = SubkeyMap.fromMap modules <> tssLoadedModules state }
-            else pure state
+  state' <-
+    if tsconfEagerTagging conf
+    then do
+      logDebug "[startTagsServer] collecting tags eagerly"
+      modules <- loadAllFilesIntoState conf
+      logDebug $ "[startTagsServer] finished collecting tags eagerly, processed" <+> pretty (getSum $ foldMap (Sum . length) modules) <+> "modules"
+      pure $ state { tssLoadedModules = SubkeyMap.fromMap modules <> tssLoadedModules state }
+    else pure state
   reqChan <- liftBase newChan
   lock    <- liftBase newEmptyMVar
   tid     <- liftBaseDiscard forkIO $ handleRequests lock reqChan state'

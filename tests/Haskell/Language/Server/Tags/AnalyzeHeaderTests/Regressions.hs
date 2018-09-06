@@ -24,6 +24,7 @@ import qualified Data.Set as S
 import qualified Data.Text as T
 
 import Data.Symbols
+import Haskell.Language.Lexer.FastTags (SrcPos(..), Type(..), Line(..))
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
 
@@ -34,6 +35,9 @@ import qualified Text.RawString.QQ as QQ
 
 type Test = TestCase T.Text UnresolvedModuleHeader
 
+pt :: Int -> Type -> PosAndType
+pt n typ = PosAndType (SrcPos "test.hs" (Line n) mempty) typ
+
 aesonHeaderTest :: Test
 aesonHeaderTest = TestCase
   { testName       = "Data.Aeson.TH header"
@@ -43,19 +47,28 @@ aesonHeaderTest = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList $
               [ EntryWithChildren
-                  { entryName               = mkSymbolName name
+                  { entryName               = (mkSymbolName name, pt n Type)
                   , entryChildrenVisibility = Just VisibleAllChildren
                   }
-              | name <- ["Options", "SumEncoding"]
+              | (name, n) <-
+                [ ("Options",     35)
+                , ("SumEncoding", 35)
+                ]
               ] ++
               [ EntryWithChildren
-                  { entryName               = mkSymbolName name
+                  { entryName               = (mkSymbolName name, pt n Function)
                   , entryChildrenVisibility = Nothing
                   }
-              | name <- [ "defaultOptions", "defaultTaggedObject", "deriveJSON"
-                        , "deriveToJSON", "deriveFromJSON", "mkToJSON"
-                        , "mkToEncoding", "mkParseJSON"
-                        ]
+              | (name, n) <-
+                [ ("defaultOptions",      35)
+                , ("defaultTaggedObject", 35)
+                , ("deriveJSON",          38)
+                , ("deriveToJSON",        40)
+                , ("deriveFromJSON",      41)
+                , ("mkToJSON",            43)
+                , ("mkToEncoding",        44)
+                , ("mkParseJSON",         45)
+                ]
               ]
           , meReexports          = mempty
           , meHasWildcardExports = True
@@ -158,7 +171,7 @@ aesonHeaderTest = TestCase
                 , SpecificImports $
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName "Bool"
-                        , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                        , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
                             [ mkUnqualSymName "False"
                             , mkUnqualSymName "True"
                             ]
@@ -176,7 +189,7 @@ aesonHeaderTest = TestCase
                 , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName "Either"
-                        , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                        , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
                             [ mkUnqualSymName "Left"
                             , mkUnqualSymName "Right"
                             ]
@@ -239,7 +252,7 @@ aesonHeaderTest = TestCase
                 , SpecificImports
                     [ EntryWithChildren
                         { entryName               = mkUnqualSymName "Maybe"
-                        , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                        , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
                             [ mkUnqualSymName "Nothing"
                             , mkUnqualSymName "Just"
                             ]
@@ -392,10 +405,15 @@ unixCompatHeaderTest = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList $
               [ EntryWithChildren
-                  { entryName               = mkSymbolName name
+                  { entryName               = (mkSymbolName name, pt n Type)
                   , entryChildrenVisibility = Nothing
                   }
-              | name <- ["FileID", "UserID", "GroupID", "LinkCount"]
+              | (name, n) <-
+                [ ("FileID",    13)
+                , ("UserID",    14)
+                , ("GroupID",   15)
+                , ("LinkCount", 16)
+                ]
               ]
           , meReexports          = S.fromList
               [ mkModuleName "System.Posix.Types"
@@ -436,8 +454,7 @@ unixCompatHeaderTest = TestCase
 -- Raw headers
 
 aesonHeader :: T.Text
-aesonHeader = [QQ.r|
-{-# LANGUAGE CPP                  #-}
+aesonHeader = [QQ.r|{-# LANGUAGE CPP                  #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE IncoherentInstances  #-}
 {-# LANGUAGE NamedFieldPuns       #-}
@@ -533,8 +550,7 @@ import qualified Data.Vector.Mutable as VM ( unsafeNew, unsafeWrite )
 |]
 
 unixCompatHeader :: T.Text
-unixCompatHeader = [QQ.r|
-{-# LANGUAGE CPP #-}
+unixCompatHeader = [QQ.r|{-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 {-|

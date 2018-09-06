@@ -9,6 +9,7 @@
 
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -22,8 +23,9 @@ import Control.Arrow (first, second)
 import Control.Category ((>>>))
 import Control.Monad.Except.Ext
 import Control.Monad.Trans.Maybe
+
 import Data.Char
-import Data.Foldable (toList)
+import Data.Foldable.Ext (toList, foldFor)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -38,7 +40,8 @@ import Data.Text.Prettyprint.Doc.Ext
 import Data.Void (Void)
 
 import Haskell.Language.Lexer.FastTags
-  (stripNewlines, tokToName, Pos(..), ServerToken(..), TokenVal(..), posFile, posLine, unLine, PragmaType(..))
+  (stripNewlines, tokToName, Pos(..), SrcPos, Type, ServerToken(..), TokenVal(..), posFile, posLine, unLine, PragmaType(..), Type(..))
+import qualified Haskell.Language.Lexer.FastTags as FastTags
 
 import Control.Monad.Logging
 import Data.ErrorMessage
@@ -101,6 +104,11 @@ pattern PType         <- Pos _ (Tok KWType)
 
 pattern PAnyName      :: Text -> Pos ServerToken
 pattern PAnyName name <- Pos _ (tokToName -> Just name)
+
+pattern PName'             :: SrcPos -> Text -> Pos ServerToken
+pattern PName' pos name    <- Pos pos (Tok (T name))
+pattern PAnyName'          :: SrcPos -> Text -> Pos ServerToken
+pattern PAnyName' pos name <- Pos pos (tokToName -> Just name)
 
 analyzeImports
   :: forall m. (HasCallStack, MonadError ErrorMessage m, MonadLog m)
@@ -201,7 +209,7 @@ analyzeImports imports qualifiers ts = do
       where
         findImportListEntries
           :: ImportType
-          -> KeyMap (EntryWithChildren UnqualifiedSymbolName)
+          -> KeyMap (EntryWithChildren () UnqualifiedSymbolName)
           -> [Pos ServerToken]
           -> m (ImportListSpec ImportList, [Pos ServerToken])
         findImportListEntries importType acc toks' = do
@@ -214,7 +222,7 @@ analyzeImports imports qualifiers ts = do
             -- Type import
             PType : PName name : rest                                         ->
               entryWithoutChildren name rest
-            PType : PLParen : Pos _ (tokToName -> Just name) : PRParen : rest ->
+            PType : PLParen : PAnyName name : PRParen : rest ->
               entryWithoutChildren name rest
             -- Pattern import
             PPattern : restWithName@(PName name : rest)
@@ -223,14 +231,14 @@ analyzeImports imports qualifiers ts = do
                 entryWithoutChildren name rest
               | otherwise                 ->
                 entryWithoutChildren "pattern" restWithName
-            PPattern : restWithName@(PLParen : Pos _ (tokToName -> Just name) : PRParen : rest)
+            PPattern : restWithName@(PLParen : PAnyName name : PRParen : rest)
               | isOpTypeName name
               , not $ isChildrenList rest ->
                 entryWithoutChildren name rest
               | otherwise                 ->
                 entryWithoutChildren "pattern" restWithName
             -- Vanilla function/operator/consturtor/type import
-            PLParen : Pos _ (tokToName -> Just name) : PRParen : rest         ->
+            PLParen : PAnyName name : PRParen : rest         ->
               entryWithChildren "operator in import list" name rest
             PLParen : PName name : PRParen : rest                             ->
               entryWithChildren "operator in import list" name rest
@@ -259,7 +267,7 @@ analyzeImports imports qualifiers ts = do
             entryWithChildren descr name rest = do
               (children, rest') <- snd $ analyzeChildren descr $ dropNLs rest
               name'             <- mkUnqualName name
-              let newEntry = EntryWithChildren name' children
+              let newEntry = EntryWithChildren name' $ (() <$) <$> children
               findImportListEntries importType (KM.insert newEntry acc) $ dropCommas rest'
             entryWithoutChildren :: Text -> [Pos ServerToken] -> m (ImportListSpec ImportList, [Pos ServerToken])
             entryWithoutChildren name rest = do
@@ -295,7 +303,7 @@ analyzeExports importQualifiers ts = do
     -- - Quux(..)
     -- - pattern PFoo
     -- - module Data.Foo.Bar
-    go :: KeyMap (EntryWithChildren SymbolName)
+    go :: KeyMap (EntryWithChildren PosAndType (SymbolName, PosAndType))
        -> Set ModuleName
        -> [Pos ServerToken]
        -> m ModuleExports
@@ -307,25 +315,25 @@ analyzeExports importQualifiers ts = do
         PRParen : _                                                       ->
           pure exports
         -- Pattern export
-        PPattern : restWithName@(PName name : rest)
+        PPattern : restWithName@(PName' pos name : rest)
           | isVanillaTypeName name
           , not $ isChildrenList rest ->
-            entryWithoutChildren name rest
+            entryWithoutChildren name pos FastTags.Pattern rest
           | otherwise                 ->
-            entryWithoutChildren "pattern" restWithName
-        PPattern : restWithName@(PLParen : Pos _ (tokToName -> Just name) : PRParen : rest)
+            entryWithoutChildren "pattern" pos FastTags.Function restWithName
+        PPattern : restWithName@(PLParen : PAnyName' pos name : PRParen : rest)
           | isOpTypeName name
           , not $ isChildrenList rest ->
-            entryWithoutChildren name rest
+            entryWithoutChildren name pos FastTags.Pattern rest
           | otherwise                 ->
-            entryWithoutChildren "pattern" restWithName
+            entryWithoutChildren "pattern" pos FastTags.Function restWithName
         -- Type export
-        PType : PName name : rest                                         ->
-          entryWithoutChildren name rest
-        PType : PLParen : Pos _ (tokToName -> Just name) : PRParen : rest ->
-          entryWithoutChildren name rest
+        PType : PName' pos name : rest                                      ->
+          entryWithoutChildren name pos FastTags.Family rest
+        PType : PLParen : PAnyName' pos name : PRParen : rest               ->
+          entryWithoutChildren name pos FastTags.Family rest
         -- Module reexport
-        PModule : PName name : rest                                       ->
+        PModule : PName name : rest                                         ->
           consumeComma entries (newReexports <> reexports) rest
           where
             modName = mkModuleName name
@@ -334,13 +342,14 @@ analyzeExports importQualifiers ts = do
               = S.fromList
               $ toList
               $ M.findWithDefault (modName :| []) (mkImportQualifier modName) importQualifiers
-        -- Vanilla function/operator/consturtor/type expotr
-        PLParen : PName name : PRParen : rest                             ->
-          entryWithChildren "operator in export list" name rest
-        PLParen : Pos _ (tokToName -> Just name) : PRParen : rest         ->
-          entryWithChildren "operator in export list" name rest
-        PName name : rest                                                 ->
-          entryWithChildren "name in export list" name rest
+        -- Vanilla function/operator/consturtor/type export
+        PLParen : PName' pos name : PRParen : rest                        ->
+          entryWithChildren "operator in export list" name pos (typeForName FastTags.Type name) rest
+        PLParen : Pos pos (tokToName -> Just name) : PRParen : rest       ->
+          entryWithChildren "operator in export list" name pos (typeForName FastTags.Type name) rest
+        PName' pos name : rest                                            ->
+
+          entryWithChildren "name in export list" name pos (typeForName FastTags.Type name) rest
         PLParen : rest                                                    ->
           go entries reexports rest
         toks'                                                             ->
@@ -352,18 +361,43 @@ analyzeExports importQualifiers ts = do
           , meReexports          = reexports
           , meHasWildcardExports = getAny $ foldMap exportsAllChildren entries
           }
-        entryWithChildren :: Doc Void -> Text -> [Pos ServerToken] -> m ModuleExports
-        entryWithChildren listType name rest = do
+        entryWithChildren
+          :: Doc Void
+          -> Text
+          -> SrcPos
+          -> Type
+          -> [Pos ServerToken]
+          -> m ModuleExports
+        entryWithChildren listType name pos typIfNoChildren rest = do
           -- logDebug $ "[analyzeExports.entryWithChildren] rest =" <+> ppTokens rest
-          (children, rest') <- snd $ analyzeChildren listType rest
-          let newEntry = EntryWithChildren (mkSymbolName name) children
+          let (presence, getChildren) = analyzeChildren listType rest
+          (children, rest') <- getChildren
+          entryType <-
+            -- TODO: eliminate potential memory leak with a stricter fold?
+            case ( presence
+                 , foldFor children $ foldMap $ \PosAndType{patType} ->
+                     (Any $ patType == Constructor, Any $ patType == Type)) of
+              (ChildrenAbsent,  _)                      -> pure typIfNoChildren
+              (ChildrenPresent, (Any False, Any False)) -> pure Type
+              (ChildrenPresent, (Any True,  Any False)) -> pure Type
+              (ChildrenPresent, (Any False, Any True))  -> pure Family
+              (ChildrenPresent, (Any True,  Any True))  -> throwErrorWithCallStack $
+                "Unexpected children specification for exported name" <+> PP.squotes (pretty name) <> "." <+>
+                "It specifies both constructor names and type names among children:" ##
+                  ppTokens rest
+          let newEntry = EntryWithChildren (mkSymbolName name, PosAndType pos entryType) children
           consumeComma (KM.insert newEntry entries) reexports rest'
-        entryWithoutChildren :: Text -> [Pos ServerToken] -> m ModuleExports
-        entryWithoutChildren name rest = do
+        entryWithoutChildren
+          :: Text
+          -> SrcPos
+          -> Type
+          -> [Pos ServerToken]
+          -> m ModuleExports
+        entryWithoutChildren name pos typ rest = do
           -- logDebug $ "[analyzeExports.entryWithoutChildren] rest =" <+> ppTokens rest
-          let newEntry = mkEntryWithoutChildren $ mkSymbolName name
+          let newEntry = mkEntryWithoutChildren (mkSymbolName name, PosAndType pos typ)
           consumeComma (KM.insert newEntry entries) reexports rest
-        exportsAllChildren :: EntryWithChildren a -> Any
+        exportsAllChildren :: EntryWithChildren PosAndType a -> Any
         exportsAllChildren (EntryWithChildren _ visibility) =
           maybe mempty isExportAllChildren visibility
           where
@@ -373,15 +407,24 @@ analyzeExports importQualifiers ts = do
 
     -- Continue parsing by consuming comma delimiter.
     consumeComma
-      :: KeyMap (EntryWithChildren SymbolName)
+      :: KeyMap (EntryWithChildren PosAndType (SymbolName, PosAndType))
       -> Set ModuleName
       -> [Pos ServerToken]
       -> m ModuleExports
     consumeComma entries reexports = go entries reexports . dropCommas
 
+typeForName :: FastTags.Type -> Text -> FastTags.Type
+typeForName constructorLikeTag name =
+  case T.uncons $ unqualSymNameText $ stripQualifiedPart name of
+    Just (':', _) -> constructorLikeTag
+    Just (c, _)
+      | isAlpha c -> if isUpper c then constructorLikeTag else FastTags.Function
+      | otherwise -> FastTags.Operator
+    Nothing -> FastTags.Function
+
 isChildrenList :: [Pos ServerToken] -> Bool
 isChildrenList toks =
-  case fst (analyzeChildren mempty toks :: (ChildrenPresence, Either ErrorMessage (Maybe ChildrenVisibility, [Pos ServerToken]))) of
+  case fst (analyzeChildren mempty toks :: (ChildrenPresence, Either ErrorMessage (Maybe (ChildrenVisibility PosAndType), [Pos ServerToken]))) of
     ChildrenPresent -> True
     ChildrenAbsent  -> False
 
@@ -400,7 +443,7 @@ instance Monoid WildcardPresence where
 
 analyzeChildren
   :: forall m. (HasCallStack, MonadError ErrorMessage m)
-  => Doc Void -> [Pos ServerToken] -> (ChildrenPresence, m (Maybe ChildrenVisibility, [Pos ServerToken]))
+  => Doc Void -> [Pos ServerToken] -> (ChildrenPresence, m (Maybe (ChildrenVisibility PosAndType), [Pos ServerToken]))
 analyzeChildren listType toks =
   case dropNLs toks of
     []                                               -> (ChildrenAbsent, pure (Nothing, []))
@@ -413,33 +456,33 @@ analyzeChildren listType toks =
     -- PLParen : PName ".." : PRParen : rest            -> (ChildrenPresent, pure (Just VisibleAllChildren, rest))
     PLParen : PRParen : rest                         -> (ChildrenAbsent, pure (Nothing, rest))
     PLParen : rest@(PAnyName name : _)
-      | isNonOperatorName name -> analyzeList rest
-      | otherwise              -> (ChildrenAbsent, pure (Nothing, toks))
+      | isNonOperatorName name       -> analyzeList rest
+      | otherwise                    -> (ChildrenAbsent, pure (Nothing, toks))
     PLParen : rest@(PType : PAnyName name : _)
-      | isNonOperatorName name -> analyzeList rest
-      | otherwise              -> (ChildrenAbsent, pure (Nothing, toks))
+      | isNonOperatorName name       -> analyzeList rest
+      | otherwise                    -> (ChildrenAbsent, pure (Nothing, toks))
     PLParen : rest@(PLParen : PAnyName name : PRParen : _)
       | not $ isNonOperatorName name -> analyzeList rest
-      | otherwise                   -> (ChildrenAbsent, pure (Nothing, toks))
+      | otherwise                    -> (ChildrenAbsent, pure (Nothing, toks))
     PLParen : rest@(PType : PLParen : PAnyName name : PRParen : _)
       | not $ isNonOperatorName name -> analyzeList rest
-      | otherwise                   -> (ChildrenAbsent, pure (Nothing, toks))
+      | otherwise                    -> (ChildrenAbsent, pure (Nothing, toks))
     toks'                                            ->
       (ChildrenAbsent, throwErrorWithCallStack $ "Cannot handle children of" <+> listType <> ":" ## ppTokens toks')
   where
     analyzeList
       :: HasCallStack
       => [Pos ServerToken]
-      -> (ChildrenPresence, m (Maybe ChildrenVisibility, [Pos ServerToken]))
+      -> (ChildrenPresence, m (Maybe (ChildrenVisibility PosAndType), [Pos ServerToken]))
     analyzeList = second (fmap mkVisibility) . extractChildren mempty mempty . dropNLs
       where
         mkVisibility
-          :: (Set UnqualifiedSymbolName, WildcardPresence, t)
-          -> (Maybe ChildrenVisibility, t)
+          :: (Map UnqualifiedSymbolName PosAndType, WildcardPresence, t)
+          -> (Maybe (ChildrenVisibility PosAndType), t)
         mkVisibility (children, wildcard, toks') = (visibility, toks')
           where
             visibility
-              | S.null children =
+              | M.null children =
                 case wildcard of
                   WildcardPresent -> Just VisibleAllChildren
                   WildcardAbsent  -> Just $ VisibleSpecificChildren children
@@ -451,36 +494,38 @@ analyzeChildren listType toks =
     extractChildren
       :: HasCallStack
       => WildcardPresence
-      -> Set UnqualifiedSymbolName
+      -> Map UnqualifiedSymbolName PosAndType
       -> [Pos ServerToken]
-      -> (ChildrenPresence, m (Set UnqualifiedSymbolName, WildcardPresence, [Pos ServerToken]))
+      -> (ChildrenPresence, m (Map UnqualifiedSymbolName PosAndType, WildcardPresence, [Pos ServerToken]))
     extractChildren wildcardPresence names = \case
-      []                                               ->
+      []                                                     ->
         (childrenPresence, pure (names, wildcardPresence, []))
-      PRParen : rest                                   ->
+      PRParen : rest                                        ->
         (childrenPresence, pure (names, wildcardPresence, rest))
-      PType : PName name : rest                        ->
-        extractChildren wildcardPresence (S.insert (stripQualifiedPart name) names) $ dropCommas rest
-      PType : PLParen : PAnyName name : PRParen : rest ->
-        extractChildren wildcardPresence (S.insert (stripQualifiedPart name) names) $ dropCommas rest
-      PName ".." : rest                                ->
+      PType : PName' pos name : rest                        ->
+        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType pos Type) names) $ dropCommas rest
+      PType : PLParen : PAnyName' pos name : PRParen : rest ->
+        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType pos Type) names) $ dropCommas rest
+      PName ".." : rest                                     ->
         extractChildren (wildcardPresence <> WildcardPresent) names $ dropCommas rest
-      PAnyName name : rest                             ->
-        extractChildren wildcardPresence (S.insert (stripQualifiedPart name) names) $ dropCommas rest
-      PLParen : PAnyName name : PRParen : rest         ->
-        extractChildren wildcardPresence (S.insert (stripQualifiedPart name) names) $ dropCommas rest
-      PLParen : rest                                   -> extractChildren wildcardPresence names $ dropNLs rest
-      toks'                                            ->
+      PAnyName' pos name : rest                             ->
+        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType pos (typeForName Constructor name)) names) $ dropCommas rest
+      PLParen : PAnyName' pos name : PRParen : rest         ->
+        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType pos (typeForName Constructor name)) names) $ dropCommas rest
+      PLParen : rest                                        ->
+        extractChildren wildcardPresence names $ dropNLs rest
+      toks'                                                 ->
         (ChildrenAbsent, throwErrorWithCallStack $ "Unrecognised children list structure:" ## ppTokens toks')
       where
-        stripQualifiedPart :: Text -> UnqualifiedSymbolName
-        stripQualifiedPart = snd . splitQualifiedPart . mkSymbolName
         childrenPresence
-          | S.null names =
+          | M.null names =
             case wildcardPresence of
               WildcardPresent -> ChildrenPresent
               WildcardAbsent  -> ChildrenAbsent
           | otherwise    = ChildrenPresent
+
+stripQualifiedPart :: Text -> UnqualifiedSymbolName
+stripQualifiedPart = snd . splitQualifiedPart . mkSymbolName
 
 isNonOperatorName :: Text -> Bool
 isNonOperatorName =

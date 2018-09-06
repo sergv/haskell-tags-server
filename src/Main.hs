@@ -30,6 +30,7 @@ import Control.Monad.Logging.Simple
 import Data.Path (mkFullPath)
 import Haskell.Language.Server.BERT
 import Haskell.Language.Server.Tags
+import Haskell.Language.Server.Tags.Types (NameResolutionStrictness(..))
 
 data ProgramConfig = ProgramConfig
   { cfgSourceDirectories :: [FilePath] -- ^ Directories with haskell files to index
@@ -39,6 +40,7 @@ data ProgramConfig = ProgramConfig
     -- ^ Whether to eagerly read and resolve all tags at the start or to
     -- lazily load only required modules on a per-request basis.|
   , cfgEagerTagging      :: Bool
+  , cfgNameResolution    :: NameResolutionStrictness
   , cfgDebugVerbosity    :: Severity
   } deriving (Eq, Ord, Show)
 
@@ -63,10 +65,13 @@ optsParser = ProgramConfig
   <*> switch
         (long "eager-tagging" <>
          help "whether to load all tags at application start")
+  <*> flag NameResolutionLax NameResolutionStrict
+        (long "strict" <>
+         help "Resolve names strictly forbidding any situations like exported name not being defined in a module.")
   <*> option verbosityArg
-        ( long "verbosity" <>
-          value Error <>
-          help "Debug verbosity - debug, info, warning, error. Default: error")
+        (long "verbosity" <>
+         value Error <>
+         help "Debug verbosity - debug, info, warning, error. Default: error")
   where
     verbosityArg :: ReadM Severity
     verbosityArg = eitherReader $ \case
@@ -83,7 +88,7 @@ progInfo = info
 
 main :: IO ()
 main = do
-  ProgramConfig{cfgSourceDirectories, cfgDirTrees, cfgPort, cfgEagerTagging, cfgDebugVerbosity} <- execParser progInfo
+  ProgramConfig{cfgSourceDirectories, cfgDirTrees, cfgPort, cfgEagerTagging, cfgNameResolution, cfgDebugVerbosity} <- execParser progInfo
   -- validate that specified directories actually exist
   for_ cfgSourceDirectories ensureDirExists
   for_ cfgDirTrees ensureDirExists
@@ -91,11 +96,12 @@ main = do
   cfgSourceDirectories' <- S.fromList <$> traverse mkFullPath cfgSourceDirectories
   cfgDirTrees'          <- S.fromList <$> traverse mkFullPath cfgDirTrees
   let conf  = defaultTagsServerConf
-                { tsconfSearchDirs = (tsconfSearchDirs defaultTagsServerConf)
+                { tsconfSearchDirs     = (tsconfSearchDirs defaultTagsServerConf)
                     { shallowPaths   = cfgSourceDirectories'
                     , recursivePaths = cfgDirTrees'
                     }
-                , tsconfEagerTagging = cfgEagerTagging
+                , tsconfEagerTagging   = cfgEagerTagging
+                , tsconfNameResolution = cfgNameResolution
                 }
       state = TagsServerState
                 { tssLoadedModules   = mempty

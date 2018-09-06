@@ -29,7 +29,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import Haskell.Language.Lexer (tokenize)
-import Haskell.Language.Lexer.FastTags (Pos, ServerToken)
+import Haskell.Language.Lexer.FastTags (Pos, ServerToken, SrcPos(..), Line(..), Type(..))
 
 import Control.Monad.Logging.Simple
 import Data.ErrorMessage
@@ -44,6 +44,9 @@ import TestUtils
 import Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions
 
 type Test = TestCase T.Text UnresolvedModuleHeader
+
+pt :: Int -> Type -> PosAndType
+pt n typ = PosAndType (SrcPos "test.hs" (Line n) mempty) typ
 
 simpleHeaderTest :: Test
 simpleHeaderTest = TestCase
@@ -318,7 +321,7 @@ moduleWithUnqualifiedImportAndNonemptyImportListWithDifferentVisibilitiesTest = 
                           }
                       , EntryWithChildren
                           { entryName               = mkUnqualSymName "Baz"
-                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
                               [ mkUnqualSymName "Quux"
                               , mkUnqualSymName "Fizz"
                               ]
@@ -349,7 +352,7 @@ moduleWithUnqualifiedImportAndNonemptyImportListWithDifferentVisibilitiesTest = 
                           }
                       , EntryWithChildren
                           { entryName               = mkUnqualSymName ":$$*:"
-                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
                               [ mkUnqualSymName ":$$$*:"
                               , mkUnqualSymName ":$$$**:"
                               ]
@@ -514,7 +517,7 @@ moduleWithImportAndAliasAndHidingImportListTest = TestCase
                           }
                       , EntryWithChildren
                           { entryName               = mkUnqualSymName "Quux"
-                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
                               [ mkUnqualSymName "Baz"
                               ]
                           }
@@ -858,7 +861,7 @@ moduleWithAmbigousImportList = TestCase
                           }
                       , EntryWithChildren
                           { entryName               = mkUnqualSymName ":$$$:"
-                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
                               [ mkUnqualSymName "X"
                               ]
                           }
@@ -872,7 +875,7 @@ moduleWithAmbigousImportList = TestCase
                           }
                       , EntryWithChildren
                           { entryName               = mkUnqualSymName ":+:"
-                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
                               [ mkUnqualSymName ":++:"
                               ]
                           }
@@ -914,7 +917,7 @@ moduleWithImportListWithoutCommas = TestCase
                           }
                       , EntryWithChildren
                           { entryName               = mkUnqualSymName "Baz"
-                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
                               [ mkUnqualSymName "Quux"
                               , mkUnqualSymName "Fizz"
                               ]
@@ -929,7 +932,7 @@ moduleWithImportListWithoutCommas = TestCase
                           }
                       , EntryWithChildren
                           { entryName               = mkUnqualSymName ":$$*:"
-                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
                               [ mkUnqualSymName ":$$$*:"
                               , mkUnqualSymName ":$$$**:"
                               ]
@@ -972,14 +975,14 @@ moduleWithImportsThatHaveChildrenListWithoutCommas = TestCase
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Baz"
-                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
                               [ mkUnqualSymName "Quux"
                               , mkUnqualSymName "Fizz"
                               ]
                           }
                       , EntryWithChildren
                           { entryName               = mkUnqualSymName ":$$*:"
-                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
                               [ mkUnqualSymName ":$$$*:"
                               , mkUnqualSymName ":$$$**:"
                               ]
@@ -1021,7 +1024,7 @@ moduleWithUnbalancedParensInImportList = TestCase
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Foo"
-                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
                               [ mkUnqualSymName "X"
                               , mkUnqualSymName "Y"
                               ]
@@ -1074,7 +1077,7 @@ moduleWithUnbalancedParensInImportChildrenList = TestCase
                   { ilEntries    = KM.fromList
                       [ EntryWithChildren
                           { entryName               = mkUnqualSymName "Foo"
-                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
                               [ mkUnqualSymName "X"
                               , mkUnqualSymName "Y"
                               , mkUnqualSymName "Z"
@@ -1232,11 +1235,11 @@ moduleWithQuaifiedExportsTest = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "Foo.bar"
+                  { entryName               = (mkSymbolName "Foo.bar", pt 1 Function)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Baz.Quux"
+                  { entryName               = (mkSymbolName "Baz.Quux", pt 1 Type)
                   , entryChildrenVisibility = Just VisibleAllChildren
                   }
               ]
@@ -1252,62 +1255,68 @@ moduleWithExportsTest :: Test
 moduleWithExportsTest = TestCase
   { testName       = "Module exports"
   , input          =
-      "module ModuleWithExport (foo, Bar(..), Baz(Quux, Fizz), Frob(.., Frob', Frob''), pattern Pat, pattern (:!:), module Frob, type Typ, type (++), (:$:), (:$$:)(..), (:$$*:)((:$$$*:), (:$$$**:))) where"
+      "module ModuleWithExport\
+      \ (foo, Bar(..), Baz(Quux, Fizz, wat, (??)),\
+      \ Frob(.., Frob', Frob''), pattern Pat, pattern (:!:),\
+      \ module Frob, type Typ, type (++),\
+      \ (:$:), (:$$:)(..), (:$$*:)((:$$$*:), (:$$$**:))) where"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "foo"
+                  { entryName               = (mkSymbolName "foo", pt 1 Function)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Bar"
+                  { entryName               = (mkSymbolName "Bar", pt 1 Type)
                   , entryChildrenVisibility = Just VisibleAllChildren
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Baz"
-                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualSymName "Quux"
-                      , mkUnqualSymName "Fizz"
+                  { entryName               = (mkSymbolName "Baz", pt 1 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName "Quux", pt 1 Constructor)
+                      , (mkUnqualSymName "Fizz", pt 1 Constructor)
+                      , (mkUnqualSymName "wat",  pt 1 Function)
+                      , (mkUnqualSymName "??",   pt 1 Operator)
                       ]
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Frob"
-                  , entryChildrenVisibility = Just $ VisibleAllChildrenPlusSome $ S.fromList
-                      [ mkUnqualSymName "Frob'"
-                      , mkUnqualSymName "Frob''"
+                  { entryName               = (mkSymbolName "Frob", pt 1 Type)
+                  , entryChildrenVisibility = Just $ VisibleAllChildrenPlusSome $ M.fromList
+                      [ (mkUnqualSymName "Frob'", pt 1 Constructor)
+                      , (mkUnqualSymName "Frob''", pt 1 Constructor)
                       ]
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Pat"
+                  { entryName               = (mkSymbolName "Pat", pt 1 Pattern)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName ":!:"
+                  { entryName               = (mkSymbolName ":!:", pt 1 Pattern)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Typ"
+                  { entryName               = (mkSymbolName "Typ", pt 1 Family)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "++"
+                  { entryName               = (mkSymbolName "++", pt 1 Family)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName ":$:"
+                  { entryName               = (mkSymbolName ":$:", pt 1 Type)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName ":$$:"
+                  { entryName               = (mkSymbolName ":$$:", pt 1 Type)
                   , entryChildrenVisibility = Just VisibleAllChildren
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName ":$$*:"
-                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualSymName ":$$$*:"
-                      , mkUnqualSymName ":$$$**:"
+                  { entryName               = (mkSymbolName ":$$*:", pt 1 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName ":$$$*:",  pt 1 Constructor)
+                      , (mkUnqualSymName ":$$$**:", pt 1 Constructor)
                       ]
                   }
               ]
@@ -1370,48 +1379,48 @@ moduleWithMultilineExportsTest = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "foo"
+                  { entryName               = (mkSymbolName "foo", pt 3 Function)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Bar"
+                  { entryName               = (mkSymbolName "Bar", pt 5 Type)
                   , entryChildrenVisibility = Just VisibleAllChildren
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Baz"
-                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualSymName "Quux"
-                      , mkUnqualSymName "Fizz"
+                  { entryName               = (mkSymbolName "Baz", pt 7 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName "Quux", pt 8 Constructor)
+                      , (mkUnqualSymName "Fizz", pt 10 Constructor)
                       ]
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Frob"
-                  , entryChildrenVisibility = Just $ VisibleAllChildrenPlusSome $ S.fromList
-                      [ mkUnqualSymName "Frob'"
-                      , mkUnqualSymName "Frob''"
+                  { entryName               = (mkSymbolName "Frob", pt 14 Type)
+                  , entryChildrenVisibility = Just $ VisibleAllChildrenPlusSome $ M.fromList
+                      [ (mkUnqualSymName "Frob'",   pt 18 Constructor)
+                      , (mkUnqualSymName "Frob''",  pt 20 Constructor)
                       ]
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Pat"
+                  { entryName               = (mkSymbolName "Pat", pt 25 Pattern)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName ":!:"
+                  { entryName               = (mkSymbolName ":!:", pt 28 Pattern)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName ":$:"
+                  { entryName               = (mkSymbolName ":$:", pt 33 Type)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName ":$$:"
+                  { entryName               = (mkSymbolName ":$$:", pt 35 Type)
                   , entryChildrenVisibility = Just VisibleAllChildren
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName ":$$*:"
-                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualSymName ":$$$*:"
-                      , mkUnqualSymName ":$$$**:"
+                  { entryName               = (mkSymbolName ":$$*:", pt 38 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName ":$$$*:",  pt 39 Constructor)
+                      , (mkUnqualSymName ":$$$**:", pt 40 Constructor)
                       ]
                   }
               ]
@@ -1433,23 +1442,23 @@ moduleWithExportsOfSpeciallyNamedOperatorsTest = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "."
+                  { entryName               = (mkSymbolName ".", pt 1 Operator)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "!"
+                  { entryName               = (mkSymbolName "!", pt 1 Operator)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "~"
+                  { entryName               = (mkSymbolName "~", pt 1 Operator)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName ".+."
+                  { entryName               = (mkSymbolName ".+.", pt 1 Operator)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Test..||."
+                  { entryName               = (mkSymbolName "Test..||.", pt 1 Operator)
                   , entryChildrenVisibility = Nothing
                   }
               ]
@@ -1471,10 +1480,15 @@ moduleStarExports = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName name
+                  { entryName               = (mkSymbolName name, pt 1 typ)
                   , entryChildrenVisibility = Nothing
                   }
-              | name <- ["Type", "Constraint", "*", "★"]
+              | (name, typ) <-
+                [ ("Type", Type)
+                , ("Constraint", Type)
+                , ("*", Family)
+                , ("★", Family)
+                ]
               ]
           , meReexports          = mempty
           , meHasWildcardExports = False
@@ -1498,13 +1512,13 @@ moduleWithTypeExportsTest1 = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "Foo"
+                  { entryName               = (mkSymbolName "Foo", pt 2 Type)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Bar"
-                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualSymName "Baz"
+                  { entryName               = (mkSymbolName "Bar", pt 3 Family)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName "Baz", pt 3 Type)
                       ]
                   }
               ]
@@ -1530,13 +1544,13 @@ moduleWithTypeExportsTest2 = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "+"
+                  { entryName               = (mkSymbolName "+", pt 2 Operator)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "**"
-                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualSymName "!!"
+                  { entryName               = (mkSymbolName "**", pt 3 Family)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName "!!", pt 3 Type)
                       ]
                   }
               ]
@@ -1562,13 +1576,13 @@ moduleWithQualifiedOperatorChildrenExportTest = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "Foo.+"
+                  { entryName               = (mkSymbolName "Foo.+", pt 2 Operator)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Foo.Bar"
-                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualSymName "<><>"
+                  { entryName               = (mkSymbolName "Foo.Bar", pt 3 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName "<><>", pt 3 Operator)
                       ]
                   }
               ]
@@ -1597,15 +1611,15 @@ moduleWithDisabledSectionTest1 = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "Foo"
-                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualSymName "X"
-                      , mkUnqualSymName "Y"
-                      , mkUnqualSymName "Z"
+                  { entryName               = (mkSymbolName "Foo", pt 3 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName "X", pt 3 Constructor)
+                      , (mkUnqualSymName "Y", pt 3 Constructor)
+                      , (mkUnqualSymName "Z", pt 3 Constructor)
                       ]
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Baz"
+                  { entryName               = (mkSymbolName "Baz", pt 7 Type)
                   , entryChildrenVisibility = Nothing
                   }
               ]
@@ -1635,15 +1649,15 @@ moduleWithDisabledSectionTest2 = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "Foo"
-                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualSymName "X"
-                      , mkUnqualSymName "Y"
-                      , mkUnqualSymName "Z"
+                  { entryName               = (mkSymbolName "Foo", pt 3 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName "X", pt 3 Constructor)
+                      , (mkUnqualSymName "Y", pt 3 Constructor)
+                      , (mkUnqualSymName "Z", pt 3 Constructor)
                       ]
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Baz"
+                  { entryName               = (mkSymbolName "Baz", pt 8 Type)
                   , entryChildrenVisibility = Nothing
                   }
               ]
@@ -1682,27 +1696,27 @@ moduleWithDisabledAndEnabledSectionsTest = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "Foo"
-                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualSymName "X"
-                      , mkUnqualSymName "Y"
-                      , mkUnqualSymName "Z"
+                  { entryName               = (mkSymbolName "Foo", pt 3 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName "X", pt 3 Constructor)
+                      , (mkUnqualSymName "Y", pt 3 Constructor)
+                      , (mkUnqualSymName "Z", pt 3 Constructor)
                       ]
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Baz"
+                  { entryName               = (mkSymbolName "Baz", pt 7 Type)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Quux"
+                  { entryName               = (mkSymbolName "Quux", pt 9 Type)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Fizz"
+                  { entryName               = (mkSymbolName "Fizz", pt 12 Type)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Buzz"
+                  { entryName               = (mkSymbolName "Buzz", pt 15 Type)
                   , entryChildrenVisibility = Nothing
                   }
               ]
@@ -1724,7 +1738,7 @@ moduleWithExportOfPatternFuncTest = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "pattern"
+                  { entryName               = (mkSymbolName "pattern", pt 1 Function)
                   , entryChildrenVisibility = Nothing
                   }
               ]
@@ -1746,19 +1760,19 @@ moduleWithExportOfManyFuncsAndPatternFuncTest = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "Foo"
+                  { entryName               = (mkSymbolName "Foo", pt 1 Type)
                   , entryChildrenVisibility = Just VisibleAllChildren
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "pattern"
+                  { entryName               = (mkSymbolName "pattern", pt 1 Function)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "++"
+                  { entryName               = (mkSymbolName "++", pt 1 Operator)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Bar"
+                  { entryName               = (mkSymbolName "Bar", pt 1 Type)
                   , entryChildrenVisibility = Nothing
                   }
               ]
@@ -1781,19 +1795,19 @@ moduleWithoutCommasAndPatternFuncExportBeforeOperator = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "Foo"
+                  { entryName               = (mkSymbolName "Foo", pt 1 Type)
                   , entryChildrenVisibility = Just VisibleAllChildren
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "pattern"
+                  { entryName               = (mkSymbolName "pattern", pt 1 Function)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "++"
+                  { entryName               = (mkSymbolName "++", pt 1 Operator)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Bar"
+                  { entryName               = (mkSymbolName "Bar", pt 1 Type)
                   , entryChildrenVisibility = Nothing
                   }
               ]
@@ -1816,19 +1830,19 @@ moduleWithoutCommasAndPatternFuncExportBeforeConstructorWithChildren = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "Foo"
+                  { entryName               = (mkSymbolName "Foo", pt 1 Type)
                   , entryChildrenVisibility = Just VisibleAllChildren
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "pattern"
+                  { entryName               = (mkSymbolName "pattern", pt 1 Function)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "++"
+                  { entryName               = (mkSymbolName "++", pt 1 Operator)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Bar"
+                  { entryName               = (mkSymbolName "Bar", pt 1 Type)
                   , entryChildrenVisibility = Nothing
                   }
               ]
@@ -1851,19 +1865,19 @@ moduleWithoutCommasAndPatternFuncExportBeforeOperatorConstructorWithChildren = T
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName ":++"
+                  { entryName               = (mkSymbolName ":++", pt 1 Type)
                   , entryChildrenVisibility = Just VisibleAllChildren
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "pattern"
+                  { entryName               = (mkSymbolName "pattern", pt 1 Function)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "++"
+                  { entryName               = (mkSymbolName "++", pt 1 Operator)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Bar"
+                  { entryName               = (mkSymbolName "Bar", pt 1 Type)
                   , entryChildrenVisibility = Nothing
                   }
               ]
@@ -1886,19 +1900,19 @@ moduleWithoutCommasAndSeveralPatternExports = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "Foo"
+                  { entryName               = (mkSymbolName "Foo", pt 1 Type)
                   , entryChildrenVisibility = Just VisibleAllChildren
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName ":++"
+                  { entryName               = (mkSymbolName ":++", pt 1 Pattern)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Bar"
+                  { entryName               = (mkSymbolName "Bar", pt 1 Type)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Baz"
+                  { entryName               = (mkSymbolName "Baz", pt 1 Pattern)
                   , entryChildrenVisibility = Nothing
                   }
               ]
@@ -1919,41 +1933,41 @@ moduleWithExportListWithoutCommasTest = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "foo"
+                  { entryName               = (mkSymbolName "foo", pt 1 Function)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Bar"
+                  { entryName               = (mkSymbolName "Bar", pt 1 Type)
                   , entryChildrenVisibility = Just VisibleAllChildren
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Baz"
-                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualSymName "Quux"
-                      , mkUnqualSymName "Fizz"
+                  { entryName               = (mkSymbolName "Baz", pt 1 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName "Quux", pt 1 Constructor)
+                      , (mkUnqualSymName "Fizz", pt 1 Constructor)
                       ]
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Pat"
+                  { entryName               = (mkSymbolName "Pat", pt 1 Pattern)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName ":!:"
+                  { entryName               = (mkSymbolName ":!:", pt 1 Pattern)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName ":$:"
+                  { entryName               = (mkSymbolName ":$:", pt 1 Type)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName ":$$:"
+                  { entryName               = (mkSymbolName ":$$:", pt 1 Type)
                   , entryChildrenVisibility = Just VisibleAllChildren
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName ":$$*:"
-                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualSymName ":$$$*:"
-                      , mkUnqualSymName ":$$$**:"
+                  { entryName               = (mkSymbolName ":$$*:", pt 1 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName ":$$$*:",  pt 1 Constructor)
+                      , (mkUnqualSymName ":$$$**:", pt 1 Constructor)
                       ]
                   }
               ]
@@ -1978,10 +1992,18 @@ moduleWithExportListWithoutCommasAndStructuresAfterNameWithoutChildrenTest = Tes
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName name
+                  { entryName               = (mkSymbolName name, pt 1 typ)
                   , entryChildrenVisibility = Nothing
                   }
-              | name <- ["foo", "++", "baz", "Baz", "quux", "Quux", "Pat"]
+              | (name, typ) <-
+                [ ("foo",  Function)
+                , ("++",   Operator)
+                , ("baz",  Function)
+                , ("Baz",  Pattern)
+                , ("quux", Function)
+                , ("Quux", Family)
+                , ("Pat",  Pattern)
+                ]
               ]
           , meReexports          = S.fromList
               [ mkModuleName name
@@ -2011,18 +2033,18 @@ moduleWithUnbalancedParensInExportList = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "Foo"
-                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualSymName "X"
-                      , mkUnqualSymName "Y"
+                  { entryName               = (mkSymbolName "Foo", pt 3 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName "X", pt 3 Constructor)
+                      , (mkUnqualSymName "Y", pt 3 Constructor)
                       ]
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Foo"
+                  { entryName               = (mkSymbolName "Foo", pt 5 Type)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Bar"
+                  { entryName               = (mkSymbolName "Bar", pt 7 Type)
                   , entryChildrenVisibility = Nothing
                   }
               ]
@@ -2054,15 +2076,15 @@ moduleWithUnbalancedParensInExportChildrenList = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "Foo"
-                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualSymName "X"
-                      , mkUnqualSymName "Y"
-                      , mkUnqualSymName "Z"
+                  { entryName               = (mkSymbolName "Foo", pt 2 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName "X", pt 4 Constructor)
+                      , (mkUnqualSymName "Y", pt 8 Constructor)
+                      , (mkUnqualSymName "Z", pt 6 Constructor)
                       ]
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Bar"
+                  { entryName               = (mkSymbolName "Bar", pt 10 Type)
                   , entryChildrenVisibility = Nothing
                   }
               ]
@@ -2091,15 +2113,15 @@ moduleWithDuplicateModuleNameTest = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "Foo"
-                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualSymName "X"
-                      , mkUnqualSymName "Y"
-                      , mkUnqualSymName "Z"
+                  { entryName               = (mkSymbolName "Foo", pt 6 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName "X", pt 6 Constructor)
+                      , (mkUnqualSymName "Y", pt 6 Constructor)
+                      , (mkUnqualSymName "Z", pt 6 Constructor)
                       ]
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Bar"
+                  { entryName               = (mkSymbolName "Bar", pt 7 Type)
                   , entryChildrenVisibility = Nothing
                   }
               ]
@@ -2121,25 +2143,25 @@ moduleWithExportsThatHaveChildrenListWithoutCommasTest = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = mkSymbolName "Bar"
+                  { entryName               = (mkSymbolName "Bar", pt 1 Type)
                   , entryChildrenVisibility = Just VisibleAllChildren
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName "Baz"
-                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualSymName "Quux"
-                      , mkUnqualSymName "Fizz"
+                  { entryName               = (mkSymbolName "Baz", pt 1 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName "Quux", pt 1 Constructor)
+                      , (mkUnqualSymName "Fizz", pt 1 Constructor)
                       ]
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName ":$:"
+                  { entryName               = (mkSymbolName ":$:", pt 1 Type)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = mkSymbolName ":$$*:"
-                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ S.fromList
-                      [ mkUnqualSymName ":$$$*:"
-                      , mkUnqualSymName ":$$$**:"
+                  { entryName               = (mkSymbolName ":$$*:", pt 1 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName ":$$$*:",  pt 1 Constructor)
+                      , (mkUnqualSymName ":$$$**:", pt 1 Constructor)
                       ]
                   }
               ]

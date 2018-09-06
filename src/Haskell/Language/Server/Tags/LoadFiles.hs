@@ -22,6 +22,7 @@ import Prelude hiding (mod, readFile)
 import Control.Arrow ((&&&))
 import Control.Monad.Catch
 import Control.Monad.Except.Ext
+import Control.Monad.Reader
 import Control.Monad.State.Strict
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
@@ -125,8 +126,9 @@ loadAllFilesIntoState conf = do
                   logDebug $ "[loadAllFilesIntoState.doResolve] currentlyLoading =" <+> ppMapWith pretty (ppNE . NEMap.keysNE) currentlyLoading
                   modify $ \s ->
                     s { rsLoadingModules = M.insert key unresolvedMap $ rsLoadingModules s }
-                  logInfo $ "[loadAllFilesIntoState.doResolve] files:" <+> ppNE (modFile <$> unresolved)
-                  resolved <- traverse (resolveModule checkLoadingModules doResolve) unresolved
+                  logInfo $ "[loadAllFilesIntoState.doResolve] files:" ## ppNE (modFile <$> unresolved)
+                  resolved <- flip runReaderT conf $
+                    traverse (resolveModule checkLoadingModules doResolve) unresolved
                   modify $ \s -> s
                     { rsLoadingModules =
                         M.delete key $ rsLoadingModules s

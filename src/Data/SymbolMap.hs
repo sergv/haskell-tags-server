@@ -145,7 +145,8 @@ fromList syms = SymbolMap
   }
   where
     symbolsWithParents :: [(UnqualifiedSymbolName, UnqualifiedSymbolName)]
-    symbolsWithParents = mapMaybe (\sym -> (resolvedSymbolName sym,) <$> resolvedSymbolParent sym) syms
+    symbolsWithParents =
+      mapMaybe (\sym -> (resolvedSymbolName sym,) <$> resolvedSymbolParent sym) syms
 
 keepNames :: SymbolMap -> Set UnqualifiedSymbolName -> SymbolMap
 keepNames SymbolMap{smParentMap, smChildrenMap, smAllSymbols} syms =

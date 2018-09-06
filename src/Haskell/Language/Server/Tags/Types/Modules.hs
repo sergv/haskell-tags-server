@@ -11,6 +11,7 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
@@ -29,6 +30,7 @@ module Haskell.Language.Server.Tags.Types.Modules
   , resolveQualifier
   , ModuleExportSpec(..)
   , ModuleExports(..)
+  , PosAndType(..)
   ) where
 
 import Prelude hiding (mod)
@@ -48,12 +50,13 @@ import GHC.Generics (Generic)
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
 import Data.ErrorMessage
-import Data.KeyMap (KeyMap)
+import Data.KeyMap (KeyMap, HasKey(..))
 import Data.Path (FullPath)
 import Data.SubkeyMap (SubkeyMap)
 import qualified Data.SubkeyMap as SubkeyMap
 import Data.SymbolMap (SymbolMap)
 import Data.Symbols
+import Haskell.Language.Lexer.FastTags (SrcPos, Type)
 import Haskell.Language.Server.Tags.Types.Imports
 
 isModuleNameConstituentChar :: Char -> Bool
@@ -173,7 +176,7 @@ instance Pretty a => Pretty (ModuleExportSpec a) where
 data ModuleExports = ModuleExports
   { -- | Toplevel names exported from this particular module as specified in
     -- the header.
-    meExportedEntries    :: KeyMap (EntryWithChildren SymbolName)
+    meExportedEntries    :: KeyMap (EntryWithChildren PosAndType (SymbolName, PosAndType))
     -- | Module name here refer to real modules only.
   , meReexports          :: Set ModuleName
     -- | Whether this module exports any entities that export all children.
@@ -190,3 +193,17 @@ instance Semigroup ModuleExports where
 instance Monoid ModuleExports where
   mempty = ModuleExports mempty mempty False
   mappend = (<>)
+
+instance HasKey (EntryWithChildren ann (SymbolName, PosAndType)) where
+  type Key (EntryWithChildren ann (SymbolName, PosAndType)) = SymbolName
+  getKey = fst . entryName
+
+-- | Tag position and type stored for later analysis
+data PosAndType = PosAndType
+  { patPos  :: SrcPos
+  , patType :: Type
+  } deriving (Eq, Ord, Show, Generic)
+
+instance Pretty PosAndType where
+  pretty = ppGeneric
+
