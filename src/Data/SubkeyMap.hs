@@ -7,13 +7,14 @@
 -- Created     :  Saturday,  8 October 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE DeriveFoldable     #-}
-{-# LANGUAGE DeriveFunctor      #-}
-{-# LANGUAGE DeriveTraversable  #-}
-{-# LANGUAGE FlexibleContexts   #-}
-{-# LANGUAGE NamedFieldPuns     #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TypeFamilies       #-}
+{-# LANGUAGE DeriveFoldable      #-}
+{-# LANGUAGE DeriveFunctor       #-}
+{-# LANGUAGE DeriveTraversable   #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving  #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 module Data.SubkeyMap
   ( SubkeyMap
@@ -27,6 +28,7 @@ module Data.SubkeyMap
   , lookupSubkeyKeys
   , alter'
   , traverseWithKey
+  , traverseMaybeWithKey
   , fromMap
   , fromList
   , fromFoldable
@@ -116,6 +118,27 @@ alter' f k SubkeyMap{smMainMap, smSubMap} = SubkeyMap
 traverseWithKey :: Applicative f => (k -> v -> f v') -> SubkeyMap k v -> f (SubkeyMap k v')
 traverseWithKey f sm@SubkeyMap{smMainMap} =
   (\smMainMap' -> sm { smMainMap = smMainMap' }) <$> M.traverseWithKey f smMainMap
+
+traverseMaybeWithKey
+  :: forall f k v v'. (Applicative f, HasSubkey k)
+  => (k -> v -> f (Maybe v')) -> SubkeyMap k v -> f (SubkeyMap k v')
+traverseMaybeWithKey f sm@SubkeyMap{smMainMap, smSubMap} =
+  update <$> M.traverseMaybeWithKey f smMainMap
+  where
+    update :: Map k v' -> SubkeyMap k v'
+    update smMainMap' = sm
+      { smMainMap = smMainMap'
+      , smSubMap  =
+        -- Do the expensive update only if anything changed.
+        if M.size smMainMap' == M.size smMainMap
+        then smSubMap
+        else (`S.intersection` ks) <$> M.restrictKeys smSubMap subkeys
+      }
+      where
+        ks :: Set k
+        ks = M.keysSet smMainMap'
+        subkeys :: Set (Subkey k)
+        subkeys = S.map getSubkey ks
 
 fromMap :: HasSubkey k => Map k v -> SubkeyMap k v
 fromMap m = SubkeyMap
