@@ -74,6 +74,8 @@ data NameResolutionStrictness =
     NameResolutionLax
   | -- | Do not ignore following events:
     -- 1. A module exports a name with children but no definition of children can be found.
+    -- 2. Imported module is missing during eager tagging - default to no names in lax mode.
+    -- 3. A module file is not found - default to no names in lax mode.
     NameResolutionStrict
   deriving (Eq, Ord, Show, Bounded, Enum, Generic)
 
