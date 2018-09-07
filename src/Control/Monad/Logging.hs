@@ -10,14 +10,19 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
 
 module Control.Monad.Logging
   ( MonadLog(..)
   , Severity(..)
+  , showSeverity
+  , readSeverity
+  , knownSeverities
   , logError
   , logWarning
   , logInfo
   , logDebug
+  , logVerboseDebug
   ) where
 
 import Control.Monad.Except
@@ -25,11 +30,39 @@ import Control.Monad.Reader
 import Control.Monad.State
 import qualified Control.Monad.State.Strict as SS
 import Control.Monad.Writer
+
+import Data.Bimap (Bimap)
+import qualified Data.Bimap as BM
+import qualified Data.List as L
+import Data.String
 import Data.Text.Prettyprint.Doc (Doc)
 import Data.Void (Void)
 
-data Severity = Debug | Info | Warning | Error
+data Severity = VerboseDebug | Debug | Info | Warning | Error
   deriving (Eq, Ord, Show)
+
+severities :: (Ord a, IsString a) => Bimap a Severity
+severities = BM.fromList
+  [ ("verbose-debug", VerboseDebug)
+  , ("debug",         Debug)
+  , ("info",          Info)
+  , ("warning",       Warning)
+  , ("error",         Error)
+  ]
+
+showSeverity :: Severity -> String
+showSeverity = (severities BM.!>)
+
+readSeverity :: MonadError String m => String -> m Severity
+readSeverity str = case BM.lookup str severities of
+  Nothing -> throwError $
+    "Invalid verbosity: " ++ str ++
+    ". Allowed values: " ++ L.intercalate ", " knownSeverities
+  Just x  -> pure x
+
+knownSeverities :: (Ord a, IsString a) => [a]
+knownSeverities = BM.keys severities
+
 
 class Monad m => MonadLog m where
   logDoc :: Severity -> Doc Void -> m ()
@@ -49,6 +82,10 @@ logInfo = logDoc Info
 {-# INLINE logDebug #-}
 logDebug :: MonadLog m => Doc Void -> m ()
 logDebug = logDoc Debug
+
+{-# INLINE logVerboseDebug #-}
+logVerboseDebug :: MonadLog m => Doc Void -> m ()
+logVerboseDebug = logDoc VerboseDebug
 
 instance MonadLog m => MonadLog (ExceptT e m) where
   {-# INLINE logDoc #-}

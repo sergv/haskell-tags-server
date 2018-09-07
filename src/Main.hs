@@ -15,7 +15,9 @@ module Main (main) where
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Except
+
 import Data.Foldable (for_)
+import qualified Data.List as L
 import qualified Data.Set as S
 import Data.Text.Prettyprint.Doc.Ext
 import Network.Socket (PortNumber)
@@ -68,18 +70,11 @@ optsParser = ProgramConfig
   <*> flag NameResolutionLax NameResolutionStrict
         (long "strict" <>
          help "Resolve names strictly forbidding any situations like exported name not being defined in a module.")
-  <*> option verbosityArg
+  <*> option (eitherReader readSeverity)
         (long "verbosity" <>
          value Error <>
-         help "Debug verbosity - debug, info, warning, error. Default: error")
-  where
-    verbosityArg :: ReadM Severity
-    verbosityArg = eitherReader $ \case
-      "debug"   -> pure Debug
-      "info"    -> pure Info
-      "warning" -> pure Warning
-      "error"   -> pure Error
-      s         -> throwError $ "Invalid verbosity: " ++ s
+         showDefaultWith showSeverity <>
+         help ("Debug verbosity. Known values: " ++ L.intercalate ", " knownSeverities ++ "."))
 
 progInfo :: ParserInfo ProgramConfig
 progInfo = info
