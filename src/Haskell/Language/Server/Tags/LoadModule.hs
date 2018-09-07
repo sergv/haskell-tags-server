@@ -81,7 +81,7 @@ loadModule
   => ImportKey
   -> m (Maybe (NonEmpty ResolvedModule))
 loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
-  logDebug $ "[loadModule] loading" <+> pretty ikModuleName
+  logInfo $ "[loadModule] loading" <+> pretty ikModuleName
   s <- get
   if key `M.member` tssLoadsInProgress s
   then
@@ -94,16 +94,18 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
   else do
     mods <- case SubkeyMap.lookup key (tssLoadedModules s) of
       Nothing -> doLoad
-      Just ms -> Just <$> for ms (reloadIfNecessary key)
+      Just ms -> do
+        logDebug $ "[loadModule] module was loaded before, reusing:" <+> pretty key
+        Just <$> traverse (reloadIfNecessary key) ms
     for mods $ \mods' -> do
       modify (\s' -> s' { tssLoadedModules = SubkeyMap.insert key mods' $ tssLoadedModules s' })
       loadedMods <- gets (SubkeyMap.keys . tssLoadedModules)
-      logDebug $ "[loadModule] loaded modules:" <+> ppList loadedMods
+      logDebug $ "[loadModule] loaded modules:" ## ppList loadedMods
       pure mods'
   where
     doLoad :: HasCallStack => m (Maybe (NonEmpty ResolvedModule))
     doLoad = do
-      logInfo $ "[loadModule.doLoad] loading module" <+> pretty ikModuleName
+      logDebug $ "[loadModule.doLoad] module was not loaded before, loading now:" <+> pretty ikModuleName
       case T.splitOn "." $ getModuleName ikModuleName of
         []     -> throwErrorWithCallStack $ "Invalid module name:" <+> pretty ikModuleName
         x : xs -> do
@@ -114,13 +116,14 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
                 HsBootModule  -> tsconfHsBootExtensions
               msg        = "Cannot load module " <> pretty ikModuleName Semigroup.<> ": no paths found"
           case (tsconfNameResolution, filter ((`S.member` extensions) . takeExtension) candidates) of
-            (NameResolutionStrict, []) -> throwErrorWithCallStack $ msg
+            (NameResolutionStrict, []) -> throwErrorWithCallStack msg
             (NameResolutionLax,    []) -> do
               logWarning msg
               pure Nothing
             (_, p : ps)                ->
               Just <$> traverse (loadModuleFromFile key Nothing) (p :| ps)
 
+-- TODO: consider using hashes to track whether a module needs reloading?
 reloadIfNecessary
   :: (HasCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => ImportKey
@@ -225,7 +228,7 @@ makeModule suggestedModuleName modifTime filename tokens = do
         , modAllExportedNames = ()
         , modIsDirty          = False
         }
-  logDebug $ "[makeModule] created module" <+> pretty mod
+  logVerboseDebug $ "[makeModule] created module" <+> pretty mod
   pure mod
   where
     defaultHeader :: UnresolvedModuleHeader
@@ -245,7 +248,7 @@ resolveModule
 resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
   logDebug $ "[resolveModule] resolving names of module" <+> pretty (mhModName unresHeader)
   (imports, symbols) <- resolveSymbols mod
-  logDebug $ ppDictHeader ("[resolveModule] Resolved items for module" <+> pretty (mhModName unresHeader))
+  logVerboseDebug $ ppDictHeader ("[resolveModule] Resolved items for module" <+> pretty (mhModName unresHeader))
     [ "imports"                          :-> ppSubkeyMapWith pretty pretty ppNE imports
     , "all symbols exported by a module" --> symbols
     ]
@@ -278,12 +281,12 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
           -> NonEmpty UnresolvedImportSpec
           -> WriterT [(ImportQualification, SymbolMap)] m (Maybe (NonEmpty ResolvedImportSpec))
         resolveImport key importSpecs = do
-          logDebug $ "[resolveModule.resolveImports.resolveImport] resolving import" <+> pretty key
           isBeingLoaded <- lift $ checkIfModuleIsAlreadyBeingLoaded key
           case isBeingLoaded of
             -- Standard code path: imported modules are already loaded and
             -- resolved, use what was resolved.
             Nothing -> do
+              logDebug $ "[resolveModule.resolveImports.resolveImport] resolving import" <+> pretty key
               modules <- lift $ loadMod key
               for modules $ \modules' -> do
                 let importedNames :: SymbolMap
@@ -309,14 +312,14 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
     resolveSymbols Module{modHeader = header@ModuleHeader{mhImports, mhModName}, modAllSymbols} = do
       (resolvedImports, filteredNames) <- resolveImports mhImports
       logDebug $ "[resolveModule.resolveImports] analysing export list of module" <+> pretty mhModName
-      logDebug $ "[resolveModule.resolveImports] resolved imports" ## ppSubkeyMapWith pretty pretty ppNE resolvedImports
+      logVerboseDebug $ "[resolveModule.resolveImports] resolved imports" ## ppSubkeyMapWith pretty pretty ppNE resolvedImports
       case mhExports header of
         NoExports                                                     ->
           pure (resolvedImports, modAllSymbols)
         EmptyExports                                                  ->
           pure (resolvedImports, modAllSymbols)
         SpecificExports ModuleExports{meExportedEntries, meReexports} -> do
-          logDebug $ "[resolveModule.resolveImports] reexports of module" <+> pretty mhModName <> ":" ## ppSet meReexports
+          logVerboseDebug $ "[resolveModule.resolveImports] reexports of module" <+> pretty mhModName <> ":" ## ppSet meReexports
           let lt, gt :: Set ModuleName
               (lt, reexportsItself, gt) = S.splitMember mhModName meReexports
               -- Names exported via module reexports.
@@ -363,7 +366,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
                 $ M.intersectionWith SM.keepNames moduleNamesByNamespace
                 $ fmap M.keysSet
                 $ MM.unMonoidalMap exportedNames
-          logDebug $ "[resolveSymbols] exportedNames =" ## ppMonoidalMapWith pretty ppMap exportedNames
+          logVerboseDebug $ "[resolveSymbols] exportedNames =" ## ppMonoidalMapWith pretty ppMap exportedNames
           let allSymbols  :: SymbolMap
               allSymbols  = mconcat
                 [ if reexportsItself then modAllSymbols else mempty
@@ -374,7 +377,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
               extra       = inferExtraParents header
               allSymbols' :: SymbolMap
               allSymbols' = SM.registerChildren extra allSymbols
-          logDebug $ "[resolveModule.resolveSymbols] inferred extra parents =" ##
+          logVerboseDebug $ "[resolveModule.resolveSymbols] inferred extra parents =" ##
             ppMapWith pretty ppSet extra
           -- Names from default namespace that are exported but not
           -- imported/defined locally. We default them to tags that
@@ -386,7 +389,8 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
                 $ M.withoutKeys
                     (MM.findWithDefault mempty Nothing exportedNames :: Map UnqualifiedSymbolName ResolvedSymbol)
                     (SM.keysSet allSymbols')
-          logDebug $ "[resolveSymbols] unresolved exports for" <+> pretty mhModName <+> "=" ## pretty unresolvedExports
+          unless (SM.null unresolvedExports) $
+            logWarning $ "[resolveSymbols] unresolved exports (will consider them coming from the export list) for" <+> pretty mhModName <> ":" ## pretty unresolvedExports
           pure (resolvedImports, allSymbols' <> unresolvedExports)
 
 resolveReexports

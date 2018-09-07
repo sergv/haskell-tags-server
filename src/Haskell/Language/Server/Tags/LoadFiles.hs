@@ -129,7 +129,7 @@ loadAllFilesIntoState conf = do
                     NameResolutionStrict -> throwErrorWithCallStack msg
                 Just unresolved -> do
                   let unresolvedMap = NEMap.fromNonEmpty $ (modFile &&& id) <$> unresolved
-                  logDebug $ "[loadAllFilesIntoState.doResolve] currentlyLoading =" <+> ppMapWith pretty (ppNE . NEMap.keysNE) currentlyLoading
+                  logDebug $ "[loadAllFilesIntoState.doResolve] currently loading:" ## ppMapWith pretty (ppNE . NEMap.keysNE) currentlyLoading
                   modify $ \s ->
                     s { rsLoadingModules = M.insert key unresolvedMap $ rsLoadingModules s }
                   -- logInfo $ "[loadAllFilesIntoState.doResolve] files:" ## ppNE (modFile <$> unresolved)
