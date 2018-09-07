@@ -7,6 +7,7 @@
 -- Created     :  Wednesday, 12 October 2016
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE DoAndIfThenElse     #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NamedFieldPuns      #-}
@@ -98,15 +99,15 @@ loadAllFilesIntoState conf = do
       doResolve
         :: forall n. (HasCallStack, MonadState ResolveState n, MonadError ErrorMessage n, MonadLog n)
         => ImportKey
-        -> n (NonEmpty ResolvedModule)
+        -> n (Maybe (NonEmpty ResolvedModule))
       doResolve key = do
-        logInfo $ "[loadAllFilesIntoState.doResolve] Resolving" <+> PP.dquotes (pretty key)
         resolveState <- get
         case M.lookup key $ rsLoadedModules resolveState of
-          Just resolved -> pure resolved
+          Just resolved -> pure $ Just resolved
           Nothing       -> do
+            logInfo $ "[loadAllFilesIntoState.doResolve] Resolving" <+> PP.dquotes (pretty key)
             let currentlyLoading = rsLoadingModules resolveState
-            if M.member key currentlyLoading
+            if key `M.member` currentlyLoading
             then
               throwErrorWithCallStack $ PP.hsep
                 [ "[loadAllFilesIntoState.doResolve] found import loop: module"
@@ -115,18 +116,23 @@ loadAllFilesIntoState conf = do
                 ]
             else
               case M.lookup key unresolvedModulesMap of
-                Nothing         ->
-                  throwErrorWithCallStack $ PP.hsep
-                    [ "[loadAllFilesIntoState.doResolve] imported module"
-                    , PP.dquotes (pretty key)
-                    , "not found"
-                    ]
+                Nothing         -> do
+                  let msg = PP.hsep
+                        [ "[loadAllFilesIntoState.doResolve] imported module"
+                        , PP.dquotes (pretty key)
+                        , "not found"
+                        ]
+                  case tsconfNameResolution conf of
+                    NameResolutionLax -> do
+                      logWarning msg
+                      pure Nothing
+                    NameResolutionStrict -> throwErrorWithCallStack msg
                 Just unresolved -> do
                   let unresolvedMap = NEMap.fromNonEmpty $ (modFile &&& id) <$> unresolved
                   logDebug $ "[loadAllFilesIntoState.doResolve] currentlyLoading =" <+> ppMapWith pretty (ppNE . NEMap.keysNE) currentlyLoading
                   modify $ \s ->
                     s { rsLoadingModules = M.insert key unresolvedMap $ rsLoadingModules s }
-                  logInfo $ "[loadAllFilesIntoState.doResolve] files:" ## ppNE (modFile <$> unresolved)
+                  -- logInfo $ "[loadAllFilesIntoState.doResolve] files:" ## ppNE (modFile <$> unresolved)
                   resolved <- flip runReaderT conf $
                     traverse (resolveModule checkLoadingModules doResolve) unresolved
                   modify $ \s -> s
@@ -136,8 +142,8 @@ loadAllFilesIntoState conf = do
                         M.insertWith (Semigroup.<>) key resolved $ rsLoadedModules s
                     }
                   logInfo $ "[loadAllFilesIntoState.doResolve] resolved" <+> PP.dquotes (pretty key)
-                  pure resolved
+                  pure $ Just resolved
 
   flip evalStateT initState $
-    flip M.traverseWithKey unresolvedModulesMap $ \importKey _ ->
+    flip M.traverseMaybeWithKey unresolvedModulesMap $ \importKey _ ->
       doResolve importKey

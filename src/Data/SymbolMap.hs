@@ -19,6 +19,7 @@ module Data.SymbolMap
   , lookup
   , lookupChildren
   , member
+  , isSubsetNames
   , fromList
   , keepNames
   , removeNames
@@ -133,6 +134,9 @@ lookupChildren sym = M.lookup sym . smChildrenMap
 
 member :: UnqualifiedSymbolName -> SymbolMap -> Bool
 member sym = M.member sym . smAllSymbols
+
+isSubsetNames :: Set UnqualifiedSymbolName -> SymbolMap -> Bool
+isSubsetNames xs = (xs `S.isSubsetOf`) . keysSet
 
 fromList :: [ResolvedSymbol] -> SymbolMap
 fromList syms = SymbolMap

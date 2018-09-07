@@ -72,8 +72,10 @@ data NameResolutionStrictness =
     -- this allows to analyse more modules e.g. the ones that define
     -- names with preprocessor/Tempate Haskell.
     NameResolutionLax
-  | -- | Do not ignore following events:
+  | -- | Do ignore following events:
     -- 1. A module exports a name with children but no definition of children can be found.
+    -- 2. Imported module is missing during eager tagging - default to no names.
+    -- 3. A module file is not found - default to no names.
     NameResolutionStrict
   deriving (Eq, Ord, Show, Bounded, Enum, Generic)
 

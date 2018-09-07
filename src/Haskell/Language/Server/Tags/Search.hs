@@ -41,7 +41,7 @@ findSymbol
   -> m [ResolvedSymbol] -- ^ Found tags, may be empty when nothing was found.
 findSymbol filename sym = do
   modName <- fileNameToModuleName filename
-  foldMapA (findInModule sym) =<< loadModule (ImportKey VanillaModule modName)
+  foldMapA (foldMapA (findInModule sym)) =<< loadModule (ImportKey VanillaModule modName)
 
 -- | Try to find out what @sym@ refers to in the context of module @mod@.
 findInModule
@@ -89,7 +89,7 @@ lookUpInImportedModules name specs = do
     if nameVisible
     then do
       mods <- loadModule ispecImportKey
-      foldForA mods $ \mod -> do
+      foldForA mods $ foldMapA $ \mod -> do
         logDebug $ "[lookUpInImportedModules] searching for name" <+> pretty name <+> "in module" <+> pretty (ikModuleName ispecImportKey)
         lookUpInImportedModule name mod
     else pure mempty
