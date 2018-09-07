@@ -11,6 +11,9 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE TypeFamilies               #-}
 
+{-# OPTIONS_GHC -Wredundant-constraints          #-}
+{-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
+
 module Data.Symbols
   ( ModuleName
   , getModuleName

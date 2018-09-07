@@ -11,6 +11,9 @@
 {-# LANGUAGE DeriveFunctor     #-}
 {-# LANGUAGE DeriveTraversable #-}
 
+{-# OPTIONS_GHC -Wredundant-constraints          #-}
+{-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
+
 module Data.Map.NonEmpty
   ( NonEmptyMap
   , singleton

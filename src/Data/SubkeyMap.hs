@@ -16,6 +16,9 @@
 {-# LANGUAGE StandaloneDeriving  #-}
 {-# LANGUAGE TypeFamilies        #-}
 
+{-# OPTIONS_GHC -Wredundant-constraints          #-}
+{-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
+
 module Data.SubkeyMap
   ( SubkeyMap
   , HasSubkey(..)
@@ -159,7 +162,7 @@ toSubkeyList :: Ord k => SubkeyMap k v -> [(Subkey k, [v])]
 toSubkeyList SubkeyMap{smMainMap, smSubMap} =
   map (second (smMainMap `indexBySet`)) $ M.toList smSubMap
 
-toSubkeyKeyList :: Ord k => SubkeyMap k v -> [(Subkey k, Set k)]
+toSubkeyKeyList :: SubkeyMap k v -> [(Subkey k, Set k)]
 toSubkeyKeyList = M.toList . smSubMap
 
 keys :: SubkeyMap k v -> [k]

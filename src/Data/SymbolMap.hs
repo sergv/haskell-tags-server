@@ -12,6 +12,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections     #-}
 
+{-# OPTIONS_GHC -Wredundant-constraints          #-}
+{-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
+
 module Data.SymbolMap
   ( SymbolMap
   , null
