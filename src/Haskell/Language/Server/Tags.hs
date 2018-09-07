@@ -75,9 +75,9 @@ startTagsServer conf state = do
   state' <-
     if tsconfEagerTagging conf
     then do
-      logDebug "[startTagsServer] collecting tags eagerly"
+      logInfo "[startTagsServer] collecting tags eagerly"
       modules <- loadAllFilesIntoState conf
-      logDebug $ "[startTagsServer] finished collecting tags eagerly, processed" <+> pretty (getSum $ foldMap (Sum . length) modules) <+> "modules"
+      logInfo $ "[startTagsServer] finished collecting tags eagerly, processed" <+> pretty (getSum $ foldMap (Sum . length) modules) <+> "modules"
       pure $ state { tssLoadedModules = SubkeyMap.fromMap modules <> tssLoadedModules state }
     else pure state
   reqChan <- liftBase newChan
@@ -107,7 +107,7 @@ startTagsServer conf state = do
       -> m TagsServerState
     handleReq reqChan serverState = do
       (request, responsePromise) <- liftBase $ readChan reqChan
-      logDebug $ "[startTagsServer.handleReq] got request:" ## pretty request
+      logInfo $ "[startTagsServer.handleReq] request:" ## pretty request
       (response, state') <- runSearchT conf serverState $
         case request of
           FindSymbol filename symbol -> do
@@ -119,7 +119,7 @@ startTagsServer conf state = do
           FindSymbolByRegexp filename _ -> do
             ensureFileExists filename
             throwErrorWithCallStack "Search by regexp is not implemented yet"
-      logDebug $ "[startTagsServer.handleReq] got response:" <+> either pretty pretty response
+      logInfo $ "[startTagsServer.handleReq] response:" ## either pretty pretty response
       Promise.putValue responsePromise response
       pure state'
 
