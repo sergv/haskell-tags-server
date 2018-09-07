@@ -12,6 +12,9 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
 
+{-# OPTIONS_GHC -Wredundant-constraints          #-}
+{-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
+
 module Data.KeyMap
   ( KeyMap
   , unKeyMap
@@ -79,7 +82,7 @@ notMember k = M.notMember k . unKeyMap
 fromList :: HasKey a => [a] -> KeyMap a
 fromList = KeyMap . M.fromListWith (<>) . map (getKey &&& (:| []))
 
-toList :: HasKey a => KeyMap a -> [(Key a, NonEmpty a)]
+toList :: KeyMap a -> [(Key a, NonEmpty a)]
 toList = M.toList . unKeyMap
 
 elems :: KeyMap a -> [NonEmpty a]
@@ -89,7 +92,7 @@ intersectAgainst :: HasKey a => KeyMap a -> Set (Key a) -> KeyMap a
 intersectAgainst (KeyMap m) keys =
   KeyMap $ M.intersection m (M.fromSet (const ()) keys)
 
-keysSet :: HasKey a => KeyMap a -> Set (Key a)
+keysSet :: KeyMap a -> Set (Key a)
 keysSet = M.keysSet . unKeyMap
 
 empty :: KeyMap a

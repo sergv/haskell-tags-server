@@ -16,6 +16,9 @@
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
+{-# OPTIONS_GHC -Wredundant-constraints          #-}
+{-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
+
 module Data.Text.Prettyprint.Doc.Ext
   ( Pretty(..)
   , (<+>)
@@ -57,16 +60,14 @@ docFromByteString :: UTF8.ByteString -> Doc ann
 docFromByteString = PP.pretty . TLE.decodeUtf8With TEE.lenientDecode
 
 ppKeyMapWith
-  :: KM.HasKey a
-  => (KM.Key a -> Doc ann)
+  :: (KM.Key a -> Doc ann)
   -> (a -> Doc ann)
   -> KeyMap a
   -> Doc ann
 ppKeyMapWith ppKey ppVal = ppAssocListWith ppKey (ppNEWith ppVal) . KM.toList
 
 ppSubkeyMapWith
-  :: SubkeyMap.HasSubkey k
-  => (k -> Doc ann)
+  :: (k -> Doc ann)
   -> (SubkeyMap.Subkey k -> Doc ann)
   -> (v -> Doc ann)
   -> SubkeyMap k v

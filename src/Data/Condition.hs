@@ -9,6 +9,9 @@
 
 {-# LANGUAGE FlexibleContexts #-}
 
+{-# OPTIONS_GHC -Wredundant-constraints          #-}
+{-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
+
 module Data.Condition
   ( Condition
   , newUnsetCondition
