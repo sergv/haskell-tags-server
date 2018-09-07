@@ -14,6 +14,7 @@
 
 module Data.SymbolMap
   ( SymbolMap
+  , null
   , insert
   , registerChildren
   , lookup
@@ -26,6 +27,7 @@ module Data.SymbolMap
   , intersectAgainst
   , keysSet
   ) where
+import Prelude hiding (lookup, null)
 
 import Control.Arrow ((&&&), second)
 import Data.Foldable (toList)
@@ -34,10 +36,9 @@ import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe
-import Data.Semigroup
+import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
-import Prelude hiding (lookup)
 
 import Data.Symbols
 import Data.Text.Prettyprint.Doc.Ext
@@ -62,7 +63,7 @@ instance Semigroup SymbolMap where
   SymbolMap x y z <> SymbolMap x' y' z' = SymbolMap
     { smParentMap   = M.unionWith (<>) x x'
     , smChildrenMap = M.unionWith (<>) y y'
-    , smAllSymbols  = M.unionWith (<>) z z'
+    , smAllSymbols  = M.unionWith (Semigroup.<>) z z'
     }
 
 instance Monoid SymbolMap where
@@ -75,6 +76,10 @@ instance Pretty SymbolMap where
     , "ChildrenMap" :-> ppMapWith pretty ppSet smChildrenMap
     , "AllSymbols"  :-> ppMapWith pretty ppNE  smAllSymbols
     ]
+
+null :: SymbolMap -> Bool
+null SymbolMap{smParentMap, smChildrenMap, smAllSymbols} =
+  M.null smAllSymbols && M.null smParentMap && M.null smChildrenMap
 
 insert :: ResolvedSymbol -> SymbolMap -> SymbolMap
 insert sym m = SymbolMap
@@ -168,8 +173,8 @@ removeNames SymbolMap{smParentMap, smChildrenMap, smAllSymbols} syms =
     , smAllSymbols  = smAllSymbols `M.withoutKeys` syms
     }
 
--- TODO: this function is the same as 'removeNames'. Confirm whether it
--- corresponds to its function.
+-- TODO: this function is the same as 'removeNames'. Confirm whether that
+-- corresponds to its purpose.
 intersectAgainst :: SymbolMap -> Set UnqualifiedSymbolName -> SymbolMap
 intersectAgainst SymbolMap{smParentMap, smChildrenMap, smAllSymbols} names = SymbolMap
   { smParentMap   = (S.\\ names) <$> (smParentMap   `M.withoutKeys` names)
