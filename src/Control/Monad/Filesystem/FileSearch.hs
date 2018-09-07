@@ -148,6 +148,7 @@ findRecursive visitPred collectPred = fmap toList . go
 
 isValidDirName :: BaseName -> Bool
 isValidDirName name = case unBaseName name of
+  ""   -> False
   "."  -> False
   ".." -> False
   _    -> True
