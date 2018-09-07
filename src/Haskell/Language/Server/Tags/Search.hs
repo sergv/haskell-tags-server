@@ -77,13 +77,14 @@ findInModule sym mod =
 
 lookUpInImportedModules
   :: forall m f. (HasCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => Foldable f
+  => (Functor f, Foldable f)
   => UnqualifiedSymbolName
   -> f ResolvedImportSpec
   -> m [ResolvedSymbol]
 lookUpInImportedModules name specs = do
-  logDebug $ "[lookUpInImportedModules] searching for name" <+> pretty name <+>
-    "in modules" <+> pretty (map (ikModuleName . ispecImportKey) $ toList specs)
+  logDebug $ ppFoldableHeader
+    ("[lookUpInImportedModules] searching for name" <+> pretty name <+> "in modules")
+    (ikModuleName . ispecImportKey <$> specs)
   foldForA specs $ \ImportSpec{ispecImportKey, ispecImportedNames} -> do
     let nameVisible = SM.member name ispecImportedNames
     if nameVisible
