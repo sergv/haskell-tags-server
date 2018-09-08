@@ -28,7 +28,6 @@ import Control.Monad.Trans.Control
 
 import qualified Data.ByteString.Lazy.Char8 as C8
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
-import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Prettyprint.Doc as PP
@@ -54,16 +53,21 @@ import ServerTests.LogCollectingServer
 testDataDir :: PathFragment
 testDataDir = "test-data"
 
-mkTestsConfig :: MonadBase IO m => PathFragment -> Set FullPath -> m TagsServerConf
-mkTestsConfig srcDir trees = liftBase $ do
-  srcDir' <- mkFullPath $ testDataDir </> srcDir
+mkTestsConfig :: MonadBase IO m => WorkingDirectory -> m TagsServerConf
+mkTestsConfig srcDir = liftBase $ do
+  searchDirsCfg <- case srcDir of
+    ShallowDir   dir -> do
+      dir' <- mkFullPath $ testDataDir </> dir
+      pure defaultSearchDirsCfg { shallowPaths = S.singleton dir' }
+    RecursiveDir dir -> do
+      dir' <- mkFullPath $ testDataDir </> dir
+      pure defaultSearchDirsCfg { recursivePaths = S.singleton dir' }
   pure defaultTagsServerConf
-    { tsconfSearchDirs   = (tsconfSearchDirs defaultTagsServerConf)
-        { shallowPaths   = S.singleton srcDir'
-        , recursivePaths = trees
-        }
+    { tsconfSearchDirs   = searchDirsCfg
     , tsconfEagerTagging = False
     }
+  where
+    defaultSearchDirsCfg = tsconfSearchDirs defaultTagsServerConf
 
 type SymbolType = String
 
@@ -91,16 +95,18 @@ responseToTerm resp =
       , AtomTerm typ
       ]
 
+data WorkingDirectory =
+    ShallowDir PathFragment
+  | RecursiveDir PathFragment
+  deriving (Eq, Ord, Show)
+
 data ServerTest = ServerTest
   { stTestName         :: String
-  , stWorkingDirectory :: Directory
+  , stWorkingDirectory :: WorkingDirectory
   , stFile             :: BaseName
   , stSymbol           :: UTF8.ByteString
   , stExpectedResponse :: ServerResponse
   } deriving (Eq, Ord, Show)
-
-newtype Directory = Directory { unDirectory :: PathFragment }
-  deriving (Eq, Ord, Show)
 
 data TestSet a =
     AtomicTest a
@@ -121,7 +127,7 @@ mkQualUnqualTest (name, unqualSym, qualSym, response) =
         ]
 
 withWorkingDir
-  :: Directory           -- ^ Working directory under testDataDir
+  :: WorkingDirectory     -- ^ Working directory under testDataDir
   -> TestSet
        ( String          -- ^ Test name
        , BaseName        -- ^ Filepath within the working directory
@@ -155,7 +161,7 @@ withFile file =
   fmap (\(name, sym, response) -> (name, file, sym, response))
 
 withDirAndFile
-  :: Directory           -- ^ Working directory under testDataDir
+  :: WorkingDirectory    -- ^ Working directory under testDataDir
   -> BaseName            -- ^ Filepath within the working directory
   -> TestSet
        ( String          -- ^ Test name
@@ -170,13 +176,13 @@ testData :: TestSet ServerTest
 testData = GroupTest "server tests"
   [ AtomicTest ServerTest
       { stTestName         = "single module"
-      , stWorkingDirectory = Directory "0000single_module"
+      , stWorkingDirectory = ShallowDir "0000single_module"
       , stFile             = "SingleModule.hs"
       , stSymbol           = "foo"
       , stExpectedResponse = Known "SingleModule.hs" 11 "Function"
       }
   , GroupTest "imports"
-      [ withDirAndFile (Directory "0001module_with_imports") "ModuleWithImports.hs" $
+      [ withDirAndFile (ShallowDir "0001module_with_imports") "ModuleWithImports.hs" $
           GroupTest "vanilla"
             [ GroupTest "wildcard import" $ map mkQualUnqualTest
                 [ ("name #1"
@@ -239,7 +245,7 @@ testData = GroupTest "server tests"
                 ]
             ]
       -- test extraction and subsequent parsing of multiline import list
-      , withDirAndFile (Directory "0001module_with_imports") "ModuleWithMultilineImportList.hs" $
+      , withDirAndFile (ShallowDir "0001module_with_imports") "ModuleWithMultilineImportList.hs" $
           group "multiline import list"
             [ ("import #1"
               , "foo"
@@ -262,7 +268,7 @@ testData = GroupTest "server tests"
               , Known "ModuleWithMultilineImportList.hs" 21 "Function"
               )
             ]
-      , withDirAndFile (Directory "0001module_with_imports") "ModuleWithQualifiedImport.hs" $
+      , withDirAndFile (ShallowDir "0001module_with_imports") "ModuleWithQualifiedImport.hs" $
           group "qualified import with alias"
             [ ("Imp.foo"
               , "Imp.foo"
@@ -285,7 +291,7 @@ testData = GroupTest "server tests"
               , Known "ModuleWithQualifiedImport.hs" 13 "Function"
               )
             ]
-      , withDirAndFile (Directory "0001module_with_imports") "ModuleWithQualifiedImportNoAlias.hs" $
+      , withDirAndFile (ShallowDir "0001module_with_imports") "ModuleWithQualifiedImportNoAlias.hs" $
           group "qualified import without alias"
             [ ("Imported1.foo"
               , "Imported1.foo"
@@ -308,7 +314,7 @@ testData = GroupTest "server tests"
               , Known "ModuleWithQualifiedImportNoAlias.hs" 13 "Function"
               )
             ]
-      , withDirAndFile (Directory "0001module_with_imports") "ModuleWithImportsAndHiding.hs" $
+      , withDirAndFile (ShallowDir "0001module_with_imports") "ModuleWithImportsAndHiding.hs" $
           group "hiding"
             [ ("wildcard import #1"
               , "foo"
@@ -331,7 +337,7 @@ testData = GroupTest "server tests"
               , Known "ModuleWithImportsAndHiding.hs" 14 "Function"
               )
             ]
-      , withDirAndFile (Directory "0001module_with_imports") "ModuleWithEmptyImportList.hs" $
+      , withDirAndFile (ShallowDir "0001module_with_imports") "ModuleWithEmptyImportList.hs" $
           group "empty import list"
             [ ("wildcard import #1"
               , "foo"
@@ -356,7 +362,7 @@ testData = GroupTest "server tests"
             ]
       ]
   , GroupTest "export list"
-      [ withDirAndFile (Directory "0002export_lists") "ModuleWithImportsThatHaveExportsList.hs" $
+      [ withDirAndFile (ShallowDir "0002export_lists") "ModuleWithImportsThatHaveExportsList.hs" $
           group "vanilla export list"
             [ ( "import module with export list #1"
               , "foo"
@@ -383,7 +389,7 @@ testData = GroupTest "server tests"
               , NotFound
               )
             ]
-      , withDirAndFile (Directory "0002export_lists") "ModuleWithImportsThatHaveExportsList.hs" $
+      , withDirAndFile (ShallowDir "0002export_lists") "ModuleWithImportsThatHaveExportsList.hs" $
           group "wildcard export list"
             [ ( "import exported name"
               , "Foo"
@@ -406,7 +412,7 @@ testData = GroupTest "server tests"
               , Known "ModuleWithWildcardExport.hs" 15 "Function"
               )
             ]
-      , withDirAndFile (Directory "0002export_lists") "ModuleWithImportsThatHaveExportsList.hs" $
+      , withDirAndFile (ShallowDir "0002export_lists") "ModuleWithImportsThatHaveExportsList.hs" $
           group "explicit export list"
             [ ( "import exported name"
               , "Foo2"
@@ -429,7 +435,7 @@ testData = GroupTest "server tests"
               , NotFound
               )
             ]
-      , withDirAndFile (Directory "0002export_lists") "ModuleWithImportsThatHaveReexports.hs" $
+      , withDirAndFile (ShallowDir "0002export_lists") "ModuleWithImportsThatHaveReexports.hs" $
           group "reexport"
             [ ( "import non-exported name"
               , "baz"
@@ -453,7 +459,7 @@ testData = GroupTest "server tests"
               )
             ]
       ]
-  , withDirAndFile (Directory "0003module_header_detection") "ModuleWithCommentsResemblingModuleHeader.hs" $
+  , withDirAndFile (ShallowDir "0003module_header_detection") "ModuleWithCommentsResemblingModuleHeader.hs" $
       group "module header detection"
         [ ( "name defined locally"
           , "foo"
@@ -464,7 +470,7 @@ testData = GroupTest "server tests"
           , Known "EmptyModule.hs" 3 "Function"
           )
         ]
-  , withDirAndFile (Directory "0004typeclass_export_associated_types") "MainModule.hs" $
+  , withDirAndFile (ShallowDir "0004typeclass_export_associated_types") "MainModule.hs" $
       group "typeclass export"
         [ ( "name defined locally"
           , "foo"
@@ -499,7 +505,7 @@ testData = GroupTest "server tests"
           , NotFound
           )
         ]
-  , withWorkingDir (Directory "0005import_cycle") $
+  , withWorkingDir (ShallowDir "0005import_cycle") $
       GroupTest "import cycle"
         [ GroupTest "wildcard export lists"
             [ withFile "A.hs" $
@@ -582,7 +588,7 @@ testData = GroupTest "server tests"
                   ]
             ]
         ]
-  , withWorkingDir (Directory "0006export_pattern_with_type_ghc8.0") $
+  , withWorkingDir (ShallowDir "0006export_pattern_with_type_ghc8.0") $
       GroupTest "export pattern along with type"
         [ withFile file $
             group groupName
@@ -617,7 +623,7 @@ testData = GroupTest "server tests"
             , ("ModuleWithSpecificImportList.hs", "import with specific import list")
             ]
         ]
-  , withWorkingDir (Directory "0007resolvable_import_cycle") $
+  , withWorkingDir (ShallowDir "0007resolvable_import_cycle") $
       GroupTest "Resolvable import cycle"
         [ withFile "A.hs" $
           group "A imports B with import list"
@@ -934,7 +940,7 @@ testData = GroupTest "server tests"
               )
             ]
         ]
-  , withDirAndFile (Directory "0008module_reexport") "ModuleWithImportsThatHaveModuleReexports.hs" $
+  , withDirAndFile (ShallowDir "0008module_reexport") "ModuleWithImportsThatHaveModuleReexports.hs" $
       group "Module reexport"
         [ ( "Import non-exported & non-reexported name"
           , "baz"
@@ -973,7 +979,7 @@ testData = GroupTest "server tests"
           , NotFound
           )
         ]
-  , withDirAndFile (Directory "0009empty_export_list_is_wildcard") "MainModule.hs" $
+  , withDirAndFile (ShallowDir "0009empty_export_list_is_wildcard") "MainModule.hs" $
       group "Empty export list is treated as export all wildcard"
         [ ( "Non-exported name #1"
           , "Foo"
@@ -1001,7 +1007,7 @@ testData = GroupTest "server tests"
           )
         ]
   , GroupTest "Import of module that defines some entities via macro"
-    [ withDirAndFile (Directory "0010exported_name_defined_via_macro") groupModule $
+    [ withDirAndFile (ShallowDir "0010exported_name_defined_via_macro") groupModule $
         group groupName
           [ ( "Type defined via macro #1"
             , "ViaMacroWithWildcardChildren"
@@ -1169,9 +1175,12 @@ mkFindSymbolTest
   -> TestTree
 mkFindSymbolTest pool ServerTest{stTestName, stWorkingDirectory, stFile, stSymbol, stExpectedResponse} =
  testCase stTestName $ do
-    conf <- mkTestsConfig (unDirectory stWorkingDirectory) mempty
+    conf <- mkTestsConfig stWorkingDirectory
     withConnection pool conf $ \conn -> do
-      let path = pathFragmentToUTF8 $ testDataDir </> unDirectory stWorkingDirectory </> stFile
+      let dir  = case stWorkingDirectory of
+            ShallowDir   x -> x
+            RecursiveDir x -> x
+          path = pathFragmentToUTF8 $ testDataDir </> dir </> stFile
       r    <- call conn "haskell-tags-server" "find" [ BinaryTerm path
                                                      , BinaryTerm stSymbol
                                                      ]
