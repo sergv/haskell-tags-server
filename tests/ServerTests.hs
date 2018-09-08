@@ -68,13 +68,13 @@ mkTestsConfig srcDir trees = liftBase $ do
 type SymbolType = String
 
 -- | Type that encodes all possible BERT responses.
-data BertResponse =
+data ServerResponse =
     Known BaseName Int SymbolType
   | Ambiguous [(BaseName, Int, SymbolType)]
   | NotFound
   deriving (Eq, Ord, Show)
 
-responseToTerm :: BertResponse -> Term
+responseToTerm :: ServerResponse -> Term
 responseToTerm resp =
   case resp of
     Known filename line typ ->
@@ -96,7 +96,7 @@ data ServerTest = ServerTest
   , stWorkingDirectory :: Directory
   , stFile             :: BaseName
   , stSymbol           :: UTF8.ByteString
-  , stExpectedResponse :: BertResponse
+  , stExpectedResponse :: ServerResponse
   } deriving (Eq, Ord, Show)
 
 newtype Directory = Directory { unDirectory :: PathFragment }
@@ -126,7 +126,7 @@ withWorkingDir
        ( String          -- ^ Test name
        , BaseName        -- ^ Filepath within the working directory
        , UTF8.ByteString -- ^ Symbol to search for
-       , BertResponse    -- ^ Expected response
+       , ServerResponse  -- ^ Expected response
        )
   -> TestSet ServerTest
 withWorkingDir dir =
@@ -143,13 +143,13 @@ withFile
   -> TestSet
        ( String          -- ^ Test name
        , UTF8.ByteString -- ^ Symbol to search for
-       , BertResponse    -- ^ Expected response
+       , ServerResponse  -- ^ Expected response
        )
   -> TestSet
        ( String          -- ^ Test name
        , a               -- ^ Filepath within the working directory
        , UTF8.ByteString -- ^ Symbol to search for
-       , BertResponse    -- ^ Expected response
+       , ServerResponse  -- ^ Expected response
        )
 withFile file =
   fmap (\(name, sym, response) -> (name, file, sym, response))
@@ -160,7 +160,7 @@ withDirAndFile
   -> TestSet
        ( String          -- ^ Test name
        , UTF8.ByteString -- ^ Symbol to search for
-       , BertResponse    -- ^ Expected response
+       , ServerResponse  -- ^ Expected response
        )
   -> TestSet ServerTest
 withDirAndFile dir file =
