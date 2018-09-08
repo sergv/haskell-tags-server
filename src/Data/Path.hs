@@ -42,6 +42,7 @@ module Data.Path
   , DropExtension(..)
   , TakeFileName(..)
   , TakeExtension(..)
+  , MakeRelative(..)
   -- * Base path
   , BaseName
   , unBaseName
@@ -109,6 +110,10 @@ getModificationTime =
 splitDirectories :: FullPath -> [PathFragment]
 splitDirectories =
   map (PathFragment . T.pack) . FilePath.splitDirectories . T.unpack . unFullPath
+
+{-# INLINE makeRelativeText #-}
+makeRelativeText :: Text -> Text -> Text
+makeRelativeText x y = T.pack $ FilePath.makeRelative (T.unpack x) (T.unpack y)
 
 -- | Path fragment, possibly with some directories but without etxension.
 -- Invariant: does not start with \/, does not end with \/.
@@ -207,6 +212,21 @@ instance TakeExtension PathFragment
 instance TakeExtension BasePath where
   {-# INLINE takeExtension #-}
   takeExtension = bpExtension
+
+class MakeRelative a b c | a b -> c where
+  makeRelative
+    :: a -- ^ Root to make relative to
+    -> b -- ^ What to transform
+    -> c
+  {-# INLINE makeRelative #-}
+  default makeRelative
+    :: (Coercible a Text, Coercible b Text, Coercible c Text)
+    => a -> b -> c
+  makeRelative = coerce makeRelativeText
+
+instance MakeRelative FullPath     FullPath     PathFragment
+instance MakeRelative FullPath     PathFragment PathFragment
+instance MakeRelative PathFragment PathFragment PathFragment
 
 -- | File basename without directory but with extension.
 newtype BaseName = BaseName { unBaseName :: PathFragment }
