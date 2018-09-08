@@ -13,7 +13,6 @@
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections       #-}
 
 module ServerTests (tests) where
 
@@ -73,8 +72,8 @@ type SymbolType = String
 
 -- | Type that encodes all possible BERT responses.
 data ServerResponse =
-    Known BaseName Int SymbolType
-  | Ambiguous [(BaseName, Int, SymbolType)]
+    Known PathFragment Int SymbolType
+  | Ambiguous [(PathFragment, Int, SymbolType)]
   | NotFound
   deriving (Eq, Ord, Show)
 
@@ -88,9 +87,9 @@ responseToTerm resp =
     NotFound ->
       AtomTerm "not_found"
   where
-    mkSymbol :: (BaseName, Int, SymbolType) -> Term
+    mkSymbol :: (PathFragment, Int, SymbolType) -> Term
     mkSymbol (filename, line, typ) = TupleTerm
-      [ BinaryTerm $ baseNameToUTF8 filename
+      [ BinaryTerm $ pathFragmentToUTF8 filename
       , IntTerm line
       , AtomTerm typ
       ]
@@ -103,7 +102,7 @@ data WorkingDirectory =
 data ServerTest = ServerTest
   { stTestName         :: String
   , stWorkingDirectory :: WorkingDirectory
-  , stFile             :: BaseName
+  , stFile             :: PathFragment
   , stSymbol           :: UTF8.ByteString
   , stExpectedResponse :: ServerResponse
   } deriving (Eq, Ord, Show)
@@ -130,7 +129,7 @@ withWorkingDir
   :: WorkingDirectory     -- ^ Working directory under testDataDir
   -> TestSet
        ( String          -- ^ Test name
-       , BaseName        -- ^ Filepath within the working directory
+       , PathFragment    -- ^ Filepath within the working directory
        , UTF8.ByteString -- ^ Symbol to search for
        , ServerResponse  -- ^ Expected response
        )
@@ -162,7 +161,7 @@ withFile file =
 
 withDirAndFile
   :: WorkingDirectory    -- ^ Working directory under testDataDir
-  -> BaseName            -- ^ Filepath within the working directory
+  -> PathFragment        -- ^ Filepath within the working directory
   -> TestSet
        ( String          -- ^ Test name
        , UTF8.ByteString -- ^ Symbol to search for
@@ -1178,9 +1177,9 @@ mkFindSymbolTest pool ServerTest{stTestName, stWorkingDirectory, stFile, stSymbo
     conf <- mkTestsConfig stWorkingDirectory
     withConnection pool conf $ \conn -> do
       let dir  = case stWorkingDirectory of
-            ShallowDir   x -> x
-            RecursiveDir x -> x
-          path = pathFragmentToUTF8 $ testDataDir </> dir </> stFile
+            ShallowDir   x -> testDataDir </> x
+            RecursiveDir x -> testDataDir </> x
+          path = pathFragmentToUTF8 $ dir </> stFile
       r    <- call conn "haskell-tags-server" "find" [ BinaryTerm path
                                                      , BinaryTerm stSymbol
                                                      ]
@@ -1193,7 +1192,8 @@ mkFindSymbolTest pool ServerTest{stTestName, stWorkingDirectory, stFile, stSymbo
         Left err  ->
           assertFailure $ displayDocString $ ppShow err ## logs
         Right res -> do
-          actual <- relativizePathsInResponse res
+          dir'   <- mkFullPath dir
+          actual <- relativizePathsInResponse dir' res
           let msg = docFromString $ "expected: " ++ show expected ++ "\n but got: " ++ show actual
           if responseType actual == responseType expected
           then
@@ -1217,8 +1217,10 @@ extractResponseError :: Term -> Maybe UTF8.ByteString
 extractResponseError (TupleTerm [AtomTerm "error", BinaryTerm msg]) = Just msg
 extractResponseError _                                              = Nothing
 
-relativizePathsInResponse :: forall m. MonadBase IO m => Term -> m Term
-relativizePathsInResponse term =
+relativizePathsInResponse
+  :: forall m. MonadBase IO m
+  => FullPath -> Term -> m Term
+relativizePathsInResponse rootDir term =
   case term of
     TupleTerm [a@(AtomTerm "loc_known"), loc] -> do
       loc' <- fixLoc loc
@@ -1230,14 +1232,14 @@ relativizePathsInResponse term =
   where
     fixLoc :: Term -> m Term
     fixLoc (TupleTerm [BinaryTerm path, line, typ]) = do
-      path' <- toFilename path
+      path' <- relativise path
       pure $ TupleTerm [BinaryTerm path', line, typ]
     fixLoc x = error $ "invalid symbol location term: " ++ show x
-    toFilename :: UTF8.ByteString -> m UTF8.ByteString
-    toFilename = fmap (baseNameToUTF8 . takeFileName) . fullPathFromUTF8
+    relativise :: UTF8.ByteString -> m UTF8.ByteString
+    relativise = fmap (pathFragmentToUTF8 . makeRelative rootDir) . fullPathFromUTF8
 
-baseNameToUTF8 :: BaseName -> UTF8.ByteString
-baseNameToUTF8 = pathFragmentToUTF8 . unBaseName
+_baseNameToUTF8 :: BaseName -> UTF8.ByteString
+_baseNameToUTF8 = pathFragmentToUTF8 . unBaseName
 
 _fullPathToUTF8 :: FullPath -> UTF8.ByteString
 _fullPathToUTF8 = C8.fromStrict . TE.encodeUtf8 . unFullPath
