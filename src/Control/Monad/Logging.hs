@@ -29,7 +29,8 @@ import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
 import qualified Control.Monad.State.Strict as SS
-import Control.Monad.Writer
+import Control.Monad.Writer as Lazy
+import Control.Monad.Writer.Strict as Strict
 
 import Data.Bimap (Bimap)
 import qualified Data.Bimap as BM
@@ -99,7 +100,11 @@ instance MonadLog m => MonadLog (StateT s m) where
   {-# INLINE logDoc #-}
   logDoc s = lift . logDoc s
 
-instance (MonadLog m, Monoid w) => MonadLog (WriterT w m) where
+instance (MonadLog m, Monoid w) => MonadLog (Lazy.WriterT w m) where
+  {-# INLINE logDoc #-}
+  logDoc s = lift . logDoc s
+
+instance (MonadLog m, Monoid w) => MonadLog (Strict.WriterT w m) where
   {-# INLINE logDoc #-}
   logDoc s = lift . logDoc s
 
