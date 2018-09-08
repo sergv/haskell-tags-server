@@ -26,7 +26,9 @@ import Control.Monad.Except (throwError)
 import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Writer
+import Control.Monad.Writer (MonadWriter(..))
+import qualified Control.Monad.Writer as Lazy
+import qualified Control.Monad.Writer.Strict as Strict
 
 import Data.Foldable.Ext
 import Data.Functor.Product (Product(..))
@@ -93,12 +95,22 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
       ]
   else do
     mods <- case SubkeyMap.lookup key (tssLoadedModules s) of
-      Nothing -> doLoad
+      Nothing -> do
+        mods' <- doLoad
+        for_ mods' $ \mods'' ->
+          modify (\s' -> s' { tssLoadedModules = SubkeyMap.insert key mods'' $ tssLoadedModules s' })
+        pure mods'
       Just ms -> do
         logDebug $ "[loadModule] module was loaded before, reusing:" <+> pretty key
-        Just <$> traverse (reloadIfNecessary key) ms
+        (ms', Any anyReloaded) <- Strict.runWriterT $ for ms $ \m -> do
+          m' <- reloadIfNecessary key m
+          case m' of
+            Nothing  -> pure m
+            Just m'' -> m'' <$ tell (Any True)
+        when anyReloaded $
+          modify $ \s' -> s' { tssLoadedModules = SubkeyMap.insert key ms' $ tssLoadedModules s' }
+        pure $ Just ms'
     for mods $ \mods' -> do
-      modify (\s' -> s' { tssLoadedModules = SubkeyMap.insert key mods' $ tssLoadedModules s' })
       loadedMods <- gets (SubkeyMap.keys . tssLoadedModules)
       logDebug $ "[loadModule] loaded modules:" ## ppList loadedMods
       pure mods'
@@ -128,14 +140,14 @@ reloadIfNecessary
   :: (HasCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => ImportKey
   -> ResolvedModule
-  -> m ResolvedModule
+  -> m (Maybe ResolvedModule)
 reloadIfNecessary key m = do
   (needsReloading, modifTime) <- moduleNeedsReloading m
   if needsReloading
   then do
     logInfo $ "[reloadIfNecessary] reloading module" <+> pretty (mhModName $ modHeader m)
-    loadModuleFromFile key (Just modifTime) (modFile m)
-  else pure m
+    Just <$> loadModuleFromFile key (Just modifTime) (modFile m)
+  else pure Nothing
 
 loadModuleFromFile
   :: (HasCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
@@ -273,13 +285,13 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
            )
     resolveImports imports = do
       logDebug $ "[resolveModule.resolveImports] analysing imports of module" <+> pretty (mhModName unresHeader)
-      runWriterT (SubkeyMap.traverseMaybeWithKey resolveImport imports)
+      Lazy.runWriterT (SubkeyMap.traverseMaybeWithKey resolveImport imports)
       where
         resolveImport
           :: HasCallStack
           => ImportKey
           -> NonEmpty UnresolvedImportSpec
-          -> WriterT [(ImportQualification, SymbolMap)] m (Maybe (NonEmpty ResolvedImportSpec))
+          -> Lazy.WriterT [(ImportQualification, SymbolMap)] m (Maybe (NonEmpty ResolvedImportSpec))
         resolveImport key importSpecs = do
           isBeingLoaded <- lift $ checkIfModuleIsAlreadyBeingLoaded key
           case isBeingLoaded of
