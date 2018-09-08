@@ -9,6 +9,7 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE PatternGuards       #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Haskell.Language.Server.Tags.Search (findSymbol) where
@@ -18,8 +19,11 @@ import Prelude hiding (mod)
 import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
+
 import Data.Char
 import Data.Foldable.Ext (toList, foldMapA, foldForA)
+import qualified Data.List as L
+import qualified Data.Set as S
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc.Ext
 
@@ -27,8 +31,10 @@ import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging
 import Data.ErrorMessage
 import Data.Path
+import Data.SymbolMap (SymbolMap)
 import qualified Data.SymbolMap as SM
 import Data.Symbols
+import qualified Haskell.Language.Lexer.FastTags as FastTags
 import Haskell.Language.Server.Tags.LoadModule
 import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports
@@ -53,7 +59,8 @@ findInModule sym mod =
   case qualifier of
     -- Unqualified name
     Nothing -> do
-      let localSyms       = maybe [] toList $ SM.lookup sym' $ modAllSymbols mod
+      let localSyms :: [ResolvedSymbol]
+          localSyms       = lookUpInSymbolMap sym' $ modAllSymbols mod
           relevantImports = filter importBringsUnqualifiedNames
                           $ foldMap toList
                           $ mhImports header
@@ -101,9 +108,29 @@ lookUpInImportedModule
   -> ResolvedModule
   -> m [ResolvedSymbol]
 lookUpInImportedModule name importedMod =
-  case SM.lookup name $ modAllExportedNames importedMod of
-    Nothing   -> pure []
-    Just syms -> pure $ toList syms
+  pure $ lookUpInSymbolMap name $ modAllExportedNames importedMod
+
+lookUpInSymbolMap :: UnqualifiedSymbolName -> SymbolMap -> [ResolvedSymbol]
+lookUpInSymbolMap sym sm =
+  -- If a name refers to both constructor and type and construcutor constructs
+  -- values for the type in question then
+  case SM.lookup sym sm of
+    Nothing -> []
+    Just syms
+      | (redundant@(_ : _), other) <- L.partition isRedundantConstructor syms'
+      , (_reallyRedundant, haveNoCorrespondingParents) <-
+          let otherFiles = S.fromList $ map resolvedSymbolFile other in
+          L.partition ((`S.member` otherFiles) . resolvedSymbolFile) redundant
+      -> haveNoCorrespondingParents ++ other
+      | otherwise
+      -> syms'
+      where
+        syms' = toList syms
+        isRedundantConstructor :: ResolvedSymbol -> Bool
+        isRedundantConstructor x =
+          case (resolvedSymbolType x, resolvedSymbolParent x) of
+            (FastTags.Constructor, Just p) -> p == resolvedSymbolName x
+            _                              -> False
 
 -- | Try to infer suitable module name from the file name. Tries to take
 -- as much directory names that start with the uppercase letter as possible.

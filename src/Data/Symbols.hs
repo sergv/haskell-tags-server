@@ -37,6 +37,7 @@ module Data.Symbols
   , resolvedSymbolType
   , resolvedSymbolParent
   , resolvedSymbolPosition
+  , resolvedSymbolFile
     -- -- * Reexports
   -- , SrcPos(..)
   -- Type(..)
@@ -176,3 +177,6 @@ resolvedSymbolParent (ResolvedSymbol (Pos _ (TagVal _ _ parent))) =
 
 resolvedSymbolPosition :: ResolvedSymbol -> SrcPos
 resolvedSymbolPosition (ResolvedSymbol (Pos pos _)) = pos
+
+resolvedSymbolFile :: ResolvedSymbol -> FilePath
+resolvedSymbolFile (ResolvedSymbol (Pos (SrcPos file _ _) _)) = file

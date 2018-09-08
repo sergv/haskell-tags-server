@@ -1101,6 +1101,70 @@ testData = GroupTest "server tests"
       , ("Via reexport", "ImportViaReexport.hs")
       ]
     ]
+  , withDirAndFile (RecursiveDir "0011hide_constructor_named_as_type/") "MainModule.hs" $
+      group "When constructor has the same name as its type then only type will be found"
+        [ ( "Same name - record"
+          , "FooMatching"
+          , Known "deps/DependencyMatchingConstructorsTypes.hs" 13 "Type"
+          )
+        , ( "Same name - newtype"
+          , "BarMatching"
+          , Known "deps/DependencyMatchingConstructorsTypes.hs" 15 "Type"
+          )
+        , ( "Same name - newtype accessor"
+          , "unBarMatching"
+          , Known "deps/DependencyMatchingConstructorsTypes.hs" 16 "Function"
+          )
+        , ( "Same name - data with alternatives"
+          , "BazMatching"
+          , Known "deps/DependencyMatchingConstructorsTypes.hs" 18 "Type"
+          )
+        , ( "Same name - GADT with alternatives"
+          , "QuuxMatching"
+          , Known "deps/DependencyMatchingConstructorsTypes.hs" 22 "Type"
+          )
+        , ( "Different name - GADT with alternatives #1"
+          , "QuuxInt"
+          , Known "deps/DependencyMatchingConstructorsTypes.hs" 24 "Constructor"
+          )
+
+        , ( "Shifted name - record"
+          , "FooShifted"
+          , Ambiguous
+              [ ("deps/DependencyShiftedConstructorsTypes.hs", 14, "Type")
+              , ("deps/DependencyShiftedConstructorsTypes.hs", 17, "Constructor")
+              ]
+          )
+        , ( "Shifted name - newtype"
+          , "BarShifted"
+          , Ambiguous
+              [ ("deps/DependencyShiftedConstructorsTypes.hs", 16, "Type")
+              , ("deps/DependencyShiftedConstructorsTypes.hs", 21, "Constructor")
+              ]
+          )
+        , ( "Shifted name - newtype accessor"
+          , "unBarShifted"
+          , Known "deps/DependencyShiftedConstructorsTypes.hs" 17 "Function"
+          )
+        , ( "Shifted name - data with alternatives"
+          , "BazShifted"
+          , Ambiguous
+              [ ("deps/DependencyShiftedConstructorsTypes.hs", 19, "Type")
+              , ("deps/DependencyShiftedConstructorsTypes.hs", 24, "Constructor")
+              ]
+          )
+        , ( "Shifted name - GADT with alternatives"
+          , "QuuxShifted"
+          , Ambiguous
+              [ ("deps/DependencyShiftedConstructorsTypes.hs", 14, "Constructor")
+              , ("deps/DependencyShiftedConstructorsTypes.hs", 23, "Type")
+              ]
+          )
+        , ( "Different name - GADT with alternatives #2"
+          , "QuuxDouble"
+          , Known "deps/DependencyShiftedConstructorsTypes.hs" 25 "Constructor"
+          )
+        ]
   ]
 
 tests :: TestTree
