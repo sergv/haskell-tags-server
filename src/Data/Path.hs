@@ -7,6 +7,7 @@
 -- Created     :  Thursday, 10 November 2016
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
@@ -14,11 +15,16 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TypeSynonymInstances       #-}
 {-# LANGUAGE UndecidableInstances       #-}
 
 {-# OPTIONS_GHC -Wredundant-constraints          #-}
 {-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
+
+#ifdef mingw32_HOST_OS
+#define WINDOWS 1
+#endif
 
 module Data.Path
   ( FullPath
@@ -26,11 +32,12 @@ module Data.Path
   , MkFullPath(..)
   , doesFileExist
   , doesDirectoryExist
-  , getDirectoryContents
+  , listDirectory
   , getModificationTime
   , splitDirectories
   , PathFragment
   , mkPathFragment
+  , mkSinglePathFragment
   , unPathFragment
   , Extension
   , mkExtension
@@ -39,7 +46,7 @@ module Data.Path
   , JoinPaths(..)
   , Contains(..)
   , AddExtension(..)
-  , DropExtension(..)
+  , DropExtensions(..)
   , TakeFileName(..)
   , TakeExtension(..)
   , MakeRelative(..)
@@ -50,7 +57,6 @@ module Data.Path
   , mkBasePath
   , bpFileName
   , bpExtension
-  , bpBaseName
   ) where
 
 import Control.Monad.Base
@@ -71,7 +77,20 @@ import qualified System.FilePath as FilePath
 -- but must be created in derivatives of IO monad.
 -- Invariant: does not end with \/.
 newtype FullPath = FullPath { unFullPath :: Text }
-  deriving (Eq, Ord, Show, Pretty, IsString)
+  deriving (Show, Pretty, IsString)
+
+#ifdef WINDOWS
+instance Eq FullPath where
+  {-# INLINE (==) #-}
+  (==) = coerce ((==) `on` T.toCaseFold)
+
+instance Ord FullPath where
+  {-# INLINE compare #-}
+  compare = coerce (compare `on` T.toCaseFold)
+#else
+deriving instance Eq  FullPath
+deriving instance Ord FullPath
+#endif
 
 class MkFullPath a m where
   mkFullPath :: a -> m FullPath
@@ -99,17 +118,17 @@ doesDirectoryExist :: MonadBase IO m => FullPath -> m Bool
 doesDirectoryExist =
   liftBase . Directory.doesDirectoryExist . T.unpack . unFullPath
 
-getDirectoryContents :: MonadBase IO m => FullPath -> m [BasePath]
-getDirectoryContents (FullPath path) = liftBase $
-  map mkBasePath <$> Directory.getDirectoryContents (T.unpack path)
+listDirectory :: MonadBase IO m => FullPath -> m [BasePath]
+listDirectory (FullPath path) = liftBase $
+  map mkBasePath <$> Directory.listDirectory (T.unpack path)
 
 getModificationTime :: MonadBase IO m => FullPath -> m UTCTime
 getModificationTime =
   liftBase . Directory.getModificationTime . T.unpack . unFullPath
 
-splitDirectories :: FullPath -> [PathFragment]
+splitDirectories :: FullPath -> [BaseName]
 splitDirectories =
-  map (PathFragment . T.pack) . FilePath.splitDirectories . T.unpack . unFullPath
+  map (BaseName . PathFragment . T.pack) . FilePath.splitDirectories . T.unpack . unFullPath
 
 {-# INLINE makeRelativeText #-}
 makeRelativeText :: Text -> Text -> Text
@@ -118,7 +137,20 @@ makeRelativeText x y = T.pack $ FilePath.makeRelative (T.unpack x) (T.unpack y)
 -- | Path fragment, possibly with some directories but without etxension.
 -- Invariant: does not start with \/, does not end with \/.
 newtype PathFragment = PathFragment { unPathFragment :: Text }
-  deriving (Eq, Ord, Show, Pretty, IsString)
+  deriving (Show, Pretty, IsString)
+
+#ifdef WINDOWS
+instance Eq PathFragment where
+  {-# INLINE (==) #-}
+  (==) = coerce ((==) `on` T.toCaseFold)
+
+instance Ord PathFragment where
+  {-# INLINE compare #-}
+  compare = coerce (compare `on` T.toCaseFold)
+#else
+deriving instance Eq  PathFragment
+deriving instance Ord PathFragment
+#endif
 
 newtype PathJoin = PathJoin { unPathJoin :: Text }
 
@@ -127,6 +159,9 @@ instance Semigroup PathJoin where
 
 mkPathFragment :: NonEmpty Text -> PathFragment
 mkPathFragment = PathFragment . unPathJoin . foldMap1 PathJoin
+
+mkSinglePathFragment :: Text -> PathFragment
+mkSinglePathFragment = PathFragment
 
 class JoinPaths a b c | a b -> c where
   (</>) :: a -> b -> c
@@ -164,7 +199,20 @@ instance Contains BaseName
 
 -- | E.g. “.hs”.
 newtype Extension = Extension { unExtension :: Text }
-  deriving (Eq, Ord, Show, IsString)
+  deriving (Show, IsString)
+
+#ifdef WINDOWS
+instance Eq Extension where
+  {-# INLINE (==) #-}
+  (==) = coerce ((==) `on` T.toCaseFold)
+
+instance Ord Extension where
+  {-# INLINE compare #-}
+  compare = coerce (compare `on` T.toCaseFold)
+#else
+deriving instance Eq  Extension
+deriving instance Ord Extension
+#endif
 
 mkExtension :: Text -> Extension
 mkExtension = Extension
@@ -179,15 +227,15 @@ instance AddExtension FullPath
 instance AddExtension PathFragment
 instance AddExtension BaseName
 
-class DropExtension a where
-  dropExtension :: a -> a
-  {-# INLINE dropExtension #-}
-  default dropExtension :: Coercible a Text => a -> a
-  dropExtension = coerce dropExt
+class DropExtensions a where
+  dropExtensions :: a -> a
+  {-# INLINE dropExtensions #-}
+  default dropExtensions :: Coercible a Text => a -> a
+  dropExtensions = coerce dropExts
 
-instance DropExtension FullPath
-instance DropExtension PathFragment
-instance DropExtension BaseName
+instance DropExtensions FullPath
+instance DropExtensions PathFragment
+instance DropExtensions BaseName
 
 class TakeFileName a where
   takeFileName :: a -> BaseName
@@ -230,23 +278,34 @@ instance MakeRelative PathFragment PathFragment PathFragment
 
 -- | File basename without directory but with extension.
 newtype BaseName = BaseName { unBaseName :: PathFragment }
-  deriving (Eq, Ord, Show, Pretty, IsString)
+  deriving (Show, Pretty, IsString)
+
+#ifdef WINDOWS
+instance Eq BaseName where
+  {-# INLINE (==) #-}
+  (==) = coerce ((==) `on` T.toCaseFold)
+
+instance Ord BaseName where
+  {-# INLINE compare #-}
+  compare = coerce (compare `on` T.toCaseFold)
+#else
+deriving instance Eq  BaseName
+deriving instance Ord BaseName
+#endif
 
 data BasePath = BasePath
   { bpFileName  :: BaseName
   , bpExtension :: Extension
-  , bpBaseName  :: Text
   }
 
 mkBasePath :: FilePath.FilePath -> BasePath
 mkBasePath p = BasePath
   { bpFileName  = BaseName $ PathFragment $ T.pack p'
   , bpExtension = Extension $ T.pack ext
-  , bpBaseName  = T.pack base
   }
   where
-    p'          = FilePath.takeFileName p
-    (base, ext) = FilePath.splitExtension p'
+    p'  = FilePath.takeFileName p
+    ext = FilePath.takeExtensions p'
 
 instance Show BasePath where
   show = show . bpFileName
@@ -263,13 +322,23 @@ getFileName :: Text -> Text
 getFileName = T.pack . FilePath.takeFileName . T.unpack
 
 getExtension :: Text -> Text
-getExtension = T.pack . FilePath.takeExtension . T.unpack
+getExtension =
+  T.cons FilePath.extSeparator . T.takeWhileEnd (/= FilePath.extSeparator)
+-- T.pack . FilePath.takeExtension . T.unpack
 
 joinPath :: Text -> Text -> Text
 joinPath x y = x <> T.singleton FilePath.pathSeparator <> y
 
 addExt :: Text -> Text -> Text
-addExt path ext = path <> T.singleton FilePath.extSeparator Semigroup.<> ext
+addExt path ext = path <> extSeparator Semigroup.<> ext
 
-dropExt :: Text -> Text
-dropExt = T.pack . FilePath.dropExtension . T.unpack
+{-# INLINE dropExts #-}
+dropExts :: Text -> Text
+dropExts =
+  T.pack . FilePath.dropExtensions . T.unpack
+-- path = case T.splitOn extSeparator path of
+--   []    -> path
+--   p : _ -> p
+
+extSeparator :: Text
+extSeparator = T.singleton FilePath.extSeparator

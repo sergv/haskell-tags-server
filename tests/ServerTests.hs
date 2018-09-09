@@ -1101,7 +1101,7 @@ testData = GroupTest "server tests"
       , ("Via reexport", "ImportViaReexport.hs")
       ]
     ]
-  , withDirAndFile (RecursiveDir "0011hide_constructor_named_as_type/") "MainModule.hs" $
+  , withDirAndFile (RecursiveDir "0011hide_constructor_named_as_type") "MainModule.hs" $
       group "When constructor has the same name as its type then only type will be found"
         [ ( "Same name - record"
           , "FooMatching"

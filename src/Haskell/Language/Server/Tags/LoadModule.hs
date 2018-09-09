@@ -122,7 +122,8 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
         []     -> throwErrorWithCallStack $ "Invalid module name:" <+> pretty ikModuleName
         x : xs -> do
           TagsServerConf{tsconfSearchDirs, tsconfVanillaExtensions, tsconfHsBootExtensions, tsconfNameResolution} <- ask
-          candidates <- runFileSearchT tsconfSearchDirs $ findByPathSuffixSansExtension $ mkPathFragment $ x :| xs
+          candidates <- runFileSearchT tsconfSearchDirs $
+            findByPathSuffixSansExtension $ mkSinglePathFragment <$> x :| xs
           let extensions = case ikImportTarget of
                 VanillaModule -> tsconfVanillaExtensions
                 HsBootModule  -> tsconfHsBootExtensions

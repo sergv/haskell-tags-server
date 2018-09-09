@@ -146,8 +146,8 @@ fileNameToModuleName fname =
       T.intercalate "." $
       reverse $
       takeWhile canBeModuleName $
-      map unPathFragment $
-      dropExtension fname' : dirs
+      map (unPathFragment . unBaseName) $
+      dropExtensions fname' : dirs
   where
     canBeModuleName :: T.Text -> Bool
     canBeModuleName t = case T.uncons t of
