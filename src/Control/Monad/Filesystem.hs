@@ -34,88 +34,88 @@ class Monad m => MonadFS m where
   readFile             :: FullPath -> m TL.Text
   doesFileExist        :: FullPath -> m Bool
   doesDirectoryExist   :: FullPath -> m Bool
-  getDirectoryContents :: FullPath -> m [BasePath]
+  listDirectory        :: FullPath -> m [BasePath]
 
 instance MonadFS IO where
   {-# INLINE getModificationTime  #-}
   {-# INLINE readFile             #-}
   {-# INLINE doesFileExist        #-}
   {-# INLINE doesDirectoryExist   #-}
-  {-# INLINE getDirectoryContents #-}
+  {-# INLINE listDirectory        #-}
   getModificationTime  = Path.getModificationTime
   readFile             = Data.Text.Lazy.IO.readFile . T.unpack . Path.unFullPath
   doesFileExist        = Path.doesFileExist
   doesDirectoryExist   = Path.doesDirectoryExist
-  getDirectoryContents = Path.getDirectoryContents
+  listDirectory        = Path.listDirectory
 
 instance MonadFS m => MonadFS (ExceptT e m) where
   {-# INLINE getModificationTime  #-}
   {-# INLINE readFile             #-}
   {-# INLINE doesFileExist        #-}
   {-# INLINE doesDirectoryExist   #-}
-  {-# INLINE getDirectoryContents #-}
+  {-# INLINE listDirectory        #-}
   getModificationTime  = lift . getModificationTime
   readFile             = lift . readFile
   doesFileExist        = lift . doesFileExist
   doesDirectoryExist   = lift . doesDirectoryExist
-  getDirectoryContents = lift . getDirectoryContents
+  listDirectory        = lift . listDirectory
 
 instance MonadFS m => MonadFS (ReaderT r m) where
   {-# INLINE getModificationTime  #-}
   {-# INLINE readFile             #-}
   {-# INLINE doesFileExist        #-}
   {-# INLINE doesDirectoryExist   #-}
-  {-# INLINE getDirectoryContents #-}
+  {-# INLINE listDirectory        #-}
   getModificationTime  = lift . getModificationTime
   readFile             = lift . readFile
   doesFileExist        = lift . doesFileExist
   doesDirectoryExist   = lift . doesDirectoryExist
-  getDirectoryContents = lift . getDirectoryContents
+  listDirectory        = lift . listDirectory
 
 instance (MonadFS m, Monoid w) => MonadFS (Lazy.WriterT w m) where
   {-# INLINE getModificationTime  #-}
   {-# INLINE readFile             #-}
   {-# INLINE doesFileExist        #-}
   {-# INLINE doesDirectoryExist   #-}
-  {-# INLINE getDirectoryContents #-}
+  {-# INLINE listDirectory        #-}
   getModificationTime  = lift . getModificationTime
   readFile             = lift . readFile
   doesFileExist        = lift . doesFileExist
   doesDirectoryExist   = lift . doesDirectoryExist
-  getDirectoryContents = lift . getDirectoryContents
+  listDirectory        = lift . listDirectory
 
 instance (MonadFS m, Monoid w) => MonadFS (Strict.WriterT w m) where
   {-# INLINE getModificationTime  #-}
   {-# INLINE readFile             #-}
   {-# INLINE doesFileExist        #-}
   {-# INLINE doesDirectoryExist   #-}
-  {-# INLINE getDirectoryContents #-}
+  {-# INLINE listDirectory        #-}
   getModificationTime  = lift . getModificationTime
   readFile             = lift . readFile
   doesFileExist        = lift . doesFileExist
   doesDirectoryExist   = lift . doesDirectoryExist
-  getDirectoryContents = lift . getDirectoryContents
+  listDirectory        = lift . listDirectory
 
 instance MonadFS m => MonadFS (Lazy.StateT s m) where
   {-# INLINE getModificationTime  #-}
   {-# INLINE readFile             #-}
   {-# INLINE doesFileExist        #-}
   {-# INLINE doesDirectoryExist   #-}
-  {-# INLINE getDirectoryContents #-}
+  {-# INLINE listDirectory        #-}
   getModificationTime  = lift . getModificationTime
   readFile             = lift . readFile
   doesFileExist        = lift . doesFileExist
   doesDirectoryExist   = lift . doesDirectoryExist
-  getDirectoryContents = lift . getDirectoryContents
+  listDirectory        = lift . listDirectory
 
 instance MonadFS m => MonadFS (Strict.StateT s m) where
   {-# INLINE getModificationTime  #-}
   {-# INLINE readFile             #-}
   {-# INLINE doesFileExist        #-}
   {-# INLINE doesDirectoryExist   #-}
-  {-# INLINE getDirectoryContents #-}
+  {-# INLINE listDirectory        #-}
   getModificationTime  = lift . getModificationTime
   readFile             = lift . readFile
   doesFileExist        = lift . doesFileExist
   doesDirectoryExist   = lift . doesDirectoryExist
-  getDirectoryContents = lift . getDirectoryContents
+  listDirectory        = lift . listDirectory

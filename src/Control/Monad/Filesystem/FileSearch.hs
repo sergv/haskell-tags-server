@@ -29,14 +29,15 @@ import Control.Monad.Except.Ext
 import Control.Monad.Ext
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Writer hiding ((<>))
+import Control.Monad.Writer
+
 import Data.DList (DList)
 import qualified Data.DList as DL
+import qualified Data.List as L
 import Data.Maybe
 import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
-import qualified Data.Text as T
 import qualified Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext
 
@@ -100,10 +101,11 @@ instance MonadReader r m => MonadReader r (FileSearchT m) where
     lift $ local f (runReaderT action env)
 
 instance (MonadError ErrorMessage m, MonadFS m) => MonadFileSearch (FileSearchT m) where
-  findByPathSuffixSansExtension fragment = FileSearchT $ do
+  findByPathSuffixSansExtension components = FileSearchT $ do
     cfg <- ask
     findAllMatching cfg checkPath
     where
+      components' = toList components
       checkPath :: FindEntry -> Maybe FullPath
       checkPath entry
         | isTarget fullPath = Just fullPath
@@ -111,7 +113,9 @@ instance (MonadError ErrorMessage m, MonadFS m) => MonadFileSearch (FileSearchT 
         where
           fullPath = findEntryFullPath entry
       isTarget :: FullPath -> Bool
-      isTarget = (unPathFragment fragment `T.isSuffixOf`) . unFullPath . dropExtension
+      isTarget candidate = components' `L.isSuffixOf` candidateComponents
+        where
+          candidateComponents = map unBaseName (toList (splitDirectories (dropExtensions candidate)))
   findRec f = FileSearchT $ do
     cfg <- ask
     findAllMatching cfg f
@@ -123,7 +127,7 @@ findAllMatching
   -> m [a]
 findAllMatching SearchCfg{shallowPaths, recursivePaths, ignoredDirs} collectPred = do
   shallowResults   <- foldForA shallowPaths $ \path ->
-    mapMaybe (collectPred . mkFindEntry path) <$> MonadFS.getDirectoryContents path
+    mapMaybe (collectPred . mkFindEntry path) <$> MonadFS.listDirectory path
   recursiveResults <- foldForA recursivePaths $ \path ->
     findRecursive ((`S.notMember` ignoredDirs) . bpFileName . findEntryBasePath) collectPred path
   return $ shallowResults ++ recursiveResults
@@ -138,20 +142,12 @@ findRecursive visitPred collectPred = fmap toList . go
   where
     go :: FullPath -> m (DList a)
     go root = do
-      contents      <- map (mkFindEntry root) .
-                       filter (isValidDirName . bpFileName) <$>
-                       MonadFS.getDirectoryContents root
+      contents      <- map (mkFindEntry root) <$>
+                       MonadFS.listDirectory root
       (dirs, files) <- partitionM (MonadFS.doesDirectoryExist . findEntryFullPath) contents
       let interestingFiles = mapMaybe collectPred files
       children      <- foldMapA (go . findEntryFullPath) $ filter visitPred dirs
       pure $ DL.fromList interestingFiles <> children
-
-isValidDirName :: BaseName -> Bool
-isValidDirName name = case unBaseName name of
-  ""   -> False
-  "."  -> False
-  ".." -> False
-  _    -> True
 
 versionControlDirs :: Set BaseName
 versionControlDirs = S.fromList

@@ -22,6 +22,8 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer
 
+import Data.List.NonEmpty (NonEmpty)
+
 import Data.Path
 
 data FindEntry = FindEntry
@@ -38,7 +40,7 @@ mkFindEntry root base = FindEntry
   }
 
 class Monad m => MonadFileSearch m where
-  findByPathSuffixSansExtension :: PathFragment -> m [FullPath]
+  findByPathSuffixSansExtension :: NonEmpty PathFragment -> m [FullPath]
   findRec                       :: (FindEntry -> Maybe a) -> m [a]
 
 instance MonadFileSearch m => MonadFileSearch (ExceptT e m) where
