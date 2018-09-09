@@ -214,7 +214,8 @@ makeModule suggestedModuleName modifTime filename tokens = do
   (header, tokens') <- analyzeHeader tokens
   let syms           :: [ResolvedSymbol]
       errors         :: [String]
-      (syms, errors) = first (fmap mkResolvedSymbol) $ processTokens tokens'
+      (syms, errors) = first (fmap mkResolvedSymbol . FastTags.removeDuplicatePatterns)
+                     $ processTokens tokens'
       allSymbols     :: SymbolMap
       allSymbols     = SM.fromList syms
   unless (null errors) $

@@ -7,6 +7,7 @@
 -- Created     :  20 June 2017
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE BangPatterns       #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE NamedFieldPuns     #-}
 {-# LANGUAGE OverloadedStrings  #-}
@@ -21,10 +22,13 @@ module Haskell.Language.Lexer.FastTags
   , stripNewlines
   , processTokens
   , stripServerTokens
+  , removeDuplicatePatterns
   , module FastTags.Token
   , module FastTags.Tag
   ) where
 
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as M
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc.Ext
 import GHC.Generics (Generic)
@@ -97,3 +101,21 @@ stripServerTokens xs = [ Pos p x | Pos p (Tok x) <- xs ]
 
 processTokens :: [Pos ServerToken] -> ([Pos TagVal], [String])
 processTokens = FastTags.Tag.processTokens . stripServerTokens
+
+-- | Keep only one Pattern tag for each unique name.
+removeDuplicatePatterns :: [Pos TagVal] -> [Pos TagVal]
+removeDuplicatePatterns = go mempty
+  where
+    go :: Map Text SrcPos -> [Pos TagVal] -> [Pos TagVal]
+    go !acc []     =
+      map (\(name, pos) -> Pos pos (TagVal name Pattern Nothing)) $ M.toList acc
+    go !acc (t:ts) =
+      case t of
+        Pos pos TagVal{tvName, tvType = Pattern, tvParent = Nothing} ->
+          go (M.insertWith minPos tvName pos acc) ts
+        t' -> t' : go acc ts
+
+minPos :: SrcPos -> SrcPos -> SrcPos
+minPos p1@SrcPos{posLine = l1} p2@SrcPos{posLine = l2}
+  | l1 < l2   = p1
+  | otherwise = p2
