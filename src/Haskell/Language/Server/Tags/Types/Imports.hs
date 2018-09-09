@@ -35,8 +35,8 @@ module Haskell.Language.Server.Tags.Types.Imports
   , ChildrenVisibility(..)
   ) where
 
-import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
+import Data.Set (Set)
 import Data.Text.Prettyprint.Doc.Ext
 import GHC.Generics (Generic)
 
@@ -160,7 +160,7 @@ instance Pretty a => Pretty (ImportListSpec a) where
 
 -- | User-provided import/hiding list.
 data ImportList = ImportList
-  { ilEntries    :: KeyMap NonEmpty (EntryWithChildren () UnqualifiedSymbolName)
+  { ilEntries    :: KeyMap Set (EntryWithChildren () UnqualifiedSymbolName)
   , ilImportType :: ImportType
   } deriving (Eq, Ord, Show)
 

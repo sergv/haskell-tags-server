@@ -209,7 +209,7 @@ analyzeImports imports qualifiers ts = do
       where
         findImportListEntries
           :: ImportType
-          -> KeyMap NonEmpty (EntryWithChildren () UnqualifiedSymbolName)
+          -> KeyMap Set (EntryWithChildren () UnqualifiedSymbolName)
           -> [Pos ServerToken]
           -> m (ImportListSpec ImportList, [Pos ServerToken])
         findImportListEntries importType acc toks' = do

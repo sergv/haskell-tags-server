@@ -19,8 +19,6 @@ module Haskell.Language.Server.Tags.LoadModule
   , resolveModule
   ) where
 
-import Prelude hiding (mod)
-
 import Control.Arrow (first)
 import Control.Monad.Except (throwError)
 import Control.Monad.Except.Ext
@@ -36,13 +34,13 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe hiding (Maybe(Just))
+import qualified Data.Monoid as Monoid
 import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Prettyprint.Doc as PP
-import Data.Text.Prettyprint.Doc.Combinators
 import Data.Text.Prettyprint.Doc.Ext
 import Data.Time.Clock (UTCTime)
 import Data.Traversable (for)
@@ -57,6 +55,7 @@ import qualified Control.Monad.Filesystem as MonadFS
 import Control.Monad.Filesystem.FileSearch
 import Control.Monad.Logging
 import Data.ErrorMessage
+import Data.KeyMap (KeyMap)
 import qualified Data.KeyMap as KM
 import Data.Map.NonEmpty (NonEmptyMap)
 import qualified Data.Map.NonEmpty as NEMap
@@ -174,21 +173,15 @@ loadModuleFromFile key@ImportKey{ikModuleName} modifTime filename = do
 checkLoadingModules
   :: forall m. MonadState TagsServerState m
   => ImportKey
-  -> m (Maybe (NonEmpty UnresolvedModule))
+  -> m (Maybe (NonEmpty UnresolvedModule, [ResolvedModule]))
 checkLoadingModules key = do
-  s <- get
-  pure $ case M.lookup key $ tssLoadsInProgress s of
-    Just modules -> Just $ NEMap.elemsNE modules `appendToNE` loadedMods
+  TagsServerState{tssLoadsInProgress, tssLoadedModules} <- get
+  pure $ case M.lookup key tssLoadsInProgress of
+    Just modules -> Just (NEMap.elemsNE modules, loadedMods)
       where
-        loadedMods :: [UnresolvedModule]
-        loadedMods = map (() <$)
-                   $ foldMap toList
-                   $ SubkeyMap.lookup key
-                   $ tssLoadedModules s
+        loadedMods :: [ResolvedModule]
+        loadedMods = foldMap toList $ SubkeyMap.lookup key tssLoadedModules
     Nothing      -> Nothing
-
-appendToNE :: NonEmpty a -> [a] -> NonEmpty a
-appendToNE (x :| xs) ys = x :| (xs ++ ys)
 
 -- | Load single module from the given file. Does not load any imports or exports.
 -- Names in the loaded module are not resolved.
@@ -255,7 +248,7 @@ makeModule suggestedModuleName modifTime filename tokens = do
 
 resolveModule
   :: forall m. (HasCallStack, MonadError ErrorMessage m, MonadReader TagsServerConf m, MonadLog m)
-  => (ImportKey -> m (Maybe (NonEmpty UnresolvedModule)))
+  => (ImportKey -> m (Maybe (NonEmpty UnresolvedModule, [ResolvedModule])))
   -> (ImportKey -> m (Maybe (NonEmpty ResolvedModule)))
   -> UnresolvedModule
   -> m ResolvedModule
@@ -317,8 +310,14 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
             -- is already being loaded. In order to break infinite loop, we must
             -- analyse it here and get all the names we interested in, whithout
             -- resolving the module!
-            Just modules ->
-              Just <$> quasiResolveImportSpecWithLoadsInProgress (mhModName unresHeader) key modules importSpecs
+            Just (toLoad, _alreadyLoaded) ->
+              Just <$> quasiResolveImportSpecWithLoadsInProgress
+                (lift . checkIfModuleIsAlreadyBeingLoaded)
+                (lift . loadMod)
+                (mhModName unresHeader)
+                key
+                toLoad
+                importSpecs
 
     resolveSymbols
       :: HasCallStack
@@ -363,7 +362,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
                   , "has no corresponding qualified imports"
                   ]
                 Just sm -> do
-                  childrenNames <- childrenNamesFromEntry mhModName modulesInScope sm $ name' <$ entry
+                  presentChildren <- childrenNamesFromEntry mhModName modulesInScope sm $ name' <$ entry
                   let childrenType :: FastTags.Type
                       childrenType = case typ of
                         FastTags.Type   -> FastTags.Constructor
@@ -372,7 +371,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
                       names :: Map UnqualifiedSymbolName ResolvedSymbol
                       names
                         = M.insert name' (mkResolvedSymbolFromParts pos name' typ Nothing)
-                        $ M.fromSet (\childName -> mkResolvedSymbolFromParts pos childName childrenType (Just name')) childrenNames
+                        $ M.fromSet (\childName -> mkResolvedSymbolFromParts pos childName childrenType (Just name')) presentChildren
                   pure $ MM.singleton qualifier names
           let filteredExports :: SymbolMap
               filteredExports
@@ -432,42 +431,92 @@ resolveReexports resolvedImports modNames =
 -- 2. Module may reexport arbitrary names, but we're only importing names
 -- defined locally in the module.
 quasiResolveImportSpecWithLoadsInProgress
-  :: forall m t. (HasCallStack, MonadWriter [(ImportQualification, SymbolMap)] m, MonadError ErrorMessage m, Traversable t)
-  => ModuleName                -- ^ Module we're currently analysing.
+  :: forall m t. (HasCallStack, MonadWriter [(ImportQualification, SymbolMap)] m, MonadError ErrorMessage m, Traversable t, MonadLog m)
+  => (ImportKey -> m (Maybe (NonEmpty UnresolvedModule, [ResolvedModule])))
+  -> (ImportKey -> m (Maybe (NonEmpty ResolvedModule)))
+  -> ModuleName                -- ^ Module we're currently analysing.
   -> ImportKey                 -- ^ Import of the main module that caused the cycle.
   -> NonEmpty UnresolvedModule -- ^ Modules in progress that are being loaded and are going to be anayzed here
   -> t UnresolvedImportSpec    -- ^ Import specs to resolve
   -> m (t ResolvedImportSpec)
-quasiResolveImportSpecWithLoadsInProgress mainModuleName key modules importSpecs =
+quasiResolveImportSpecWithLoadsInProgress checkIfModuleIsAlreadyBeingLoaded loadMod mainModName mainModImport modules importSpecs =
   for importSpecs $ \spec@ImportSpec{ispecQualification, ispecImportList} -> do
-    let processImports :: Maybe (Set UnqualifiedSymbolName) -> m SymbolMap
-        processImports expectedNames =
-          foldForA modules $ \Module{modHeader = ModuleHeader{mhExports, mhModName}, modAllSymbols} ->
+    let processImports :: Maybe (KeyMap Set (EntryWithChildren () UnqualifiedSymbolName)) -> m SymbolMap
+        processImports wantedNames =
+          foldForA modules $ \Module{modHeader = ModuleHeader{mhExports, mhModName = importedModName, mhImports}, modAllSymbols} ->
             case mhExports of
               NoExports    -> pure modAllSymbols
               EmptyExports -> pure modAllSymbols
               SpecificExports ModuleExports{meReexports, meExportedEntries}
-                | S.null meReexports || maybe False (`SM.isSubsetNames` modAllSymbols) expectedNames
+                | S.null meReexports || allWantedNamesDefinedLocally
                 , S.size unqualifiedExports == S.size exportedNames ->
-                  case expectedNames of
+                  case wantedSet of
                     Nothing -> pure $ modAllSymbols `SM.restrictKeys` unqualifiedExports
-                    Just expected
-                      | expected `S.isSubsetOf` unqualifiedExports
-                      -> pure $ modAllSymbols `SM.restrictKeys` expected
+                    Just wanted
+                      | wanted `S.isSubsetOf` unqualifiedExports
+                      -> pure $ modAllSymbols `SM.restrictKeys` wanted
                       | otherwise
                       ->
                         -- TODO: decide whether to actually throw an error or return mempty.
                         -- pure mempty -- This module could not have been imported in reality - discard it.
                         throwErrorWithCallStack $ ppDictHeader
                           "This module could not have been imported in reality"
-                          [ "mhModName"          --> mhModName
-                          , "expected"           :-> ppSet expected
+                          [ "importedModName"    --> importedModName
+                          , "expected"           :-> ppSet wanted
+                          , "meReexports"        :-> ppSet meReexports
                           , "unqualifiedExports" :-> ppSet unqualifiedExports
                           , "exportedNames"      :-> ppSet exportedNames
                           ]
+                -- If all we have are reexports...
+                | Just wantedNames' <- wantedNames
+                , not (S.null meReexports) && not allWantedNamesDefinedLocally
+                , S.null exportedNames -> do
+                -- , S.size unqualifiedExports == S.size exportedNames ->
+                  let reexportedImports :: [UnresolvedImportSpec]
+                      reexportedImports =
+                        foldMap (foldMap toList) $ M.restrictKeys (SubkeyMap.toSubmap mhImports) meReexports
+                      candidateReexports :: [UnresolvedImportSpec]
+                      candidateReexports =
+                        filter (canBringNamesIntoScope wantedNames') reexportedImports
+
+                  (canLoad :: [UnresolvedImportSpec], cannotLoad :: [ModuleName]) <-
+                    foldForA candidateReexports $ \imp@ImportSpec{ispecImportKey} -> do
+                      isBeingLoaded <- checkIfModuleIsAlreadyBeingLoaded ispecImportKey
+                      pure $ case isBeingLoaded of
+                        Nothing -> -- Not being loaded, may load
+                          ([imp], mempty)
+                        Just (inProgress, _finishedLoading) -> -- Already being loaded - too bad
+                          -- TODO: use '_finishedLoading' as it may help to
+                          -- resolve some names.
+                          (mempty, mhModName . modHeader <$> toList inProgress)
+                  res <- resolveLoop loadMod wantedNames' canLoad
+                  case res of
+                    Nothing -> do
+                      logDebug $ ppDictHeader "Import cycle debug info"
+                        [ "canLoad"            --> canLoad
+                        , "cannotLoad"         --> cannotLoad
+                        , "meReexports"        :-> ppSet meReexports
+                        , "wantedNames'"       :-> ppKeyMapWith pretty pretty wantedNames'
+                        , "reexportedImports"  --> reexportedImports
+                        , "candidateReexports" --> candidateReexports
+                        ]
+                      throwErrorWithCallStack $ ppFoldableHeader
+                        (PP.hsep
+                          [ "Cannot resolve reexport import cycle: module"
+                          , PP.dquotes (pretty mainModName)
+                          , "imports names from"
+                          , pretty mainModImport
+                          , "that reexports names from modules that are already being loaded:"
+                          ])
+                        cannotLoad
+                    Just syms -> pure syms
                 | otherwise ->
                   throwErrorWithCallStack errMsg
                 where
+                  wantedSet :: Maybe (Set UnqualifiedSymbolName)
+                  wantedSet = KM.keysSet <$> wantedNames
+                  allWantedNamesDefinedLocally = maybe False (`SM.isSubsetNames` modAllSymbols) wantedSet
+
                   exportedNames :: Set SymbolName
                   exportedNames = KM.keysSet meExportedEntries
                   unqualifiedExports :: Set UnqualifiedSymbolName
@@ -477,8 +526,8 @@ quasiResolveImportSpecWithLoadsInProgress mainModuleName key modules importSpecs
                     $ S.map mkUnqualifiedSymbolName exportedNames
                   errMsg :: Doc Void
                   errMsg = ppFoldableHeader
-                    ("Cannot resolve import cycle: module" <+> PP.dquotes (pretty mainModuleName) <+> "imports names from" <+> pretty key <>
-                     ", but the import" <+> pretty mhModName <+> "exports names that are not defined locally:")
+                    ("Cannot resolve import cycle: module" <+> PP.dquotes (pretty mainModName) <+> "imports names from" <+> pretty mainModImport <>
+                     ", but the import" <+> pretty importedModName <+> "exports names that are not defined locally:")
                     (exportedNames `S.difference` S.mapMonotonic getUnqualifiedSymbolName (SM.keysSet modAllSymbols))
     names <- case ispecImportList of
       -- If there's no import list then ensure that either:
@@ -486,15 +535,104 @@ quasiResolveImportSpecWithLoadsInProgress mainModuleName key modules importSpecs
       -- must be defined locally.
       -- 2. There's an export list but it exports *only* names
       -- defined locally.
-      NoImportList              -> processImports Nothing
-      AssumedWildcardImportList -> processImports Nothing
-      SpecificImports ImportList{ilEntries} -> do
-        let importedNames = KM.keysSet ilEntries
-        processImports $ Just importedNames
+      NoImportList                          -> processImports Nothing
+      AssumedWildcardImportList             -> processImports Nothing
+      SpecificImports ImportList{ilEntries} -> processImports $ Just ilEntries
     -- Record which names enter current module's scope under certain
     -- qualification from import spec we're currently analysing.
     tell [(ispecQualification, names)]
     pure $ spec { ispecImportedNames = names }
+
+resolveLoop
+  :: forall m. Monad m
+  => (ImportKey -> m (Maybe (NonEmpty ResolvedModule)))
+  -> KeyMap Set (EntryWithChildren () UnqualifiedSymbolName)
+  -> [UnresolvedImportSpec]
+  -> m (Maybe SymbolMap)
+resolveLoop loadMod wantedNames = go (KM.keysSet wantedNames) mempty
+  where
+    go
+      :: Set UnqualifiedSymbolName
+      -> SymbolMap
+      -> [UnresolvedImportSpec]
+      -> m (Maybe SymbolMap)
+    go wanted found = \case
+      [] | S.null wanted -> pure $ Just found
+         | otherwise     -> pure Nothing
+      ImportSpec{ispecImportKey} : specs -> do
+        mod <- loadMod ispecImportKey
+        case mod of
+          Nothing   -> go wanted  found  specs
+          Just mods -> go wanted' found' specs
+            where
+              found' :: SymbolMap
+              found' = foldMap ((`SM.restrictKeys` wanted) . modAllExportedNames) mods
+              wanted' = wanted S.\\ SM.keysSet found'
+
+canBringNamesIntoScope
+  :: KeyMap Set (EntryWithChildren () UnqualifiedSymbolName)
+  -> UnresolvedImportSpec
+  -> Bool
+canBringNamesIntoScope names ImportSpec{ispecImportList} =
+  case ispecImportList of
+    NoImportList                                        -> True
+    AssumedWildcardImportList                           -> True
+    SpecificImports ImportList{ilEntries, ilImportType} ->
+      case ilImportType of
+        Imported ->
+          or $ M.intersectionWith
+            canBringNamesViaImport
+            (S.map entryChildrenVisibility <$> KM.toMap names)
+            (S.map entryChildrenVisibility <$> KM.toMap ilEntries)
+        Hidden   ->
+          not $ M.null $ M.differenceWith
+            hideNames
+            (S.map entryChildrenVisibility <$> KM.toMap names)
+            (S.map entryChildrenVisibility <$> KM.toMap ilEntries)
+      where
+        canBringNamesViaImport
+          :: Set (Maybe (ChildrenVisibility ()))
+          -> Set (Maybe (ChildrenVisibility ()))
+          -> Bool
+        canBringNamesViaImport wanted present =
+          Nothing `S.member` wanted && Nothing `S.member` present ||
+          presentWildcards ||
+          not (S.null (wantedChildren `S.intersection` presentChildren))
+          where
+            wantedChildren, presentChildren :: Set UnqualifiedSymbolName
+            (Monoid.Any presentWildcards, presentChildren) = foldMap analyse present
+            (_,                           wantedChildren)  = foldMap analyse wanted
+        hideNames
+          :: Set (Maybe (ChildrenVisibility ()))
+          -> Set (Maybe (ChildrenVisibility ()))
+          -> Maybe (Set (Maybe (ChildrenVisibility ())))
+        hideNames wanted present
+          | Nothing `S.member` present || presentWildcards
+          = Nothing
+          | otherwise
+          = nothingIfEmpty $ S.map (fmap (hideChildren presentChildren)) $ wanted S.\\ present
+          where
+            presentChildren :: Set UnqualifiedSymbolName
+            (Monoid.Any presentWildcards, presentChildren) = foldMap analyse present
+        analyse
+          :: Maybe (ChildrenVisibility ())
+          -> (Monoid.Any, Set UnqualifiedSymbolName)
+        analyse = \case
+          Nothing                                 -> (Monoid.Any False, mempty)
+          Just VisibleAllChildren                 -> (Monoid.Any True, mempty)
+          Just (VisibleSpecificChildren children) -> (mempty, M.keysSet children)
+          Just (VisibleAllChildrenPlusSome extra) -> (Monoid.Any True, M.keysSet extra)
+
+hideChildren :: Set UnqualifiedSymbolName -> ChildrenVisibility a -> ChildrenVisibility a
+hideChildren toHide = \case
+  VisibleAllChildren            -> VisibleAllChildren
+  VisibleSpecificChildren xs    -> VisibleSpecificChildren $ M.withoutKeys xs toHide
+  VisibleAllChildrenPlusSome xs -> VisibleAllChildrenPlusSome $ M.withoutKeys xs toHide
+
+nothingIfEmpty :: Set a -> Maybe (Set a)
+nothingIfEmpty xs
+  | S.null xs = Nothing
+  | otherwise = Just xs
 
 -- | Some tags should get extra children-parent relationships, that were not
 -- evident by looking at tag definitions alone.
