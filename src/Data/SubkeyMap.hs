@@ -35,10 +35,14 @@ module Data.SubkeyMap
   , fromMap
   , fromList
   , fromFoldable
+  , toMap
+  , toSubmap
   , toList
   , toSubkeyList
   , toSubkeyKeyList
   , keys
+  , restrictKeys
+  , withoutKeys
   ) where
 
 import Control.Arrow
@@ -155,12 +159,18 @@ fromList = fromFoldable
 fromFoldable :: (Foldable f, HasSubkey k, Semigroup v) => f (k, v) -> SubkeyMap k v
 fromFoldable = foldl' (\acc (k, v) -> insertWith (<>) k v acc) empty
 
+toMap :: SubkeyMap k v -> Map k v
+toMap = smMainMap
+
+toSubmap :: Ord k => SubkeyMap k v -> Map (Subkey k) [v]
+toSubmap SubkeyMap{smMainMap, smSubMap} =
+  (smMainMap `indexBySet`) <$> smSubMap
+
 toList :: SubkeyMap k v -> [(k, v)]
-toList = M.toList . smMainMap
+toList = M.toList . toMap
 
 toSubkeyList :: Ord k => SubkeyMap k v -> [(Subkey k, [v])]
-toSubkeyList SubkeyMap{smMainMap, smSubMap} =
-  map (second (smMainMap `indexBySet`)) $ M.toList smSubMap
+toSubkeyList = M.toList . toSubmap
 
 toSubkeyKeyList :: SubkeyMap k v -> [(Subkey k, Set k)]
 toSubkeyKeyList = M.toList . smSubMap
@@ -168,7 +178,29 @@ toSubkeyKeyList = M.toList . smSubMap
 keys :: SubkeyMap k v -> [k]
 keys = M.keys . smMainMap
 
+-- | Leav only keys found in a Set within a Map.
+restrictKeys :: forall k v. HasSubkey k => SubkeyMap k v -> Set k -> SubkeyMap k v
+restrictKeys SubkeyMap{smMainMap, smSubMap} ks =
+  SubkeyMap
+    { smMainMap = M.restrictKeys smMainMap ks
+    , smSubMap  = (`S.intersection` ks) <$> M.restrictKeys smSubMap  subkeys
+    }
+  where
+    subkeys :: Set (Subkey k)
+    subkeys = S.map getSubkey ks
+
+-- | Remove all keys found in a Set from a Map.
+withoutKeys :: forall k v. HasSubkey k => SubkeyMap k v -> Set k -> SubkeyMap k v
+withoutKeys SubkeyMap{smMainMap, smSubMap} ks =
+  SubkeyMap
+    { smMainMap =               M.withoutKeys smMainMap ks
+    , smSubMap  = (S.\\ ks) <$> M.withoutKeys smSubMap  subkeys
+    }
+  where
+    subkeys :: Set (Subkey k)
+    subkeys = S.map getSubkey ks
+
 -- Utils
 
 indexBySet :: Ord k => Map k v -> Set k -> [v]
-indexBySet m ixs = M.elems $ m `M.intersection` M.fromSet (const ()) ixs
+indexBySet m ixs = M.elems $ M.restrictKeys m ixs

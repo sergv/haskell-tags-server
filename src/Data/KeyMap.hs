@@ -7,10 +7,11 @@
 -- Created     :  Monday, 19 September 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE StandaloneDeriving         #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE StandaloneDeriving   #-}
+{-# LANGUAGE TypeFamilies         #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wredundant-constraints          #-}
 {-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
@@ -24,17 +25,21 @@ module Data.KeyMap
   , member
   , notMember
   , fromList
+  , toMap
   , toList
   , elems
-  , intersectAgainst
+  , restrictKeys
   , keysSet
   , empty
   , null
+  , intersectionWith
+  , differenceWith
   ) where
 
 import Control.Arrow
 import Data.Coerce
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Semigroup
 import Data.Set (Set)
@@ -44,7 +49,7 @@ import Data.Text.Prettyprint.Doc.Combinators
 
 -- | Map than maintains sets of values that all share some key.
 -- Every value must be a member of 'HasKey' typeclass.
-newtype KeyMap a = KeyMap { unKeyMap :: M.Map (Key a) (NonEmpty a) }
+newtype KeyMap a = KeyMap { unKeyMap :: Map (Key a) (NonEmpty a) }
 
 deriving instance (Eq a, Eq (Key a))     => Eq (KeyMap a)
 deriving instance (Ord a, Ord (Key a))   => Ord (KeyMap a)
@@ -82,15 +87,18 @@ notMember k = M.notMember k . unKeyMap
 fromList :: HasKey a => [a] -> KeyMap a
 fromList = KeyMap . M.fromListWith (<>) . map (getKey &&& (:| []))
 
+toMap :: KeyMap a -> Map (Key a) (NonEmpty a)
+toMap = unKeyMap
+
 toList :: KeyMap a -> [(Key a, NonEmpty a)]
-toList = M.toList . unKeyMap
+toList = M.toList . toMap
 
 elems :: KeyMap a -> [NonEmpty a]
 elems = M.elems . unKeyMap
 
-intersectAgainst :: HasKey a => KeyMap a -> Set (Key a) -> KeyMap a
-intersectAgainst (KeyMap m) keys =
-  KeyMap $ M.intersection m (M.fromSet (const ()) keys)
+restrictKeys :: forall a. HasKey a => KeyMap a -> Set (Key a) -> KeyMap a
+restrictKeys =
+  coerce (M.restrictKeys :: Map (Key a) (NonEmpty a) -> Set (Key a) -> Map (Key a) (NonEmpty a))
 
 keysSet :: KeyMap a -> Set (Key a)
 keysSet = M.keysSet . unKeyMap
@@ -100,3 +108,21 @@ empty = KeyMap M.empty
 
 null :: KeyMap a -> Bool
 null = M.null . unKeyMap
+
+intersectionWith
+  :: forall a. HasKey a
+  => (NonEmpty a -> NonEmpty a -> NonEmpty a)
+  -> KeyMap a
+  -> KeyMap a
+  -> KeyMap a
+intersectionWith =
+  coerce (M.intersectionWith :: (NonEmpty a -> NonEmpty a -> NonEmpty a) -> Map (Key a) (NonEmpty a) -> Map (Key a) (NonEmpty a) -> Map (Key a) (NonEmpty a))
+
+differenceWith
+  :: forall a. HasKey a
+  => (NonEmpty a -> NonEmpty a -> Maybe (NonEmpty a))
+  -> KeyMap a
+  -> KeyMap a
+  -> KeyMap a
+differenceWith =
+  coerce (M.differenceWith :: (NonEmpty a -> NonEmpty a -> Maybe (NonEmpty a)) -> Map (Key a) (NonEmpty a) -> Map (Key a) (NonEmpty a) -> Map (Key a) (NonEmpty a))

@@ -171,7 +171,7 @@ loadModuleFromFile key@ImportKey{ikModuleName} modifTime filename = do
     f = NEMap.delete filename
 
 checkLoadingModules
-  :: forall m. (MonadState TagsServerState m)
+  :: forall m. MonadState TagsServerState m
   => ImportKey
   -> m (Maybe (NonEmpty UnresolvedModule))
 checkLoadingModules key = do
@@ -375,7 +375,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
           let filteredExports :: SymbolMap
               filteredExports
                 = fold
-                $ M.intersectionWith SM.keepNames moduleNamesByNamespace
+                $ M.intersectionWith SM.restrictKeys moduleNamesByNamespace
                 $ fmap M.keysSet
                 $ MM.unMonoidalMap exportedNames
           logVerboseDebug $ "[resolveSymbols] exportedNames =" ## ppMonoidalMapWith pretty ppMap exportedNames
@@ -448,10 +448,10 @@ quasiResolveImportSpecWithLoadsInProgress mainModuleName key modules importSpecs
                 | S.null meReexports || maybe False (`SM.isSubsetNames` modAllSymbols) expectedNames
                 , S.size unqualifiedExports == S.size exportedNames ->
                   case expectedNames of
-                    Nothing -> pure $ modAllSymbols `SM.intersectAgainst` unqualifiedExports
+                    Nothing -> pure $ modAllSymbols `SM.restrictKeys` unqualifiedExports
                     Just expected
                       | expected `S.isSubsetOf` unqualifiedExports
-                      -> pure $ modAllSymbols `SM.intersectAgainst` expected
+                      -> pure $ modAllSymbols `SM.restrictKeys` expected
                       | otherwise
                       ->
                         -- TODO: decide whether to actually throw an error or return mempty.
@@ -536,8 +536,8 @@ filterVisibleNames moduleName importedMods allImportedNames ImportSpec{ispecQual
       pure allImportedNames
     SpecificImports ImportList{ilImportType, ilEntries} -> do
       let f = case ilImportType of
-                Imported -> SM.keepNames
-                Hidden   -> SM.removeNames
+                Imported -> SM.restrictKeys
+                Hidden   -> SM.withoutKeys
       importedNames <- foldMapA (allNamesFromEntry moduleName importedMods allImportedNames) ilEntries
       pure $ f allImportedNames importedNames
   pure (ispecQualification, visibleNames)
