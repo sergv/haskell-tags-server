@@ -60,11 +60,12 @@ docFromByteString :: UTF8.ByteString -> Doc ann
 docFromByteString = PP.pretty . TLE.decodeUtf8With TEE.lenientDecode
 
 ppKeyMapWith
-  :: (KM.Key a -> Doc ann)
+  :: Foldable f
+  => (KM.Key a -> Doc ann)
   -> (a -> Doc ann)
-  -> KeyMap a
+  -> KeyMap f a
   -> Doc ann
-ppKeyMapWith ppKey ppVal = ppAssocListWith ppKey (ppNEWith ppVal) . KM.toList
+ppKeyMapWith ppKey ppVal = ppAssocListWith ppKey (ppListWith ppVal . toList) . KM.toList
 
 ppSubkeyMapWith
   :: (k -> Doc ann)
