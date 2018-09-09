@@ -25,11 +25,11 @@ module Data.SymbolMap
   , member
   , isSubsetNames
   , fromList
-  , keepNames
-  , removeNames
-  , intersectAgainst
+  , restrictKeys
+  , withoutKeys
   , keysSet
   ) where
+
 import Prelude hiding (lookup, null)
 
 import Control.Arrow ((&&&), second)
@@ -160,30 +160,21 @@ fromList syms = SymbolMap
     symbolsWithParents =
       mapMaybe (\sym -> (resolvedSymbolName sym,) <$> resolvedSymbolParent sym) syms
 
-keepNames :: SymbolMap -> Set UnqualifiedSymbolName -> SymbolMap
-keepNames SymbolMap{smParentMap, smChildrenMap, smAllSymbols} syms =
+restrictKeys :: SymbolMap -> Set UnqualifiedSymbolName -> SymbolMap
+restrictKeys SymbolMap{smParentMap, smChildrenMap, smAllSymbols} syms =
   SymbolMap
     { smParentMap   = (`S.intersection` syms) <$> (smParentMap   `M.restrictKeys` syms)
     , smChildrenMap = (`S.intersection` syms) <$> (smChildrenMap `M.restrictKeys` syms)
     , smAllSymbols  = smAllSymbols `M.restrictKeys` syms
     }
 
-removeNames :: SymbolMap -> Set UnqualifiedSymbolName -> SymbolMap
-removeNames SymbolMap{smParentMap, smChildrenMap, smAllSymbols} syms =
+withoutKeys :: SymbolMap -> Set UnqualifiedSymbolName -> SymbolMap
+withoutKeys SymbolMap{smParentMap, smChildrenMap, smAllSymbols} syms =
   SymbolMap
     { smParentMap   = (S.\\ syms) <$> (smParentMap   `M.withoutKeys` syms)
     , smChildrenMap = (S.\\ syms) <$> (smChildrenMap `M.withoutKeys` syms)
     , smAllSymbols  = smAllSymbols `M.withoutKeys` syms
     }
-
--- TODO: this function is the same as 'removeNames'. Confirm whether that
--- corresponds to its purpose.
-intersectAgainst :: SymbolMap -> Set UnqualifiedSymbolName -> SymbolMap
-intersectAgainst SymbolMap{smParentMap, smChildrenMap, smAllSymbols} names = SymbolMap
-  { smParentMap   = (S.\\ names) <$> (smParentMap   `M.withoutKeys` names)
-  , smChildrenMap = (S.\\ names) <$> (smChildrenMap `M.withoutKeys` names)
-  , smAllSymbols  = smAllSymbols `M.withoutKeys` names
-  }
 
 keysSet :: SymbolMap -> Set UnqualifiedSymbolName
 keysSet = M.keysSet . smAllSymbols

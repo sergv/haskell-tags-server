@@ -177,7 +177,18 @@ data ModuleExports = ModuleExports
   { -- | Toplevel names exported from this particular module as specified in
     -- the header.
     meExportedEntries    :: KeyMap (EntryWithChildren PosAndType (SymbolName, PosAndType))
-    -- | Module name here refer to real modules only.
+    -- | Module name here refer to real modules only. I.e. reexports via
+    -- handles, like
+    --
+    -- > module Foo
+    -- > ( module Bar
+    -- > , module Data.List
+    -- > ) where
+    -- >
+    -- > import Data.Array as Bar
+    -- > import Data.List
+    --
+    -- were already resolved into @Data.Set.fromList ["Data.Array", "Data.List"]@.
   , meReexports          :: Set ModuleName
     -- | Whether this module exports any entities that export all children.
   , meHasWildcardExports :: Bool
