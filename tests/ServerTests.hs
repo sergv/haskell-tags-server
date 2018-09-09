@@ -44,6 +44,7 @@ import Control.Monad.Filesystem.FileSearch (SearchCfg(..))
 import Data.Path
 import Haskell.Language.Server.BERT
 import Haskell.Language.Server.Tags
+import Haskell.Language.Server.Tags.Types (NameResolutionStrictness(..))
 import PortPool
 
 import ServerTests.LogCollectingServer
@@ -52,8 +53,12 @@ import ServerTests.LogCollectingServer
 testDataDir :: PathFragment
 testDataDir = "test-data"
 
-mkTestsConfig :: MonadBase IO m => WorkingDirectory -> m TagsServerConf
-mkTestsConfig srcDir = liftBase $ do
+mkTestsConfig
+  :: MonadBase IO m
+  => NameResolutionStrictness
+  -> WorkingDirectory
+  -> m TagsServerConf
+mkTestsConfig tsconfNameResolution srcDir = liftBase $ do
   searchDirsCfg <- case srcDir of
     ShallowDir   dir -> do
       dir' <- mkFullPath $ testDataDir </> dir
@@ -62,8 +67,9 @@ mkTestsConfig srcDir = liftBase $ do
       dir' <- mkFullPath $ testDataDir </> dir
       pure defaultSearchDirsCfg { recursivePaths = S.singleton dir' }
   pure defaultTagsServerConf
-    { tsconfSearchDirs   = searchDirsCfg
-    , tsconfEagerTagging = False
+    { tsconfSearchDirs     = searchDirsCfg
+    , tsconfEagerTagging   = False
+    , tsconfNameResolution -- = NameResolutionLax -- NameResolutionStrict
     }
   where
     defaultSearchDirsCfg = tsconfSearchDirs defaultTagsServerConf
@@ -100,11 +106,12 @@ data WorkingDirectory =
   deriving (Eq, Ord, Show)
 
 data ServerTest = ServerTest
-  { stTestName         :: String
-  , stWorkingDirectory :: WorkingDirectory
-  , stFile             :: PathFragment
-  , stSymbol           :: UTF8.ByteString
-  , stExpectedResponse :: ServerResponse
+  { stTestName                 :: String
+  , stNameResolutionStrictness :: NameResolutionStrictness
+  , stWorkingDirectory         :: WorkingDirectory
+  , stFile                     :: PathFragment
+  , stSymbol                   :: UTF8.ByteString
+  , stExpectedResponse         :: ServerResponse
   } deriving (Eq, Ord, Show)
 
 data TestSet a =
@@ -126,7 +133,8 @@ mkQualUnqualTest (name, unqualSym, qualSym, response) =
         ]
 
 withWorkingDir
-  :: WorkingDirectory     -- ^ Working directory under testDataDir
+  :: NameResolutionStrictness
+  -> WorkingDirectory     -- ^ Working directory under testDataDir
   -> TestSet
        ( String          -- ^ Test name
        , PathFragment    -- ^ Filepath within the working directory
@@ -134,13 +142,14 @@ withWorkingDir
        , ServerResponse  -- ^ Expected response
        )
   -> TestSet ServerTest
-withWorkingDir dir =
+withWorkingDir mode dir =
   fmap $ \(name, file, sym, response) -> ServerTest
-    { stTestName         = name
-    , stWorkingDirectory = dir
-    , stFile             = file
-    , stSymbol           = sym
-    , stExpectedResponse = response
+    { stTestName                 = name
+    , stNameResolutionStrictness = mode
+    , stWorkingDirectory         = dir
+    , stFile                     = file
+    , stSymbol                   = sym
+    , stExpectedResponse         = response
     }
 
 withFile
@@ -160,7 +169,8 @@ withFile file =
   fmap (\(name, sym, response) -> (name, file, sym, response))
 
 withDirAndFile
-  :: WorkingDirectory    -- ^ Working directory under testDataDir
+  :: NameResolutionStrictness
+  -> WorkingDirectory    -- ^ Working directory under testDataDir
   -> PathFragment        -- ^ Filepath within the working directory
   -> TestSet
        ( String          -- ^ Test name
@@ -168,20 +178,21 @@ withDirAndFile
        , ServerResponse  -- ^ Expected response
        )
   -> TestSet ServerTest
-withDirAndFile dir file =
-  withWorkingDir dir . fmap (\(name, sym, response) -> (name, file, sym, response))
+withDirAndFile mode dir file =
+  withWorkingDir mode dir . fmap (\(name, sym, response) -> (name, file, sym, response))
 
 testData :: TestSet ServerTest
 testData = GroupTest "server tests"
   [ AtomicTest ServerTest
-      { stTestName         = "single module"
-      , stWorkingDirectory = ShallowDir "0000single_module"
-      , stFile             = "SingleModule.hs"
-      , stSymbol           = "foo"
-      , stExpectedResponse = Known "SingleModule.hs" 11 "Function"
+      { stTestName                 = "single module"
+      , stNameResolutionStrictness = NameResolutionStrict
+      , stWorkingDirectory         = ShallowDir "0000single_module"
+      , stFile                     = "SingleModule.hs"
+      , stSymbol                   = "foo"
+      , stExpectedResponse         = Known "SingleModule.hs" 11 "Function"
       }
   , GroupTest "imports"
-      [ withDirAndFile (ShallowDir "0001module_with_imports") "ModuleWithImports.hs" $
+      [ withDirAndFile NameResolutionStrict (ShallowDir "0001module_with_imports") "ModuleWithImports.hs" $
           GroupTest "vanilla"
             [ GroupTest "wildcard import" $ map mkQualUnqualTest
                 [ ("name #1"
@@ -244,7 +255,7 @@ testData = GroupTest "server tests"
                 ]
             ]
       -- test extraction and subsequent parsing of multiline import list
-      , withDirAndFile (ShallowDir "0001module_with_imports") "ModuleWithMultilineImportList.hs" $
+      , withDirAndFile NameResolutionStrict (ShallowDir "0001module_with_imports") "ModuleWithMultilineImportList.hs" $
           group "multiline import list"
             [ ("import #1"
               , "foo"
@@ -267,7 +278,7 @@ testData = GroupTest "server tests"
               , Known "ModuleWithMultilineImportList.hs" 21 "Function"
               )
             ]
-      , withDirAndFile (ShallowDir "0001module_with_imports") "ModuleWithQualifiedImport.hs" $
+      , withDirAndFile NameResolutionStrict (ShallowDir "0001module_with_imports") "ModuleWithQualifiedImport.hs" $
           group "qualified import with alias"
             [ ("Imp.foo"
               , "Imp.foo"
@@ -290,7 +301,7 @@ testData = GroupTest "server tests"
               , Known "ModuleWithQualifiedImport.hs" 13 "Function"
               )
             ]
-      , withDirAndFile (ShallowDir "0001module_with_imports") "ModuleWithQualifiedImportNoAlias.hs" $
+      , withDirAndFile NameResolutionStrict (ShallowDir "0001module_with_imports") "ModuleWithQualifiedImportNoAlias.hs" $
           group "qualified import without alias"
             [ ("Imported1.foo"
               , "Imported1.foo"
@@ -313,7 +324,7 @@ testData = GroupTest "server tests"
               , Known "ModuleWithQualifiedImportNoAlias.hs" 13 "Function"
               )
             ]
-      , withDirAndFile (ShallowDir "0001module_with_imports") "ModuleWithImportsAndHiding.hs" $
+      , withDirAndFile NameResolutionStrict (ShallowDir "0001module_with_imports") "ModuleWithImportsAndHiding.hs" $
           group "hiding"
             [ ("wildcard import #1"
               , "foo"
@@ -336,7 +347,7 @@ testData = GroupTest "server tests"
               , Known "ModuleWithImportsAndHiding.hs" 14 "Function"
               )
             ]
-      , withDirAndFile (ShallowDir "0001module_with_imports") "ModuleWithEmptyImportList.hs" $
+      , withDirAndFile NameResolutionStrict (ShallowDir "0001module_with_imports") "ModuleWithEmptyImportList.hs" $
           group "empty import list"
             [ ("wildcard import #1"
               , "foo"
@@ -361,7 +372,7 @@ testData = GroupTest "server tests"
             ]
       ]
   , GroupTest "export list"
-      [ withDirAndFile (ShallowDir "0002export_lists") "ModuleWithImportsThatHaveExportsList.hs" $
+      [ withDirAndFile NameResolutionStrict (ShallowDir "0002export_lists") "ModuleWithImportsThatHaveExportsList.hs" $
           group "vanilla export list"
             [ ( "import module with export list #1"
               , "foo"
@@ -388,7 +399,7 @@ testData = GroupTest "server tests"
               , NotFound
               )
             ]
-      , withDirAndFile (ShallowDir "0002export_lists") "ModuleWithImportsThatHaveExportsList.hs" $
+      , withDirAndFile NameResolutionStrict (ShallowDir "0002export_lists") "ModuleWithImportsThatHaveExportsList.hs" $
           group "wildcard export list"
             [ ( "import exported name"
               , "Foo"
@@ -411,7 +422,7 @@ testData = GroupTest "server tests"
               , Known "ModuleWithWildcardExport.hs" 15 "Function"
               )
             ]
-      , withDirAndFile (ShallowDir "0002export_lists") "ModuleWithImportsThatHaveExportsList.hs" $
+      , withDirAndFile NameResolutionStrict (ShallowDir "0002export_lists") "ModuleWithImportsThatHaveExportsList.hs" $
           group "explicit export list"
             [ ( "import exported name"
               , "Foo2"
@@ -434,7 +445,7 @@ testData = GroupTest "server tests"
               , NotFound
               )
             ]
-      , withDirAndFile (ShallowDir "0002export_lists") "ModuleWithImportsThatHaveReexports.hs" $
+      , withDirAndFile NameResolutionStrict (ShallowDir "0002export_lists") "ModuleWithImportsThatHaveReexports.hs" $
           group "reexport"
             [ ( "import non-exported name"
               , "baz"
@@ -458,7 +469,7 @@ testData = GroupTest "server tests"
               )
             ]
       ]
-  , withDirAndFile (ShallowDir "0003module_header_detection") "ModuleWithCommentsResemblingModuleHeader.hs" $
+  , withDirAndFile NameResolutionStrict (ShallowDir "0003module_header_detection") "ModuleWithCommentsResemblingModuleHeader.hs" $
       group "module header detection"
         [ ( "name defined locally"
           , "foo"
@@ -469,7 +480,7 @@ testData = GroupTest "server tests"
           , Known "EmptyModule.hs" 3 "Function"
           )
         ]
-  , withDirAndFile (ShallowDir "0004typeclass_export_associated_types") "MainModule.hs" $
+  , withDirAndFile NameResolutionStrict (ShallowDir "0004typeclass_export_associated_types") "MainModule.hs" $
       group "typeclass export"
         [ ( "name defined locally"
           , "foo"
@@ -504,7 +515,7 @@ testData = GroupTest "server tests"
           , NotFound
           )
         ]
-  , withWorkingDir (ShallowDir "0005import_cycle") $
+  , withWorkingDir NameResolutionStrict (ShallowDir "0005import_cycle") $
       GroupTest "import cycle"
         [ GroupTest "wildcard export lists"
             [ withFile "A.hs" $
@@ -587,7 +598,7 @@ testData = GroupTest "server tests"
                   ]
             ]
         ]
-  , withWorkingDir (ShallowDir "0006export_pattern_with_type_ghc8.0") $
+  , withWorkingDir NameResolutionStrict (ShallowDir "0006export_pattern_with_type_ghc8.0") $
       GroupTest "export pattern along with type"
         [ withFile file $
             group groupName
@@ -622,7 +633,7 @@ testData = GroupTest "server tests"
             , ("ModuleWithSpecificImportList.hs", "import with specific import list")
             ]
         ]
-  , withWorkingDir (ShallowDir "0007resolvable_import_cycle") $
+  , withWorkingDir NameResolutionStrict (ShallowDir "0007resolvable_import_cycle") $
       GroupTest "Resolvable import cycle"
         [ withFile "A.hs" $
           group "A imports B with import list"
@@ -939,7 +950,7 @@ testData = GroupTest "server tests"
               )
             ]
         ]
-  , withDirAndFile (ShallowDir "0008module_reexport") "ModuleWithImportsThatHaveModuleReexports.hs" $
+  , withDirAndFile NameResolutionStrict (ShallowDir "0008module_reexport") "ModuleWithImportsThatHaveModuleReexports.hs" $
       group "Module reexport"
         [ ( "Import non-exported & non-reexported name"
           , "baz"
@@ -978,7 +989,7 @@ testData = GroupTest "server tests"
           , NotFound
           )
         ]
-  , withDirAndFile (ShallowDir "0009empty_export_list_is_wildcard") "MainModule.hs" $
+  , withDirAndFile NameResolutionStrict (ShallowDir "0009empty_export_list_is_wildcard") "MainModule.hs" $
       group "Empty export list is treated as export all wildcard"
         [ ( "Non-exported name #1"
           , "Foo"
@@ -1005,8 +1016,9 @@ testData = GroupTest "server tests"
           , NotFound
           )
         ]
-  , GroupTest "Import of module that defines some entities via macro"
-    [ withDirAndFile (ShallowDir "0010exported_name_defined_via_macro") groupModule $
+  , withWorkingDir NameResolutionLax (ShallowDir "0010exported_name_defined_via_macro") $
+    GroupTest "Import of module that defines some entities via macro"
+      [ withFile groupModule $
         group groupName
           [ ( "Type defined via macro #1"
             , "ViaMacroWithWildcardChildren"
@@ -1096,12 +1108,12 @@ testData = GroupTest "server tests"
             , Known "Definitions.hs" 51 "Function"
             )
           ]
-    | (groupName, groupModule) <-
-      [ ("Direct import", "ImportDirectly.hs")
-      , ("Via reexport", "ImportViaReexport.hs")
+      | (groupName, groupModule) <-
+        [ ("Direct import", "ImportDirectly.hs")
+        , ("Via reexport", "ImportViaReexport.hs")
+        ]
       ]
-    ]
-  , withDirAndFile (RecursiveDir "0011hide_constructor_named_as_type") "MainModule.hs" $
+  , withDirAndFile NameResolutionStrict (RecursiveDir "0011hide_constructor_named_as_type") "MainModule.hs" $
       group "When constructor has the same name as its type then only type will be found"
         [ ( "Same name - record"
           , "FooMatching"
@@ -1236,9 +1248,9 @@ mkFindSymbolTest
   :: IO PortPool
   -> ServerTest
   -> TestTree
-mkFindSymbolTest pool ServerTest{stTestName, stWorkingDirectory, stFile, stSymbol, stExpectedResponse} =
+mkFindSymbolTest pool ServerTest{stTestName, stNameResolutionStrictness, stWorkingDirectory, stFile, stSymbol, stExpectedResponse} =
  testCase stTestName $ do
-    conf <- mkTestsConfig stWorkingDirectory
+    conf <- mkTestsConfig stNameResolutionStrictness stWorkingDirectory
     withConnection pool conf $ \conn -> do
       let dir  = case stWorkingDirectory of
             ShallowDir   x -> testDataDir </> x
