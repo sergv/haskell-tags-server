@@ -48,14 +48,15 @@ module Haskell.Language.Lexer.State
 
 import Control.Monad.Except.Ext
 import Control.Monad.State
+import Data.List.NonEmpty (NonEmpty)
 import qualified Data.Map as M
 import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
+import Data.Text.Prettyprint.Doc.Ext (Pretty(..), ppDictHeader, MapEntry(..))
 import GHC.Stack (HasCallStack)
 import Lens.Micro
-import Data.Text.Prettyprint.Doc.Ext (Pretty(..), ppDictHeader, MapEntry(..))
 
 import Data.ErrorMessage
 import Data.KeyMap (KeyMap)
@@ -78,7 +79,7 @@ data AlexState = AlexState
   -- | Whether we're in bird-style or latex-style literate environment
   , asLiterateStyle       :: !(Maybe LiterateStyle)
   , asContextStack        :: [Context]
-  , asDefines             :: !(KeyMap PreprocessorMacro)
+  , asDefines             :: !(KeyMap NonEmpty PreprocessorMacro)
   , asUndefinedMacro      :: !(Set MacroName)
 
   , asCodeBeforeParsingMacroArgs :: {-# UNPACK #-} !AlexCode

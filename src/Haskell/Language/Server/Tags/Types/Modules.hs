@@ -176,7 +176,7 @@ instance Pretty a => Pretty (ModuleExportSpec a) where
 data ModuleExports = ModuleExports
   { -- | Toplevel names exported from this particular module as specified in
     -- the header.
-    meExportedEntries    :: KeyMap (EntryWithChildren PosAndType (SymbolName, PosAndType))
+    meExportedEntries    :: KeyMap NonEmpty (EntryWithChildren PosAndType (SymbolName, PosAndType))
     -- | Module name here refer to real modules only. I.e. reexports via
     -- handles, like
     --

@@ -209,7 +209,7 @@ analyzeImports imports qualifiers ts = do
       where
         findImportListEntries
           :: ImportType
-          -> KeyMap (EntryWithChildren () UnqualifiedSymbolName)
+          -> KeyMap NonEmpty (EntryWithChildren () UnqualifiedSymbolName)
           -> [Pos ServerToken]
           -> m (ImportListSpec ImportList, [Pos ServerToken])
         findImportListEntries importType acc toks' = do
@@ -303,7 +303,7 @@ analyzeExports importQualifiers ts = do
     -- - Quux(..)
     -- - pattern PFoo
     -- - module Data.Foo.Bar
-    go :: KeyMap (EntryWithChildren PosAndType (SymbolName, PosAndType))
+    go :: KeyMap NonEmpty (EntryWithChildren PosAndType (SymbolName, PosAndType))
        -> Set ModuleName
        -> [Pos ServerToken]
        -> m ModuleExports
@@ -407,7 +407,7 @@ analyzeExports importQualifiers ts = do
 
     -- Continue parsing by consuming comma delimiter.
     consumeComma
-      :: KeyMap (EntryWithChildren PosAndType (SymbolName, PosAndType))
+      :: KeyMap NonEmpty (EntryWithChildren PosAndType (SymbolName, PosAndType))
       -> Set ModuleName
       -> [Pos ServerToken]
       -> m ModuleExports
