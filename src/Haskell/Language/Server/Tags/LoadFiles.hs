@@ -25,6 +25,8 @@ import Control.Monad.Catch
 import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State.Strict
+
+import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -91,10 +93,15 @@ loadAllFilesIntoState conf = do
       checkLoadingModules
         :: forall n. MonadState ResolveState n
         => ImportKey
-        -> n (Maybe (NonEmpty UnresolvedModule))
+        -> n (Maybe (NonEmpty UnresolvedModule, [ResolvedModule]))
       checkLoadingModules key = do
-        s <- get
-        pure $ NEMap.elemsNE <$> M.lookup key (rsLoadingModules s)
+        ResolveState{rsLoadingModules, rsLoadedModules} <- get
+        pure $ case M.lookup key rsLoadingModules of
+          Just modules -> Just (NEMap.elemsNE modules, loadedMods)
+            where
+              loadedMods :: [ResolvedModule]
+              loadedMods = foldMap toList $ M.lookup key rsLoadedModules
+          Nothing      -> Nothing
 
       doResolve
         :: forall n. (HasCallStack, MonadState ResolveState n, MonadError ErrorMessage n, MonadLog n)

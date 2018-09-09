@@ -1177,6 +1177,115 @@ testData = GroupTest "server tests"
           , Known "deps/DependencyShiftedConstructorsTypes.hs" 25 "Constructor"
           )
         ]
+  , withWorkingDir NameResolutionStrict (RecursiveDir "0012resolve_reexport_import_cycles") $
+    GroupTest "Resolve import cycles caused by module that reexports stuff"
+      [ withFile "import1NoListImport2WithListChildrenWildcardsReexportModule/ImportReexports.hs" $
+        group "Import1 - NoList Import2 - WithListChildrenWildcards ReexportModule - ImportReexports"
+          [ (C8.unpack sym, sym, response)
+          | (sym, response) <-
+            [ ("FooA",       Known "ANoExportList.hs" 15 "Type")
+            , ("FooA1",      Known "ANoExportList.hs" 15 "Constructor")
+            , ("fooA1",      Known "ANoExportList.hs" 16 "Function")
+            , ("fooA2",      Known "ANoExportList.hs" 17 "Function")
+            , ("BarA",       Known "ANoExportList.hs" 20 "Type")
+            , ("BarA1",      Known "ANoExportList.hs" 21 "Constructor")
+            , ("unBarA",     Known "ANoExportList.hs" 22 "Function")
+            , ("BazAP",      Known "ANoExportList.hs" 24 "Pattern")
+            , ("quuxA",      Known "ANoExportList.hs" 27 "Function")
+            , ("FrobAP",     Known "ANoExportList.hs" 30 "Pattern")
+            , ("QuuxA",      Known "ANoExportList.hs" 33 "Type")
+            , ("QuuxA1",     Known "ANoExportList.hs" 34 "Constructor")
+            , ("QuuxA2",     Known "ANoExportList.hs" 35 "Constructor")
+            , ("QuuxAP",     Known "ANoExportList.hs" 37 "Pattern")
+            , ("derivedA",   NotFound)
+
+            , ("FooB",       Known "BWildcardExportListWithChildren.hs" 25 "Type")
+            , ("FooB1",      Known "BWildcardExportListWithChildren.hs" 25 "Constructor")
+            , ("fooB1",      Known "BWildcardExportListWithChildren.hs" 26 "Function")
+            , ("fooB2",      Known "BWildcardExportListWithChildren.hs" 27 "Function")
+            , ("BarB",       Known "BWildcardExportListWithChildren.hs" 30 "Type")
+            , ("BarB1",      Known "BWildcardExportListWithChildren.hs" 31 "Constructor")
+            , ("unBarB",     Known "BWildcardExportListWithChildren.hs" 32 "Function")
+            , ("BazBP",      Known "BWildcardExportListWithChildren.hs" 34 "Pattern")
+            , ("quuxB",      Known "BWildcardExportListWithChildren.hs" 37 "Function")
+            , ("FrobBP",     Known "BWildcardExportListWithChildren.hs" 40 "Pattern")
+            , ("QuuxB",      Known "BWildcardExportListWithChildren.hs" 43 "Type")
+            , ("QuuxB1",     Known "BWildcardExportListWithChildren.hs" 44 "Constructor")
+            , ("QuuxB2",     Known "BWildcardExportListWithChildren.hs" 45 "Constructor")
+            , ("QuuxBP",     Known "BWildcardExportListWithChildren.hs" 47 "Pattern")
+            , ("derivedB",   Known "BWildcardExportListWithChildren.hs" 22 "Function")
+
+            , ("FooC",       Known "CWildcardExportListWithChildrenPlusSome.hs" 22 "Type")
+            , ("FooC1",      Known "CWildcardExportListWithChildrenPlusSome.hs" 22 "Constructor")
+            , ("fooC1",      Known "CWildcardExportListWithChildrenPlusSome.hs" 23 "Function")
+            , ("fooC2",      Known "CWildcardExportListWithChildrenPlusSome.hs" 24 "Function")
+            , ("BarC",       Known "CWildcardExportListWithChildrenPlusSome.hs" 27 "Type")
+            , ("BarC1",      Known "CWildcardExportListWithChildrenPlusSome.hs" 28 "Constructor")
+            , ("unBarC",     Known "CWildcardExportListWithChildrenPlusSome.hs" 29 "Function")
+            , ("BazCP",      Known "CWildcardExportListWithChildrenPlusSome.hs" 31 "Pattern")
+            , ("quuxC",      Known "CWildcardExportListWithChildrenPlusSome.hs" 34 "Function")
+            , ("FrobCP",     Known "CWildcardExportListWithChildrenPlusSome.hs" 37 "Pattern")
+            , ("QuuxC",      Known "CWildcardExportListWithChildrenPlusSome.hs" 40 "Type")
+            , ("QuuxC1",     Known "CWildcardExportListWithChildrenPlusSome.hs" 41 "Constructor")
+            , ("QuuxC2",     Known "CWildcardExportListWithChildrenPlusSome.hs" 42 "Constructor")
+            , ("QuuxCP",     Known "CWildcardExportListWithChildrenPlusSome.hs" 44 "Pattern")
+            , ("derivedC",   Known "CWildcardExportListWithChildrenPlusSome.hs" 19 "Function")
+
+            , ("FooD",       Known "DSpecificExportListWithChildren.hs" 26 "Type")
+            , ("FooD1",      Known "DSpecificExportListWithChildren.hs" 26 "Constructor")
+            , ("fooD1",      NotFound)
+            , ("fooD2",      NotFound)
+            , ("BarD",       Known "DSpecificExportListWithChildren.hs" 31 "Type")
+            , ("BarD1",      Known "DSpecificExportListWithChildren.hs" 32 "Constructor")
+            , ("unBarD",     Known "DSpecificExportListWithChildren.hs" 33 "Function")
+            , ("BazDP",      Known "DSpecificExportListWithChildren.hs" 35 "Pattern")
+            , ("quuxD",      Known "DSpecificExportListWithChildren.hs" 38 "Function")
+            , ("FrobDP",     Known "DSpecificExportListWithChildren.hs" 41 "Pattern")
+            , ("QuuxD",      Known "DSpecificExportListWithChildren.hs" 44 "Type")
+            , ("QuuxD1",     NotFound)
+            , ("QuuxD2",     Known "DSpecificExportListWithChildren.hs" 46 "Constructor")
+            , ("QuuxDP",     Known "DSpecificExportListWithChildren.hs" 48 "Pattern")
+            , ("derivedD",   Known "DSpecificExportListWithChildren.hs" 22 "Function")
+
+            , ("FooE",       Known "ESpecificExportListWithChildrenPlusSome.hs" 22 "Type")
+            , ("FooE1",      Known "ESpecificExportListWithChildrenPlusSome.hs" 22 "Constructor")
+            , ("fooE1",      NotFound)
+            , ("fooE2",      NotFound)
+            , ("BarE",       Known "ESpecificExportListWithChildrenPlusSome.hs" 27 "Type")
+            , ("BarE1",      Known "ESpecificExportListWithChildrenPlusSome.hs" 28 "Constructor")
+            , ("unBarE",     Known "ESpecificExportListWithChildrenPlusSome.hs" 29 "Function")
+            , ("BazEP",      Known "ESpecificExportListWithChildrenPlusSome.hs" 31 "Pattern")
+            , ("quuxE",      Known "ESpecificExportListWithChildrenPlusSome.hs" 34 "Function")
+            , ("FrobEP",     Known "ESpecificExportListWithChildrenPlusSome.hs" 37 "Pattern")
+            , ("QuuxE",      Known "ESpecificExportListWithChildrenPlusSome.hs" 40 "Type")
+            , ("QuuxE1",     NotFound)
+            , ("QuuxE2",     Known "ESpecificExportListWithChildrenPlusSome.hs" 42 "Constructor")
+            , ("QuuxEP",     Known "ESpecificExportListWithChildrenPlusSome.hs" 44 "Pattern")
+            , ("derivedE",   Known "ESpecificExportListWithChildrenPlusSome.hs" 19 "Function")
+
+            , ("reexportsFunc", Known "import1NoListImport2WithListChildrenWildcardsReexportModule/Reexports.hs" 27 "Function")
+            , ("ReexportType",  Known "import1NoListImport2WithListChildrenWildcardsReexportModule/Reexports.hs" 30 "Type")
+            , ("ReexportC1",    Known "import1NoListImport2WithListChildrenWildcardsReexportModule/Reexports.hs" 31 "Constructor")
+            , ("ReexportC2",    Known "import1NoListImport2WithListChildrenWildcardsReexportModule/Reexports.hs" 32 "Constructor")
+            , ("commonFunc"
+              , Ambiguous $ map (\(file, n) -> (file, n, "Function"))
+                [ ("ANoExportList.hs", 40)
+                , ("BWildcardExportListWithChildren.hs", 50)
+                , ("CWildcardExportListWithChildrenPlusSome.hs", 47)
+                , ("DSpecificExportListWithChildren.hs", 51)
+                , ("ESpecificExportListWithChildrenPlusSome.hs", 47)
+                ]
+              )
+            ]
+          ]
+      , withFile "import1NoListImport2WithListChildrenWildcardsReexportModule/ImportCausesImportCycle.hs" $
+        group "Import1 - NoList Import2 - WithListChildrenWildcards ReexportModule - ImportCausesImportCycle"
+          [ (C8.unpack sym, sym, response)
+          | (sym, response) <-
+            [ ("foo", Known "import1NoListImport2WithListChildrenWildcardsReexportModule/CausesImportCycle.hs" 17 "Function")
+            ]
+          ]
+      ]
   ]
 
 tests :: TestTree
