@@ -1286,6 +1286,20 @@ testData = GroupTest "server tests"
             ]
           ]
       ]
+  , withDirAndFile NameResolutionStrict (RecursiveDir "0013module_imports_same_name") "MainModule.hs" $
+      group "Module imports another module from the same name but different location"
+        [ (C8.unpack sym, sym, response)
+        | (sym, response) <-
+          [ ("foo",       Known "module1/Dependency.hs" 16 "Function")
+          , ("bar",       Known "module2/Dependency.hs" 11 "Function")
+          , ("ambiguous"
+            , Ambiguous $ map (\(file, n) -> (file, n, "Function"))
+              [ ("module1/Dependency.hs", 13)
+              , ("module2/Dependency.hs", 14)
+              ]
+            )
+          ]
+        ]
   ]
 
 tests :: TestTree
