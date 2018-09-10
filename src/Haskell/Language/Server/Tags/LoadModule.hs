@@ -19,6 +19,8 @@ module Haskell.Language.Server.Tags.LoadModule
   , resolveModule
   ) where
 
+import Prelude hiding (mod)
+
 import Control.Arrow (first)
 import Control.Monad.Except (throwError)
 import Control.Monad.Except.Ext
@@ -266,6 +268,8 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
   where
     unresHeader :: UnresolvedModuleHeader
     unresHeader = modHeader mod
+    unresFile :: FullPath
+    unresFile = modFile mod
     expandImportQualification :: forall a. (ImportQualification, a) -> [(Maybe ImportQualifier, a)]
     expandImportQualification = \case
       (Unqualified, x)                   -> [(Nothing, x)]
@@ -279,7 +283,9 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
            , [(ImportQualification, SymbolMap)]
            )
     resolveImports imports = do
-      logDebug $ "[resolveModule.resolveImports] analysing imports of module" <+> pretty (mhModName unresHeader)
+      logDebug $
+        "[resolveModule.resolveImports] analysing imports of module" <+> pretty (mhModName unresHeader) <+>
+        "from" <+> pretty unresFile
       Lazy.runWriterT (SubkeyMap.traverseMaybeWithKey resolveImport imports)
       where
         resolveImport
@@ -316,7 +322,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
                 (lift . loadMod)
                 (mhModName unresHeader)
                 key
-                toLoad
+                (filter ((unresFile /=) . modFile) $ toList toLoad)
                 importSpecs
 
     resolveSymbols
@@ -431,12 +437,12 @@ resolveReexports resolvedImports modNames =
 -- 2. Module may reexport arbitrary names, but we're only importing names
 -- defined locally in the module.
 quasiResolveImportSpecWithLoadsInProgress
-  :: forall m t. (HasCallStack, MonadWriter [(ImportQualification, SymbolMap)] m, MonadError ErrorMessage m, Traversable t, MonadLog m)
+  :: forall m f t. (HasCallStack, MonadWriter [(ImportQualification, SymbolMap)] m, MonadError ErrorMessage m, MonadLog m, Traversable t, Foldable f)
   => (ImportKey -> m (Maybe (NonEmpty UnresolvedModule, [ResolvedModule])))
   -> (ImportKey -> m (Maybe (NonEmpty ResolvedModule)))
   -> ModuleName                -- ^ Module we're currently analysing.
   -> ImportKey                 -- ^ Import of the main module that caused the cycle.
-  -> NonEmpty UnresolvedModule -- ^ Modules in progress that are being loaded and are going to be anayzed here
+  -> f UnresolvedModule        -- ^ Modules in progress that are being loaded and are going to be anayzed here
   -> t UnresolvedImportSpec    -- ^ Import specs to resolve
   -> m (t ResolvedImportSpec)
 quasiResolveImportSpecWithLoadsInProgress checkIfModuleIsAlreadyBeingLoaded loadMod mainModName mainModImport modules importSpecs =
