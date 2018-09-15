@@ -112,7 +112,7 @@ loadAllFilesIntoState conf = do
         case M.lookup key $ rsLoadedModules resolveState of
           Just resolved -> pure $ Just resolved
           Nothing       -> do
-            logInfo $ "[loadAllFilesIntoState.doResolve] Resolving" <+> PP.dquotes (pretty key)
+            logInfo $ "[loadAllFilesIntoState.doResolve] Resolving" <+> PP.dquotes (pretty (ikModuleName key))
             let currentlyLoading = rsLoadingModules resolveState
             if key `M.member` currentlyLoading
             then
@@ -148,7 +148,7 @@ loadAllFilesIntoState conf = do
                     , rsLoadedModules  =
                         M.insertWith (Semigroup.<>) key resolved $ rsLoadedModules s
                     }
-                  logInfo $ "[loadAllFilesIntoState.doResolve] resolved" <+> PP.dquotes (pretty key)
+                  logInfo $ "[loadAllFilesIntoState.doResolve] Resolved" <+> PP.dquotes (pretty (ikModuleName key))
                   pure $ Just resolved
 
   flip evalStateT initState $
