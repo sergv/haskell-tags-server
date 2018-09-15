@@ -1287,7 +1287,7 @@ testData = GroupTest "server tests"
           ]
       ]
   , withDirAndFile NameResolutionStrict (RecursiveDir "0013module_imports_same_name") "MainModule.hs" $
-      group "Module imports another module from the same name but different location"
+      group "Some dependent module imports another module with the same name but different location"
         [ (C8.unpack sym, sym, response)
         | (sym, response) <-
           [ ("foo",       Known "module1/Dependency.hs" 16 "Function")
@@ -1300,6 +1300,34 @@ testData = GroupTest "server tests"
             )
           ]
         ]
+  , withDirAndFile NameResolutionStrict (RecursiveDir "0014module_imports_same_name_multiple_occurrences") "MainModule.hs" $
+      group "Several dependent modules imports another module with the same name but different location"
+        [ (C8.unpack sym, sym, response)
+        | (sym, response) <-
+          [ ("foo",       Known "module1/Dependency.hs" 16 "Function")
+          , ("foofoo",    Known "module1/Foo.hs"        15 "Function")
+          , ("bar",       Known "module2/Dependency.hs" 11 "Function")
+          , ("frob",      Known "module3/Dependency.hs" 18 "Function")
+          , ("ambiguous"
+            , Ambiguous $ map (\(file, n) -> (file, n, "Function"))
+              [ ("module1/Dependency.hs", 13)
+              , ("module3/Dependency.hs", 15)
+              , ("module2/Dependency.hs", 14)
+              ]
+            )
+          ]
+        ]
+  , withDirAndFile NameResolutionStrict (ShallowDir "0015reexport_via_implicit_qualifier") "Main.hs" $
+      group "Reexport name via implicit module qualifier"
+        [ (C8.unpack sym, sym, response)
+        | (sym, response) <-
+          [ ("foo",       Known "Source.hs" 11 "Function")
+          , ("Bar",       Known "Source.hs" 14 "Type")
+          , ("unBar",     NotFound)
+          , ("lookup",    Known "ModuleWithReexport.hs" 17 "Function")
+          ]
+        ]
+
   ]
 
 tests :: TestTree
@@ -1448,4 +1476,3 @@ fullPathFromUTF8 = mkFullPath . TE.decodeUtf8 . C8.toStrict
 
 pathFragmentToUTF8 :: PathFragment -> UTF8.ByteString
 pathFragmentToUTF8 = C8.fromStrict . TE.encodeUtf8 . unPathFragment
-
