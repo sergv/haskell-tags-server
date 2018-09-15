@@ -299,7 +299,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
             -- Standard code path: imported modules are already loaded and
             -- resolved, use what was resolved.
             Nothing -> do
-              logDebug $ "[resolveModule.resolveImports.resolveImport] resolving import" <+> pretty key
+              logDebug $ "[resolveModule.resolveImports.resolveImport] Resolving import" <+> pretty (ikModuleName key)
               modules <- lift $ loadMod key
               for modules $ \modules' -> do
                 let importedNames :: SymbolMap
@@ -316,13 +316,20 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
             -- is already being loaded. In order to break infinite loop, we must
             -- analyse it here and get all the names we interested in, whithout
             -- resolving the module!
-            Just (toLoad, _alreadyLoaded) ->
+            Just (toLoad, _alreadyLoaded) -> do
+              let toResolve = filter ((unresFile /=) . modFile) $ toList toLoad
+              logDebug $ "[resolveModule.resolveImports.resolveImport] Module" <+>
+                pretty (ikModuleName key) <+>
+                "is already being loaded. This happened while loading" <+> pretty
+                (mhModName (modHeader mod)) <+> "from" <+> pretty (modFile mod) <> ". Initiating cycle resolution procedures for modules" ##
+                pretty (map modFile toResolve)
               Just <$> quasiResolveImportSpecWithLoadsInProgress
                 (lift . checkIfModuleIsAlreadyBeingLoaded)
                 (lift . loadMod)
                 (mhModName unresHeader)
+                (modFile mod)
                 key
-                (filter ((unresFile /=) . modFile) $ toList toLoad)
+                toResolve
                 importSpecs
 
     resolveSymbols
@@ -331,7 +338,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
     resolveSymbols Module{modHeader = header@ModuleHeader{mhImports, mhModName}, modAllSymbols} = do
       (resolvedImports, filteredNames) <- resolveImports mhImports
       logDebug $ "[resolveModule.resolveImports] analysing export list of module" <+> pretty mhModName
-      logVerboseDebug $ "[resolveModule.resolveImports] resolved imports" ## ppSubkeyMapWith pretty pretty ppNE resolvedImports
+      logVerboseDebug $ "[resolveModule.resolveImports] Resolved imports" ## ppSubkeyMapWith pretty pretty ppNE resolvedImports
       case mhExports header of
         NoExports                                                     ->
           pure (resolvedImports, modAllSymbols)
@@ -441,15 +448,16 @@ quasiResolveImportSpecWithLoadsInProgress
   => (ImportKey -> m (Maybe (NonEmpty UnresolvedModule, [ResolvedModule])))
   -> (ImportKey -> m (Maybe (NonEmpty ResolvedModule)))
   -> ModuleName                -- ^ Module we're currently analysing.
+  -> FullPath
   -> ImportKey                 -- ^ Import of the main module that caused the cycle.
   -> f UnresolvedModule        -- ^ Modules in progress that are being loaded and are going to be anayzed here
   -> t UnresolvedImportSpec    -- ^ Import specs to resolve
   -> m (t ResolvedImportSpec)
-quasiResolveImportSpecWithLoadsInProgress checkIfModuleIsAlreadyBeingLoaded loadMod mainModName mainModImport modules importSpecs =
+quasiResolveImportSpecWithLoadsInProgress checkIfModuleIsAlreadyBeingLoaded loadMod mainModName mainModFile mainModImport modules importSpecs =
   for importSpecs $ \spec@ImportSpec{ispecQualification, ispecImportList} -> do
     let processImports :: Maybe (KeyMap Set (EntryWithChildren () UnqualifiedSymbolName)) -> m SymbolMap
         processImports wantedNames =
-          foldForA modules $ \Module{modHeader = ModuleHeader{mhExports, mhModName = importedModName, mhImports}, modAllSymbols} ->
+          foldForA modules $ \Module{modHeader = ModuleHeader{mhExports, mhModName = importedModName, mhImports}, modFile = importedModFile, modAllSymbols} ->
             case mhExports of
               NoExports    -> pure modAllSymbols
               EmptyExports -> pure modAllSymbols
@@ -462,17 +470,17 @@ quasiResolveImportSpecWithLoadsInProgress checkIfModuleIsAlreadyBeingLoaded load
                       | wanted `S.isSubsetOf` unqualifiedExports
                       -> pure $ modAllSymbols `SM.restrictKeys` wanted
                       | otherwise
-                      ->
-                        -- TODO: decide whether to actually throw an error or return mempty.
-                        -- pure mempty -- This module could not have been imported in reality - discard it.
-                        throwErrorWithCallStack $ ppDictHeader
-                          "This module could not have been imported in reality"
-                          [ "importedModName"    --> importedModName
-                          , "expected"           :-> ppSet wanted
-                          , "meReexports"        :-> ppSet meReexports
-                          , "unqualifiedExports" :-> ppSet unqualifiedExports
-                          , "exportedNames"      :-> ppSet exportedNames
-                          ]
+                      -> pure mempty
+                        -- -- TODO: decide whether to actually throw an error or return mempty.
+                        -- -- pure mempty -- This module could not have been imported in reality - discard it.
+                        -- throwErrorWithCallStack $ ppDictHeader
+                        --   "This module could not have been imported in reality"
+                        --   [ "importedModName"    --> importedModName
+                        --   , "expected"           :-> ppSet wanted
+                        --   , "meReexports"        :-> ppSet meReexports
+                        --   , "unqualifiedExports" :-> ppSet unqualifiedExports
+                        --   , "exportedNames"      :-> ppSet exportedNames
+                        --   ]
                 -- If all we have are reexports...
                 | Just wantedNames' <- wantedNames
                 , not (S.null meReexports) && not allWantedNamesDefinedLocally
@@ -521,7 +529,8 @@ quasiResolveImportSpecWithLoadsInProgress checkIfModuleIsAlreadyBeingLoaded load
                 where
                   wantedSet :: Maybe (Set UnqualifiedSymbolName)
                   wantedSet = KM.keysSet <$> wantedNames
-                  allWantedNamesDefinedLocally = maybe False (`SM.isSubsetNames` modAllSymbols) wantedSet
+                  allWantedNamesDefinedLocally =
+                    maybe False (`SM.isSubsetNames` modAllSymbols) wantedSet
 
                   exportedNames :: Set SymbolName
                   exportedNames = KM.keysSet meExportedEntries
@@ -532,8 +541,9 @@ quasiResolveImportSpecWithLoadsInProgress checkIfModuleIsAlreadyBeingLoaded load
                     $ S.map mkUnqualifiedSymbolName exportedNames
                   errMsg :: Doc Void
                   errMsg = ppFoldableHeader
-                    ("Cannot resolve import cycle: module" <+> PP.dquotes (pretty mainModName) <+> "imports names from" <+> pretty mainModImport <>
-                     ", but the import" <+> pretty importedModName <+> "exports names that are not defined locally:")
+                    ("Cannot resolve import cycle: module" <+> PP.dquotes (pretty mainModName) <+> PP.parens (pretty mainModFile) <+>
+                    "imports names from" <+> pretty (ikModuleName mainModImport) <>
+                     ", but a candidate for that import," <+> pretty importedModName <+> PP.parens (pretty importedModFile) <> ", exports names that are not defined locally:")
                     (exportedNames `S.difference` S.mapMonotonic getUnqualifiedSymbolName (SM.keysSet modAllSymbols))
     names <- case ispecImportList of
       -- If there's no import list then ensure that either:
