@@ -37,14 +37,14 @@ module Data.KeyMap
   , differenceWith
   ) where
 
+import Prelude hiding (lookup, null)
+
 import Control.Arrow
 import Data.Coerce
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Pointed
-import Data.Semigroup
 import Data.Set (Set)
-import Prelude hiding (lookup, null)
 
 import Data.Text.Prettyprint.Doc.Combinators
 
