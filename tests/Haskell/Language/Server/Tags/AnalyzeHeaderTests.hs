@@ -576,6 +576,86 @@ moduleWithImportOfSpeciallyNamedOperatorsTest = TestCase
       }
   }
 
+moduleWithMultipleImports :: Test
+moduleWithMultipleImports = TestCase
+  { testName       = "Module multiple imports"
+  , input          =
+      "module Test where \n\
+      \import Mod1\n\
+      \import Mod2 as Foo\n\
+      \"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = NoExports
+      , mhImportQualifiers = M.fromList
+        [ (mkImportQualifier $ mkModuleName "Foo", neSingleton $ mkModuleName "Mod2")
+        ]
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Mod1"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = NoImportList
+              , ispecImportedNames = ()
+              }
+          , neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Mod2"
+                  }
+              , ispecQualification =
+                BothQualifiedAndUnqualified $ mkImportQualifier $ mkModuleName "Foo"
+              , ispecImportList    = NoImportList
+              , ispecImportedNames = ()
+              }
+          ]
+      }
+  }
+
+moduleWithImportsAfterDefinitions :: Test
+moduleWithImportsAfterDefinitions = TestCase
+  { testName       = "Module multiple imports"
+  , input          =
+      "module Test where \n\
+      \import Mod1\n\
+      \\n\
+      \foo :: a -> a\n\
+      \foo x = x\n\
+      \\n\
+      \import Mod2 as Foo\n\
+      \"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = NoExports
+      , mhImportQualifiers = M.fromList
+        [ (mkImportQualifier $ mkModuleName "Foo", neSingleton $ mkModuleName "Mod2")
+        ]
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Mod1"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = NoImportList
+              , ispecImportedNames = ()
+              }
+          , neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Mod2"
+                  }
+              , ispecQualification =
+                BothQualifiedAndUnqualified $ mkImportQualifier $ mkModuleName "Foo"
+              , ispecImportList    = NoImportList
+              , ispecImportedNames = ()
+              }
+          ]
+      }
+  }
+
 moduleWithImportOfPatternFuncTest :: Test
 moduleWithImportOfPatternFuncTest = TestCase
   { testName       = "Import of \"pattern\" function"
@@ -1209,7 +1289,6 @@ moduleWithSomeHSC2HSDirectivesInImportList3 = TestCase
           ]
       }
   }
-
 
 
 moduleWithEmptyExportsTest :: Test
@@ -2198,6 +2277,8 @@ tests = testGroup "Header analysis tests"
     , doTest moduleWithImportAndAliasTest
     , doTest moduleWithImportAndAliasAndHidingImportListTest
     , doTest moduleWithImportOfSpeciallyNamedOperatorsTest
+    , doTest moduleWithMultipleImports
+    , doTest moduleWithImportsAfterDefinitions
     , testGroup "pattern as a function name"
         [ doTest moduleWithImportOfPatternFuncTest
         , doTest moduleWithImportOfManyFuncsAndPatternFuncTest
