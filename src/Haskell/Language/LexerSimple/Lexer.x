@@ -97,7 +97,7 @@ $hexdigit   = [0-9a-fA-F]
 -- state.
 <0, comment, qq, literate> $ws+ ;
 
--- Literate Haskell support. 'literate' code handles all text except actuall
+-- Literate Haskell support. 'literate' code handles all text except actual
 -- Haskell program text. It aims to strip all non-Haskell text.
 <literate> {
 ^ ">" $ws*
