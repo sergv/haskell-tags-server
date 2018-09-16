@@ -147,6 +147,7 @@ executable haskell-tags-server
     -fno-warn-name-shadowing
     -rtsopts
     -threaded
+    "-with-rtsopts=-A32m -N"
   if impl(ghc >= 8.0)
     ghc-options:
       -Wcompat
