@@ -40,7 +40,7 @@ instance Applicative (EitherCPST e m) where
   pure x = EitherCPST $ \_ sk -> sk x
   {-# INLINE (<*>) #-}
   EitherCPST f <*> EitherCPST g = EitherCPST $
-      \ek sk -> f ek (\h -> g ek (sk . h))
+      \ek sk -> f ek (\f' -> g ek (sk . f'))
 
 instance IsString e => Alternative (EitherCPST e m) where
   {-# INLINE empty #-}
@@ -53,7 +53,7 @@ instance Monad (EitherCPST e m) where
   return = pure
   {-# INLINE (>>=) #-}
   EitherCPST f >>= m = EitherCPST $ \ek sk ->
-      f ek (\x -> runEitherCPST (m x) ek sk)
+    f ek (\x -> runEitherCPST (m x) ek sk)
 
 instance MonadTrans (EitherCPST e) where
   {-# INLINE lift #-}
@@ -64,15 +64,15 @@ instance MonadError e (EitherCPST e m) where
   throwError e = EitherCPST $ \ek _ -> ek e
   {-# INLINE catchError #-}
   catchError (EitherCPST f) handler = EitherCPST $ \ek sk ->
-      f (\e -> runEitherCPST (handler e) ek sk) sk
+    f (\e -> runEitherCPST (handler e) ek sk) sk
 
-instance (MonadState s m) => MonadState s (EitherCPST e m) where
+instance MonadState s m => MonadState s (EitherCPST e m) where
   {-# INLINE get #-}
   get = EitherCPST $ \_ sk -> get >>= sk
   {-# INLINE put #-}
   put x = EitherCPST $ \_ sk -> put x >>= sk
 
-instance (MonadReader r m) => MonadReader r (EitherCPST e m) where
+instance MonadReader r m => MonadReader r (EitherCPST e m) where
   {-# INLINE ask    #-}
   ask = EitherCPST $ \_ sk -> ask >>= sk
   {-# INLINE local  #-}

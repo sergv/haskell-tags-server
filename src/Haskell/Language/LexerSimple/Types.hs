@@ -36,7 +36,7 @@ module Haskell.Language.LexerSimple.Types
 import Codec.Binary.UTF8.String (encodeChar)
 import Control.Applicative
 import Control.Monad.EitherCPS
-import Control.Monad.State.Strict
+import Control.Monad.State
 import Data.Char
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IS
