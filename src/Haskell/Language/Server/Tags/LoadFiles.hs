@@ -139,7 +139,7 @@ loadAllFilesIntoState conf = do
                   logDebug $ "[loadAllFilesIntoState.doResolve] currently loading:" ## ppMapWith pretty (ppNE . NEMap.keysNE) currentlyLoading
                   modify $ \s ->
                     s { rsLoadingModules = M.insert key unresolvedMap $ rsLoadingModules s }
-                  -- logInfo $ "[loadAllFilesIntoState.doResolve] files:" ## ppNE (modFile <$> unresolved)
+                  -- logDebug $ "[loadAllFilesIntoState.doResolve] files:" ## ppNE (modFile <$> unresolved)
                   resolved <- flip runReaderT conf $
                     traverse (resolveModule checkLoadingModules doResolve) unresolved
                   modify $ \s -> s

@@ -1327,7 +1327,20 @@ testData = GroupTest "server tests"
           , ("lookup",    Known "ModuleWithReexport.hs" 17 "Function")
           ]
         ]
-
+  , withDirAndFile NameResolutionLax (ShallowDir "0016reexport_of_missing_module") "Main.hs" $
+      group "Reexport of missing module"
+        [ (C8.unpack sym, sym, response)
+        | (sym, response) <-
+          [ ("foo",       Known "Source.hs" 11 "Function")
+          , ("Bar",       Known "Source.hs" 14 "Type")
+          , ("unBar",     NotFound)
+          , ("lookup",    Known "ModuleWithReexport.hs" 21 "Function")
+          -- These names come from missing modules and should default
+          -- to the export list of the module that refers to them.
+          , ("foo2",      Known "ModuleWithReexport.hs" 13 "Function")
+          , ("Quux",      Known "ModuleWithReexport.hs" 14 "Type")
+          ]
+        ]
   ]
 
 tests :: TestTree

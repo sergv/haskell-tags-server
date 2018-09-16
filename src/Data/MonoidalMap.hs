@@ -7,6 +7,9 @@
 -- Created     :  Wednesday, 28 September 2016
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DeriveFoldable      #-}
+{-# LANGUAGE DeriveFunctor       #-}
+{-# LANGUAGE DeriveTraversable   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 {-# OPTIONS_GHC -Wredundant-constraints          #-}
@@ -27,7 +30,7 @@ import Data.Map (Map)
 import qualified Data.Map as M
 
 newtype MonoidalMap k v = MonoidalMap { unMonoidalMap :: Map k v }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 instance (Ord k, Semigroup v) => Semigroup (MonoidalMap k v) where
   (<>) (MonoidalMap x) (MonoidalMap y) = MonoidalMap $ M.unionWith (<>) x y
