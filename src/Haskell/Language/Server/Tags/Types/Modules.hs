@@ -138,7 +138,7 @@ instance Pretty a => Pretty (ModuleHeader a) where
 
 -- | Find out which modules a given @ImportQualifier@ refers to.
 resolveQualifier
-  :: (HasCallStack, MonadError ErrorMessage m)
+  :: (WithCallStack, MonadError ErrorMessage m)
   => ImportQualifier
   -> ModuleHeader a
   -> m (Maybe (NonEmpty (ImportSpec a)))

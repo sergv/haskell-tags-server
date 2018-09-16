@@ -54,7 +54,7 @@ import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
 
 analyzeHeader
-  :: (HasCallStack, MonadError ErrorMessage m, MonadLog m)
+  :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => [Pos ServerToken]
   -> m (Maybe UnresolvedModuleHeader, [Pos ServerToken])
 analyzeHeader ts =
@@ -111,7 +111,7 @@ pattern PAnyName'          :: SrcPos -> Text -> Pos ServerToken
 pattern PAnyName' pos name <- Pos pos (tokToName -> Just name)
 
 analyzeImports
-  :: forall m. (HasCallStack, MonadError ErrorMessage m, MonadLog m)
+  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => SubkeyMap ImportKey (NonEmpty UnresolvedImportSpec)
   -> Map ImportQualifier (NonEmpty ModuleName)
   -> [Pos ServerToken]
@@ -282,7 +282,7 @@ analyzeImports imports qualifiers ts = do
             Just name' -> pure name'
 
 analyzeExports
-  :: forall m. (HasCallStack, MonadError ErrorMessage m, MonadLog m)
+  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => Map ImportQualifier (NonEmpty ModuleName)
   -> [Pos ServerToken]
   -> m (ModuleExportSpec ModuleExports)
@@ -442,7 +442,7 @@ instance Monoid WildcardPresence where
   mappend = (<>)
 
 analyzeChildren
-  :: forall m. (HasCallStack, MonadError ErrorMessage m)
+  :: forall m. (WithCallStack, MonadError ErrorMessage m)
   => Doc Void -> [Pos ServerToken] -> (ChildrenPresence, m (Maybe (ChildrenVisibility PosAndType), [Pos ServerToken]))
 analyzeChildren listType toks =
   case dropNLs toks of
@@ -471,7 +471,7 @@ analyzeChildren listType toks =
       (ChildrenAbsent, throwErrorWithCallStack $ "Cannot handle children of" <+> listType <> ":" ## ppTokens toks')
   where
     analyzeList
-      :: HasCallStack
+      :: WithCallStack
       => [Pos ServerToken]
       -> (ChildrenPresence, m (Maybe (ChildrenVisibility PosAndType), [Pos ServerToken]))
     analyzeList = second (fmap mkVisibility) . extractChildren mempty mempty . dropNLs
@@ -492,7 +492,7 @@ analyzeChildren listType toks =
                   WildcardAbsent  -> Just $ VisibleSpecificChildren children
 
     extractChildren
-      :: HasCallStack
+      :: WithCallStack
       => WildcardPresence
       -> Map UnqualifiedSymbolName PosAndType
       -> [Pos ServerToken]

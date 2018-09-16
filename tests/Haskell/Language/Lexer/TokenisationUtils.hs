@@ -23,7 +23,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Prettyprint.Doc.Ext as PP
 import Data.Void (Void)
-import GHC.Stack (HasCallStack)
+import GHC.Stack.Ext (WithCallStack)
 
 import Haskell.Language.Lexer (LiterateLocation(..))
 import qualified Haskell.Language.LexerSimple.Lexer as Lexer
@@ -48,7 +48,7 @@ filename :: FilePath
 filename = "fn.hs"
 
 testFullTagsWithoutPrefixes
-  :: HasCallStack
+  :: WithCallStack
   => FilePath -> LiterateLocation Void -> Text -> [Pos TagVal] -> TestTree
 testFullTagsWithoutPrefixes fn mode = \source tags ->
   makeTest (first sort . processTokens . tokenize' fn mode) source (tags, warnings)
@@ -57,7 +57,7 @@ testFullTagsWithoutPrefixes fn mode = \source tags ->
     warnings = []
 
 testTagNames
-  :: HasCallStack
+  :: WithCallStack
   => FilePath -> LiterateLocation Void -> Text -> [String] -> TestTree
 testTagNames fn mode source tags =
   makeTest process source (tags, warnings)
@@ -72,7 +72,7 @@ untag :: Pos TagVal -> String
 untag (Pos _ (TagVal name _ _)) = T.unpack name
 
 tokenize'
-  :: HasCallStack
+  :: WithCallStack
   => FilePath -> LiterateLocation Void -> Text -> [Pos ServerToken]
 tokenize' fn mode =
     either (error . PP.displayDocString . PP.pretty) id

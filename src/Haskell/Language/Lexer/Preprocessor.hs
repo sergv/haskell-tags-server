@@ -111,7 +111,7 @@ extractFunction = \case
 
 -- | Parse "#define ..." directive
 parsePreprocessorDefine
-  :: (HasCallStack, MonadError ErrorMessage m)
+  :: (WithCallStack, MonadError ErrorMessage m)
   => Text
   -> m PreprocessorMacro
 parsePreprocessorDefine =
@@ -119,7 +119,7 @@ parsePreprocessorDefine =
 
 -- | Parse "#undef ..." directive
 parsePreprocessorUndef
-  :: (HasCallStack, MonadError ErrorMessage m)
+  :: (WithCallStack, MonadError ErrorMessage m)
   => Text
   -> m MacroName
 parsePreprocessorUndef =

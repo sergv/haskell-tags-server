@@ -67,7 +67,7 @@ waitForTagsServerFinish = liftBase . readMVar . tsFinishState
 -- | Start new tags server thread that will serve requests supplied via returned
 -- RequestHandler.
 startTagsServer
-  :: forall m. (HasCallStack, MonadBase IO m, MonadBaseControl IO m, MonadCatch m, MonadError ErrorMessage m, MonadLog m, MonadFS m)
+  :: forall m. (WithCallStack, MonadBase IO m, MonadBaseControl IO m, MonadCatch m, MonadError ErrorMessage m, MonadLog m, MonadFS m)
   => TagsServerConf
   -> TagsServerState
   -> m TagsServer
@@ -124,7 +124,7 @@ startTagsServer conf state = do
       pure state'
 
 ensureFileExists
-  :: (HasCallStack, MonadFS m, MonadError ErrorMessage m)
+  :: (WithCallStack, MonadFS m, MonadError ErrorMessage m)
   => FullPath -> m ()
 ensureFileExists path = do
   exists <- doesFileExist path

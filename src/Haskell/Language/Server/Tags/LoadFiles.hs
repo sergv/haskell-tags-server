@@ -65,7 +65,7 @@ data ResolveState = ResolveState
   }
 
 loadAllFilesIntoState
-  :: forall m. (HasCallStack, MonadCatch m, MonadError ErrorMessage m, MonadLog m, MonadFS m)
+  :: forall m. (WithCallStack, MonadCatch m, MonadError ErrorMessage m, MonadLog m, MonadFS m)
   => TagsServerConf
   -> m (Map ImportKey (NonEmpty ResolvedModule))
 loadAllFilesIntoState conf = do
@@ -104,7 +104,7 @@ loadAllFilesIntoState conf = do
           Nothing      -> Nothing
 
       doResolve
-        :: forall n. (HasCallStack, MonadState ResolveState n, MonadError ErrorMessage n, MonadLog n)
+        :: forall n. (WithCallStack, MonadState ResolveState n, MonadError ErrorMessage n, MonadLog n)
         => ImportKey
         -> n (Maybe (NonEmpty ResolvedModule))
       doResolve key = do
