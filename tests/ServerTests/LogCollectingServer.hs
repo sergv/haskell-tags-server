@@ -61,7 +61,7 @@ mkLogCollectingServer conf port = do
     }
 
 stopLogCollectingServer
-  :: (HasCallStack, MonadBase IO m)
+  :: (WithCallStack, MonadBase IO m)
   => LogCollectingServer -> m ()
 stopLogCollectingServer LogCollectingServer{lcsTagsServer, lcsBertServer} = do
   stopBertServer lcsBertServer

@@ -425,7 +425,7 @@ kw :: Applicative m => TokenVal -> AlexAction m
 kw tok = \_ _ -> pure $ one $ Tok tok
 
 tokenizeM
-  :: (HasCallStack, Monad m)
+  :: (WithCallStack, Monad m)
   => FilePath -> LiterateMode -> Text -> m (Either ErrorMessage [Pos ServerToken])
 tokenizeM filename mode input =
   runAlexT filename mode code toplevelCode input scanTokens
@@ -439,20 +439,20 @@ tokenizeM filename mode input =
     toplevelCode = startCode
 
 -- TODO: add unsafe interleave here for producing tokens
-scanTokens :: (HasCallStack, Monad m) => AlexT m [Pos ServerToken]
+scanTokens :: (WithCallStack, Monad m) => AlexT m [Pos ServerToken]
 scanTokens = do
   toks <- alexMonadScan
   case valOf $ NE.last toks of
     Tok EOF -> pure []
     _       -> (toList toks <>) <$> scanTokens
 
-alexMonadScan :: (HasCallStack, Monad m) => AlexT m (NonEmpty (Pos ServerToken))
+alexMonadScan :: (WithCallStack, Monad m) => AlexT m (NonEmpty (Pos ServerToken))
 alexMonadScan = do
   filename <- asks aeFilename
   line     <- gets (aiLine . asInput)
   fmap (Pos (mkSrcPos filename line)) <$> continueScanning
 
-continueScanning :: forall m. (HasCallStack, Monad m) => AlexT m (NonEmpty ServerToken)
+continueScanning :: forall m. (WithCallStack, Monad m) => AlexT m (NonEmpty ServerToken)
 continueScanning = do
   env   <- ask
   state <- get
@@ -523,7 +523,7 @@ popRParen _ _ = do
   pure $ one $ Tok RParen
 
 popContext
-  :: (HasCallStack, MonadState AlexState m, MonadError ErrorMessage m)
+  :: (WithCallStack, MonadState AlexState m, MonadError ErrorMessage m)
   => m (Maybe Context)
 popContext = do
   cs <- gets asContextStack
@@ -535,7 +535,7 @@ popContext = do
 
 
 errorAtLine
-  :: (HasCallStack, MonadError ErrorMessage m, MonadState AlexState m)
+  :: (WithCallStack, MonadError ErrorMessage m, MonadState AlexState m)
   => Doc Void -> m a
 errorAtLine msg = do
   line <- gets (unLine . aiLine . asInput)
@@ -591,7 +591,7 @@ data PredEnv = PredEnv
 -- TODO: alex does not like two adjacent single quotes, even in comments!
 
 resolvePossibleMacroArgumentOrConstantMacro
-  :: (HasCallStack, Monad m)
+  :: (WithCallStack, Monad m)
   => AlexInput -> Text -> AlexT m (NonEmpty ServerToken)
 resolvePossibleMacroArgumentOrConstantMacro input matchedText = do
   let macroName   = mkMacroName matchedText
@@ -627,7 +627,7 @@ resolvePossibleMacroArgumentOrConstantMacro input matchedText = do
           continueScanning
 
 resolvePossibleFunctionMacroApplication
-  :: (HasCallStack, Monad m)
+  :: (WithCallStack, Monad m)
   => AlexAction (AlexT m)
 resolvePossibleFunctionMacroApplication input len = do
   let functionName :: Text

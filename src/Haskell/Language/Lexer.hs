@@ -16,7 +16,7 @@ module Haskell.Language.Lexer
 
 -- import Data.Functor.Identity
 import Data.Text (Text)
-import GHC.Stack (HasCallStack)
+import GHC.Stack.Ext (WithCallStack)
 import System.FilePath
 
 import Data.ErrorMessage
@@ -28,7 +28,7 @@ import Haskell.Language.Lexer.FastTags
 import qualified Haskell.Language.LexerSimple.Lexer as SimpleLexer
 import Haskell.Language.LexerSimple.Types (LiterateLocation(..))
 
-tokenize :: HasCallStack => FilePath -> Text -> Either ErrorMessage [Pos ServerToken]
+tokenize :: WithCallStack => FilePath -> Text -> Either ErrorMessage [Pos ServerToken]
 -- tokenize filename = runIdentity . tokenizeM filename mode
   -- where
   --   mode :: LiterateMode

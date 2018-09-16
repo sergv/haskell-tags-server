@@ -2332,7 +2332,7 @@ tests = testGroup "Header analysis tests"
     ]
   ]
 
-doTest :: HasCallStack => Test -> TestTree
+doTest :: WithCallStack => Test -> TestTree
 doTest TestCase{testName, input, expectedResult} =
   testCase testName $ do
     let (res, logs) = runWriter $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runExceptT $ analyzeHeader =<< tokens

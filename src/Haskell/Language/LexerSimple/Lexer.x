@@ -290,7 +290,7 @@ isLiterateLatexOrOutside litLoc _inputBefore _len _inputAfter =
     Vanilla              -> False
 
 tokenize
-  :: HasCallStack
+  :: WithCallStack
   => FilePath -> LiterateLocation Void -> Text -> Either ErrorMessage [Pos ServerToken]
 tokenize filename litLoc input =
   runAlexM litLoc startCode' input $ scanTokens filename
@@ -301,7 +301,7 @@ tokenize filename litLoc input =
       LiterateInside x -> absurd x
 
 -- TODO: add unsafe interleave here for producing tokens
-scanTokens :: HasCallStack => FilePath -> AlexM [Pos ServerToken]
+scanTokens :: WithCallStack => FilePath -> AlexM [Pos ServerToken]
 scanTokens filename = go []
   where
     go acc = do
@@ -315,7 +315,7 @@ scanTokens filename = go []
           let !tok = Pos (mkSrcPos filename $! aiLine input) nextTok
           go (tok : acc)
 
-continueScanning :: HasCallStack => AlexM ServerToken
+continueScanning :: WithCallStack => AlexM ServerToken
 continueScanning = do
   AlexState{asInput, asCode, asLiterateLoc} <- get
   go asCode asLiterateLoc asInput
@@ -337,7 +337,7 @@ continueScanning = do
             AlexToken input' tokLen action       ->
               alexSetInput input' *> action input tokLen
 
-startIndentationCounting :: HasCallStack => Int -> AlexM ServerToken
+startIndentationCounting :: WithCallStack => Int -> AlexM ServerToken
 startIndentationCounting !n = do
   modify (\s -> s { asIndentationSize = n, asCommentDepth = 1 })
   alexSetNextCode indentCommentCode
@@ -349,39 +349,39 @@ endIndentationCounting !n = do
   alexSetNextCode startCode
   Tok . Newline <$> gets asIndentationSize
 
-startIndentComment :: HasCallStack => AlexM ServerToken
+startIndentComment :: WithCallStack => AlexM ServerToken
 startIndentComment = do
   void $ modifyCommentDepth (+1)
   alexSetNextCode indentCommentCode
   continueScanning
 
-startPreprocessorStripping :: HasCallStack => AlexM ServerToken
+startPreprocessorStripping :: WithCallStack => AlexM ServerToken
 startPreprocessorStripping = do
   void $ modifyPreprocessorDepth (+1)
   alexSetNextCode stripCppCode
   continueScanning
 
-endPreprocessorStripping :: HasCallStack => AlexM ServerToken
+endPreprocessorStripping :: WithCallStack => AlexM ServerToken
 endPreprocessorStripping = do
   newDepth <- modifyPreprocessorDepth (\x -> x - 1)
   when (newDepth == 0) $
     alexSetNextCode startCode
   continueScanning
 
-startComment :: HasCallStack => AlexM ServerToken
+startComment :: WithCallStack => AlexM ServerToken
 startComment = do
   void $ modifyCommentDepth (+1)
   alexSetNextCode commentCode
   continueScanning
 
-endComment :: HasCallStack => AlexCode -> AlexM ServerToken
+endComment :: WithCallStack => AlexCode -> AlexM ServerToken
 endComment nextCode = do
   newDepth <- modifyCommentDepth (\x -> x - 1)
   when (newDepth == 0) $
     alexSetNextCode nextCode
   continueScanning
 
-startString :: HasCallStack => AlexM ServerToken
+startString :: WithCallStack => AlexM ServerToken
 startString =
   alexSetNextCode stringCode *> continueScanning
 

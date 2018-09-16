@@ -80,7 +80,7 @@ defaultModuleName = mkModuleName "Main"
 -- | Fetch module by it's name from cache or load it. Check modification time
 -- of module files and reload if anything changed
 loadModule
-  :: forall m. (HasCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => ImportKey
   -> m (Maybe (NonEmpty ResolvedModule))
 loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
@@ -116,7 +116,7 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
       logDebug $ "[loadModule] loaded modules:" ## ppList loadedMods
       pure mods'
   where
-    doLoad :: HasCallStack => m (Maybe (NonEmpty ResolvedModule))
+    doLoad :: WithCallStack => m (Maybe (NonEmpty ResolvedModule))
     doLoad = do
       logDebug $ "[loadModule.doLoad] module was not loaded before, loading now:" <+> pretty ikModuleName
       case T.splitOn "." $ getModuleName ikModuleName of
@@ -139,7 +139,7 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
 
 -- TODO: consider using hashes to track whether a module needs reloading?
 reloadIfNecessary
-  :: (HasCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => ImportKey
   -> ResolvedModule
   -> m (Maybe ResolvedModule)
@@ -152,7 +152,7 @@ reloadIfNecessary key m = do
   else pure Nothing
 
 loadModuleFromFile
-  :: (HasCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => ImportKey
   -> Maybe UTCTime
   -> FullPath
@@ -188,7 +188,7 @@ checkLoadingModules key = do
 -- | Load single module from the given file. Does not load any imports or exports.
 -- Names in the loaded module are not resolved.
 loadModuleFromSource
-  :: (HasCallStack, MonadError ErrorMessage m, MonadLog m)
+  :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => Maybe ModuleName
   -> UTCTime
   -> FullPath
@@ -199,7 +199,7 @@ loadModuleFromSource suggestedModuleName modifTime filename source = do
   makeModule suggestedModuleName modifTime filename tokens
 
 makeModule
-  :: (HasCallStack, MonadError ErrorMessage m, MonadLog m)
+  :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => Maybe ModuleName -- ^ Suggested module name, will be used if source does not define it's own name.
   -> UTCTime
   -> FullPath
@@ -249,7 +249,7 @@ makeModule suggestedModuleName modifTime filename tokens = do
       }
 
 resolveModule
-  :: forall m. (HasCallStack, MonadError ErrorMessage m, MonadReader TagsServerConf m, MonadLog m)
+  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadReader TagsServerConf m, MonadLog m)
   => (ImportKey -> m (Maybe (NonEmpty UnresolvedModule, [ResolvedModule])))
   -> (ImportKey -> m (Maybe (NonEmpty ResolvedModule)))
   -> UnresolvedModule
@@ -272,7 +272,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
     unresFile = modFile mod
 
     resolveImports
-      :: HasCallStack
+      :: WithCallStack
       => SubkeyMap ImportKey (NonEmpty UnresolvedImportSpec)
       -> m ( SubkeyMap ImportKey (NonEmpty ResolvedImportSpec)
            , [(ImportQualification, ModuleName, SymbolMap)]
@@ -284,7 +284,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
       Lazy.runWriterT (SubkeyMap.traverseMaybeWithKey resolveImport imports)
       where
         resolveImport
-          :: HasCallStack
+          :: WithCallStack
           => ImportKey
           -> NonEmpty UnresolvedImportSpec
           -> Lazy.WriterT [(ImportQualification, ModuleName, SymbolMap)] m (Maybe (NonEmpty ResolvedImportSpec))
@@ -336,7 +336,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
                 importSpecs
 
     resolveSymbols
-      :: HasCallStack
+      :: WithCallStack
       => UnresolvedModule -> m (SubkeyMap ImportKey (NonEmpty ResolvedImportSpec), SymbolMap)
     resolveSymbols Module{modHeader = header@ModuleHeader{mhImports, mhModName}, modAllSymbols} = do
       logDebug $ "[resolveModule.resolveSymbols] Resolving symbols of module" <+> pretty mhModName
@@ -461,7 +461,7 @@ resolveReexports resolvedImports modNames =
 -- 2. Module may reexport arbitrary names, but we're only importing names
 -- defined locally in the module.
 quasiResolveImportSpecWithLoadsInProgress
-  :: forall m f t. (HasCallStack, Traversable t, Foldable f)
+  :: forall m f t. (WithCallStack, Traversable t, Foldable f)
   => (MonadWriter [(ImportQualification, ModuleName, SymbolMap)] m, MonadError ErrorMessage m, MonadReader TagsServerConf m, MonadLog m)
   => (ImportKey -> m (Maybe (NonEmpty UnresolvedModule, [ResolvedModule])))
   -> (ImportKey -> m (Maybe (NonEmpty ResolvedModule)))
@@ -712,7 +712,7 @@ inferExtraParents ModuleHeader{mhExports} = M.fromListWith (<>) entries
 
 -- | Find out which names under qualification come out of an import spec.
 filterVisibleNames
-  :: (HasCallStack, MonadError ErrorMessage m, MonadReader TagsServerConf m, Foldable f)
+  :: (WithCallStack, MonadError ErrorMessage m, MonadReader TagsServerConf m, Foldable f)
   => ModuleName
   -> f ModuleName         -- ^ Imported modules for error reporting.
   -> SymbolMap            -- ^ All names from the set of imports.
@@ -735,7 +735,7 @@ filterVisibleNames moduleName importedMods allImportedNames ImportSpec{ispecImpo
 -- | Get names referred to by @EntryWithChildren@ given a @SymbolMap@
 -- of names currently in scope.
 allNamesFromEntry
-  :: forall m f ann. (HasCallStack, MonadError ErrorMessage m, MonadReader TagsServerConf m, Foldable f)
+  :: forall m f ann. (WithCallStack, MonadError ErrorMessage m, MonadReader TagsServerConf m, Foldable f)
   => ModuleName
   -> f ModuleName -- ^ Imported modules for error reporting.
   -> SymbolMap
@@ -748,7 +748,7 @@ allNamesFromEntry moduleName importedMods allImportedNames entry@(EntryWithChild
 -- | Get children names only referred to by @EntryWithChildren@ given
 -- a @SymbolMap@ of names currently in scope.
 childrenNamesFromEntry
-  :: forall m f ann. (HasCallStack, MonadError ErrorMessage m, MonadReader TagsServerConf m, Foldable f)
+  :: forall m f ann. (WithCallStack, MonadError ErrorMessage m, MonadReader TagsServerConf m, Foldable f)
   => ModuleName
   -> f ModuleName -- ^ Imported modules for error reporting.
   -> SymbolMap
@@ -762,7 +762,7 @@ childrenNamesFromEntry moduleName importedMods allImportedNames (EntryWithChildr
     Just (VisibleAllChildrenPlusSome extraChildren) ->
       (M.keysSet extraChildren <>) <$> childrenSymbols
   where
-    childrenSymbols :: HasCallStack => m (Set UnqualifiedSymbolName)
+    childrenSymbols :: WithCallStack => m (Set UnqualifiedSymbolName)
     childrenSymbols = do
       nameResolution <- asks tsconfNameResolution
       case (nameResolution, SM.lookupChildren sym allImportedNames) of

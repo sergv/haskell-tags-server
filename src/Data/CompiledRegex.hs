@@ -46,7 +46,7 @@ instance Ord CompiledRegex where
   compare = compare `on` source
 
 compileRegex
-  :: (HasCallStack, MonadError ErrorMessage m)
+  :: (WithCallStack, MonadError ErrorMessage m)
   => Bool -> String -> m CompiledRegex
 compileRegex captureGroups src =
   case makeRegexOptsM compOpt execOpt src of

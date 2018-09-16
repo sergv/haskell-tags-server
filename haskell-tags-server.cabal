@@ -20,7 +20,17 @@ build-type:
 cabal-version:
   >=1.16
 
+flag dev
+  description:
+    Enable development aids
+  default:
+    False
+  manual:
+    True
+
 library
+  if flag(assertions)
+    cpp-options: -DDEVELOPMENT
   build-depends:
     array,
     attoparsec >= 0.13.1.0,
@@ -78,6 +88,8 @@ library
     Data.Symbols
     Data.Symbols.MacroName
     Data.Text.Prettyprint.Doc.Ext
+
+    GHC.Stack.Ext
 
     Haskell.Language.LexerSimple.Lexer
     Haskell.Language.LexerSimple.Types

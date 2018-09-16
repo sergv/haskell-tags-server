@@ -55,7 +55,7 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc.Ext (Pretty(..), ppDictHeader, MapEntry(..))
-import GHC.Stack (HasCallStack)
+import GHC.Stack.Ext (WithCallStack)
 import Lens.Micro
 
 import Data.ErrorMessage
@@ -158,7 +158,7 @@ removeMacroDef name =
 
 {-# INLINE enterConstantMacroDef #-}
 enterConstantMacroDef
-  :: (HasCallStack, MonadState AlexState m, MonadError ErrorMessage m)
+  :: (WithCallStack, MonadState AlexState m, MonadError ErrorMessage m)
   => ConstantMacroDef
   -> m ()
 enterConstantMacroDef ConstantMacroDef{cmdName, cmdBody} =
@@ -168,7 +168,7 @@ enterConstantMacroDef ConstantMacroDef{cmdName, cmdBody} =
 
 {-# INLINE enterFunctionMacroDef #-}
 enterFunctionMacroDef
-  :: (HasCallStack, MonadState AlexState m, MonadError ErrorMessage m)
+  :: (WithCallStack, MonadState AlexState m, MonadError ErrorMessage m)
   => FunctionMacroDef
   -> [T.Text]
   -> m ()

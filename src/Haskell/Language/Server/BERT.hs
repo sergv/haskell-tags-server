@@ -61,7 +61,7 @@ defaultPort :: Network.PortNumber
 defaultPort = 10000
 
 decodeUtf8
-  :: (HasCallStack, MonadError ErrorMessage m)
+  :: (WithCallStack, MonadError ErrorMessage m)
   => Doc Void -> UTF8.ByteString -> m T.Text
 decodeUtf8 thing =
   either (throwErrorWithCallStack . mkErr) pure . TE.decodeUtf8' . C8.toStrict
@@ -102,7 +102,7 @@ waitForBertServerStart :: MonadBase IO m => BertServer -> m ()
 waitForBertServerStart = waitForCondition . stStartedLock . bsTransport
 
 runBertServer
-  :: forall m. (HasCallStack, MonadBase IO m, MonadBaseControl IO m, MonadLog m, StM m BERT.DispatchResult ~ BERT.DispatchResult)
+  :: forall m. (WithCallStack, MonadBase IO m, MonadBaseControl IO m, MonadLog m, StM m BERT.DispatchResult ~ BERT.DispatchResult)
   => Network.PortNumber
   -> RequestHandler
   -> m BertServer
@@ -117,7 +117,7 @@ runBertServer port reqHandler = do
     , bsTransport = syncTransport
     }
   where
-    go :: HasCallStack => String -> String -> [Term] -> m BERT.DispatchResult
+    go :: WithCallStack => String -> String -> [Term] -> m BERT.DispatchResult
     go mod func args = do
       logDebug $ "[runBertServer.go] got request" <+> pretty mod <> ":" ## pretty func
       res <- runExceptT $ go' mod func args
@@ -129,7 +129,7 @@ runBertServer port reqHandler = do
             ]
         Right x -> pure x
     go'
-      :: HasCallStack
+      :: WithCallStack
       => String -> String -> [Term] -> ExceptT ErrorMessage m BERT.DispatchResult
     go' "haskell-tags-server" "find-regexp" args =
       case args of

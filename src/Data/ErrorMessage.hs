@@ -15,7 +15,7 @@ module Data.ErrorMessage (ErrorMessage(..)) where
 import Data.String
 import Data.Text.Prettyprint.Doc.Ext
 import Data.Void (Void, vacuous)
-import GHC.Stack
+import GHC.Stack.Ext
 
 data ErrorMessage = ErrorMessage
   { errorMessageBody      :: Doc Void
