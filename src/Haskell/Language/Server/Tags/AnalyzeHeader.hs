@@ -123,7 +123,7 @@ analyzeImports imports qualifiers ts = do
   -- logDebug $ "[analyzeImports] ts =" <+> ppTokens ts
   res <- runMaybeT $ do
     -- Drop initial "import" keyword and {-# SOURCE #-} pragma, if any
-    (ts2, importTarget) <- case dropNLs ts of
+    (ts2, importTarget) <- case dropWhile (\case { PImport -> False; _ -> True }) $ dropNLs ts of
       PImport : (d -> PSourcePragma : rest) -> pure (rest, HsBootModule)
       PImport :                       rest  -> pure (rest, VanillaModule)
       _                                     -> mzero
