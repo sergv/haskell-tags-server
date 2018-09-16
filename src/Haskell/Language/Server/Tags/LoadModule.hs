@@ -208,13 +208,13 @@ makeModule
 makeModule suggestedModuleName modifTime filename tokens = do
   (header, tokens') <- analyzeHeader tokens
   let syms           :: [ResolvedSymbol]
-      errors         :: [String]
+      errors         :: [Doc Void]
       (syms, errors) = first (fmap mkResolvedSymbol . FastTags.removeDuplicatePatterns)
                      $ processTokens tokens'
       allSymbols     :: SymbolMap
       allSymbols     = SM.fromList syms
   unless (null errors) $
-    logError $ ppFoldableHeaderWith docFromString
+    logError $ ppFoldableHeaderWith id
       ("fast-tags errors while loading" <+> pretty filename)
       errors
   case (suggestedModuleName, header) of

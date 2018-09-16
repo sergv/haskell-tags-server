@@ -17,7 +17,7 @@ module Haskell.Language.Lexer.TokenisationUtils
 
 import Test.Tasty
 
-import Control.Arrow (first)
+import Control.Arrow ((***))
 import Data.List (sort)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -51,7 +51,7 @@ testFullTagsWithoutPrefixes
   :: WithCallStack
   => FilePath -> LiterateLocation Void -> Text -> [Pos TagVal] -> TestTree
 testFullTagsWithoutPrefixes fn mode = \source tags ->
-  makeTest (first sort . processTokens . tokenize' fn mode) source (tags, warnings)
+  makeTest ((sort *** map PP.displayDocString) . processTokens . tokenize' fn mode) source (tags, warnings)
   where
     warnings :: [String]
     warnings = []
@@ -66,7 +66,8 @@ testTagNames fn mode source tags =
     warnings = []
 
     process :: Text -> ([String], [String])
-    process = first (sort . map untag) . processTokens . tokenize' fn mode
+    process =
+      (sort . map untag *** map PP.displayDocString) . processTokens . tokenize' fn mode
 
 untag :: Pos TagVal -> String
 untag (Pos _ (TagVal name _ _)) = T.unpack name

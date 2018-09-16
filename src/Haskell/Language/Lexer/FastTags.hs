@@ -27,10 +27,13 @@ module Haskell.Language.Lexer.FastTags
   , module FastTags.Tag
   ) where
 
+import Control.Arrow (second)
+
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc.Ext
+import Data.Void (Void)
 import GHC.Generics (Generic)
 
 import FastTags.Tag
@@ -97,10 +100,11 @@ stripNewlines = filter isNonNewline
     isNonNewline _                         = True
 
 stripServerTokens :: [Pos ServerToken] -> [Pos TokenVal]
-stripServerTokens xs = [ Pos p x | Pos p (Tok x) <- xs ]
+stripServerTokens xs = [Pos p x | Pos p (Tok x) <- xs]
 
-processTokens :: [Pos ServerToken] -> ([Pos TagVal], [String])
-processTokens = FastTags.Tag.processTokens . stripServerTokens
+processTokens :: [Pos ServerToken] -> ([Pos TagVal], [Doc Void])
+processTokens =
+  second (map docFromString) . FastTags.Tag.processTokens . stripServerTokens
 
 -- | Keep only one Pattern tag for each unique name.
 removeDuplicatePatterns :: [Pos TagVal] -> [Pos TagVal]
