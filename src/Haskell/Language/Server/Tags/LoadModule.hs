@@ -22,7 +22,6 @@ module Haskell.Language.Server.Tags.LoadModule
 import Prelude hiding (mod)
 
 import Control.Arrow (first)
-import Control.Monad.Except (throwError)
 import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
@@ -194,9 +193,11 @@ loadModuleFromSource
   -> FullPath
   -> TL.Text
   -> m UnresolvedModule
-loadModuleFromSource suggestedModuleName modifTime filename source = do
-  tokens <- either throwError pure $ tokenize (T.unpack $ unFullPath filename) (TL.toStrict source)
+loadModuleFromSource suggestedModuleName modifTime filename source =
   makeModule suggestedModuleName modifTime filename tokens
+  where
+    tokens =
+      tokenize (T.unpack $ unFullPath filename) (TL.toStrict source)
 
 makeModule
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)

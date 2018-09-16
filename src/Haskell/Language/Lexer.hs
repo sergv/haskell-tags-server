@@ -19,7 +19,6 @@ import Data.Text (Text)
 import GHC.Stack.Ext (WithCallStack)
 import System.FilePath
 
-import Data.ErrorMessage
 -- import Haskell.Language.Lexer.FastTags (Token)
 -- import Haskell.Language.Lexer.Lexer (tokenizeM)
 -- import Haskell.Language.Lexer.Types (LiterateMode(..))
@@ -28,7 +27,7 @@ import Haskell.Language.Lexer.FastTags
 import qualified Haskell.Language.LexerSimple.Lexer as SimpleLexer
 import Haskell.Language.LexerSimple.Types (LiterateLocation(..))
 
-tokenize :: WithCallStack => FilePath -> Text -> Either ErrorMessage [Pos ServerToken]
+tokenize :: WithCallStack => FilePath -> Text -> [Pos ServerToken]
 -- tokenize filename = runIdentity . tokenizeM filename mode
   -- where
   --   mode :: LiterateMode

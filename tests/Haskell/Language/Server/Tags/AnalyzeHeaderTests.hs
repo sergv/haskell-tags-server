@@ -2335,7 +2335,7 @@ tests = testGroup "Header analysis tests"
 doTest :: WithCallStack => Test -> TestTree
 doTest TestCase{testName, input, expectedResult} =
   testCase testName $ do
-    let (res, logs) = runWriter $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runExceptT $ analyzeHeader =<< tokens
+    let (res, logs) = runWriter $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runExceptT $ analyzeHeader tokens
         logsDoc     = "Logs, size " <> pretty (length logs) <> ":" ## PP.indent 2 (PP.vcat logs)
     case res of
       Left msg               -> assertFailure $ displayDocString $ pretty msg ## logsDoc
@@ -2372,5 +2372,5 @@ doTest TestCase{testName, input, expectedResult} =
         unless (header == expectedResult) $
           assertFailure $ displayDocString $ msg ## logsDoc
   where
-    tokens :: forall m. MonadError ErrorMessage m => m [Pos ServerToken]
-    tokens = either throwError pure $ tokenize "test.hs" input
+    tokens :: [Pos ServerToken]
+    tokens = tokenize "test.hs" input

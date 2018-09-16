@@ -20,7 +20,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Unsafe as T
 import Data.Void (Void, absurd)
 
-import Data.ErrorMessage
+import Data.IgnoreEqOrdHash
 import Haskell.Language.LexerSimple.Types
 import Haskell.Language.Lexer.FastTags
 import Haskell.Language.Lexer.Types (LiterateStyle(..), Context(..), mkSrcPos, AlexCode(..))
@@ -291,7 +291,7 @@ isLiterateLatexOrOutside litLoc _inputBefore _len _inputAfter =
 
 tokenize
   :: WithCallStack
-  => FilePath -> LiterateLocation Void -> Text -> Either ErrorMessage [Pos ServerToken]
+  => FilePath -> LiterateLocation Void -> Text -> [Pos ServerToken]
 tokenize filename litLoc input =
   runAlexM litLoc startCode' input $ scanTokens filename
   where
@@ -329,7 +329,7 @@ continueScanning = do
               pure $ Tok EOF
             AlexError AlexInput{aiLine, aiInput} -> do
               code <- gets asCode
-              throwErrorWithCallStack $ "Lexical error while in state" <+> pretty code
+              pure $ Error $ IgnoreEqOrdHash $ "Lexical error while in state" <+> pretty code
                 <+> "at line" <+>
                 pretty (unLine aiLine) <> ":" ## PP.squotes (pretty (T.take 40 aiInput))
             AlexSkip input' _                    ->
@@ -439,11 +439,11 @@ popRParen _ _ = do
 
 {-# INLINE errorAtLine #-}
 errorAtLine
-  :: (MonadError ErrorMessage m, MonadState AlexState m)
-  => Doc Void -> m a
+  :: MonadState AlexState m
+  => Doc Void -> m ServerToken
 errorAtLine msg = do
   line <- gets (unLine . aiLine . asInput)
-  throwErrorWithCallStack $ "Error at line" <+> pretty line <> ":" <+> msg
+  pure $ Error $ IgnoreEqOrdHash $ "Error at line" <+> pretty line <> ":" <+> msg
 
 startLiterateBird :: AlexM ()
 startLiterateBird = do
