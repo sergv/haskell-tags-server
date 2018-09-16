@@ -35,7 +35,6 @@ module Haskell.Language.LexerSimple.Types
 
 import Codec.Binary.UTF8.String (encodeChar)
 import Control.Applicative
-import Control.Monad.EitherCPS
 import Control.Monad.State
 import Data.Char
 import Data.IntSet (IntSet)
@@ -46,7 +45,6 @@ import qualified Data.Text as Text
 import Data.Void (Void, vacuous)
 import Data.Word (Word8)
 
-import Data.ErrorMessage
 import Haskell.Language.Lexer.FastTags
 import Haskell.Language.Lexer.Types (LiterateStyle(..), Context(..), AlexCode(..))
 
@@ -211,16 +209,16 @@ calculateQuasiQuoteEnds startPos =
       , qqessPrevChar = c
       }
 
-type AlexM = EitherCPST ErrorMessage (State AlexState)
+type AlexM = State AlexState
 
 runAlexM
   :: LiterateLocation Void
   -> AlexCode
   -> Text
   -> AlexM a
-  -> Either ErrorMessage a
+  -> a
 runAlexM litLoc startCode input action =
-  evalState (runEitherCPST action (return . Left) (return . Right)) s
+  evalState action s
   where
     s = mkAlexState litLoc startCode (mkAlexInput input)
 

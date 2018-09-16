@@ -9,6 +9,7 @@
 
 {-# LANGUAGE BangPatterns       #-}
 {-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE NamedFieldPuns     #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -29,12 +30,16 @@ module Haskell.Language.Lexer.FastTags
 
 import Control.Arrow (second)
 
+import Data.Either
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
+import Data.Maybe
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc.Ext
 import Data.Void (Void)
 import GHC.Generics (Generic)
+
+import Data.IgnoreEqOrdHash
 
 import FastTags.Tag
   ( TagVal(..)
@@ -63,7 +68,7 @@ data ServerToken =
   | LBanana -- Arrows: (|
   | RBanana -- Arrows: |)
   | Tok !TokenVal
-  -- | Error
+  | Error (IgnoreEqOrdHash (Doc Void))
   deriving (Eq, Ord, Show, Generic)
 
 instance Pretty ServerToken where
@@ -99,12 +104,21 @@ stripNewlines = filter isNonNewline
     isNonNewline (Pos _ (Tok (Newline _))) = False
     isNonNewline _                         = True
 
-stripServerTokens :: [Pos ServerToken] -> [Pos TokenVal]
-stripServerTokens xs = [Pos p x | Pos p (Tok x) <- xs]
+stripServerTokens :: [Pos ServerToken] -> ([Pos TokenVal], [Doc Void])
+stripServerTokens = partitionEithers . mapMaybe f
+  where
+    f :: Pos ServerToken -> Maybe (Either (Pos TokenVal) (Doc Void))
+    f = \case
+      Pos p (Tok x)     -> Just $ Left $ Pos p x
+      Pos _ (Error msg) -> Just $ Right $ unIgnoreEqOrdHash msg
+      _                 -> Nothing
 
 processTokens :: [Pos ServerToken] -> ([Pos TagVal], [Doc Void])
-processTokens =
-  second (map docFromString) . FastTags.Tag.processTokens . stripServerTokens
+processTokens toks
+  = second ((errs ++) . map docFromString)
+  $ FastTags.Tag.processTokens toks'
+  where
+    (toks', errs) = stripServerTokens toks
 
 -- | Keep only one Pattern tag for each unique name.
 removeDuplicatePatterns :: [Pos TagVal] -> [Pos TagVal]

@@ -6,12 +6,15 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE OverloadedStrings #-}
+
 module Haskell.Language.Lexer.TokenisationUtils
   ( filename
   , testFullTagsWithoutPrefixes
   , testTagNames
   , untag
   , tokenize'
+  , stripServerTokens'
   , module Haskell.Language.Lexer.FastTags
   ) where
 
@@ -32,6 +35,7 @@ import TestUtils (makeTest)
 import Haskell.Language.Lexer.FastTags
   ( PragmaType(..)
   , ServerToken(..)
+  , TokenVal
   , TagVal(..)
   , Pos(..)
   , Type(..)
@@ -42,6 +46,7 @@ import Haskell.Language.Lexer.FastTags
   , processTokens
   , UnstrippedTokens(..)
   , unstrippedTokensOf
+  , stripServerTokens
   )
 
 filename :: FilePath
@@ -76,10 +81,18 @@ tokenize'
   :: WithCallStack
   => FilePath -> LiterateLocation Void -> Text -> [Pos ServerToken]
 tokenize' fn mode =
-    either (error . PP.displayDocString . PP.pretty) id
+    -- either (error . PP.displayDocString . PP.pretty) id
   -- . runIdentity
   -- . Lexer.tokenizeM fn mode
-  . Lexer.tokenize fn mode
+  -- .
+  Lexer.tokenize fn mode
+
+stripServerTokens' :: [Pos ServerToken] -> [Pos TokenVal]
+stripServerTokens' ts =
+  case stripServerTokens ts of
+    (ts', [])       -> ts'
+    (_,   es@(_:_)) -> error $ PP.displayDocString $
+      PP.ppFoldableHeaderWith id "Errors while stripping server tokens:" es
 
 -- tokenize''
 --   :: FilePath
