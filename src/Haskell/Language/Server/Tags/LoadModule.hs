@@ -594,8 +594,8 @@ resolveLoop loadMod wantedNames = go (KM.keysSet wantedNames) mempty
       -> [UnresolvedImportSpec]
       -> m (Maybe SymbolMap)
     go wanted found = \case
-      [] | S.null wanted -> pure $ Just found
-         | otherwise     -> pure Nothing
+      _ | S.null wanted -> pure $ Just found
+      []                -> pure Nothing
       ImportSpec{ispecImportKey} : specs -> do
         mod <- loadMod ispecImportKey
         case mod of
