@@ -7,6 +7,7 @@
 -- Created     :  Tuesday, 27 September 2016
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -33,6 +34,8 @@ module Data.SymbolMap
 import Prelude hiding (lookup, null)
 
 import Control.Arrow ((&&&), second)
+import Control.DeepSeq
+
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
@@ -42,6 +45,7 @@ import Data.Maybe
 import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
+import GHC.Generics (Generic)
 
 import Data.Symbols
 import Data.Text.Prettyprint.Doc.Ext
@@ -60,7 +64,9 @@ data SymbolMap = SymbolMap
     -- | Map from parents to chidrens
   , smChildrenMap :: Map UnqualifiedSymbolName (Set UnqualifiedSymbolName)
   , smAllSymbols  :: Map UnqualifiedSymbolName (NonEmpty ResolvedSymbol)
-  } deriving (Eq, Ord, Show)
+  } deriving (Eq, Ord, Show, Generic)
+
+instance NFData SymbolMap
 
 instance Semigroup SymbolMap where
   SymbolMap x y z <> SymbolMap x' y' z' = SymbolMap

@@ -7,6 +7,7 @@
 -- Created     :  Monday, 19 September 2016
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DeriveGeneric        #-}
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE StandaloneDeriving   #-}
@@ -40,21 +41,27 @@ module Data.KeyMap
 import Prelude hiding (lookup, null)
 
 import Control.Arrow
+import Control.DeepSeq
+
 import Data.Coerce
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Pointed
 import Data.Set (Set)
+import GHC.Generics
 
 import Data.Text.Prettyprint.Doc.Combinators
 
 -- | Map than maintains sets of values that all share some key.
 -- Every value must be a member of 'HasKey' typeclass.
 newtype KeyMap f a = KeyMap { unKeyMap :: Map (Key a) (f a) }
+  deriving (Generic)
 
 deriving instance (Eq   (f a), Eq   (Key a)) => Eq   (KeyMap f a)
 deriving instance (Ord  (f a), Ord  (Key a)) => Ord  (KeyMap f a)
 deriving instance (Show (f a), Show (Key a)) => Show (KeyMap f a)
+
+instance (NFData (f a), NFData (Key a)) => NFData (KeyMap f a)
 
 instance (Pretty (Key a), Pretty (f a)) => Pretty (KeyMap f a) where
   pretty = ppAssocList . M.toList . unKeyMap

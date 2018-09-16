@@ -36,7 +36,10 @@ module Haskell.Language.Server.Tags.Types.Modules
 import Prelude hiding (mod)
 
 import Control.Monad.Except.Ext
+import Control.DeepSeq
+
 import Data.Char
+import Data.Hashable
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -78,7 +81,9 @@ data Module a = Module
     -- | Whether some imports of this module were updated and thus revolved
     -- module exports are no longer valid.
   , modIsDirty          :: !Bool
-  } deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
+  } deriving (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
+
+instance NFData a => NFData (Module a)
 
 type UnresolvedModule = Module ()
 type ResolvedModule   = Module SymbolMap
@@ -116,7 +121,9 @@ data ModuleHeader a = ModuleHeader
     -- NB same module name may be present several times with different qualifications
     -- because it may be imported several times.
   , mhImports          :: !(SubkeyMap ImportKey (NonEmpty (ImportSpec a)))
-  } deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
+  } deriving (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
+
+instance NFData a => NFData (ModuleHeader a)
 
 type UnresolvedModuleHeader = ModuleHeader ()
 type ResolvedModuleHeader   = ModuleHeader SymbolMap
@@ -170,6 +177,8 @@ data ModuleExportSpec a =
     SpecificExports a
   deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
 
+instance NFData a => NFData (ModuleExportSpec a)
+
 instance Pretty a => Pretty (ModuleExportSpec a) where
   pretty = ppGeneric
 
@@ -194,6 +203,8 @@ data ModuleExports = ModuleExports
   , meHasWildcardExports :: Bool
   } deriving (Eq, Ord, Show, Generic)
 
+instance NFData ModuleExports
+
 instance Pretty ModuleExports where
   pretty = ppGeneric
 
@@ -214,6 +225,9 @@ data PosAndType = PosAndType
   { patPos  :: SrcPos
   , patType :: Type
   } deriving (Eq, Ord, Show, Generic)
+
+instance Hashable PosAndType
+instance NFData   PosAndType
 
 instance Pretty PosAndType where
   pretty = ppGeneric

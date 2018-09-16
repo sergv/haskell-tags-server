@@ -9,6 +9,7 @@
 
 {-# LANGUAGE DeriveFoldable      #-}
 {-# LANGUAGE DeriveFunctor       #-}
+{-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE DeriveTraversable   #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NamedFieldPuns      #-}
@@ -45,15 +46,18 @@ module Data.SubkeyMap
   , withoutKeys
   ) where
 
+import Prelude hiding (lookup, null)
+
 import Control.Arrow
-import Control.Monad.State.Strict
+import Control.DeepSeq
+
 import Data.Foldable (foldl')
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Semigroup
+import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
-import Prelude hiding (lookup, null)
+import GHC.Generics (Generic)
 
 class (Ord k, Ord (Subkey k)) => HasSubkey k where
   type Subkey k :: *
@@ -69,11 +73,13 @@ class (Ord k, Ord (Subkey k)) => HasSubkey k where
 data SubkeyMap k v = SubkeyMap
   { smMainMap :: !(Map k v)
   , smSubMap  :: !(Map (Subkey k) (Set k))
-  } deriving (Functor, Foldable, Traversable)
+  } deriving (Functor, Foldable, Traversable, Generic)
 
-deriving instance (Eq k,   Eq (Subkey k),   Eq v)   => Eq (SubkeyMap k v)
-deriving instance (Ord k,  Ord (Subkey k),  Ord v)  => Ord (SubkeyMap k v)
+deriving instance (Eq   k,  Eq  (Subkey k), Eq   v) => Eq   (SubkeyMap k v)
+deriving instance (Ord  k, Ord  (Subkey k), Ord  v) => Ord  (SubkeyMap k v)
 deriving instance (Show k, Show (Subkey k), Show v) => Show (SubkeyMap k v)
+
+instance (NFData k, NFData (Subkey k), NFData v) => NFData (SubkeyMap k v)
 
 instance (HasSubkey k, Semigroup v) => Semigroup (SubkeyMap k v) where
   SubkeyMap m1 s1 <> SubkeyMap m2 s2 = SubkeyMap
@@ -83,7 +89,7 @@ instance (HasSubkey k, Semigroup v) => Semigroup (SubkeyMap k v) where
 
 instance (HasSubkey k, Semigroup v) => Monoid (SubkeyMap k v) where
   mempty  = empty
-  mappend = (<>)
+  mappend = (Semigroup.<>)
 
 empty :: SubkeyMap k v
 empty = SubkeyMap

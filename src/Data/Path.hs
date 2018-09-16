@@ -59,7 +59,9 @@ module Data.Path
   , bpExtension
   ) where
 
+import Control.DeepSeq
 import Control.Monad.Base
+
 import Data.Coerce
 import Data.Function
 import Data.List.NonEmpty (NonEmpty(..))
@@ -77,7 +79,7 @@ import qualified System.FilePath as FilePath
 -- but must be created in derivatives of IO monad.
 -- Invariant: does not end with \/.
 newtype FullPath = FullPath { unFullPath :: Text }
-  deriving (Show, Pretty, IsString)
+  deriving (Show, Pretty, IsString, NFData)
 
 #ifdef WINDOWS
 instance Eq FullPath where
@@ -137,7 +139,7 @@ makeRelativeText x y = T.pack $ FilePath.makeRelative (T.unpack x) (T.unpack y)
 -- | Path fragment, possibly with some directories but without etxension.
 -- Invariant: does not start with \/, does not end with \/.
 newtype PathFragment = PathFragment { unPathFragment :: Text }
-  deriving (Show, Pretty, IsString)
+  deriving (Show, Pretty, IsString, NFData)
 
 #ifdef WINDOWS
 instance Eq PathFragment where
@@ -199,7 +201,7 @@ instance Contains BaseName
 
 -- | E.g. “.hs”.
 newtype Extension = Extension { unExtension :: Text }
-  deriving (Show, IsString)
+  deriving (Show, IsString, NFData)
 
 #ifdef WINDOWS
 instance Eq Extension where
@@ -278,7 +280,7 @@ instance MakeRelative PathFragment PathFragment PathFragment
 
 -- | File basename without directory but with extension.
 newtype BaseName = BaseName { unBaseName :: PathFragment }
-  deriving (Show, Pretty, IsString)
+  deriving (Show, Pretty, IsString, NFData)
 
 #ifdef WINDOWS
 instance Eq BaseName where
