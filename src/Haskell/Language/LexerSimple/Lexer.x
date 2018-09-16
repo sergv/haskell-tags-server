@@ -15,9 +15,7 @@ import Control.Monad.State.Strict
 import qualified Data.IntSet as IS
 import qualified Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext (Pretty(..), Doc, (<+>), (##))
-import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Unsafe as T
 import Data.Void (Void, absurd)
 
 import Data.IgnoreEqOrdHash
@@ -141,7 +139,7 @@ $nl [^>]
 
 
 [\\]? @nl $space* "{-"  { \input len -> startIndentationCounting (countInputSpace input len) }
-[\\]? @nl $space*       { \input len -> pure $! Tok $! Newline $! (len - 1) - (case T.unsafeHead (aiInput input) of { '\\' -> 1; _ -> 0 }) }
+[\\]? @nl $space*       { \input len -> pure $! Tok $! Newline $! (len - 1) - (case unsafeTextHead (aiInput input) of { '\\' -> 1; _ -> 0 }) }
 [\-][\-]+ ~[$symbol $nl] .* ;
 [\-][\-]+ / @nl         ;
 
@@ -331,7 +329,7 @@ continueScanning = do
               code <- gets asCode
               pure $ Error $ IgnoreEqOrdHash $ "Lexical error while in state" <+> pretty code
                 <+> "at line" <+>
-                pretty (unLine aiLine) <> ":" ## PP.squotes (pretty (T.take 40 aiInput))
+                pretty (unLine aiLine) <> ":" ## PP.squotes (pretty (TL.take 40 aiInput))
             AlexSkip input' _                    ->
               go' input'
             AlexToken input' tokLen action       ->
