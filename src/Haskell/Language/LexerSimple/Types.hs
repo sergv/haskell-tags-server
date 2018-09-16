@@ -30,6 +30,7 @@ module Haskell.Language.LexerSimple.Types
   , alexSetNextCode
   , alexInputPrevChar
   , alexGetByte
+  , unsafeTextHead
   ) where
 
 import Codec.Binary.UTF8.String (encodeChar)
@@ -39,7 +40,9 @@ import Data.IntSet (IntSet)
 import qualified Data.IntSet as IS
 import Data.Maybe
 import qualified Data.Text as T
+import qualified Data.Text.Internal.Lazy as TIL
 import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Unsafe as T
 import Data.Void (Void, vacuous)
 import Data.Word (Word8)
 
@@ -53,10 +56,10 @@ advanceLine _    = id
 
 countInputSpace :: AlexInput -> Int -> Int
 countInputSpace input len =
-  countSpace $ T.take len $ aiInput input
+  countSpace $ TL.take (fromIntegral len) $ aiInput input
   where
-    countSpace :: T.Text -> Int
-    countSpace = T.foldl' inc 0
+    countSpace :: TL.Text -> Int
+    countSpace = TL.foldl' inc 0
       where
         inc acc ' '    = acc + 1
         inc acc '\t'   = acc + 8
@@ -64,7 +67,7 @@ countInputSpace input len =
         inc acc _      = acc
 
 data AlexInput = AlexInput
-  { aiInput         :: T.Text
+  { aiInput         :: TL.Text
   , aiPrevChar      :: {-# UNPACK #-} !Char
   , aiBytes         :: [Word8]
   , aiLine          :: {-# UNPACK #-} !Line
@@ -73,7 +76,7 @@ data AlexInput = AlexInput
 
 mkAlexInput :: TL.Text -> AlexInput
 mkAlexInput s = AlexInput
-  { aiInput         = TL.toStrict s'
+  { aiInput         = s'
   , aiPrevChar      = '\n'
   , aiBytes         = []
   , aiLine          = initLine
@@ -177,7 +180,8 @@ modifyPreprocessorDepth f = do
 
 {-# INLINE retrieveToken #-}
 retrieveToken :: AlexInput -> Int -> T.Text
-retrieveToken AlexInput{aiInput} len = T.take len aiInput
+retrieveToken AlexInput{aiInput} len =
+  TL.toStrict $ TL.take (fromIntegral len) aiInput
 
 {-# INLINE addIndentationSize #-}
 addIndentationSize :: MonadState AlexState m => Int -> m ()
@@ -190,9 +194,9 @@ data QQEndsState = QQEndsState
   , qqessPrevChar :: {-# UNPACK #-} !Char
   }
 
-calculateQuasiQuoteEnds :: Int -> T.Text -> IntSet
+calculateQuasiQuoteEnds :: Int -> TL.Text -> IntSet
 calculateQuasiQuoteEnds startPos =
-  qqessMap . T.foldl' combine (QQEndsState startPos mempty '\n')
+  qqessMap . TL.foldl' combine (QQEndsState startPos mempty '\n')
   where
     combine :: QQEndsState -> Char -> QQEndsState
     combine QQEndsState{qqessPos, qqessMap, qqessPrevChar} c = QQEndsState
@@ -237,7 +241,7 @@ alexGetByte input@AlexInput{aiInput, aiBytes, aiLine, aiAbsPos} =
     b:bs -> Just (b, input { aiBytes = bs })
     []   -> nextChar
   where
-    nextChar = case T.uncons aiInput of
+    nextChar = case TL.uncons aiInput of
       Nothing      -> Nothing
       Just (c, cs) -> encode (fromMaybe c $ fixChar c) cs
     encode c cs =
@@ -288,3 +292,11 @@ fixChar c
     symbol = '\x04'
     digit  = '\x05'
     suffix = '\x06'
+
+-- unsafeTextHead :: T.Text -> Char
+-- unsafeTextHead = T.unsafeHead
+
+unsafeTextHead :: TL.Text -> Char
+unsafeTextHead = \case
+  TIL.Chunk x _ -> T.unsafeHead x
+  TIL.Empty -> error "unsafeTextHead called on empty lazy text"
