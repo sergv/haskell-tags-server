@@ -14,12 +14,14 @@ module Data.IgnoreEqOrdHash
   ( IgnoreEqOrdHash(..)
   ) where
 
+import Control.DeepSeq
+
 import Data.Coerce
 import Data.Hashable
 import Data.Text.Prettyprint.Doc.Ext
 
 newtype IgnoreEqOrdHash a = IgnoreEqOrdHash { unIgnoreEqOrdHash :: a }
-  deriving (Pretty)
+  deriving (Pretty, NFData)
 
 instance Eq (IgnoreEqOrdHash a) where
   {-# INLINE (==) #-}

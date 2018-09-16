@@ -39,6 +39,7 @@ library
     bimap,
     bytestring,
     containers,
+    deepseq,
     directory,
     dlist,
     exceptions >= 0.8,

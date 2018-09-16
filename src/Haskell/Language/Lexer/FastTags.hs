@@ -29,8 +29,10 @@ module Haskell.Language.Lexer.FastTags
   ) where
 
 import Control.Arrow (second)
+import Control.DeepSeq
 
 import Data.Either
+import Data.Hashable
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import Data.Maybe
@@ -59,6 +61,9 @@ import qualified FastTags.Tag (processTokens)
 data PragmaType = SourcePragma
   deriving (Show, Eq, Ord, Generic)
 
+instance Hashable PragmaType
+instance NFData   PragmaType
+
 instance Pretty PragmaType where
   pretty = ppGeneric
 
@@ -71,24 +76,50 @@ data ServerToken =
   | Error (IgnoreEqOrdHash (Doc Void))
   deriving (Eq, Ord, Show, Generic)
 
+instance Hashable ServerToken
+
+instance NFData ServerToken where
+  rnf = \case
+    Pragma x -> rnf x
+    HSC2HS   -> ()
+    LBanana  -> ()
+    RBanana  -> ()
+    Tok x    -> rnf x
+    Error x  -> x `seq` ()
+
 instance Pretty ServerToken where
   pretty = ppGeneric
 
 deriving instance Generic TokenVal
+instance Hashable TokenVal
+instance NFData   TokenVal
 
 instance Pretty TokenVal where
   pretty = ppGeneric
+
+deriving instance Generic Line
+instance Hashable Line
+
+deriving instance Generic SrcPos
+instance Hashable SrcPos
 
 instance Pretty SrcPos where
   pretty SrcPos{posFile, posLine} = pretty posFile <> ":" <> pretty (unLine posLine)
 
 deriving instance Generic (Pos a)
+instance Hashable a => Hashable (Pos a)
 
 instance Pretty a => Pretty (Pos a) where
   pretty = ppGeneric
 
+deriving instance Generic Type
+instance Hashable Type
+
 instance Pretty Type where
-  pretty = ppShow
+  pretty = ppGeneric
+
+deriving instance Generic TagVal
+instance Hashable TagVal
 
 tokToName :: ServerToken -> Maybe Text
 tokToName (Tok ExclamationMark) = Just "!"

@@ -35,6 +35,9 @@ module Haskell.Language.Server.Tags.Types.Imports
   , ChildrenVisibility(..)
   ) where
 
+import Control.DeepSeq
+
+import Data.Hashable
 import Data.Map (Map)
 import Data.Set (Set)
 import Data.Text.Prettyprint.Doc.Ext
@@ -49,10 +52,13 @@ import Data.Symbols
 data ImportKey = ImportKey
   { -- | Whether this import statement is annotated with {-# SOURCE #-} pragma.
     -- This means that it refers to .hs-boot file, rather than vanilla .hs file.
-    ikImportTarget :: ImportTarget
+    ikImportTarget :: !ImportTarget
     -- | Name of imported module
-  , ikModuleName   :: ModuleName
+  , ikModuleName   :: !ModuleName
   } deriving (Eq, Ord, Show, Generic)
+
+instance Hashable ImportKey
+instance NFData   ImportKey
 
 instance HasSubkey ImportKey where
   type Subkey ImportKey = ModuleName
@@ -66,6 +72,9 @@ instance Pretty ImportKey where
 data ImportTarget = VanillaModule | HsBootModule
   deriving (Eq, Ord, Show, Enum, Bounded, Generic)
 
+instance Hashable ImportTarget
+instance NFData   ImportTarget
+
 instance Pretty ImportTarget where
   pretty = ppGeneric
 
@@ -76,6 +85,8 @@ data ImportSpec a = ImportSpec
   , ispecImportList    :: ImportListSpec ImportList
   , ispecImportedNames :: a
   } deriving (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
+
+instance NFData a => NFData (ImportSpec a)
 
 type UnresolvedImportSpec = ImportSpec ()
 type ResolvedImportSpec   = ImportSpec SymbolMap
@@ -120,6 +131,9 @@ data ImportQualification =
   | BothQualifiedAndUnqualified ImportQualifier
   deriving (Eq, Ord, Show, Generic)
 
+instance Hashable ImportQualification
+instance NFData   ImportQualification
+
 instance Pretty ImportQualification where
   pretty = ppGeneric
 
@@ -144,6 +158,9 @@ data ImportType =
     Hidden
   deriving (Eq, Ord, Show, Generic)
 
+instance Hashable ImportType
+instance NFData   ImportType
+
 instance Pretty ImportType where
   pretty = ppGeneric
 
@@ -155,6 +172,8 @@ data ImportListSpec a =
   | SpecificImports a
   deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
 
+instance NFData a => NFData (ImportListSpec a)
+
 instance Pretty a => Pretty (ImportListSpec a) where
   pretty = ppGeneric
 
@@ -162,7 +181,9 @@ instance Pretty a => Pretty (ImportListSpec a) where
 data ImportList = ImportList
   { ilEntries    :: KeyMap Set (EntryWithChildren () UnqualifiedSymbolName)
   , ilImportType :: ImportType
-  } deriving (Eq, Ord, Show)
+  } deriving (Eq, Ord, Show, Generic)
+
+instance NFData ImportList
 
 instance Pretty ImportList where
   pretty ImportList{ilImportType, ilEntries} =
@@ -172,6 +193,8 @@ data EntryWithChildren childAnn name = EntryWithChildren
   { entryName               :: name
   , entryChildrenVisibility :: Maybe (ChildrenVisibility childAnn)
   } deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
+
+instance (NFData a, NFData b) => NFData (EntryWithChildren a b)
 
 instance (Pretty ann, Pretty name) => Pretty (EntryWithChildren ann name) where
   pretty = ppGeneric
@@ -198,6 +221,8 @@ data ChildrenVisibility ann =
     -- ErrorCall(..,ErrorCall)
   | VisibleAllChildrenPlusSome (Map UnqualifiedSymbolName ann)
   deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
+
+instance NFData a => NFData (ChildrenVisibility a)
 
 instance Pretty a => Pretty (ChildrenVisibility a) where
   pretty = ppGeneric

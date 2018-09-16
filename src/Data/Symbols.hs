@@ -44,10 +44,13 @@ module Data.Symbols
   ) where
 
 import Control.Applicative
+import Control.DeepSeq
+
 import Data.Attoparsec.Text
 import qualified Data.Attoparsec.Text as Attoparsec
 import Data.Char (isUpper)
 import Data.Coerce
+import Data.Hashable
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc.Ext
@@ -59,7 +62,7 @@ import Data.KeyMap (HasKey(..))
 -- | e.g. Foo, Foo.Bar. Assume that this is not an import qualifier.
 -- Import qualifiers should be labeled as 'ImportQualifer'.
 newtype ModuleName = ModuleName { getModuleName :: Text }
-  deriving (Eq, Ord, Show, Pretty)
+  deriving (Eq, Ord, Show, Pretty, Hashable, NFData)
 
 mkModuleName :: Text -> ModuleName
 mkModuleName = ModuleName
@@ -69,21 +72,21 @@ mkModuleName = ModuleName
 -- import Foo.Bar as XXX
 -- import qualified Fizz.Buzz as XXX
 newtype ImportQualifier = ImportQualifier { getImportQualifier :: ModuleName }
-  deriving (Eq, Ord, Show, Pretty)
+  deriving (Eq, Ord, Show, Pretty, Hashable, NFData)
 
 mkImportQualifier :: ModuleName -> ImportQualifier
 mkImportQualifier = ImportQualifier
 
 -- | Name the @ResolvedSymbol@ refers to. Can be either qualified or unqualified.
 newtype SymbolName = SymbolName { getSymbolName :: Text }
-  deriving (Eq, Ord, Show, Pretty)
+  deriving (Eq, Ord, Show, Pretty, Hashable, NFData)
 
 mkSymbolName :: Text -> SymbolName
 mkSymbolName = SymbolName
 
 -- | Name the @ResolvedSymbol@ refers to.
 newtype UnqualifiedSymbolName = UnqualifiedSymbolName { getUnqualifiedSymbolName :: SymbolName }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Hashable, NFData)
 
 instance Pretty UnqualifiedSymbolName where
   pretty = pretty . getUnqualifiedSymbolName
@@ -127,7 +130,7 @@ splitQualifiedPart sym =
 -- | A symbolic name that identifier some Haskell entity. Has position,
 -- entity type and possibly a parent.
 newtype ResolvedSymbol = ResolvedSymbol (Pos TagVal)
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Hashable, NFData)
 
 instance HasKey ResolvedSymbol where
   type Key ResolvedSymbol = UnqualifiedSymbolName
