@@ -13,10 +13,10 @@ import Control.Monad
 import Control.Monad.Except.Ext
 import Control.Monad.State.Strict
 import qualified Data.IntSet as IS
-import Data.Text (Text)
 import qualified Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext (Pretty(..), Doc, (<+>), (##))
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Unsafe as T
 import Data.Void (Void, absurd)
 
@@ -291,7 +291,7 @@ isLiterateLatexOrOutside litLoc _inputBefore _len _inputAfter =
 
 tokenize
   :: WithCallStack
-  => FilePath -> LiterateLocation Void -> Text -> [Pos ServerToken]
+  => FilePath -> LiterateLocation Void -> TL.Text -> [Pos ServerToken]
 tokenize filename litLoc input =
   runAlexM litLoc startCode' input $ scanTokens filename
   where

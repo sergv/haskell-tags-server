@@ -9,7 +9,6 @@ module Haskell.Language.LexerSimple.Types
   ( advanceLine
   , countInputSpace
   , AlexInput(..)
-  , mkAlexInput
   , Context(..)
   , LiterateLocation(..)
   , isLiterateEnabled
@@ -34,14 +33,13 @@ module Haskell.Language.LexerSimple.Types
   ) where
 
 import Codec.Binary.UTF8.String (encodeChar)
-import Control.Applicative
 import Control.Monad.State
 import Data.Char
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IS
 import Data.Maybe
-import Data.Text (Text)
-import qualified Data.Text as Text
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import Data.Void (Void, vacuous)
 import Data.Word (Word8)
 
@@ -55,10 +53,10 @@ advanceLine _    = id
 
 countInputSpace :: AlexInput -> Int -> Int
 countInputSpace input len =
-  countSpace $ Text.take len $ aiInput input
+  countSpace $ T.take len $ aiInput input
   where
-    countSpace :: Text -> Int
-    countSpace = Text.foldl' inc 0
+    countSpace :: T.Text -> Int
+    countSpace = T.foldl' inc 0
       where
         inc acc ' '    = acc + 1
         inc acc '\t'   = acc + 8
@@ -66,16 +64,16 @@ countInputSpace input len =
         inc acc _      = acc
 
 data AlexInput = AlexInput
-  { aiInput         :: Text
+  { aiInput         :: T.Text
   , aiPrevChar      :: {-# UNPACK #-} !Char
   , aiBytes         :: [Word8]
   , aiLine          :: {-# UNPACK #-} !Line
   , aiAbsPos        :: {-# UNPACK #-} !Int
   } deriving (Show, Eq, Ord)
 
-mkAlexInput :: Text -> AlexInput
+mkAlexInput :: TL.Text -> AlexInput
 mkAlexInput s = AlexInput
-  { aiInput         = s'
+  { aiInput         = TL.toStrict s'
   , aiPrevChar      = '\n'
   , aiBytes         = []
   , aiLine          = initLine
@@ -89,14 +87,12 @@ mkAlexInput s = AlexInput
     -- Same reasoning applies to the initial absolute position.
     initAbsPos = -1
 
-    s' = Text.cons '\n' $ Text.snoc (stripBOM s) '\n'
-    stripBOM :: Text -> Text
-    stripBOM xs =
-      fromMaybe xs $
-      Text.stripPrefix utf8BOM xs <|> Text.stripPrefix utf8BOM' xs
-    -- utf8BOM = "\xEF\xBB\xBF"
-    utf8BOM = "\xFFEF"
-    utf8BOM' = "\xFEFF"
+    s' = TL.cons '\n' $ TL.snoc (stripBOM s) '\n'
+    stripBOM :: TL.Text -> TL.Text
+    stripBOM xs = case TL.uncons xs of
+      Just ('\xFF', xs') -> TL.tail xs'
+      Just ('\xFE', xs') -> TL.tail xs'
+      _                  -> xs
 
 data LiterateLocation a = LiterateInside a | LiterateOutside | Vanilla
   deriving (Eq, Ord, Show, Functor)
@@ -180,8 +176,8 @@ modifyPreprocessorDepth f = do
   return depth'
 
 {-# INLINE retrieveToken #-}
-retrieveToken :: AlexInput -> Int -> Text
-retrieveToken AlexInput{aiInput} len = Text.take len aiInput
+retrieveToken :: AlexInput -> Int -> T.Text
+retrieveToken AlexInput{aiInput} len = T.take len aiInput
 
 {-# INLINE addIndentationSize #-}
 addIndentationSize :: MonadState AlexState m => Int -> m ()
@@ -194,9 +190,9 @@ data QQEndsState = QQEndsState
   , qqessPrevChar :: {-# UNPACK #-} !Char
   }
 
-calculateQuasiQuoteEnds :: Int -> Text -> IntSet
+calculateQuasiQuoteEnds :: Int -> T.Text -> IntSet
 calculateQuasiQuoteEnds startPos =
-  qqessMap . Text.foldl' combine (QQEndsState startPos mempty '\n')
+  qqessMap . T.foldl' combine (QQEndsState startPos mempty '\n')
   where
     combine :: QQEndsState -> Char -> QQEndsState
     combine QQEndsState{qqessPos, qqessMap, qqessPrevChar} c = QQEndsState
@@ -214,7 +210,7 @@ type AlexM = State AlexState
 runAlexM
   :: LiterateLocation Void
   -> AlexCode
-  -> Text
+  -> TL.Text
   -> AlexM a
   -> a
 runAlexM litLoc startCode input action =
@@ -241,7 +237,7 @@ alexGetByte input@AlexInput{aiInput, aiBytes, aiLine, aiAbsPos} =
     b:bs -> Just (b, input { aiBytes = bs })
     []   -> nextChar
   where
-    nextChar = case Text.uncons aiInput of
+    nextChar = case T.uncons aiInput of
       Nothing      -> Nothing
       Just (c, cs) -> encode (fromMaybe c $ fixChar c) cs
     encode c cs =

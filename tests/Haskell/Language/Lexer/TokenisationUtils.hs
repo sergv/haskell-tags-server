@@ -22,8 +22,8 @@ import Test.Tasty
 
 import Control.Arrow ((***))
 import Data.List (sort)
-import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Prettyprint.Doc.Ext as PP
 import Data.Void (Void)
 import GHC.Stack.Ext (WithCallStack)
@@ -54,7 +54,7 @@ filename = "fn.hs"
 
 testFullTagsWithoutPrefixes
   :: WithCallStack
-  => FilePath -> LiterateLocation Void -> Text -> [Pos TagVal] -> TestTree
+  => FilePath -> LiterateLocation Void -> TL.Text -> [Pos TagVal] -> TestTree
 testFullTagsWithoutPrefixes fn mode = \source tags ->
   makeTest ((sort *** map PP.displayDocString) . processTokens . tokenize' fn mode) source (tags, warnings)
   where
@@ -63,14 +63,14 @@ testFullTagsWithoutPrefixes fn mode = \source tags ->
 
 testTagNames
   :: WithCallStack
-  => FilePath -> LiterateLocation Void -> Text -> [String] -> TestTree
+  => FilePath -> LiterateLocation Void -> TL.Text -> [String] -> TestTree
 testTagNames fn mode source tags =
   makeTest process source (tags, warnings)
   where
     warnings :: [String]
     warnings = []
 
-    process :: Text -> ([String], [String])
+    process :: TL.Text -> ([String], [String])
     process =
       (sort . map untag *** map PP.displayDocString) . processTokens . tokenize' fn mode
 
@@ -79,7 +79,7 @@ untag (Pos _ (TagVal name _ _)) = T.unpack name
 
 tokenize'
   :: WithCallStack
-  => FilePath -> LiterateLocation Void -> Text -> [Pos ServerToken]
+  => FilePath -> LiterateLocation Void -> TL.Text -> [Pos ServerToken]
 tokenize' fn mode =
     -- either (error . PP.displayDocString . PP.pretty) id
   -- . runIdentity
