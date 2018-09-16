@@ -16,7 +16,7 @@ import Test.Tasty
 import Test.Tasty.HUnit (testCase)
 
 import Data.List (sort)
-import Data.Text (Text)
+import qualified Data.Text.Lazy as TL
 
 import Haskell.Language.Lexer (LiterateLocation(..))
 
@@ -831,7 +831,7 @@ testFullPipeline = testGroup "Full processing pipeline"
        . concatMap (\(i, t) -> fst $ processTokens $ tokenize' ("fn" ++ show i) Vanilla t)
        . zip [0..]
 
-textShowSource :: Text
+textShowSource :: TL.Text
 textShowSource =
     [QQ.r|
 #define GTEXT_SHOW(text_type,show_funs,no_show_funs,show1_funs,one_hash,two_hash,hash_prec,gtext_show,gshow_prec,gtext_show_con,gshow_prec_con,show_prec,lift_show_prec,show_space,show_paren,show_list_with,from_char,from_string) \

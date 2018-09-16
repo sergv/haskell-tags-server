@@ -16,13 +16,12 @@
 module Haskell.Language.Server.Tags.AnalyzeHeaderTests (tests) where
 
 import Control.Arrow
-import Control.Monad.Except (throwError)
 import Control.Monad.Except.Ext
 import Control.Monad.Writer
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 import qualified Data.Set as S
-import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext
 import Test.Tasty
@@ -32,7 +31,6 @@ import Haskell.Language.Lexer (tokenize)
 import Haskell.Language.Lexer.FastTags (Pos, ServerToken, SrcPos(..), Line(..), Type(..))
 
 import Control.Monad.Logging.Simple
-import Data.ErrorMessage
 import qualified Data.KeyMap as KM
 import qualified Data.SubkeyMap as SubkeyMap
 import Data.Symbols
@@ -43,7 +41,7 @@ import Haskell.Language.Server.Tags.Types.Modules
 import TestUtils
 import Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions
 
-type Test = TestCase T.Text UnresolvedModuleHeader
+type Test = TestCase TL.Text UnresolvedModuleHeader
 
 pt :: Int -> Type -> PosAndType
 pt n typ = PosAndType (SrcPos "test.hs" (Line n) mempty) typ

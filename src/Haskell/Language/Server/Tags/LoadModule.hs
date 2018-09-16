@@ -197,7 +197,7 @@ loadModuleFromSource suggestedModuleName modifTime filename source =
   makeModule suggestedModuleName modifTime filename tokens
   where
     tokens =
-      tokenize (T.unpack $ unFullPath filename) (TL.toStrict source)
+      tokenize (T.unpack $ unFullPath filename) source
 
 makeModule
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)

@@ -15,7 +15,7 @@ module Haskell.Language.Lexer
   ) where
 
 -- import Data.Functor.Identity
-import Data.Text (Text)
+import qualified Data.Text.Lazy as TL
 import GHC.Stack.Ext (WithCallStack)
 import System.FilePath
 
@@ -27,7 +27,7 @@ import Haskell.Language.Lexer.FastTags
 import qualified Haskell.Language.LexerSimple.Lexer as SimpleLexer
 import Haskell.Language.LexerSimple.Types (LiterateLocation(..))
 
-tokenize :: WithCallStack => FilePath -> Text -> [Pos ServerToken]
+tokenize :: WithCallStack => FilePath -> TL.Text -> [Pos ServerToken]
 -- tokenize filename = runIdentity . tokenizeM filename mode
   -- where
   --   mode :: LiterateMode
