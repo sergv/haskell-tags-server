@@ -270,14 +270,6 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
     unresHeader = modHeader mod
     unresFile :: FullPath
     unresFile = modFile mod
-    expandImportQualification :: forall a. (ImportQualification, ModuleName, a) -> [(Maybe ImportQualifier, a)]
-    expandImportQualification = \case
-      (Unqualified, name, x)                   ->
-        [(Just $ mkImportQualifier name, x), (Nothing, x)]
-      (Qualified q, _, x)                      ->
-        [(Just q, x)]
-      (BothQualifiedAndUnqualified q, name, x) ->
-        [(Just $ mkImportQualifier name, x), (Just q, x), (Nothing, x)]
 
     resolveImports
       :: HasCallStack
@@ -304,17 +296,25 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
             Nothing -> do
               logDebug $ "[resolveModule.resolveImports.resolveImport] Resolving import" <+> pretty (ikModuleName key)
               modules <- lift $ loadMod key
-              for modules $ \modules' -> do
-                let importedNames :: SymbolMap
-                    importedNames = foldMap modAllExportedNames modules'
-                    importedMods :: NonEmpty ModuleName
-                    importedMods = mhModName . modHeader <$> modules'
-                for importSpecs $ \spec@ImportSpec{ispecImportKey = ImportKey{ikModuleName = importedModName}} -> do
-                  (qual, symMap) <- filterVisibleNames importedModName importedMods importedNames spec
-                  -- Record which names enter current module's scope under certain
-                  -- qualification from import spec we're currently analysing.
-                  tell [(qual, importedModName, symMap)]
-                  pure $ spec { ispecImportedNames = symMap }
+              case modules of
+                Nothing       -> do
+                  -- The import is not found. Record that it brings no names
+                  -- under relevant qualifiers so that later on those names
+                  -- could be defaulted as coming from the export list.
+                  for_ importSpecs $ \ImportSpec{ispecImportKey = ImportKey{ikModuleName = importedModName}, ispecQualification} ->
+                    tell [(ispecQualification, importedModName, mempty)]
+                  pure Nothing
+                Just modules' -> do
+                  let importedNames :: SymbolMap
+                      importedNames = foldMap modAllExportedNames modules'
+                      importedMods :: NonEmpty ModuleName
+                      importedMods = mhModName . modHeader <$> modules'
+                  fmap Just $ for importSpecs $ \spec@ImportSpec{ispecImportKey = ImportKey{ikModuleName = importedModName}, ispecQualification} -> do
+                    symMap <- filterVisibleNames importedModName importedMods importedNames spec
+                    -- Record which names enter current module's scope under certain
+                    -- qualification from import spec we're currently analysing.
+                    tell [(ispecQualification, importedModName, symMap)]
+                    pure $ spec { ispecImportedNames = symMap }
             -- Non-standard code path for breaking import cycles: imported module
             -- is already being loaded. In order to break infinite loop, we must
             -- analyse it here and get all the names we interested in, whithout
@@ -339,16 +339,17 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
       :: HasCallStack
       => UnresolvedModule -> m (SubkeyMap ImportKey (NonEmpty ResolvedImportSpec), SymbolMap)
     resolveSymbols Module{modHeader = header@ModuleHeader{mhImports, mhModName}, modAllSymbols} = do
-      (resolvedImports, filteredNames) <- resolveImports mhImports
-      logDebug $ "[resolveModule.resolveImports] analysing export list of module" <+> pretty mhModName
-      logVerboseDebug $ "[resolveModule.resolveImports] Resolved imports" ## ppSubkeyMapWith pretty pretty ppNE resolvedImports
+      logDebug $ "[resolveModule.resolveSymbols] Resolving symbols of module" <+> pretty mhModName
+      (resolvedImports, namesAndQualifiersFromImports) <- resolveImports mhImports
+      logDebug $ "[resolveModule.resolveSymbols] analysing export list of module" <+> pretty mhModName
+      logVerboseDebug $ "[resolveModule.resolveSymbols] Resolved imports" ## ppSubkeyMapWith pretty pretty ppNE resolvedImports
       case mhExports header of
         NoExports                                                     ->
           pure (resolvedImports, modAllSymbols)
         EmptyExports                                                  ->
           pure (resolvedImports, modAllSymbols)
         SpecificExports ModuleExports{meExportedEntries, meReexports} -> do
-          logVerboseDebug $ "[resolveModule.resolveImports] reexports of module" <+> pretty mhModName <> ":" ## ppSet meReexports
+          logVerboseDebug $ "[resolveModule.resolveSymbols] reexports of module" <+> pretty mhModName <> ":" ## ppSet meReexports
           let lt, gt :: Set ModuleName
               (lt, reexportsItself, gt) = S.splitMember mhModName meReexports
               -- Names exported via module reexports.
@@ -356,27 +357,30 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
               reexports = resolveReexports resolvedImports $ Pair lt gt
               -- Names defined in current module grouped by their
               -- qualifier (a "namespace").
-              moduleNamesByNamespace :: Map (Maybe ImportQualifier) SymbolMap
-              moduleNamesByNamespace
+              namesInScopeByNamespace :: Map (Maybe ImportQualifier) SymbolMap
+              namesInScopeByNamespace
                 = M.fromListWith (<>)
                 $ (Nothing, modAllSymbols)
                 : (Just $ mkImportQualifier mhModName, modAllSymbols)
-                : concatMap expandImportQualification filteredNames
+                : concatMap expandImportQualification namesAndQualifiersFromImports
               modulesInScope :: [ModuleName]
               modulesInScope = map ikModuleName $ SubkeyMap.keys mhImports
-          -- Names exported from current module, grouped by export qualifier.
-          (exportedNames :: MonoidalMap (Maybe ImportQualifier) (Map UnqualifiedSymbolName ResolvedSymbol)) <-
+          -- Names exported from current module, grouped by export qualifier and
+          -- resolving to a location within the export list.
+          (exportedFromExportList :: MonoidalMap (Maybe ImportQualifier) (Map UnqualifiedSymbolName ResolvedSymbol)) <-
             foldForA meExportedEntries $ \entry -> do
               let (name, PosAndType pos typ)   = entryName entry
                   name' :: UnqualifiedSymbolName
                   (qualifier, name') = splitQualifiedPart name
-              case M.lookup qualifier moduleNamesByNamespace of
-                Nothing -> throwErrorWithCallStack $ PP.hsep
+              case M.lookup qualifier namesInScopeByNamespace of
+                Nothing -> throwErrorWithCallStack $ ppDictHeader (PP.hsep
                   [ "Internal error: export qualifier"
                   , PP.dquotes $ pretty qualifier
-                  , "of entry"
-                  , PP.dquotes $ pretty entry
                   , "has no corresponding qualified imports"
+                  ])
+                  [ "import entry"                  --> entry
+                  , "namesInScopeByNamespace"       :-> ppMap namesInScopeByNamespace
+                  , "namesAndQualifiersFromImports" --> namesAndQualifiersFromImports
                   ]
                 Just sm -> do
                   presentChildren <- childrenNamesFromEntry mhModName modulesInScope sm $ name' <$ entry
@@ -390,18 +394,18 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
                         = M.insert name' (mkResolvedSymbolFromParts pos name' typ Nothing)
                         $ M.fromSet (\childName -> mkResolvedSymbolFromParts pos childName childrenType (Just name')) presentChildren
                   pure $ MM.singleton qualifier names
-          let filteredExports :: SymbolMap
-              filteredExports
+          let presentExports :: SymbolMap
+              presentExports
                 = fold
-                $ M.intersectionWith SM.restrictKeys moduleNamesByNamespace
+                $ M.intersectionWith SM.restrictKeys namesInScopeByNamespace
                 $ fmap M.keysSet
-                $ MM.unMonoidalMap exportedNames
-          logVerboseDebug $ "[resolveSymbols] exportedNames =" ## ppMonoidalMapWith pretty ppMap exportedNames
+                $ MM.unMonoidalMap exportedFromExportList
+          logVerboseDebug $ "[resolveSymbols] exportedFromExportList =" ## ppMonoidalMapWith pretty ppMap exportedFromExportList
           let allSymbols  :: SymbolMap
               allSymbols  = mconcat
                 [ if reexportsItself then modAllSymbols else mempty
                 , reexports
-                , filteredExports
+                , presentExports
                 ]
               extra       :: Map UnqualifiedSymbolName (Set UnqualifiedSymbolName)
               extra       = inferExtraParents header
@@ -413,15 +417,24 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
           -- imported/defined locally. We default them to tags that
           -- come from the corresponding export list.
           let unresolvedExports :: SymbolMap
-              unresolvedExports
-                = SM.fromList
-                $ M.elems
-                $ M.withoutKeys
-                    (MM.findWithDefault mempty Nothing exportedNames :: Map UnqualifiedSymbolName ResolvedSymbol)
-                    (SM.keysSet allSymbols')
+              unresolvedExports =
+                SM.withoutKeys
+                  (SM.fromList (foldMap M.elems exportedFromExportList))
+                  (SM.keysSet allSymbols')
           unless (SM.null unresolvedExports) $
             logWarning $ "[resolveSymbols] unresolved exports (will consider them coming from the export list) for" <+> pretty mhModName <> ":" ## pretty unresolvedExports
           pure (resolvedImports, allSymbols' <> unresolvedExports)
+
+expandImportQualification
+  :: forall a. (ImportQualification, ModuleName, a)
+  -> [(Maybe ImportQualifier, a)]
+expandImportQualification = \case
+  (Unqualified, name, x)                   ->
+    [(Just $ mkImportQualifier name, x), (Nothing, x)]
+  (Qualified q, _, x)                      ->
+    [(Just q, x)]
+  (BothQualifiedAndUnqualified q, name, x) ->
+    [(Just $ mkImportQualifier name, x), (Just q, x), (Nothing, x)]
 
 resolveReexports
   :: (Foldable f, Foldable g)
@@ -704,8 +717,8 @@ filterVisibleNames
   -> f ModuleName         -- ^ Imported modules for error reporting.
   -> SymbolMap            -- ^ All names from the set of imports.
   -> UnresolvedImportSpec -- ^ Import spec for this particular set of imports.
-  -> m (ImportQualification, SymbolMap)
-filterVisibleNames moduleName importedMods allImportedNames ImportSpec{ispecQualification, ispecImportList} = do
+  -> m SymbolMap
+filterVisibleNames moduleName importedMods allImportedNames ImportSpec{ispecImportList} = do
   visibleNames <- case ispecImportList of
     NoImportList                                        ->
       pure allImportedNames
@@ -717,7 +730,7 @@ filterVisibleNames moduleName importedMods allImportedNames ImportSpec{ispecQual
                 Hidden   -> SM.withoutKeys
       importedNames <- foldMapA (allNamesFromEntry moduleName importedMods allImportedNames) ilEntries
       pure $ f allImportedNames importedNames
-  pure (ispecQualification, visibleNames)
+  pure visibleNames
 
 -- | Get names referred to by @EntryWithChildren@ given a @SymbolMap@
 -- of names currently in scope.
@@ -732,7 +745,7 @@ allNamesFromEntry moduleName importedMods allImportedNames entry@(EntryWithChild
   S.insert sym <$>
   childrenNamesFromEntry moduleName importedMods allImportedNames entry
 
--- | Get only children names referred to by @EntryWithChildren@ given
+-- | Get children names only referred to by @EntryWithChildren@ given
 -- a @SymbolMap@ of names currently in scope.
 childrenNamesFromEntry
   :: forall m f ann. (HasCallStack, MonadError ErrorMessage m, MonadReader TagsServerConf m, Foldable f)
