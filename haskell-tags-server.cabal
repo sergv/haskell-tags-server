@@ -65,6 +65,7 @@ library
     time,
     transformers,
     transformers-base,
+    unordered-containers,
     utf8-string >= 0.3
   exposed-modules:
     Control.Arrow.Ext
