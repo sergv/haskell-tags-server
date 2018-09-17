@@ -27,6 +27,8 @@ import Control.Monad.Reader
 import Control.Monad.State.Strict
 
 import Data.Foldable
+import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as HM
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -60,8 +62,8 @@ classifyPath TagsServerConf{tsconfVanillaExtensions, tsconfHsBootExtensions} ent
     ext  = bpExtension $ findEntryBasePath entry
 
 data ResolveState = ResolveState
-  { rsLoadingModules :: !(Map ImportKey (NonEmptyMap FullPath UnresolvedModule))
-  , rsLoadedModules  :: !(Map ImportKey (NonEmpty ResolvedModule))
+  { rsLoadingModules :: !(HashMap ImportKey (NonEmptyMap FullPath UnresolvedModule))
+  , rsLoadedModules  :: !(HashMap ImportKey (NonEmpty ResolvedModule))
   }
 
 loadAllFilesIntoState
@@ -96,11 +98,11 @@ loadAllFilesIntoState conf = do
         -> n (Maybe (NonEmpty UnresolvedModule, [ResolvedModule]))
       checkLoadingModules key = do
         ResolveState{rsLoadingModules, rsLoadedModules} <- get
-        pure $ case M.lookup key rsLoadingModules of
+        pure $ case HM.lookup key rsLoadingModules of
           Just modules -> Just (NEMap.elemsNE modules, loadedMods)
             where
               loadedMods :: [ResolvedModule]
-              loadedMods = foldMap toList $ M.lookup key rsLoadedModules
+              loadedMods = foldMap toList $ HM.lookup key rsLoadedModules
           Nothing      -> Nothing
 
       doResolve
@@ -109,12 +111,12 @@ loadAllFilesIntoState conf = do
         -> n (Maybe (NonEmpty ResolvedModule))
       doResolve key = do
         resolveState <- get
-        case M.lookup key $ rsLoadedModules resolveState of
+        case HM.lookup key $ rsLoadedModules resolveState of
           Just resolved -> pure $ Just resolved
           Nothing       -> do
             logInfo $ "[loadAllFilesIntoState.doResolve] Resolving" <+> PP.dquotes (pretty (ikModuleName key))
             let currentlyLoading = rsLoadingModules resolveState
-            if key `M.member` currentlyLoading
+            if key `HM.member` currentlyLoading
             then
               throwErrorWithCallStack $ PP.hsep
                 [ "[loadAllFilesIntoState.doResolve] found import loop: module"
@@ -136,17 +138,17 @@ loadAllFilesIntoState conf = do
                     NameResolutionStrict -> throwErrorWithCallStack msg
                 Just unresolved -> do
                   let unresolvedMap = NEMap.fromNonEmpty $ (modFile &&& id) <$> unresolved
-                  logDebug $ "[loadAllFilesIntoState.doResolve] currently loading:" ## ppMapWith pretty (ppNE . NEMap.keysNE) currentlyLoading
+                  logDebug $ "[loadAllFilesIntoState.doResolve] currently loading:" ## ppHashMapWith pretty (ppNE . NEMap.keysNE) currentlyLoading
                   modify $ \s ->
-                    s { rsLoadingModules = M.insert key unresolvedMap $ rsLoadingModules s }
+                    s { rsLoadingModules = HM.insert key unresolvedMap $ rsLoadingModules s }
                   -- logDebug $ "[loadAllFilesIntoState.doResolve] files:" ## ppNE (modFile <$> unresolved)
                   resolved <- flip runReaderT conf $
                     traverse (resolveModule checkLoadingModules doResolve) unresolved
                   modify $ \s -> s
                     { rsLoadingModules =
-                        M.delete key $ rsLoadingModules s
+                        HM.delete key $ rsLoadingModules s
                     , rsLoadedModules  =
-                        M.insertWith (Semigroup.<>) key resolved $ rsLoadedModules s
+                        HM.insertWith (Semigroup.<>) key resolved $ rsLoadedModules s
                     }
                   logInfo $ "[loadAllFilesIntoState.doResolve] Resolved" <+> PP.dquotes (pretty (ikModuleName key))
                   pure $ Just resolved
