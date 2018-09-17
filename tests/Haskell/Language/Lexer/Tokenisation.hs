@@ -266,11 +266,11 @@ testTokeniseWithNewlines = testGroup "Tokenise with newlines"
       \\\end{code}\n\
       \And that's it !"
       |=>
-      [ Newline 1
+      [ Newline 0
       , T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 0
       , T "factorial", Number, Equals, Number, Newline 0
       , T "factorial", T "n", Equals, Newline 2
-      , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", Number, RParen, Newline 0
+      , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", Number, RParen
       ]
     , "This is a 'factorial' function\n\
       \\\begin{code}\n\
@@ -286,14 +286,37 @@ testTokeniseWithNewlines = testGroup "Tokenise with newlines"
       \\\end{code}\n\
       \And that's it !"
       |=>
-      [ Newline 1
+      [ Newline 0
       , T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 0
       , T "factorial", Number, Equals, Number, Newline 0
       , T "factorial", T "n", Equals, Newline 2
       , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", Number, RParen, Newline 0
-      , Newline 1
       , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 0
-      , T "foo", T "x", Equals, T "x", Newline 0
+      , T "foo", T "x", Equals, T "x"
+      ]
+    , "This is a 'factorial' function\n\
+      \\\begin{code}\n\
+      \  factorial :: Integer -> Integer\n\
+      \  factorial 0 = 1\n\
+      \  factorial n = \n\
+      \    n * (factorial $ n - 1)\n\
+      \\\end{code}\n\
+      \But that's not it yet! Here's another function:\n\
+      \\\begin{code}\n\
+      \  foo :: a -> a\n\
+      \  foo x = x\n\
+      \\\end{code}\n\
+      \And that's it !"
+      |=>
+      [ Newline 2
+      , T "factorial", DoubleColon, T "Integer", Arrow, T "Integer", Newline 2
+      , T "factorial", Number, Equals, Number, Newline 2
+      , T "factorial", T "n", Equals, Newline 4
+      , T "n", T "*", LParen, T "factorial", T "$", T "n", T "-", Number, RParen
+
+      , Newline 2
+      , T "foo", DoubleColon, T "a", Arrow, T "a", Newline 2
+      , T "foo", T "x", Equals, T "x"
       ]
     , "Test\n\
       \\\begin{code}\n\
@@ -302,11 +325,10 @@ testTokeniseWithNewlines = testGroup "Tokenise with newlines"
       \  n :: c\n\
       \\\end{code}"
       |=>
-      [ Newline 1
+      [ Newline 0
       , KWClass, LParen, T "X", T "x", RParen, Implies, T "C", T "a", T "b", KWWhere, Newline 2
       , T "m", DoubleColon, T "a", Arrow, T "b", Newline 2
       , T "n", DoubleColon, T "c"
-      , Newline 0
       ]
     , "Test\n\
       \\\begin{code}\n\
@@ -315,11 +337,10 @@ testTokeniseWithNewlines = testGroup "Tokenise with newlines"
       \\tn :: c\n\
       \\\end{code}"
       |=>
-      [ Newline 1
+      [ Newline 0
       , KWClass, LParen, T "X", T "x", RParen, Implies, T "C", T "a", T "b", KWWhere, Newline 1
       , T "m", DoubleColon, T "a", Arrow, T "b", Newline 1
       , T "n", DoubleColon, T "c"
-      , Newline 0
       ]
     ]
   ]

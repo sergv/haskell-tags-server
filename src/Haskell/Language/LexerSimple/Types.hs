@@ -38,7 +38,6 @@ import Control.Monad.State
 import Data.Char
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IS
-import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.Internal.Lazy as TIL
 import qualified Data.Text.Lazy as TL
@@ -68,7 +67,6 @@ countInputSpace input len =
 
 data AlexInput = AlexInput
   { aiInput         :: TL.Text
-  , aiPrevChar      :: {-# UNPACK #-} !Char
   , aiBytes         :: [Word8]
   , aiLine          :: {-# UNPACK #-} !Line
   , aiAbsPos        :: {-# UNPACK #-} !Int
@@ -76,11 +74,10 @@ data AlexInput = AlexInput
 
 mkAlexInput :: TL.Text -> AlexInput
 mkAlexInput s = AlexInput
-  { aiInput         = s'
-  , aiPrevChar      = '\n'
-  , aiBytes         = []
-  , aiLine          = initLine
-  , aiAbsPos        = initAbsPos
+  { aiInput  = s'
+  , aiBytes  = []
+  , aiLine   = initLine
+  , aiAbsPos = initAbsPos
   }
   where
     -- Line numbering starts from 0 because we're adding additional newline
@@ -233,7 +230,7 @@ alexSetNextCode code = modify $ \s -> s { asCode = code }
 -- Alex interface
 {-# INLINE alexInputPrevChar #-}
 alexInputPrevChar :: AlexInput -> Char
-alexInputPrevChar = aiPrevChar
+alexInputPrevChar = const '\0'
 
 alexGetByte :: AlexInput -> Maybe (Word8, AlexInput)
 alexGetByte input@AlexInput{aiInput, aiBytes, aiLine, aiAbsPos} =
@@ -243,48 +240,47 @@ alexGetByte input@AlexInput{aiInput, aiBytes, aiLine, aiAbsPos} =
   where
     nextChar = case TL.uncons aiInput of
       Nothing      -> Nothing
-      Just (c, cs) -> encode (fromMaybe c $ fixChar c) cs
+      Just (c, cs) -> encode (fixChar c) cs
     encode c cs =
       case encodeChar c of
         b:bs -> Just (b, input')
           where
             input' = input
-              { aiInput    = cs
-              , aiBytes    = bs
-              , aiPrevChar = c
-              , aiLine     = advanceLine c aiLine
-              , aiAbsPos   = aiAbsPos + 1
+              { aiInput  = cs
+              , aiBytes  = bs
+              , aiLine   = advanceLine c aiLine
+              , aiAbsPos = aiAbsPos + 1
               }
         []   -> error
           "alexGetByte: should not happen - utf8 encoding of a character is empty"
 
 -- Translate unicode character into special symbol we teached Alex to recognize.
-fixChar :: Char -> Maybe Char
+fixChar :: Char -> Char
 -- These should not be translated since Alex knows about them
-fixChar '→' = Nothing
-fixChar '∷' = Nothing
-fixChar '⇒' = Nothing
-fixChar '∀' = Nothing
+fixChar c@'→' = c
+fixChar c@'∷' = c
+fixChar c@'⇒' = c
+fixChar c@'∀' = c
 fixChar c
-  | c <= '\x7f' = Nothing -- Plain ascii needs no fixing.
+  | c <= '\x7f' = c -- Plain ascii needs no fixing.
   | otherwise
   = case generalCategory c of
-      UppercaseLetter      -> Just upper
-      LowercaseLetter      -> Just lower
-      TitlecaseLetter      -> Just upper
-      ModifierLetter       -> Just suffix
-      OtherLetter          -> Just lower
-      DecimalNumber        -> Just digit
-      OtherNumber          -> Just digit
-      Space                -> Just space
-      ConnectorPunctuation -> Just symbol
-      DashPunctuation      -> Just symbol
-      OtherPunctuation     -> Just symbol
-      MathSymbol           -> Just symbol
-      CurrencySymbol       -> Just symbol
-      ModifierSymbol       -> Just symbol
-      OtherSymbol          -> Just symbol
-      _                    -> Nothing
+      UppercaseLetter      -> upper
+      LowercaseLetter      -> lower
+      TitlecaseLetter      -> upper
+      ModifierLetter       -> suffix
+      OtherLetter          -> lower
+      DecimalNumber        -> digit
+      OtherNumber          -> digit
+      Space                -> space
+      ConnectorPunctuation -> symbol
+      DashPunctuation      -> symbol
+      OtherPunctuation     -> symbol
+      MathSymbol           -> symbol
+      CurrencySymbol       -> symbol
+      ModifierSymbol       -> symbol
+      OtherSymbol          -> symbol
+      _                    -> c
   where
     space  = '\x01'
     upper  = '\x02'
