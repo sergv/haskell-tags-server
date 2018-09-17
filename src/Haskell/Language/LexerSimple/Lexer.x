@@ -98,12 +98,12 @@ $hexdigit   = [0-9a-fA-F]
 -- Literate Haskell support. 'literate' code handles all text except actual
 -- Haskell program text. It aims to strip all non-Haskell text.
 <literate> {
-^ ">" $ws*
+$nl ">" $ws*
   -- / { isLiterateEnabled' }
-  { \_ len -> (Tok $! Newline $! len - 1)  <$ startLiterateBird }
-^ "\begin{code}" $nl
+  { \_ len -> (Tok $! Newline $! len - 2)  <$ startLiterateBird }
+$nl "\begin{code}" @nl $space*
   -- / { isLiterateEnabled' }
-  { \_ len -> (Tok $! Newline $! len - 12) <$ startLiterateLatex }
+  { \input len -> (Tok $! Newline $! (countInputSpace input len)) <$ startLiterateLatex }
 (. | $nl) ;
 }
 
@@ -133,13 +133,14 @@ $nl ">" $space*
 $nl [^>]
   / { isLiterateBirdOrOutside }
   { \_ _   -> endLiterate }
-^ "\end{code}"
+$nl "\end{code}"
   / { isLiterateLatexOrOutside }
   { \_ _   -> endLiterate }
 
 
 [\\]? @nl $space* "{-"  { \input len -> startIndentationCounting (countInputSpace input len) }
-[\\]? @nl $space*       { \input len -> pure $! Tok $! Newline $! (len - 1) - (case unsafeTextHead (aiInput input) of { '\\' -> 1; _ -> 0 }) }
+[\\]? [\r] $nl $space*  { \input len -> pure $! Tok $! Newline $! (len - 2) - (case unsafeTextHead (aiInput input) of { '\\' -> 1; _ -> 0 }) }
+[\\]? $nl $space*       { \input len -> pure $! Tok $! Newline $! (len - 1) - (case unsafeTextHead (aiInput input) of { '\\' -> 1; _ -> 0 }) }
 [\-][\-]+ ~[$symbol $nl] .* ;
 [\-][\-]+ / @nl         ;
 
