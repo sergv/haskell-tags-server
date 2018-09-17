@@ -1,6 +1,7 @@
 {
 {-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE MultiWayIf          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
@@ -14,6 +15,7 @@ import Control.Monad.Except.Ext
 import Control.Monad.State.Strict
 import qualified Data.IntSet as IS
 import qualified Data.Text.Prettyprint.Doc as PP
+import qualified Data.Text.Prettyprint.Doc.Ext as PP
 import Data.Text.Prettyprint.Doc.Ext (Pretty(..), Doc, (<+>), (##))
 import qualified Data.Text.Lazy as TL
 import Data.Void (Void, absurd)
@@ -57,8 +59,11 @@ $unidigit  = \x05
 $digit     = [$ascdigit $unidigit]
 $unisuffix = \x06
 $ident_nonsym = [$ascident $uniident $unisuffix $digit] # [$symbol]
-$ident_syms   = [\'\_\#]
+$ident_syms   = [ \' \_ \# ]
 $ident     = [$ident_nonsym $ident_syms]
+
+-- Stands for "→", "∷", "⇒", "⦇", "⦈", "∀", "⟦", "⟧"
+$reserved_symbol = \x07
 
 -- $reserved_op = [→ ∷ ⇒ ∀]
 
@@ -66,12 +71,12 @@ $ident     = [$ident_nonsym $ident_syms]
 
 @qualificationPrefix = ( $large $ident* $dot )*
 
-@arrow       = ( "->" | "→" )
-@doublecolon = ( "::" | "∷" )
-@implies     = ( "=>" | "⇒" )
+@arrow       =  "->"
+@doublecolon =  "::"
+@implies     =  "=>"
 
-@lbanana     = ( "(|" | ⦇ )
-@rbanana     = ( "|)" | ⦈ )
+@lbanana     =  "(|"
+@rbanana     =  "|)"
 
 $charesc    = [a b f n r t v \\ \" \' \&]
 $octdigit   = [0-7]
@@ -182,9 +187,9 @@ $space*                 { \_ len -> endIndentationCounting len }
 
 <0> "[" [\$\(]* @qualificationPrefix $ident* [\)]*  "|"
                         { \input len -> startQuasiquoter input len }
-<0> "⟦"                 { \_ _ -> startUnconditionalQuasiQuoter }
 <qq> "$("               { \_ _ -> startSplice CtxQuasiquoter }
-<qq> ("|]" | "⟧")       { \_ _ -> endQuasiquoter startCode }
+<qq> ("|]" | "⟧")       { \_ _ -> endQuasiquoter }
+<qq> $reserved_symbol   { \input _len -> reservedSymbolQQ (unsafeTextHead (aiInput input)) }
 <qq> (. | $nl)          ;
 
 <0> "$("                { \_ _ -> startSplice CtxHaskell }
@@ -203,7 +208,6 @@ $space*                 { \_ len -> endIndentationCounting len }
 "else"                  { kw KWElse }
 "family"                { kw KWFamily }
 "forall"                { \_ _ -> pure $! Tok $! T "forall" }
-"∀"                     { \_ _ -> pure $! Tok $! T "forall" }
 "foreign"               { kw KWForeign }
 "if"                    { kw KWIf }
 "import"                { kw KWImport }
@@ -249,6 +253,8 @@ $space*                 { \_ len -> endIndentationCounting len }
                         { \input len -> pure $! Tok $! T $! retrieveToken input len }
 @qualificationPrefix $symbol+
                         { \input len -> pure $! Tok $! T $! retrieveToken input len }
+
+$reserved_symbol        { \input _len -> reservedSymbol (unsafeTextHead (aiInput input)) }
 
 @lbanana / ~[$symbol]   { \_ _ -> pure LBanana }
 @rbanana                { \_ _ -> pure RBanana }
@@ -416,9 +422,9 @@ startSplice ctx = do
   pushContext ctx
   pure $ Tok SpliceStart
 
-endQuasiquoter :: AlexCode -> AlexM ServerToken
-endQuasiquoter nextCode =
-  Tok QuasiquoterEnd <$ alexSetNextCode nextCode
+endQuasiquoter :: AlexM ServerToken
+endQuasiquoter =
+  Tok QuasiquoterEnd <$ alexSetNextCode startCode
 
 pushLParen :: AlexAction AlexM
 pushLParen _ _ =
@@ -459,6 +465,23 @@ endLiterate = do
   alexSetNextCode literateCode
   alexExitLiterateEnv
   continueScanning
+
+reservedSymbol :: WithCallStack => Char -> AlexM ServerToken
+reservedSymbol = \case
+  '→' -> pure $! Tok Arrow
+  '∷' -> pure $! Tok DoubleColon
+  '⇒' -> pure $! Tok Implies
+  '∀' -> pure $! Tok $! T $! "forall"
+  '⦇' -> pure LBanana
+  '⦈' -> pure RBanana
+  '⟦' -> startUnconditionalQuasiQuoter
+  '⟧' -> endQuasiquoter
+  c   -> error $ PP.displayDocString $ "Unexpected reserved symbol:" <+> pretty c
+
+reservedSymbolQQ :: WithCallStack => Char -> AlexM ServerToken
+reservedSymbolQQ = \case
+  '⟧' -> endQuasiquoter
+  _   -> continueScanning
 
 -- Known codes
 

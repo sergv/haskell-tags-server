@@ -6,8 +6,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Haskell.Language.LexerSimple.Types
-  ( advanceLine
-  , countInputSpace
+  ( countInputSpace
   , AlexInput(..)
   , Context(..)
   , LiterateLocation(..)
@@ -33,7 +32,6 @@ module Haskell.Language.LexerSimple.Types
   , unsafeTextHead
   ) where
 
-import Codec.Binary.UTF8.String (encodeChar)
 import Control.Monad.State
 import Data.Char
 import Data.IntSet (IntSet)
@@ -49,8 +47,9 @@ import Haskell.Language.Lexer.FastTags
 import Haskell.Language.Lexer.Types (LiterateStyle(..), Context(..), AlexCode(..))
 
 {-# INLINE advanceLine #-}
-advanceLine :: Char -> Line -> Line
-advanceLine '\n' = increaseLine
+advanceLine :: Word8 -> Line -> Line
+-- advanceLine '\n' = increaseLine
+advanceLine 10 = increaseLine -- 10 = '\n'
 advanceLine _    = id
 
 countInputSpace :: AlexInput -> Int -> Int
@@ -66,16 +65,14 @@ countInputSpace input len =
         inc acc _      = acc
 
 data AlexInput = AlexInput
-  { aiInput         :: TL.Text
-  , aiBytes         :: [Word8]
-  , aiLine          :: {-# UNPACK #-} !Line
-  , aiAbsPos        :: {-# UNPACK #-} !Int
+  { aiInput  :: TL.Text
+  , aiLine   :: {-# UNPACK #-} !Line
+  , aiAbsPos :: {-# UNPACK #-} !Int
   } deriving (Show, Eq, Ord)
 
 mkAlexInput :: TL.Text -> AlexInput
 mkAlexInput s = AlexInput
   { aiInput  = s'
-  , aiBytes  = []
   , aiLine   = initLine
   , aiAbsPos = initAbsPos
   }
@@ -233,42 +230,41 @@ alexInputPrevChar :: AlexInput -> Char
 alexInputPrevChar = const '\0'
 
 alexGetByte :: AlexInput -> Maybe (Word8, AlexInput)
-alexGetByte input@AlexInput{aiInput, aiBytes, aiLine, aiAbsPos} =
-  case aiBytes of
-    b:bs -> Just (b, input { aiBytes = bs })
-    []   -> nextChar
+alexGetByte input@AlexInput{aiInput, aiLine, aiAbsPos} =
+  case TL.uncons aiInput of
+    Nothing      -> Nothing
+    Just (c, cs) -> Just $! encode (fixChar c) cs
   where
-    nextChar = case TL.uncons aiInput of
-      Nothing      -> Nothing
-      Just (c, cs) -> encode (fixChar c) cs
-    encode c cs =
-      case encodeChar c of
-        b:bs -> Just (b, input')
-          where
-            input' = input
-              { aiInput  = cs
-              , aiBytes  = bs
-              , aiLine   = advanceLine c aiLine
-              , aiAbsPos = aiAbsPos + 1
-              }
-        []   -> error
-          "alexGetByte: should not happen - utf8 encoding of a character is empty"
+    encode :: Word8 -> TL.Text -> (Word8, AlexInput)
+    encode b cs = (b, input')
+      where
+        input' = input
+          { aiInput  = cs
+          , aiLine   = advanceLine b aiLine
+          , aiAbsPos = aiAbsPos + 1
+          }
 
 -- Translate unicode character into special symbol we teached Alex to recognize.
-fixChar :: Char -> Char
--- These should not be translated since Alex knows about them
-fixChar c@'→' = c
-fixChar c@'∷' = c
-fixChar c@'⇒' = c
-fixChar c@'∀' = c
-fixChar c
-  | c <= '\x7f' = c -- Plain ascii needs no fixing.
-  | otherwise
-  = case generalCategory c of
+fixChar :: Char -> Word8
+fixChar c =
+  case c of
+  -- These should not be translated since Alex knows about them
+  '→' -> reservedSym
+  '∷' -> reservedSym
+  '⇒' -> reservedSym
+  '∀' -> reservedSym
+  '⦇' -> reservedSym
+  '⦈' -> reservedSym
+  '⟦' -> reservedSym
+  '⟧' -> reservedSym
+  _ | c <= '\x7f' -> if  c <= '\x07' then other else fromIntegral (ord c) -- Plain ascii needs no fixing.
+    | otherwise   ->
+    case generalCategory c of
       UppercaseLetter      -> upper
       LowercaseLetter      -> lower
       TitlecaseLetter      -> upper
       ModifierLetter       -> suffix
+      NonSpacingMark       -> suffix
       OtherLetter          -> lower
       DecimalNumber        -> digit
       OtherNumber          -> digit
@@ -280,14 +276,16 @@ fixChar c
       CurrencySymbol       -> symbol
       ModifierSymbol       -> symbol
       OtherSymbol          -> symbol
-      _                    -> c
+      _                    -> other
   where
-    space  = '\x01'
-    upper  = '\x02'
-    lower  = '\x03'
-    symbol = '\x04'
-    digit  = '\x05'
-    suffix = '\x06'
+    other       = 0x00 -- Don't care about these
+    space       = 0x01
+    upper       = 0x02
+    lower       = 0x03
+    symbol      = 0x04
+    digit       = 0x05
+    suffix      = 0x06
+    reservedSym = 0x07
 
 -- unsafeTextHead :: T.Text -> Char
 -- unsafeTextHead = T.unsafeHead
