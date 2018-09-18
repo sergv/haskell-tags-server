@@ -15,11 +15,13 @@ module Haskell.Language.LexerSimple.Lexer (tokenize) where
 import Control.Monad
 import Control.Monad.Except.Ext
 import Control.Monad.State.Strict
+
+import qualified Data.ByteString as BS
+import Data.Char (chr)
 import qualified Data.IntSet as IS
 import qualified Data.Text.Prettyprint.Doc as PP
-import qualified Data.Text.Prettyprint.Doc.Ext as PP
 import Data.Text.Prettyprint.Doc.Ext (Pretty(..), Doc, (<+>), (##))
-import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Prettyprint.Doc.Ext as PP
 import Data.Void (Void, absurd)
 
 import Data.IgnoreEqOrdHash
@@ -146,8 +148,8 @@ $nl "\end{code}"
 
 
 [\\]? @nl $space* "{-"  { \input len -> startIndentationCounting (countInputSpace input len) }
-[\\]? [\r] $nl $space*  { \input len -> pure $! Tok $! Newline $! (len - 2) - (case unsafeTextHead (aiInput input) of { '\\' -> 1; _ -> 0 }) }
-[\\]? $nl $space*       { \input len -> pure $! Tok $! Newline $! (len - 1) - (case unsafeTextHead (aiInput input) of { '\\' -> 1; _ -> 0 }) }
+[\\]? [\r] $nl $space*  { \input len -> pure $! Tok $! Newline $! (len - 2) - (case chr (fromIntegral (unsafeTextHeadAscii (aiInput input))) of { '\\' -> 1; _ -> 0 }) }
+[\\]? $nl $space*       { \input len -> pure $! Tok $! Newline $! (len - 1) - (case chr (fromIntegral (unsafeTextHeadAscii (aiInput input))) of { '\\' -> 1; _ -> 0 }) }
 [\-][\-]+ ~[$symbol $nl] .* ;
 [\-][\-]+ / @nl         ;
 
@@ -298,7 +300,7 @@ isLiterateLatexOrOutside litLoc _inputBefore _len _inputAfter =
 
 tokenize
   :: WithCallStack
-  => FilePath -> LiterateLocation Void -> TL.Text -> [Pos ServerToken]
+  => FilePath -> LiterateLocation Void -> BS.ByteString -> [Pos ServerToken]
 tokenize filename litLoc input =
   runAlexM litLoc startCode' input $ scanTokens filename
   where
@@ -338,7 +340,7 @@ continueScanning = do
               code <- gets asCode
               pure $ Error $ IgnoreEqOrdHash $ "Lexical error while in state" <+> pretty code
                 <+> "at line" <+>
-                pretty (unLine aiLine) <> ":" ## PP.squotes (pretty (TL.take 40 aiInput))
+                pretty (unLine aiLine) <> ":" ## PP.squotes (PP.ppByteString (BS.take 40 aiInput))
             AlexSkip input' _                    ->
               go' input'
             AlexToken input' tokLen action       ->

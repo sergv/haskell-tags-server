@@ -20,9 +20,9 @@ import qualified Control.Monad.State.Lazy as Lazy
 import qualified Control.Monad.State.Strict as Strict
 import Control.Monad.Writer as Lazy
 import Control.Monad.Writer.Strict as Strict
+
+import qualified Data.ByteString as BS
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.IO
 import Data.Time.Clock (UTCTime)
 
 import Data.Path (FullPath, BasePath)
@@ -31,7 +31,7 @@ import qualified Data.Path as Path
 -- | Monad for interaction with filesystem.
 class Monad m => MonadFS m where
   getModificationTime  :: FullPath -> m UTCTime
-  readFile             :: FullPath -> m TL.Text
+  readFile             :: FullPath -> m BS.ByteString
   doesFileExist        :: FullPath -> m Bool
   doesDirectoryExist   :: FullPath -> m Bool
   listDirectory        :: FullPath -> m [BasePath]
@@ -43,7 +43,7 @@ instance MonadFS IO where
   {-# INLINE doesDirectoryExist   #-}
   {-# INLINE listDirectory        #-}
   getModificationTime  = Path.getModificationTime
-  readFile             = Data.Text.Lazy.IO.readFile . T.unpack . Path.unFullPath
+  readFile             = BS.readFile . T.unpack . Path.unFullPath
   doesFileExist        = Path.doesFileExist
   doesDirectoryExist   = Path.doesDirectoryExist
   listDirectory        = Path.listDirectory

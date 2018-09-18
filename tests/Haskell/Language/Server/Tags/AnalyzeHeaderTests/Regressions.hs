@@ -17,11 +17,12 @@ module Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions
   ) where
 
 import Control.Arrow ((&&&))
+
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 import qualified Data.Set as S
-import qualified Data.Text.Lazy as TL
+import qualified Data.Text as T
 
 import Data.Symbols
 import Haskell.Language.Lexer.FastTags (SrcPos(..), Type(..), Line(..))
@@ -33,7 +34,7 @@ import qualified Data.SubkeyMap as SubkeyMap
 import TestUtils
 import qualified Text.RawString.QQ as QQ
 
-type Test = TestCase TL.Text UnresolvedModuleHeader
+type Test = TestCase T.Text UnresolvedModuleHeader
 
 pt :: Int -> Type -> PosAndType
 pt n typ = PosAndType (SrcPos "test.hs" (Line n) mempty) typ
@@ -453,7 +454,7 @@ unixCompatHeaderTest = TestCase
 
 -- Raw headers
 
-aesonHeader :: TL.Text
+aesonHeader :: T.Text
 aesonHeader = [QQ.r|{-# LANGUAGE CPP                  #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE IncoherentInstances  #-}
@@ -549,7 +550,7 @@ import qualified Data.Vector as V ( unsafeIndex, null, length, create, fromList 
 import qualified Data.Vector.Mutable as VM ( unsafeNew, unsafeWrite )
 |]
 
-unixCompatHeader :: TL.Text
+unixCompatHeader :: T.Text
 unixCompatHeader = [QQ.r|{-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
