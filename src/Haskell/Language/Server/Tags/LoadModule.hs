@@ -29,6 +29,7 @@ import Control.Monad.Writer (MonadWriter(..))
 import qualified Control.Monad.Writer as Lazy
 import qualified Control.Monad.Writer.Strict as Strict
 
+import qualified Data.ByteString as BS
 import Data.Foldable.Ext
 import Data.Functor.Product (Product(..))
 import Data.List.NonEmpty (NonEmpty(..))
@@ -40,7 +41,6 @@ import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext
 import Data.Time.Clock (UTCTime)
@@ -191,7 +191,7 @@ loadModuleFromSource
   => Maybe ModuleName
   -> UTCTime
   -> FullPath
-  -> TL.Text
+  -> BS.ByteString
   -> m UnresolvedModule
 loadModuleFromSource suggestedModuleName modifTime filename source =
   makeModule suggestedModuleName modifTime filename tokens

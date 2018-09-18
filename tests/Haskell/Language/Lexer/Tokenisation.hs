@@ -13,7 +13,7 @@ module Haskell.Language.Lexer.Tokenisation (tests) where
 import Test.Tasty
 
 import Data.List (sort)
-import qualified Data.Text.Lazy as TL
+import qualified Data.Text as T
 
 import Haskell.Language.Lexer (LiterateLocation(..))
 import Haskell.Language.Lexer.FastTags.TagValPatterns
@@ -149,7 +149,7 @@ testTokenise = testGroup "Tokenise"
   ]
   where
     (==>) = makeTest f
-    f :: TL.Text -> [ServerToken]
+    f :: T.Text -> [ServerToken]
     f = tail -- strip uninteresting initial newline
       . map valOf
       . tokenize' filename Vanilla

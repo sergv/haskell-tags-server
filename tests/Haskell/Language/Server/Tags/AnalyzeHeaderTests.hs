@@ -18,10 +18,12 @@ module Haskell.Language.Server.Tags.AnalyzeHeaderTests (tests) where
 import Control.Arrow
 import Control.Monad.Except.Ext
 import Control.Monad.Writer
+
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 import qualified Data.Set as S
-import qualified Data.Text.Lazy as TL
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext
 import Test.Tasty
@@ -41,7 +43,7 @@ import Haskell.Language.Server.Tags.Types.Modules
 import TestUtils
 import Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions
 
-type Test = TestCase TL.Text UnresolvedModuleHeader
+type Test = TestCase T.Text UnresolvedModuleHeader
 
 pt :: Int -> Type -> PosAndType
 pt n typ = PosAndType (SrcPos "test.hs" (Line n) mempty) typ
@@ -2371,4 +2373,4 @@ doTest TestCase{testName, input, expectedResult} =
           assertFailure $ displayDocString $ msg ## logsDoc
   where
     tokens :: [Pos ServerToken]
-    tokens = tokenize "test.hs" input
+    tokens = tokenize "test.hs" $ TE.encodeUtf8 input
