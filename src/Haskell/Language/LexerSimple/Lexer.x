@@ -8,6 +8,8 @@
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
+{-# OPTIONS_GHC -O2 #-}
+
 module Haskell.Language.LexerSimple.Lexer (tokenize) where
 
 import Control.Monad
