@@ -5,6 +5,8 @@
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 
+{-# OPTIONS_GHC -O2 #-}
+
 module Haskell.Language.LexerSimple.Types
   ( countInputSpace
   , AlexInput(..)
@@ -94,6 +96,7 @@ mkAlexInput s = AlexInput
 data LiterateLocation a = LiterateInside a | LiterateOutside | Vanilla
   deriving (Eq, Ord, Show, Functor)
 
+{-# INLINE isLiterateEnabled #-}
 isLiterateEnabled :: LiterateLocation a -> Bool
 isLiterateEnabled = \case
   LiterateInside _ -> True
@@ -229,6 +232,7 @@ alexSetNextCode code = modify $ \s -> s { asCode = code }
 alexInputPrevChar :: AlexInput -> Char
 alexInputPrevChar = const '\0'
 
+{-# INLINE alexGetByte #-}
 alexGetByte :: AlexInput -> Maybe (Word8, AlexInput)
 alexGetByte input@AlexInput{aiInput, aiLine, aiAbsPos} =
   case TL.uncons aiInput of
@@ -245,6 +249,7 @@ alexGetByte input@AlexInput{aiInput, aiLine, aiAbsPos} =
           }
 
 -- Translate unicode character into special symbol we teached Alex to recognize.
+{-# INLINE fixChar #-}
 fixChar :: Char -> Word8
 fixChar c =
   case c of
@@ -290,6 +295,7 @@ fixChar c =
 -- unsafeTextHead :: T.Text -> Char
 -- unsafeTextHead = T.unsafeHead
 
+{-# INLINE unsafeTextHead #-}
 unsafeTextHead :: TL.Text -> Char
 unsafeTextHead = \case
   TIL.Chunk x _ -> T.unsafeHead x
