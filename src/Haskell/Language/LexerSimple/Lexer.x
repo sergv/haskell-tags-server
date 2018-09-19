@@ -14,7 +14,8 @@ module Haskell.Language.LexerSimple.Lexer (tokenize) where
 
 import Control.Monad
 import Control.Monad.Except.Ext
-import Control.Monad.State.Strict
+import Control.Monad.Writer
+import Control.Monad.State
 
 import qualified Data.ByteString as BS
 import Data.Char (chr)
@@ -310,19 +311,20 @@ tokenize filename litLoc input =
       LiterateInside x -> absurd x
 
 -- TODO: add unsafe interleave here for producing tokens
-scanTokens :: WithCallStack => FilePath -> AlexM [Pos ServerToken]
-scanTokens filename = go []
+scanTokens :: WithCallStack => FilePath -> AlexM ()
+scanTokens filename = go
   where
-    go acc = do
+    go = do
       nextTok <- continueScanning
       case nextTok of
-        Tok EOF -> return $ reverse acc
+        Tok EOF -> pure ()
         _       -> do
           -- Use input after reading token to get proper prefix that includes
           -- token we currently read.
-          input <- gets asInput
-          let !tok = Pos (mkSrcPos filename $! aiLine input) nextTok
-          go (tok : acc)
+          AlexState{asInput = AlexInput{aiLine}} <- get
+          let !tok = Pos (mkSrcPos filename aiLine) nextTok
+          tell [tok]
+          go
 
 continueScanning :: WithCallStack => AlexM ServerToken
 continueScanning = do
