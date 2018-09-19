@@ -39,7 +39,8 @@ module Haskell.Language.LexerSimple.Types
   , unsafeTextHead
   ) where
 
-import Control.Monad.State
+import Control.Monad.State.Strict
+import Control.Monad.Writer.Strict
 import Data.Char
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IS
@@ -214,16 +215,16 @@ calculateQuasiQuoteEnds startPos =
       , qqessPrevChar = c#
       }
 
-type AlexM = State AlexState
+type AlexM = WriterT [Pos ServerToken] (State AlexState)
 
 runAlexM
   :: LiterateLocation Void
   -> AlexCode
   -> C8.ByteString
-  -> AlexM a
-  -> a
+  -> AlexM ()
+  -> [Pos ServerToken]
 runAlexM litLoc startCode input action =
-  evalState action s
+  evalState (execWriterT action) s
   where
     s = mkAlexState litLoc startCode (mkAlexInput input)
 
