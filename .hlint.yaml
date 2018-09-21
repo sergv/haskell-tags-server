@@ -59,6 +59,15 @@
 # Generalise map to fmap, ++ to <>
 # - group: {name: generalise, enabled: true}
 
+# (foo = \x -> x + 1) => (foo x = x + 1)
+- ignore:
+    { name: "Redundant lambda"
+    }
+# (\x -> foo x bar) => (`foo` bar)
+- ignore:
+    { name: "Avoid lambda"
+    }
+
 - ignore:
     { name: "Redundant do"
     , within:
