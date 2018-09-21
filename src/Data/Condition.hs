@@ -26,11 +26,14 @@ import Control.Monad.Base
 newtype Condition = Condition (MVar ())
   deriving (Eq)
 
-newUnsetCondition :: (MonadBase IO m) => m Condition
+{-# INLINE newUnsetCondition #-}
+newUnsetCondition :: MonadBase IO m => m Condition
 newUnsetCondition = liftBase $ Condition <$> newEmptyMVar
 
-setCondition :: (MonadBase IO m) => Condition -> m ()
+{-# INLINE setCondition #-}
+setCondition :: MonadBase IO m => Condition -> m ()
 setCondition (Condition v) = liftBase $ putMVar v ()
 
-waitForCondition :: (MonadBase IO m) => Condition -> m ()
+{-# INLINE waitForCondition #-}
+waitForCondition :: MonadBase IO m => Condition -> m ()
 waitForCondition (Condition v) = liftBase $ readMVar v

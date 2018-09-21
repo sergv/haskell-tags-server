@@ -19,12 +19,16 @@ import Data.Foldable
 newtype MonoidalLift f a = MonoidalLift { unMonoidalLift :: f a }
 
 instance (Applicative f, Semigroup a) => Semigroup (MonoidalLift f a) where
+  {-# INLINE (<>) #-}
   (<>) (MonoidalLift x) (MonoidalLift y) = MonoidalLift $ (<>) <$> x <*> y
 
 instance (Applicative f, Semigroup a, Monoid a) => Monoid (MonoidalLift f a) where
+  {-# INLINE mempty  #-}
+  {-# INLINE mappend #-}
   mempty = MonoidalLift $ pure mempty
   mappend = (<>)
 
+{-# INLINE foldMapA #-}
 foldMapA :: (Applicative f, Semigroup a, Monoid a, Foldable t) => (b -> f a) -> t b -> f a
 foldMapA f = unMonoidalLift . foldMap (MonoidalLift . f)
 

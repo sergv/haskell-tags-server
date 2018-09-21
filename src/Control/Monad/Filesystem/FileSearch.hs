@@ -51,18 +51,21 @@ import Data.Path
 data SearchCfg = SearchCfg
   { -- | Directories with files of interest. The files will be looked up in
     -- these directories but not in their children.
-    shallowPaths   :: Set FullPath
+    shallowPaths   :: !(Set FullPath)
     -- | Directories with file hierarchies containing files of interest. The
     -- files will be looked up in both the directroies and all of their children.
-  , recursivePaths :: Set FullPath
-  , ignoredDirs    :: Set BaseName
+  , recursivePaths :: !(Set FullPath)
+  , ignoredDirs    :: !(Set BaseName)
   } deriving (Eq, Ord, Show)
 
 instance Semigroup SearchCfg where
+  {-# INLINE (<>) #-}
   (<>) (SearchCfg x y z) (SearchCfg x' y' z') =
     SearchCfg (x <> x') (y <> y') (z <> z')
 
 instance Monoid SearchCfg where
+  {-# INLINE mempty  #-}
+  {-# INLINE mappend #-}
   mempty = SearchCfg mempty mempty mempty
   mappend = (Semigroup.<>)
 
@@ -85,6 +88,7 @@ newtype FileSearchT m a = FileSearchT (ReaderT SearchCfg m a)
     , MonadFS
     )
 
+{-# INLINE runFileSearchT #-}
 runFileSearchT :: Monad m => SearchCfg -> FileSearchT m a -> m a
 runFileSearchT env (FileSearchT action) = runReaderT action env
 

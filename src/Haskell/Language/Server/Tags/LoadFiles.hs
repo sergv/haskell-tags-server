@@ -30,8 +30,8 @@ import Data.Foldable
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Map (Map)
-import qualified Data.Map as M
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as M
 import qualified Data.Semigroup as Semigroup
 import qualified Data.Set as S
 import qualified Data.Text.Prettyprint.Doc as PP

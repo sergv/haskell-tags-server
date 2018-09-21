@@ -39,8 +39,8 @@ import Control.DeepSeq
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
-import Data.Map (Map)
-import qualified Data.Map as M
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as M
 import Data.Maybe
 import Data.Semigroup as Semigroup
 import Data.Set (Set)
@@ -60,15 +60,16 @@ data SymbolMap = SymbolMap
     -- different parents. This should be prevented by careful analysis of
     -- module headers, but, unfortunately, cannot be ruled out entirely because
     -- we're not a Haskell compiler.
-    smParentMap   :: Map UnqualifiedSymbolName (Set UnqualifiedSymbolName)
+    smParentMap   :: !(Map UnqualifiedSymbolName (Set UnqualifiedSymbolName))
     -- | Map from parents to chidrens
-  , smChildrenMap :: Map UnqualifiedSymbolName (Set UnqualifiedSymbolName)
-  , smAllSymbols  :: Map UnqualifiedSymbolName (NonEmpty ResolvedSymbol)
+  , smChildrenMap :: !(Map UnqualifiedSymbolName (Set UnqualifiedSymbolName))
+  , smAllSymbols  :: !(Map UnqualifiedSymbolName (NonEmpty ResolvedSymbol))
   } deriving (Eq, Ord, Show, Generic)
 
 instance NFData SymbolMap
 
 instance Semigroup SymbolMap where
+  {-# INLINE (<>) #-}
   SymbolMap x y z <> SymbolMap x' y' z' = SymbolMap
     { smParentMap   = M.unionWith (<>) x x'
     , smChildrenMap = M.unionWith (<>) y y'
@@ -76,6 +77,8 @@ instance Semigroup SymbolMap where
     }
 
 instance Monoid SymbolMap where
+  {-# INLINE mempty  #-}
+  {-# INLINE mappend #-}
   mempty  = SymbolMap mempty mempty mempty
   mappend = (<>)
 
@@ -86,6 +89,7 @@ instance Pretty SymbolMap where
     , "AllSymbols"  :-> ppMapWith pretty ppNE  smAllSymbols
     ]
 
+{-# INLINE null #-}
 null :: SymbolMap -> Bool
 null SymbolMap{smParentMap, smChildrenMap, smAllSymbols} =
   M.null smAllSymbols && M.null smParentMap && M.null smChildrenMap
@@ -136,19 +140,24 @@ registerChildren extraChildrenMap SymbolMap{smParentMap, smChildrenMap, smAllSym
     smAllSymbolsKeys :: Set UnqualifiedSymbolName
     smAllSymbolsKeys = M.keysSet smAllSymbols
 
+{-# INLINE lookup #-}
 lookup :: UnqualifiedSymbolName -> SymbolMap -> Maybe (NonEmpty ResolvedSymbol)
 lookup sym = M.lookup sym . smAllSymbols
 
+{-# INLINE _lookupParent #-}
 -- Noone uses it yet, so it's hidden here in case it will be needed later.
 _lookupParent :: UnqualifiedSymbolName -> SymbolMap -> Maybe (Set UnqualifiedSymbolName)
 _lookupParent sym = M.lookup sym . smParentMap
 
+{-# INLINE lookupChildren #-}
 lookupChildren :: UnqualifiedSymbolName -> SymbolMap -> Maybe (Set UnqualifiedSymbolName)
 lookupChildren sym = M.lookup sym . smChildrenMap
 
+{-# INLINE member #-}
 member :: UnqualifiedSymbolName -> SymbolMap -> Bool
 member sym = M.member sym . smAllSymbols
 
+{-# INLINE isSubsetNames #-}
 isSubsetNames :: Set UnqualifiedSymbolName -> SymbolMap -> Bool
 isSubsetNames xs = (xs `S.isSubsetOf`) . keysSet
 
@@ -182,5 +191,6 @@ withoutKeys SymbolMap{smParentMap, smChildrenMap, smAllSymbols} syms =
     , smAllSymbols  = smAllSymbols `M.withoutKeys` syms
     }
 
+{-# INLINE keysSet #-}
 keysSet :: SymbolMap -> Set UnqualifiedSymbolName
 keysSet = M.keysSet . smAllSymbols

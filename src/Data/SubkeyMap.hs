@@ -52,8 +52,8 @@ import Control.Arrow
 import Control.DeepSeq
 
 import Data.Foldable (foldl')
-import Data.Map (Map)
-import qualified Data.Map as M
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as M
 import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
@@ -82,52 +82,64 @@ deriving instance (Show k, Show (Subkey k), Show v) => Show (SubkeyMap k v)
 instance (NFData k, NFData (Subkey k), NFData v) => NFData (SubkeyMap k v)
 
 instance (HasSubkey k, Semigroup v) => Semigroup (SubkeyMap k v) where
+  {-# INLINE (<>) #-}
   SubkeyMap m1 s1 <> SubkeyMap m2 s2 = SubkeyMap
     { smMainMap = M.unionWith (<>) m1 m2
     , smSubMap  = M.unionWith (<>) s1 s2
     }
 
 instance (HasSubkey k, Semigroup v) => Monoid (SubkeyMap k v) where
+  {-# INLINE mempty  #-}
+  {-# INLINE mappend #-}
   mempty  = empty
   mappend = (Semigroup.<>)
 
+{-# INLINE empty #-}
 empty :: SubkeyMap k v
 empty = SubkeyMap
   { smMainMap = M.empty
   , smSubMap  = M.empty
   }
 
+{-# INLINE null #-}
 null :: SubkeyMap k v -> Bool
 null = M.null . smMainMap
 
+{-# INLINE insert #-}
 insert :: HasSubkey k => k -> v -> SubkeyMap k v -> SubkeyMap k v
 insert = insertWith const
 
+{-# INLINE insertWith #-}
 insertWith :: HasSubkey k => (v -> v -> v) -> k -> v -> SubkeyMap k v -> SubkeyMap k v
 insertWith f k v SubkeyMap{smMainMap, smSubMap} = SubkeyMap
   { smMainMap = M.insertWith f k v smMainMap
   , smSubMap  = M.insertWith (<>) (getSubkey k) (S.singleton k) smSubMap
   }
 
+{-# INLINE lookup #-}
 lookup :: Ord k => k -> SubkeyMap k v -> Maybe v
 lookup k = M.lookup k . smMainMap
 
+{-# INLINE lookupSubkey #-}
 lookupSubkey :: HasSubkey k => Subkey k -> SubkeyMap k v -> [v]
 lookupSubkey k SubkeyMap{smMainMap, smSubMap} =
   case M.lookup k smSubMap of
     Nothing   -> []
     Just idxs -> smMainMap `indexBySet` idxs
 
+{-# INLINE lookupSubkeyKeys #-}
 -- | Find out which keys correspond to the given subkey.
 lookupSubkeyKeys :: HasSubkey k => Subkey k -> SubkeyMap k v -> Maybe (Set k)
 lookupSubkeyKeys k = M.lookup k . smSubMap
 
+{-# INLINE alter' #-}
 alter' :: HasSubkey k => (Maybe v -> v) -> k -> SubkeyMap k v -> SubkeyMap k v
 alter' f k SubkeyMap{smMainMap, smSubMap} = SubkeyMap
   { smMainMap = M.alter (Just . f) k smMainMap
   , smSubMap  = M.insertWith (<>) (getSubkey k) (S.singleton k) smSubMap
   }
 
+{-# INLINE traverseWithKey #-}
 traverseWithKey :: Applicative f => (k -> v -> f v') -> SubkeyMap k v -> f (SubkeyMap k v')
 traverseWithKey f sm@SubkeyMap{smMainMap} =
   (\smMainMap' -> sm { smMainMap = smMainMap' }) <$> M.traverseWithKey f smMainMap
@@ -159,28 +171,35 @@ fromMap m = SubkeyMap
   , smSubMap  = M.fromListWith (<>) $ map (getSubkey &&& S.singleton) $ M.keys m
   }
 
+{-# INLINE fromList #-}
 fromList :: (HasSubkey k, Semigroup v) => [(k, v)] -> SubkeyMap k v
 fromList = fromFoldable
 
 fromFoldable :: (Foldable f, HasSubkey k, Semigroup v) => f (k, v) -> SubkeyMap k v
 fromFoldable = foldl' (\acc (k, v) -> insertWith (<>) k v acc) empty
 
+{-# INLINE toMap #-}
 toMap :: SubkeyMap k v -> Map k v
 toMap = smMainMap
 
+{-# INLINE toSubmap #-}
 toSubmap :: Ord k => SubkeyMap k v -> Map (Subkey k) [v]
 toSubmap SubkeyMap{smMainMap, smSubMap} =
   (smMainMap `indexBySet`) <$> smSubMap
 
+{-# INLINE toList #-}
 toList :: SubkeyMap k v -> [(k, v)]
 toList = M.toList . toMap
 
+{-# INLINE toSubkeyList #-}
 toSubkeyList :: Ord k => SubkeyMap k v -> [(Subkey k, [v])]
 toSubkeyList = M.toList . toSubmap
 
+{-# INLINE toSubkeyKeyList #-}
 toSubkeyKeyList :: SubkeyMap k v -> [(Subkey k, Set k)]
 toSubkeyKeyList = M.toList . smSubMap
 
+{-# INLINE keys #-}
 keys :: SubkeyMap k v -> [k]
 keys = M.keys . smMainMap
 
@@ -208,5 +227,6 @@ withoutKeys SubkeyMap{smMainMap, smSubMap} ks =
 
 -- Utils
 
+{-# INLINE indexBySet #-}
 indexBySet :: Ord k => Map k v -> Set k -> [v]
 indexBySet m ixs = M.elems $ M.restrictKeys m ixs

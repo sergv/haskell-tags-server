@@ -44,8 +44,8 @@ import Control.Arrow
 import Control.DeepSeq
 
 import Data.Coerce
-import Data.Map (Map)
-import qualified Data.Map as M
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as M
 import Data.Pointed
 import Data.Set (Set)
 import GHC.Generics
@@ -67,58 +67,74 @@ instance (Pretty (Key a), Pretty (f a)) => Pretty (KeyMap f a) where
   pretty = ppAssocList . M.toList . unKeyMap
 
 instance (Ord (Key a), Semigroup (f a)) => Semigroup (KeyMap f a) where
+  {-# INLINE (<>) #-}
   KeyMap m <> KeyMap m' = KeyMap $ M.unionWith (<>) m m'
 
 instance (Ord (Key a), Semigroup (f a)) => Monoid (KeyMap f a) where
+  {-# INLINE mempty  #-}
+  {-# INLINE mappend #-}
   mempty = KeyMap mempty
   mappend = (<>)
 
 instance Foldable f => Foldable (KeyMap f) where
+  {-# INLINE foldMap #-}
   foldMap f = foldMap (foldMap f) . unKeyMap
 
 class Ord (Key a) => HasKey a where
   type Key a :: *
   getKey :: a -> Key a
 
+{-# INLINE insert #-}
 insert
   :: forall a f. (HasKey a, Pointed f, Semigroup (f a))
   => a -> KeyMap f a -> KeyMap f a
 insert x = coerce $ M.insertWith (<>) (getKey x) (point @f x)
 
-lookup :: HasKey a => Key a -> KeyMap f a -> Maybe (f a)
-lookup k = M.lookup k . unKeyMap
+{-# INLINE lookup #-}
+lookup :: forall a f . HasKey a => Key a -> KeyMap f a -> Maybe (f a)
+lookup = coerce (M.lookup :: Key a -> Map (Key a) (f a) -> Maybe (f a))
 
-member :: HasKey a => Key a -> KeyMap f a -> Bool
-member k = M.member k . unKeyMap
+{-# INLINE member #-}
+member :: forall a f. HasKey a => Key a -> KeyMap f a -> Bool
+member = coerce (M.member :: Key a -> Map (Key a) (f a) -> Bool)
 
-notMember :: HasKey a => Key a -> KeyMap f a -> Bool
-notMember k = M.notMember k . unKeyMap
+{-# INLINE notMember #-}
+notMember :: forall a f. HasKey a => Key a -> KeyMap f a -> Bool
+notMember = coerce (M.notMember :: Key a -> Map (Key a) (f a) -> Bool)
 
 fromList :: (HasKey a, Pointed f, Semigroup (f a)) => [a] -> KeyMap f a
 fromList = KeyMap . M.fromListWith (<>) . map (getKey &&& point)
 
+{-# INLINE toMap #-}
 toMap :: KeyMap f a -> Map (Key a) (f a)
 toMap = unKeyMap
 
+{-# INLINE toList #-}
 toList :: KeyMap f a -> [(Key a, f a)]
 toList = M.toList . toMap
 
-elems :: KeyMap f a -> [f a]
-elems = M.elems . unKeyMap
+{-# INLINE elems #-}
+elems :: forall a f. KeyMap f a -> [f a]
+elems = coerce (M.elems :: Map (Key a) (f a) -> [f a])
 
+{-# INLINE restrictKeys #-}
 restrictKeys :: forall a f. HasKey a => KeyMap f a -> Set (Key a) -> KeyMap f a
 restrictKeys =
   coerce (M.restrictKeys :: Map (Key a) (f a) -> Set (Key a) -> Map (Key a) (f a))
 
-keysSet :: KeyMap f a -> Set (Key a)
-keysSet = M.keysSet . unKeyMap
+{-# INLINE keysSet #-}
+keysSet :: forall a f. KeyMap f a -> Set (Key a)
+keysSet = coerce (M.keysSet :: Map (Key a) (f a) -> Set (Key a))
 
-empty :: KeyMap f a
-empty = KeyMap M.empty
+{-# INLINE empty #-}
+empty :: forall a f. KeyMap f a
+empty = coerce (M.empty :: Map (Key a) (f a))
 
-null :: KeyMap f a -> Bool
-null = M.null . unKeyMap
+{-# INLINE null #-}
+null :: forall a f. KeyMap f a -> Bool
+null = coerce (M.null :: Map (Key a) (f a) -> Bool)
 
+{-# INLINE intersectionWith #-}
 intersectionWith
   :: forall a f. HasKey a
   => (f a -> f a -> f a)
@@ -128,6 +144,7 @@ intersectionWith
 intersectionWith =
   coerce (M.intersectionWith :: (f a -> f a -> f a) -> Map (Key a) (f a) -> Map (Key a) (f a) -> Map (Key a) (f a))
 
+{-# INLINE differenceWith #-}
 differenceWith
   :: forall a f. HasKey a
   => (f a -> f a -> Maybe (f a))

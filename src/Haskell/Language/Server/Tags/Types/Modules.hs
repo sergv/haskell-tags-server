@@ -41,8 +41,8 @@ import Control.DeepSeq
 import Data.Char
 import Data.Hashable
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Map (Map)
-import qualified Data.Map as M
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as M
 import Data.Semigroup
 import Data.Set (Set)
 import Data.Text.Prettyprint.Doc.Ext
@@ -174,7 +174,7 @@ data ModuleExportSpec a =
   | -- | Export list specifies no entries.
     EmptyExports
   | -- | Exprort list specifies entries.
-    SpecificExports a
+    SpecificExports !a
   deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
 
 instance NFData a => NFData (ModuleExportSpec a)
@@ -185,7 +185,7 @@ instance Pretty a => Pretty (ModuleExportSpec a) where
 data ModuleExports = ModuleExports
   { -- | Toplevel names exported from this particular module as specified in
     -- the header.
-    meExportedEntries    :: KeyMap NonEmpty (EntryWithChildren PosAndType (SymbolName, PosAndType))
+    meExportedEntries    :: !(KeyMap NonEmpty (EntryWithChildren PosAndType (SymbolName, PosAndType)))
     -- | Module name here refer to real modules only. I.e. reexports via
     -- handles, like
     --
@@ -198,9 +198,9 @@ data ModuleExports = ModuleExports
     -- > import Data.List
     --
     -- were already resolved into @Data.Set.fromList ["Data.Array", "Data.List"]@.
-  , meReexports          :: Set ModuleName
+  , meReexports          :: !(Set ModuleName)
     -- | Whether this module exports any entities that export all children.
-  , meHasWildcardExports :: Bool
+  , meHasWildcardExports :: !Bool
   } deriving (Eq, Ord, Show, Generic)
 
 instance NFData ModuleExports
@@ -209,21 +209,25 @@ instance Pretty ModuleExports where
   pretty = ppGeneric
 
 instance Semigroup ModuleExports where
+  {-# INLINE (<>) #-}
   (<>) (ModuleExports x y z) (ModuleExports x' y' z') =
     ModuleExports (x <> x') (y <> y') (z || z')
 
 instance Monoid ModuleExports where
+  {-# INLINE mempty  #-}
+  {-# INLINE mappend #-}
   mempty = ModuleExports mempty mempty False
   mappend = (<>)
 
 instance HasKey (EntryWithChildren ann (SymbolName, PosAndType)) where
   type Key (EntryWithChildren ann (SymbolName, PosAndType)) = SymbolName
+  {-# INLINE getKey #-}
   getKey = fst . entryName
 
 -- | Tag position and type stored for later analysis
 data PosAndType = PosAndType
-  { patPos  :: SrcPos
-  , patType :: Type
+  { patPos  :: !SrcPos
+  , patType :: !Type
   } deriving (Eq, Ord, Show, Generic)
 
 instance Hashable PosAndType
