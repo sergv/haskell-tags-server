@@ -23,6 +23,7 @@ import qualified Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext (Pretty(..), Doc, (<+>), (##))
 import qualified Data.Text.Prettyprint.Doc.Ext as PP
 import Data.Void (Void, absurd)
+import Data.Word
 
 import Data.IgnoreEqOrdHashNFData
 import Haskell.Language.Lexer.FastTags
@@ -114,7 +115,9 @@ $nl ">" $ws*
 $nl "\begin{code}" @nl $space*
   -- / { isLiterateEnabled' }
   { \input len -> (Newline $! countInputSpace input len) <$ startLiterateLatex }
-(. | $nl) ;
+$nl ;
+.
+  { \_ _ -> dropUntilNL' }
 }
 
 -- Analyse "#if 0" constructs used in e.g. GHC.Base
@@ -131,8 +134,12 @@ $nl "\begin{code}" @nl $space*
 <stripCpp> {
 "#" @cpp_opt_ws ( "ifdef" | "if" ) .*  { \_ _ -> startPreprocessorStripping }
 "#" @cpp_opt_ws "endif" .*             { \_ _ -> endPreprocessorStripping   }
-"#" @cpp_opt_ws ( "elif" | "else" | "define" | "undef" | "line" | "error" | "include" ) .* ;
-(. | $nl) ;
+"#" @cpp_opt_ws ( "elif" | "else" | "define" | "undef" | "line" | "error" | "include" )
+  { \_ _ -> dropUntilNL' }
+$nl ;
+.
+  { \_ _ -> dropUntil' 35 -- '#'
+  }
 }
 
 <0> {
@@ -151,7 +158,8 @@ $nl "\end{code}"
 [\\]? @nl $space* "{-"  { \input len -> startIndentationCounting (countInputSpace input len) }
 [\\]? [\r] $nl $space*  { \input len -> pure $! Newline $! (len - 2) - (case chr (fromIntegral (unsafeTextHeadAscii (aiInput input))) of { '\\' -> 1; _ -> 0 }) }
 [\\]? $nl $space*       { \input len -> pure $! Newline $! (len - 1) - (case chr (fromIntegral (unsafeTextHeadAscii (aiInput input))) of { '\\' -> 1; _ -> 0 }) }
-[\-][\-]+ ~[$symbol $nl] .* ;
+[\-][\-]+ ~[$symbol $nl]
+  { \_ _ -> dropUntilNL' }
 [\-][\-]+ / @nl         ;
 
 }
@@ -160,11 +168,14 @@ $nl "\end{code}"
 <0> "{-#" $ws* @source_pragma $ws* "#-}" { \_ _ -> pure $ Pragma SourcePragma }
 
 
--- Comments
+-- Nested comments
 <0, comment>
   "{-"                  { \_ _ -> startComment }
 <comment> "-}"          { \_ _ -> endComment startCode }
-<comment> (. | $nl)     ;
+-- 45  - '-'
+-- 123 - '{'
+<comment> $nl ;
+<comment> .             { \_ _ -> dropUntil2' 45 123 }
 <0> "-}"                { \_ _ -> errorAtLine "Unmatched -}" }
 
 <indentComment>
@@ -339,6 +350,21 @@ continueScanning = do
               go' input'
             AlexToken input' tokLen action       ->
               alexSetInput input' *> action input tokLen
+
+dropUntilNL' :: AlexM ServerToken
+dropUntilNL' = do
+  modify $ \s -> s { asInput = dropUntilNL $ asInput s }
+  continueScanning
+
+dropUntil' :: Word8 -> AlexM ServerToken
+dropUntil' w = do
+  modify $ \s -> s { asInput = dropUntil w $ asInput s }
+  continueScanning
+
+dropUntil2' :: Word8 -> Word8 -> AlexM ServerToken
+dropUntil2' w1 w2 = do
+  modify $ \s -> s { asInput = dropUntil2 w1 w2 $ asInput s }
+  continueScanning
 
 startIndentationCounting :: WithCallStack => Int -> AlexM ServerToken
 startIndentationCounting !n = do

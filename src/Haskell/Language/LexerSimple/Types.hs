@@ -38,6 +38,9 @@ module Haskell.Language.LexerSimple.Types
   , alexSetInput
   , alexSetNextCode
   , alexInputPrevChar
+  , dropUntilNL
+  , dropUntil
+  , dropUntil2
   , alexGetByte
   , unsafeTextHeadAscii
   , unsafeTextHead
@@ -330,6 +333,21 @@ alexSetNextCode code = modify $ set asCodeL code
 alexInputPrevChar :: AlexInput -> Char
 alexInputPrevChar = const '\0'
 
+{-# INLINE dropUntilNL #-}
+dropUntilNL :: AlexInput -> AlexInput
+dropUntilNL input@AlexInput{aiInput} =
+  input { aiInput = dropUntilNL# aiInput }
+
+{-# INLINE dropUntil #-}
+dropUntil :: Word8 -> AlexInput -> AlexInput
+dropUntil w input@AlexInput{aiInput} =
+  input { aiInput = dropUntil# w aiInput }
+
+{-# INLINE dropUntil2 #-}
+dropUntil2 :: Word8 -> Word8 -> AlexInput -> AlexInput
+dropUntil2 w1 w2 input@AlexInput{aiInput} =
+  input { aiInput = dropUntil2# w1 w2 aiInput }
+
 {-# INLINE alexGetByte #-}
 alexGetByte :: AlexInput -> Maybe (Word8, AlexInput)
 alexGetByte input@AlexInput{aiInput} =
@@ -406,6 +424,38 @@ nextChar :: Ptr Word8 -> (Char, Ptr Word8)
 nextChar (Ptr ptr#) =
   case utf8DecodeChar# ptr# of
     (# c#, nBytes# #) -> (C# c#, Ptr (ptr# `plusAddr#` nBytes#))
+
+{-# INLINE dropUntilNL# #-}
+dropUntilNL# :: Ptr Word8 -> Ptr Word8
+dropUntilNL# (Ptr start#) = Ptr (go start#)
+  where
+    go :: Addr# -> Addr#
+    go ptr# = case indexWord8OffAddr# ptr# 0# of
+      0##  -> ptr#
+      10## -> ptr# -- '\n'
+      _    -> go (ptr# `plusAddr#` 1#)
+
+{-# INLINE dropUntil# #-}
+dropUntil# :: Word8 -> Ptr Word8 -> Ptr Word8
+dropUntil# (W8# w#) (Ptr start#) = Ptr (go start#)
+  where
+    go :: Addr# -> Addr#
+    go ptr# = case indexWord8OffAddr# ptr# 0# of
+      0##  -> ptr#
+      10## -> ptr# -- '\n'
+      c# | isTrue# (c# `eqWord#` w#) -> ptr#
+         | otherwise                 -> go (ptr# `plusAddr#` 1#)
+
+{-# INLINE dropUntil2# #-}
+dropUntil2# :: Word8 -> Word8 -> Ptr Word8 -> Ptr Word8
+dropUntil2# (W8# w1#) (W8# w2#) (Ptr start#) = Ptr (go start#)
+  where
+    go :: Addr# -> Addr#
+    go ptr# = case indexWord8OffAddr# ptr# 0# of
+      0##  -> ptr#
+      10## -> ptr# -- '\n'
+      c# | isTrue# ((c# `eqWord#` w1#) `orI#` (c# `eqWord#` w2#)) -> ptr#
+         | otherwise                                              -> go (ptr# `plusAddr#` 1#)
 
 {-# INLINE utf8Foldl' #-}
 utf8Foldl' :: forall a. (a -> Char# -> a) -> a -> Ptr Word8 -> a
