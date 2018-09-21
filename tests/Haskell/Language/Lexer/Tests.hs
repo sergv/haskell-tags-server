@@ -20,7 +20,6 @@ import qualified Data.Text as T
 
 import Haskell.Language.Lexer (LiterateLocation(..))
 
-import Haskell.Language.Lexer.FastTags.TagValPatterns
 import qualified Haskell.Language.Lexer.Tokenisation as Tokenisation
 import Haskell.Language.Lexer.TokenisationUtils
 import TestUtils (makeAssertion, makeTest)

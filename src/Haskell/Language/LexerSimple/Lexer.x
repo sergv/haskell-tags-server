@@ -24,7 +24,7 @@ import Data.Text.Prettyprint.Doc.Ext (Pretty(..), Doc, (<+>), (##))
 import qualified Data.Text.Prettyprint.Doc.Ext as PP
 import Data.Void (Void, absurd)
 
-import Data.IgnoreEqOrdHash
+import Data.IgnoreEqOrdHashNFData
 import Haskell.Language.Lexer.FastTags
 import Haskell.Language.Lexer.Types (LiterateStyle(..), Context(..), mkSrcPos, AlexCode(..))
 import Haskell.Language.LexerSimple.LensBlaze
@@ -110,10 +110,10 @@ $hexdigit   = [0-9a-fA-F]
 <literate> {
 $nl ">" $ws*
   -- / { isLiterateEnabled' }
-  { \_ len -> (Tok $! Newline $! len - 2)  <$ startLiterateBird }
+  { \_ len -> (Newline $! len - 2)  <$ startLiterateBird }
 $nl "\begin{code}" @nl $space*
   -- / { isLiterateEnabled' }
-  { \input len -> (Tok $! Newline $! countInputSpace input len) <$ startLiterateLatex }
+  { \input len -> (Newline $! countInputSpace input len) <$ startLiterateLatex }
 (. | $nl) ;
 }
 
@@ -139,7 +139,7 @@ $nl "\begin{code}" @nl $space*
 
 $nl ">" $space*
   / { isLiterateEnabled' }
-  { \_ len -> pure $! Tok $! Newline $! len - 2 }
+  { \_ len -> pure $! Newline $! len - 2 }
 $nl [^>]
   / { isLiterateBirdOrOutside' }
   { \_ _   -> endLiterate }
@@ -149,8 +149,8 @@ $nl "\end{code}"
 
 
 [\\]? @nl $space* "{-"  { \input len -> startIndentationCounting (countInputSpace input len) }
-[\\]? [\r] $nl $space*  { \input len -> pure $! Tok $! Newline $! (len - 2) - (case chr (fromIntegral (unsafeTextHeadAscii (aiInput input))) of { '\\' -> 1; _ -> 0 }) }
-[\\]? $nl $space*       { \input len -> pure $! Tok $! Newline $! (len - 1) - (case chr (fromIntegral (unsafeTextHeadAscii (aiInput input))) of { '\\' -> 1; _ -> 0 }) }
+[\\]? [\r] $nl $space*  { \input len -> pure $! Newline $! (len - 2) - (case chr (fromIntegral (unsafeTextHeadAscii (aiInput input))) of { '\\' -> 1; _ -> 0 }) }
+[\\]? $nl $space*       { \input len -> pure $! Newline $! (len - 1) - (case chr (fromIntegral (unsafeTextHeadAscii (aiInput input))) of { '\\' -> 1; _ -> 0 }) }
 [\-][\-]+ ~[$symbol $nl] .* ;
 [\-][\-]+ / @nl         ;
 
@@ -212,7 +212,7 @@ $space*                 { \_ len -> endIndentationCounting len }
 "do"                    { kw KWDo }
 "else"                  { kw KWElse }
 "family"                { kw KWFamily }
-"forall"                { \_ _ -> pure $! Tok $! T "forall" }
+"forall"                { \_ _ -> pure $! T "forall" }
 "foreign"               { kw KWForeign }
 "if"                    { kw KWIf }
 "import"                { kw KWImport }
@@ -225,7 +225,7 @@ $space*                 { \_ len -> endIndentationCounting len }
 "module"                { kw KWModule }
 "newtype"               { kw KWNewtype }
 "of"                    { kw KWOf }
-"pattern"               { \_ _ -> pure $! Tok $! T "pattern" }
+"pattern"               { \_ _ -> pure $! T "pattern" }
 "then"                  { kw KWThen }
 "type"                  { kw KWType }
 "where"                 { kw KWWhere }
@@ -255,9 +255,9 @@ $space*                 { \_ len -> endIndentationCounting len }
 @number                 { kw Number }
 
 [\']* @qualificationPrefix ($ident | $large)+
-                        { \input len -> pure $! Tok $! T $! retrieveToken input len }
+                        { \input len -> pure $! T $! retrieveToken input len }
 @qualificationPrefix $symbol+
-                        { \input len -> pure $! Tok $! T $! retrieveToken input len }
+                        { \input len -> pure $! T $! retrieveToken input len }
 
 $reserved_symbol        { \input _len -> reservedSymbol (unsafeTextHead (aiInput input)) }
 
@@ -272,8 +272,8 @@ type AlexAction m = AlexInput -> Int -> m ServerToken
 type AlexPred a = a -> AlexInput -> Int -> AlexInput -> Bool
 
 {-# INLINE kw #-}
-kw :: Applicative m => TokenVal -> AlexAction m
-kw tok = \_ _ -> pure $ Tok tok
+kw :: Applicative m => ServerToken -> AlexAction m
+kw tok = \_ _ -> pure tok
 
 
 isLiterateEnabled'
@@ -309,8 +309,8 @@ scanTokens filename = go
     go = do
       nextTok <- continueScanning
       case nextTok of
-        Tok EOF -> pure ()
-        _       -> do
+        EOF -> pure ()
+        _   -> do
           -- Use input after reading token to get proper prefix that includes
           -- token we currently read.
           AlexState{asInput} <- get
@@ -329,10 +329,10 @@ continueScanning = do
         go' input =
           case alexScanUser litLoc input (unAlexCode code) :: AlexReturn (AlexAction AlexM) of
             AlexEOF                              ->
-              pure $ Tok EOF
+              pure EOF
             AlexError input@AlexInput{aiInput} -> do
               code <- gets (view asCodeL)
-              pure $ Error $ IgnoreEqOrdHash $ "Lexical error while in state" <+> pretty code
+              pure $ Error $ IgnoreEqOrdHashNFData $ "Lexical error while in state" <+> pretty code
                 <+> "at line" <+>
                 pretty (unLine (view aiLineL input)) <> ":" ## PP.squotes (PP.ppByteString (utf8BS 40 aiInput))
             AlexSkip input' _                    ->
@@ -349,7 +349,7 @@ startIndentationCounting !n = do
 endIndentationCounting :: Int -> AlexM ServerToken
 endIndentationCounting !n = do
   alexSetNextCode startCode
-  Tok . Newline . (+ n) . fromIntegral <$> gets (view asIndentationSizeL)
+  Newline . (+ n) . fromIntegral <$> gets (view asIndentationSizeL)
 
 startIndentComment :: WithCallStack => AlexM ServerToken
 startIndentComment = do
@@ -389,7 +389,7 @@ startString =
 
 endString :: AlexCode -> AlexM ServerToken
 endString nextCode =
-  Tok String <$ alexSetNextCode nextCode
+  String <$ alexSetNextCode nextCode
 
 startQuasiquoter :: AlexInput -> Int -> AlexM ServerToken
 startQuasiquoter _ n
@@ -406,26 +406,26 @@ startQuasiquoter AlexInput{aiInput} _ = do
     -- No chance of quasi-quote closing till the end of current file.
     -- Assume that file ought to be well-formed and treat currently
     -- matched input
-    False -> pure $ Tok LBracket
+    False -> pure LBracket
     True  -> startUnconditionalQuasiQuoter
 
 startUnconditionalQuasiQuoter :: AlexM ServerToken
 startUnconditionalQuasiQuoter =
-  Tok QuasiquoterStart <$ alexSetNextCode qqCode
+  QuasiquoterStart <$ alexSetNextCode qqCode
 
 startSplice :: Context -> AlexM ServerToken
 startSplice ctx = do
   alexSetNextCode startCode
   pushContext ctx
-  pure $ Tok SpliceStart
+  pure SpliceStart
 
 endQuasiquoter :: AlexM ServerToken
 endQuasiquoter =
-  Tok QuasiquoterEnd <$ alexSetNextCode startCode
+  QuasiquoterEnd <$ alexSetNextCode startCode
 
 pushLParen :: AlexAction AlexM
 pushLParen _ _ =
-  Tok LParen <$ pushContext CtxHaskell
+  LParen <$ pushContext CtxHaskell
 
 popRParen :: AlexAction AlexM
 popRParen _ _ = do
@@ -437,7 +437,7 @@ popRParen _ _ = do
       alexSetNextCode $ case c of
         CtxHaskell     -> startCode
         CtxQuasiquoter -> qqCode
-  pure $ Tok RParen
+  pure RParen
 
 {-# INLINE errorAtLine #-}
 errorAtLine
@@ -445,7 +445,7 @@ errorAtLine
   => Doc Void -> m ServerToken
 errorAtLine msg = do
   line <- gets (unLine . view aiLineL . asInput)
-  pure $ Error $ IgnoreEqOrdHash $ "Error at line" <+> pretty line <> ":" <+> msg
+  pure $ Error $ IgnoreEqOrdHashNFData $ "Error at line" <+> pretty line <> ":" <+> msg
 
 startLiterateBird :: AlexM ()
 startLiterateBird = do
@@ -465,10 +465,10 @@ endLiterate = do
 
 reservedSymbol :: WithCallStack => Char -> AlexM ServerToken
 reservedSymbol = \case
-  '→' -> pure $! Tok Arrow
-  '∷' -> pure $! Tok DoubleColon
-  '⇒' -> pure $! Tok Implies
-  '∀' -> pure $! Tok $! T $! "forall"
+  '→' -> pure Arrow
+  '∷' -> pure DoubleColon
+  '⇒' -> pure Implies
+  '∀' -> pure $! T $! "forall"
   '⦇' -> pure LBanana
   '⦈' -> pure RBanana
   '⟦' -> startUnconditionalQuasiQuoter

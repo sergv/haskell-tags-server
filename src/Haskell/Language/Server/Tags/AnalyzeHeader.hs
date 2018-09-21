@@ -40,7 +40,7 @@ import Data.Text.Prettyprint.Doc.Ext
 import Data.Void (Void)
 
 import Haskell.Language.Lexer.FastTags
-  (stripNewlines, tokToName, Pos(..), SrcPos, Type, ServerToken(..), TokenVal(..), posFile, posLine, unLine, PragmaType(..), Type(..))
+  (stripNewlines, tokToName, Pos(..), SrcPos, Type, posFile, posLine, unLine, PragmaType(..), ServerToken(..), Type(..))
 import qualified Haskell.Language.Lexer.FastTags as FastTags
 
 import Control.Monad.Logging
@@ -59,10 +59,10 @@ analyzeHeader
   -> m (Maybe UnresolvedModuleHeader, [Pos ServerToken])
 analyzeHeader ts =
   -- logDebug $ "[analyzeHeader] ts =" <+> ppTokens ts
-  case dropWhile ((/= Tok KWModule) . valOf) ts of
-    Pos _ (Tok KWModule) :
-      (dropNLs -> Pos _ (Tok (T modName)) :
-        (break ((== Tok KWWhere) . valOf) . dropNLs -> (exportList, Pos _ (Tok KWWhere) : body))) -> do
+  case dropWhile ((/= KWModule) . valOf) ts of
+    Pos _ KWModule :
+      (dropNLs -> Pos _ (T modName) :
+        (break ((== KWWhere) . valOf) . dropNLs -> (exportList, Pos _ KWWhere : body))) -> do
       (importSpecs, importQualifiers, body') <- analyzeImports mempty mempty body
       exports                                <- analyzeExports importQualifiers exportList
       let header = ModuleHeader
@@ -76,37 +76,37 @@ analyzeHeader ts =
     _ -> pure (Nothing, ts)
 
 pattern PAs           :: Pos ServerToken
-pattern PAs           <- Pos _ (Tok (T "as"))
+pattern PAs           <- Pos _ (T "as")
 pattern PComma        :: Pos ServerToken
-pattern PComma        <- Pos _ (Tok Comma)
+pattern PComma        <- Pos _ Comma
 pattern PHiding       :: Pos ServerToken
-pattern PHiding       <- Pos _ (Tok (T "hiding"))
+pattern PHiding       <- Pos _ (T "hiding")
 pattern PImport       :: Pos ServerToken
-pattern PImport       <- Pos _ (Tok KWImport)
+pattern PImport       <- Pos _ KWImport
 pattern PLParen       :: Pos ServerToken
-pattern PLParen       <- Pos _ (Tok LParen)
+pattern PLParen       <- Pos _ LParen
 pattern PModule       :: Pos ServerToken
-pattern PModule       <- Pos _ (Tok KWModule)
+pattern PModule       <- Pos _ KWModule
 pattern PName         :: Text -> Pos ServerToken
-pattern PName name    <- Pos _ (Tok (T name))
+pattern PName name    <- Pos _ (T name)
 pattern PPattern      :: Pos ServerToken
-pattern PPattern      <- Pos _ (Tok (T "pattern"))
+pattern PPattern      <- Pos _ (T "pattern")
 pattern PQualified    :: Pos ServerToken
-pattern PQualified    <- Pos _ (Tok (T "qualified"))
+pattern PQualified    <- Pos _ (T "qualified")
 pattern PRParen       :: Pos ServerToken
-pattern PRParen       <- Pos _ (Tok RParen)
+pattern PRParen       <- Pos _ RParen
 pattern PSourcePragma :: Pos ServerToken
 pattern PSourcePragma <- Pos _ (Pragma SourcePragma)
 pattern PString       :: Pos ServerToken
-pattern PString       <- Pos _ (Tok String)
+pattern PString       <- Pos _ String
 pattern PType         :: Pos ServerToken
-pattern PType         <- Pos _ (Tok KWType)
+pattern PType         <- Pos _ KWType
 
 pattern PAnyName      :: Text -> Pos ServerToken
 pattern PAnyName name <- Pos _ (tokToName -> Just name)
 
 pattern PName'             :: SrcPos -> Text -> Pos ServerToken
-pattern PName' pos name    <- Pos pos (Tok (T name))
+pattern PName' pos name    <- Pos pos (T name)
 pattern PAnyName'          :: SrcPos -> Text -> Pos ServerToken
 pattern PAnyName' pos name <- Pos pos (tokToName -> Just name)
 
@@ -557,14 +557,14 @@ ppTokens = pretty . Tokens . take 16
 
 -- | Drop prefix of newlines.
 dropNLs :: [Pos ServerToken] -> [Pos ServerToken]
-dropNLs (Pos _ (Tok (Newline _)) : ts) = dropNLs ts
-dropNLs ts                             = ts
+dropNLs (Pos _ (Newline _) : ts) = dropNLs ts
+dropNLs ts                       = ts
 
 dropCommas :: [Pos ServerToken] -> [Pos ServerToken]
 dropCommas = go . dropNLs
   where
-    go (Pos _ (Tok Comma) : ts) = dropCommas ts
-    go ts                       = ts
+    go (Pos _ Comma : ts) = dropCommas ts
+    go ts                 = ts
 
 isVanillaTypeName  :: Text -> Bool
 isVanillaTypeName = maybe False (isUpper . fst) . T.uncons
