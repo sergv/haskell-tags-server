@@ -43,7 +43,7 @@ data Context
 
 -- | Abstract wrapper around alex automata states.
 newtype AlexCode = AlexCode { unAlexCode :: Int }
-  deriving (Eq, Ord, Show, Pretty)
+  deriving (Eq, Ord, Show, Pretty, Enum, Num, Real, Integral)
 
 data LiterateStyle = Bird | Latex
   deriving (Eq, Ord, Show, Enum, Bounded)

@@ -19,16 +19,16 @@ import Control.Monad.State
 
 import qualified Data.ByteString as BS
 import Data.Char (chr)
-import qualified Data.IntSet as IS
 import qualified Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext (Pretty(..), Doc, (<+>), (##))
 import qualified Data.Text.Prettyprint.Doc.Ext as PP
 import Data.Void (Void, absurd)
 
 import Data.IgnoreEqOrdHash
-import Haskell.Language.LexerSimple.Types
 import Haskell.Language.Lexer.FastTags
 import Haskell.Language.Lexer.Types (LiterateStyle(..), Context(..), mkSrcPos, AlexCode(..))
+import Haskell.Language.LexerSimple.LensBlaze
+import Haskell.Language.LexerSimple.Types
 
 }
 
@@ -113,7 +113,7 @@ $nl ">" $ws*
   { \_ len -> (Tok $! Newline $! len - 2)  <$ startLiterateBird }
 $nl "\begin{code}" @nl $space*
   -- / { isLiterateEnabled' }
-  { \input len -> (Tok $! Newline $! (countInputSpace input len)) <$ startLiterateLatex }
+  { \input len -> (Tok $! Newline $! countInputSpace input len) <$ startLiterateLatex }
 (. | $nl) ;
 }
 
@@ -141,10 +141,10 @@ $nl ">" $space*
   / { isLiterateEnabled' }
   { \_ len -> pure $! Tok $! Newline $! len - 2 }
 $nl [^>]
-  / { isLiterateBirdOrOutside }
+  / { isLiterateBirdOrOutside' }
   { \_ _   -> endLiterate }
 $nl "\end{code}"
-  / { isLiterateLatexOrOutside }
+  / { isLiterateLatexOrOutside' }
   { \_ _   -> endLiterate }
 
 
@@ -173,7 +173,7 @@ $nl "\end{code}"
 <indentComment> (. | $nl) ;
 
 <indentCount> {
-$space* "{-"            { \input len -> addIndentationSize (countInputSpace input len) *> startIndentComment }
+$space* "{-"            { \input len -> addIndentationSize (fromIntegral (countInputSpace input len)) *> startIndentComment }
 $space*                 { \_ len -> endIndentationCounting len }
 }
 
@@ -281,23 +281,15 @@ isLiterateEnabled'
 isLiterateEnabled' litLoc _inputBefore _len _inputAfter =
   isLiterateEnabled litLoc
 
-isLiterateBirdOrOutside
+isLiterateBirdOrOutside'
   :: AlexPred (LiterateLocation LiterateStyle)
-isLiterateBirdOrOutside litLoc _inputBefore _len _inputAfter =
-  case litLoc of
-    LiterateInside Bird  -> True
-    LiterateInside Latex -> False
-    LiterateOutside      -> True
-    Vanilla              -> False
+isLiterateBirdOrOutside' litLoc _inputBefore _len _inputAfter =
+  isLiterateBirdOrOutside litLoc
 
-isLiterateLatexOrOutside
+isLiterateLatexOrOutside'
   :: AlexPred (LiterateLocation LiterateStyle)
-isLiterateLatexOrOutside litLoc _inputBefore _len _inputAfter =
-  case litLoc of
-    LiterateInside Bird  -> False
-    LiterateInside Latex -> True
-    LiterateOutside      -> True
-    Vanilla              -> False
+isLiterateLatexOrOutside' litLoc _inputBefore _len _inputAfter =
+  isLiterateLatexOrOutside litLoc
 
 tokenize
   :: WithCallStack
@@ -321,28 +313,28 @@ scanTokens filename = go
         _       -> do
           -- Use input after reading token to get proper prefix that includes
           -- token we currently read.
-          AlexState{asInput = AlexInput{aiLine}} <- get
-          let !tok = Pos (mkSrcPos filename aiLine) nextTok
+          AlexState{asInput} <- get
+          let !tok = Pos (mkSrcPos filename $! view aiLineL asInput) nextTok
           tell [tok]
           go
 
 continueScanning :: WithCallStack => AlexM ServerToken
 continueScanning = do
-  AlexState{asInput, asCode, asLiterateLoc} <- get
-  go asCode asLiterateLoc asInput
+  s@AlexState{asInput} <- get
+  go (view asCodeL s) (view asLiterateLocL s) asInput
   where
     go :: AlexCode -> LiterateLocation LiterateStyle -> AlexInput -> AlexM ServerToken
-    go code litLoc = go'
+    go code !litLoc = go'
       where
         go' input =
           case alexScanUser litLoc input (unAlexCode code) :: AlexReturn (AlexAction AlexM) of
             AlexEOF                              ->
               pure $ Tok EOF
-            AlexError AlexInput{aiLine, aiInput} -> do
-              code <- gets asCode
+            AlexError input@AlexInput{aiInput} -> do
+              code <- gets (view asCodeL)
               pure $ Error $ IgnoreEqOrdHash $ "Lexical error while in state" <+> pretty code
                 <+> "at line" <+>
-                pretty (unLine aiLine) <> ":" ## PP.squotes (PP.ppByteString (BS.take 40 aiInput))
+                pretty (unLine (view aiLineL input)) <> ":" ## PP.squotes (PP.ppByteString (utf8BS 40 aiInput))
             AlexSkip input' _                    ->
               go' input'
             AlexToken input' tokLen action       ->
@@ -350,15 +342,14 @@ continueScanning = do
 
 startIndentationCounting :: WithCallStack => Int -> AlexM ServerToken
 startIndentationCounting !n = do
-  modify (\s -> s { asIndentationSize = n, asCommentDepth = 1 })
+  modify (\s -> set asCommentDepthL 1 $ set asIndentationSizeL (fromIntegral n) s)
   alexSetNextCode indentCommentCode
   continueScanning
 
 endIndentationCounting :: Int -> AlexM ServerToken
 endIndentationCounting !n = do
-  addIndentationSize n
   alexSetNextCode startCode
-  Tok . Newline <$> gets asIndentationSize
+  Tok . Newline . (+ n) . fromIntegral <$> gets (view asIndentationSizeL)
 
 startIndentComment :: WithCallStack => AlexM ServerToken
 startIndentComment = do
@@ -403,20 +394,20 @@ endString nextCode =
 startQuasiquoter :: AlexInput -> Int -> AlexM ServerToken
 startQuasiquoter _ n
   | n == 2 = startUnconditionalQuasiQuoter
-startQuasiquoter AlexInput{aiInput, aiAbsPos} _ = do
-  ends   <- gets asPositionsOfQuasiQuoteEnds
-  qqEnds <- case ends of
+startQuasiquoter AlexInput{aiInput} _ = do
+  !haveEnd     <- gets (view asHaveQQEndL)
+  isEndPresent <- case haveEnd of
     Nothing    -> do
-      let ends' = calculateQuasiQuoteEnds aiAbsPos aiInput
-      modify $ \s -> s { asPositionsOfQuasiQuoteEnds = Just ends' }
-      pure ends'
+      let haveEnd' = calculateQuasiQuoteEnds aiInput
+      modify $ set asHaveQQEndL (Just haveEnd')
+      pure haveEnd'
     Just ends' -> pure ends'
-  case IS.lookupGT aiAbsPos qqEnds of
+  case isEndPresent of
     -- No chance of quasi-quote closing till the end of current file.
     -- Assume that file ought to be well-formed and treat currently
     -- matched input
-    Nothing -> pure $ Tok LBracket
-    Just _  -> startUnconditionalQuasiQuoter
+    False -> pure $ Tok LBracket
+    True  -> startUnconditionalQuasiQuoter
 
 startUnconditionalQuasiQuoter :: AlexM ServerToken
 startUnconditionalQuasiQuoter =
@@ -453,7 +444,7 @@ errorAtLine
   :: MonadState AlexState m
   => Doc Void -> m ServerToken
 errorAtLine msg = do
-  line <- gets (unLine . aiLine . asInput)
+  line <- gets (unLine . view aiLineL . asInput)
   pure $ Error $ IgnoreEqOrdHash $ "Error at line" <+> pretty line <> ":" <+> msg
 
 startLiterateBird :: AlexM ()
