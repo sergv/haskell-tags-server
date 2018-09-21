@@ -112,7 +112,9 @@ withAlexInput s f =
               { aiInput  = ptr' `plusPtr` offset
               , aiLine   = Line 0
               }
-        pure $ f input
+            !res = f input
+        touchForeignPtr ptr
+        pure res
   where
     -- Line numbering starts from 0 because we're adding additional newline
     -- at the beginning to simplify processing. Thus, line numbers in the
@@ -304,6 +306,7 @@ calculateQuasiQuoteEnds =
 
 type AlexM = WriterT [Pos ServerToken] (State AlexState)
 
+{-# INLINE runAlexM #-}
 runAlexM
   :: LiterateLocation Void
   -> AlexCode
