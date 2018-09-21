@@ -14,9 +14,9 @@ import Test.Tasty
 
 import Data.List (sort)
 import qualified Data.Text as T
+import Data.Void (Void)
 
 import Haskell.Language.Lexer (LiterateLocation(..))
-import Haskell.Language.Lexer.FastTags.TagValPatterns
 import Haskell.Language.Lexer.TokenisationUtils
 import TestUtils (makeTest)
 
@@ -537,8 +537,9 @@ testBreakBlocks = testGroup "Break blocks"
   where
     (==>) = makeTest (f Vanilla)
     (|=>) = makeTest (f LiterateOutside)
+    f :: LiterateLocation Void -> T.Text -> [[ServerToken]]
     f mode =
-        map (map (Tok . valOf) . unstrippedTokensOf)
+        map (map (embedServerToken . valOf) . unstrippedTokensOf)
       . breakBlocks
       . UnstrippedTokens
       . stripServerTokens'
@@ -573,7 +574,7 @@ testWhereBlock = testGroup "whereBlock"
   ]
   where
     (==>) = makeTest f
-    f = map (map (Tok . valOf) . unstrippedTokensOf)
+    f = map (map (embedServerToken . valOf) . unstrippedTokensOf)
       . whereBlock
       . UnstrippedTokens
       . stripServerTokens'

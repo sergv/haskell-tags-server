@@ -48,6 +48,7 @@ import Haskell.Language.Lexer.FastTags
   , UnstrippedTokens(..)
   , unstrippedTokensOf
   , stripServerTokens
+  , embedServerToken
   )
 
 filename :: FilePath
