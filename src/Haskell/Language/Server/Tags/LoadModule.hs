@@ -33,8 +33,8 @@ import qualified Data.ByteString as BS
 import Data.Foldable.Ext
 import Data.Functor.Product (Product(..))
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Map (Map)
-import qualified Data.Map as M
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as M
 import Data.Maybe hiding (Maybe(Just))
 import qualified Data.Monoid as Monoid
 import Data.Semigroup as Semigroup
@@ -161,6 +161,7 @@ loadModuleFromFile key@ImportKey{ikModuleName} modifTime filename = do
   modifTime'    <- maybe (MonadFS.getModificationTime filename) pure modifTime
   source        <- MonadFS.readFile filename
   unresolvedMod <- loadModuleFromSource (Just ikModuleName) modifTime' filename source
+
   modify $ \s -> s
     { tssLoadsInProgress = M.insertWith NEMap.union key (NEMap.singleton filename unresolvedMod) $ tssLoadsInProgress s }
   resolved      <- resolveModule checkLoadingModules loadModule unresolvedMod

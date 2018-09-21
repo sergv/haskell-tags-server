@@ -64,6 +64,7 @@ import Data.KeyMap (HasKey(..))
 newtype ModuleName = ModuleName { getModuleName :: Text }
   deriving (Eq, Ord, Show, Pretty, Hashable, NFData)
 
+{-# INLINE mkModuleName #-}
 mkModuleName :: Text -> ModuleName
 mkModuleName = ModuleName
 
@@ -74,6 +75,7 @@ mkModuleName = ModuleName
 newtype ImportQualifier = ImportQualifier { getImportQualifier :: ModuleName }
   deriving (Eq, Ord, Show, Pretty, Hashable, NFData)
 
+{-# INLINE mkImportQualifier #-}
 mkImportQualifier :: ModuleName -> ImportQualifier
 mkImportQualifier = ImportQualifier
 
@@ -81,6 +83,7 @@ mkImportQualifier = ImportQualifier
 newtype SymbolName = SymbolName { getSymbolName :: Text }
   deriving (Eq, Ord, Show, Pretty, Hashable, NFData)
 
+{-# INLINE mkSymbolName #-}
 mkSymbolName :: Text -> SymbolName
 mkSymbolName = SymbolName
 
@@ -91,6 +94,7 @@ newtype UnqualifiedSymbolName = UnqualifiedSymbolName { getUnqualifiedSymbolName
 instance Pretty UnqualifiedSymbolName where
   pretty = pretty . getUnqualifiedSymbolName
 
+{-# INLINE unqualSymNameText #-}
 unqualSymNameText :: UnqualifiedSymbolName -> Text
 unqualSymNameText = coerce
 
@@ -134,6 +138,7 @@ newtype ResolvedSymbol = ResolvedSymbol (Pos TagVal)
 
 instance HasKey ResolvedSymbol where
   type Key ResolvedSymbol = UnqualifiedSymbolName
+  {-# INLINE getKey #-}
   getKey = resolvedSymbolName
 
 instance Pretty ResolvedSymbol where
@@ -155,6 +160,7 @@ instance Pretty ResolvedSymbol where
       ppSrcPos (SrcPos file line _) =
         docFromString file <> ":" <> pretty (unLine line)
 
+{-# INLINE mkResolvedSymbol #-}
 mkResolvedSymbol :: Pos TagVal -> ResolvedSymbol
 mkResolvedSymbol = ResolvedSymbol
 
@@ -167,19 +173,24 @@ mkResolvedSymbolFromParts
 mkResolvedSymbolFromParts pos name typ parent =
   ResolvedSymbol $ Pos pos $ TagVal (unqualSymNameText name) typ (unqualSymNameText <$> parent)
 
+{-# INLINE resolvedSymbolName #-}
 resolvedSymbolName :: ResolvedSymbol -> UnqualifiedSymbolName
 resolvedSymbolName (ResolvedSymbol (Pos _ (TagVal name _ _))) =
   UnqualifiedSymbolName $ SymbolName name
 
+{-# INLINE resolvedSymbolType #-}
 resolvedSymbolType :: ResolvedSymbol -> Type
 resolvedSymbolType (ResolvedSymbol (Pos _ (TagVal _ typ _))) = typ
 
+{-# INLINE resolvedSymbolParent #-}
 resolvedSymbolParent :: ResolvedSymbol -> Maybe UnqualifiedSymbolName
 resolvedSymbolParent (ResolvedSymbol (Pos _ (TagVal _ _ parent))) =
   UnqualifiedSymbolName . SymbolName <$> parent
 
+{-# INLINE resolvedSymbolPosition #-}
 resolvedSymbolPosition :: ResolvedSymbol -> SrcPos
 resolvedSymbolPosition (ResolvedSymbol (Pos pos _)) = pos
 
+{-# INLINE resolvedSymbolFile #-}
 resolvedSymbolFile :: ResolvedSymbol -> FilePath
 resolvedSymbolFile (ResolvedSymbol (Pos (SrcPos file _ _) _)) = file

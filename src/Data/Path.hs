@@ -112,10 +112,12 @@ instance MonadBase IO m => MkFullPath PathFragment m where
   {-# INLINE mkFullPath #-}
   mkFullPath = mkFullPath . unPathFragment
 
+{-# INLINE doesFileExist #-}
 doesFileExist :: MonadBase IO m => FullPath -> m Bool
 doesFileExist =
   liftBase . Directory.doesFileExist . T.unpack . unFullPath
 
+{-# INLINE doesDirectoryExist #-}
 doesDirectoryExist :: MonadBase IO m => FullPath -> m Bool
 doesDirectoryExist =
   liftBase . Directory.doesDirectoryExist . T.unpack . unFullPath
@@ -124,10 +126,12 @@ listDirectory :: MonadBase IO m => FullPath -> m [BasePath]
 listDirectory (FullPath path) = liftBase $
   map mkBasePath <$> Directory.listDirectory (T.unpack path)
 
+{-# INLINE getModificationTime #-}
 getModificationTime :: MonadBase IO m => FullPath -> m UTCTime
 getModificationTime =
   liftBase . Directory.getModificationTime . T.unpack . unFullPath
 
+{-# INLINE splitDirectories #-}
 splitDirectories :: FullPath -> [BaseName]
 splitDirectories =
   map (BaseName . PathFragment . T.pack) . FilePath.splitDirectories . T.unpack . unFullPath
@@ -157,11 +161,13 @@ deriving instance Ord PathFragment
 newtype PathJoin = PathJoin { unPathJoin :: Text }
 
 instance Semigroup PathJoin where
+  {-# INLINE (<>) #-}
   (<>) = coerce joinPath
 
 mkPathFragment :: NonEmpty Text -> PathFragment
 mkPathFragment = PathFragment . unPathJoin . foldMap1 PathJoin
 
+{-# INLINE mkSinglePathFragment #-}
 mkSinglePathFragment :: Text -> PathFragment
 mkSinglePathFragment = PathFragment
 
@@ -216,6 +222,7 @@ deriving instance Eq  Extension
 deriving instance Ord Extension
 #endif
 
+{-# INLINE mkExtension #-}
 mkExtension :: Text -> Extension
 mkExtension = Extension
 
@@ -296,8 +303,8 @@ deriving instance Ord BaseName
 #endif
 
 data BasePath = BasePath
-  { bpFileName  :: BaseName
-  , bpExtension :: Extension
+  { bpFileName  :: !BaseName
+  , bpExtension :: !Extension
   }
 
 mkBasePath :: FilePath.FilePath -> BasePath
@@ -313,24 +320,30 @@ instance Show BasePath where
   show = show . bpFileName
 
 instance Eq BasePath where
+  {-# INLINE (==) #-}
   (==) = (==) `on` bpFileName
 
 instance Ord BasePath where
+  {-# INLINE compare #-}
   compare = compare `on` bpFileName
 
 -- Internals
 
+{-# INLINE getFileName #-}
 getFileName :: Text -> Text
 getFileName = T.pack . FilePath.takeFileName . T.unpack
 
+{-# INLINE getExtension #-}
 getExtension :: Text -> Text
 getExtension =
   T.cons FilePath.extSeparator . T.takeWhileEnd (/= FilePath.extSeparator)
 -- T.pack . FilePath.takeExtension . T.unpack
 
+{-# INLINE joinPath #-}
 joinPath :: Text -> Text -> Text
 joinPath x y = x <> T.singleton FilePath.pathSeparator <> y
 
+{-# INLINE addExt #-}
 addExt :: Text -> Text -> Text
 addExt path ext = path <> extSeparator Semigroup.<> ext
 
@@ -342,5 +355,6 @@ dropExts =
 --   []    -> path
 --   p : _ -> p
 
+{-# INLINE extSeparator #-}
 extSeparator :: Text
 extSeparator = T.singleton FilePath.extSeparator

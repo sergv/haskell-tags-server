@@ -27,9 +27,9 @@ import Data.List.NonEmpty (NonEmpty)
 import Data.Path
 
 data FindEntry = FindEntry
-  { findEntryRoot     :: FullPath
-  , findEntryBasePath :: BasePath
-  , findEntryFullPath :: FullPath
+  { findEntryRoot     :: !FullPath
+  , findEntryBasePath :: !BasePath
+  , findEntryFullPath :: !FullPath
   } deriving (Eq, Ord, Show)
 
 mkFindEntry :: FullPath -> BasePath -> FindEntry

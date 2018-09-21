@@ -7,6 +7,7 @@
 -- Created     :  Thursday, 22 September 2016
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
@@ -27,8 +28,8 @@ import Control.Monad.Trans.Maybe
 import Data.Char
 import Data.Foldable.Ext (toList, foldFor)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Map (Map)
-import qualified Data.Map as M
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as M
 import Data.Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
@@ -497,7 +498,7 @@ analyzeChildren listType toks =
       -> Map UnqualifiedSymbolName PosAndType
       -> [Pos ServerToken]
       -> (ChildrenPresence, m (Map UnqualifiedSymbolName PosAndType, WildcardPresence, [Pos ServerToken]))
-    extractChildren wildcardPresence names = \case
+    extractChildren wildcardPresence !names = \case
       []                                                     ->
         (childrenPresence, pure (names, wildcardPresence, []))
       PRParen : rest                                        ->

@@ -86,6 +86,7 @@ macroName = \case
 
 instance HasKey PreprocessorMacro where
   type Key PreprocessorMacro = MacroName
+  {-# INLINE getKey #-}
   getKey = macroName
 
 instance Pretty PreprocessorMacro where

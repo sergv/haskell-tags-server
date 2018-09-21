@@ -26,24 +26,30 @@ module Data.MonoidalMap
 import Prelude hiding (lookup)
 
 import Data.Coerce
-import Data.Map (Map)
-import qualified Data.Map as M
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as M
 
 newtype MonoidalMap k v = MonoidalMap { unMonoidalMap :: Map k v }
   deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 instance (Ord k, Semigroup v) => Semigroup (MonoidalMap k v) where
+  {-# INLINE (<>) #-}
   (<>) (MonoidalMap x) (MonoidalMap y) = MonoidalMap $ M.unionWith (<>) x y
 
 instance (Ord k, Semigroup v) => Monoid (MonoidalMap k v) where
+  {-# INLINE mempty  #-}
+  {-# INLINE mappend #-}
   mempty = MonoidalMap mempty
   mappend = (<>)
 
-singleton :: k -> v -> MonoidalMap k v
-singleton k v = MonoidalMap $ M.singleton k v
+{-# INLINE singleton #-}
+singleton :: forall k v. k -> v -> MonoidalMap k v
+singleton = coerce (M.singleton :: k -> v -> Map k v)
 
+{-# INLINE lookup #-}
 lookup :: forall k v. Ord k => k -> MonoidalMap k v -> Maybe v
 lookup = coerce (M.lookup :: k -> Map k v -> Maybe v)
 
+{-# INLINE findWithDefault #-}
 findWithDefault :: forall k v. Ord k => v -> k -> MonoidalMap k v -> v
 findWithDefault = coerce (M.findWithDefault :: v -> k -> Map k v -> v)

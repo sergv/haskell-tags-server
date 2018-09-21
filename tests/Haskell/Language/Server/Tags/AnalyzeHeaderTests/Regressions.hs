@@ -20,7 +20,7 @@ import Control.Arrow ((&&&))
 
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
-import qualified Data.Map as M
+import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import qualified Data.Text as T
 

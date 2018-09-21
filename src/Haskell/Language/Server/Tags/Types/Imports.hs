@@ -38,7 +38,7 @@ module Haskell.Language.Server.Tags.Types.Imports
 import Control.DeepSeq
 
 import Data.Hashable
-import Data.Map (Map)
+import Data.Map.Strict (Map)
 import Data.Set (Set)
 import Data.Text.Prettyprint.Doc.Ext
 import GHC.Generics (Generic)
@@ -80,10 +80,10 @@ instance Pretty ImportTarget where
 
 -- | Information about import statement
 data ImportSpec a = ImportSpec
-  { ispecImportKey     :: ImportKey
-  , ispecQualification :: ImportQualification
-  , ispecImportList    :: ImportListSpec ImportList
-  , ispecImportedNames :: a
+  { ispecImportKey     :: !ImportKey
+  , ispecQualification :: !ImportQualification
+  , ispecImportList    :: !(ImportListSpec ImportList)
+  , ispecImportedNames :: !a
   } deriving (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
 
 instance NFData a => NFData (ImportSpec a)
@@ -120,7 +120,7 @@ data ImportQualification =
     -- The ModuleName field would store "Y" in this case.
     --
     -- import qualified X - field would store "X"
-    Qualified ImportQualifier
+    Qualified !ImportQualifier
     -- | Vanilla import, e.g.
     --
     -- import X
@@ -128,7 +128,7 @@ data ImportQualification =
     -- | Vanilla import with explicit alias, e.g.
     --
     -- import X as Y
-  | BothQualifiedAndUnqualified ImportQualifier
+  | BothQualifiedAndUnqualified !ImportQualifier
   deriving (Eq, Ord, Show, Generic)
 
 instance Hashable ImportQualification
@@ -169,7 +169,7 @@ data ImportListSpec a =
     -- | When we canot precisely analyse an import list it's
     -- conservatively defaulted to "import all".
   | AssumedWildcardImportList
-  | SpecificImports a
+  | SpecificImports !a
   deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
 
 instance NFData a => NFData (ImportListSpec a)
@@ -179,8 +179,8 @@ instance Pretty a => Pretty (ImportListSpec a) where
 
 -- | User-provided import/hiding list.
 data ImportList = ImportList
-  { ilEntries    :: KeyMap Set (EntryWithChildren () UnqualifiedSymbolName)
-  , ilImportType :: ImportType
+  { ilEntries    :: !(KeyMap Set (EntryWithChildren () UnqualifiedSymbolName))
+  , ilImportType :: !ImportType
   } deriving (Eq, Ord, Show, Generic)
 
 instance NFData ImportList
@@ -190,8 +190,8 @@ instance Pretty ImportList where
     ppFoldableHeader ("Import list[" <> pretty ilImportType <> "]") ilEntries
 
 data EntryWithChildren childAnn name = EntryWithChildren
-  { entryName               :: name
-  , entryChildrenVisibility :: Maybe (ChildrenVisibility childAnn)
+  { entryName               :: !name
+  , entryChildrenVisibility :: !(Maybe (ChildrenVisibility childAnn))
   } deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
 
 instance (NFData a, NFData b) => NFData (EntryWithChildren a b)
@@ -204,10 +204,12 @@ mkEntryWithoutChildren name = EntryWithChildren name Nothing
 
 instance HasKey (EntryWithChildren ann UnqualifiedSymbolName) where
   type Key (EntryWithChildren ann UnqualifiedSymbolName) = UnqualifiedSymbolName
+  {-# INLINE getKey #-}
   getKey = entryName
 
 instance HasKey (EntryWithChildren ann SymbolName) where
   type Key (EntryWithChildren ann SymbolName) = SymbolName
+  {-# INLINE getKey #-}
   getKey = entryName
 
 data ChildrenVisibility ann =
@@ -215,11 +217,11 @@ data ChildrenVisibility ann =
     VisibleAllChildren
     -- | Import/export with explicit list of children, e.g. Foo(Bar, Baz), Quux(foo, bar).
     -- Set is always non-empty.
-  | VisibleSpecificChildren (Map UnqualifiedSymbolName ann)
+  | VisibleSpecificChildren !(Map UnqualifiedSymbolName ann)
     -- | Wildcard export with some things added in, so they'll be visible on
     -- wildcard import, e.g.
     -- ErrorCall(..,ErrorCall)
-  | VisibleAllChildrenPlusSome (Map UnqualifiedSymbolName ann)
+  | VisibleAllChildrenPlusSome !(Map UnqualifiedSymbolName ann)
   deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
 
 instance NFData a => NFData (ChildrenVisibility a)

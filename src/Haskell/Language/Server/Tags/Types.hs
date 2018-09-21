@@ -26,7 +26,7 @@ module Haskell.Language.Server.Tags.Types
   ) where
 
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Map (Map)
+import Data.Map.Strict (Map)
 import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Text.Prettyprint.Doc.Ext
@@ -83,13 +83,13 @@ instance Pretty NameResolutionStrictness where
   pretty = ppGeneric
 
 data TagsServerConf = TagsServerConf
-  { tsconfSearchDirs        :: SearchCfg
-  , tsconfVanillaExtensions :: Set Extension
-  , tsconfHsBootExtensions  :: Set Extension
+  { tsconfSearchDirs        :: !SearchCfg
+  , tsconfVanillaExtensions :: !(Set Extension)
+  , tsconfHsBootExtensions  :: !(Set Extension)
     -- | Whether to read and compute tags lazily or read them all at once when
     -- server starts.
-  , tsconfEagerTagging      :: Bool
-  , tsconfNameResolution    :: NameResolutionStrictness
+  , tsconfEagerTagging      :: !Bool
+  , tsconfNameResolution    :: !NameResolutionStrictness
   } deriving (Eq, Ord, Show)
 
 defaultTagsServerConf :: TagsServerConf
