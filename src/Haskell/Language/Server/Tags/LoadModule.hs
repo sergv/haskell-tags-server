@@ -450,8 +450,8 @@ resolveReexports resolvedImports modNames =
         case ispecQualification of
           -- See https://ro-che.info/articles/2012-12-25-haskell-module-system-p1 for details.
           -- Excerpt from Haskell Report:
-          -- “The form module M names the set of all entities that are in scope
-          --  with both an unqualified name e and a qualified name M.e”.
+          -- ‘The form module M names the set of all entities that are in scope
+          --  with both an unqualified name e and a qualified name M.e’.
           Qualified _                   -> mempty
           Unqualified                   -> ispecImportedNames
           BothQualifiedAndUnqualified _ -> ispecImportedNames
