@@ -96,6 +96,7 @@ library
 
     GHC.Stack.Ext
 
+    Haskell.Language.LexerSimple.LensBlaze
     Haskell.Language.LexerSimple.Lexer
     Haskell.Language.LexerSimple.Types
 
