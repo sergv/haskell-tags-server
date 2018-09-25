@@ -31,6 +31,10 @@ flag dev
 library
   if flag(assertions)
     cpp-options: -DDEVELOPMENT
+  if os(Windows)
+    build-depends: unix-compat
+  else
+    build-depends: unix >= 2.6, unix-compat
   build-depends:
     array,
     attoparsec >= 0.13.1.0,

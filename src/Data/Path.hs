@@ -18,8 +18,10 @@
 {-# LANGUAGE KindSignatures             #-}
 {-# LANGUAGE MonoLocalBinds             #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE MultiWayIf                 #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TypeSynonymInstances       #-}
 {-# LANGUAGE UndecidableInstances       #-}
@@ -63,6 +65,7 @@ module Data.Path
   ) where
 
 import Control.DeepSeq
+import Control.Exception
 import Control.Monad.Base
 import Control.Monad.Except.Ext
 import Control.Monad.Ext
@@ -75,10 +78,16 @@ import Data.Semigroup.Foldable.Class (foldMap1)
 import Data.String
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext
 import Data.Time.Clock (UTCTime)
 import qualified System.Directory as Directory
 import qualified System.FilePath as FilePath
+
+#ifdef WINDOWS
+#else
+import System.Posix.Files as Posix
+#endif
 
 -- | A type-level label to distinguish directories and files.
 data FileType = Dir | File
@@ -107,6 +116,7 @@ class MkSomeFullPath a m where
 
 instance (MonadBase IO m, MonadError ErrorMessage m) => MkSomeFullPath FilePath.FilePath m where
   {-# INLINE mkSomeFullPath #-}
+#ifdef WINDOWS
   mkSomeFullPath
     :: FilePath.FilePath
     -> m (Either (FullPath 'File) (FullPath 'Dir))
@@ -125,6 +135,28 @@ instance (MonadBase IO m, MonadError ErrorMessage m) => MkSomeFullPath FilePath.
       then pure $! Right $! FullPath $ T.pack path'
       else throwErrorWithCallStack $
         "Path does not refer to either a file or a directory:" <+> pretty path'
+#else
+  mkSomeFullPath
+    :: FilePath.FilePath
+    -> m (Either (FullPath 'File) (FullPath 'Dir))
+  mkSomeFullPath path = do
+    status <- liftBase $ Posix.getSymbolicLinkStatus path
+    path'  <- liftBase $ T.pack <$> Directory.makeAbsolute path
+    if | Posix.isRegularFile  status -> pure $! Left  $! FullPath path'
+       | Posix.isDirectory    status -> pure $! Right $! FullPath path'
+       | Posix.isSymbolicLink status -> do
+         status' <- liftBase $ try $ Posix.getFileStatus path
+         case status' of
+           Left (e :: IOException) -> throwErrorWithCallStack $
+             "Error while getting status of path" <+> PP.squotes (pretty path) <+> ":" ## ppShow e
+           Right status''
+             | isRegularFile  status'' -> pure $! Left  $! FullPath path'
+             | isDirectory    status'' -> pure $! Right $! FullPath path'
+             | otherwise               -> throwErrorWithCallStack $
+               "Symbolic link" <+> PP.squotes (pretty path) <+> "refers to neither a file nor a directory."
+       | otherwise            -> throwErrorWithCallStack $
+          "Path" <+> PP.squotes (pretty path) <+> "refers to neither a file, directory or a symbolic link."
+#endif
 
 instance MkSomeFullPath FilePath.FilePath m => MkSomeFullPath Text m where
   {-# INLINE mkSomeFullPath #-}
