@@ -29,6 +29,7 @@ import System.IO
 import Control.Monad.Filesystem.FileSearch (SearchCfg(..))
 import Control.Monad.Logging
 import Control.Monad.Logging.Simple
+import Data.ErrorMessage
 import Data.Path (mkFullPath)
 import Haskell.Language.Server.BERT
 import Haskell.Language.Server.Tags
@@ -88,25 +89,26 @@ main = do
   for_ cfgSourceDirectories ensureDirExists
   for_ cfgDirTrees ensureDirExists
 
-  cfgSourceDirectories' <- S.fromList <$> traverse mkFullPath cfgSourceDirectories
-  cfgDirTrees'          <- S.fromList <$> traverse mkFullPath cfgDirTrees
-  let conf  = defaultTagsServerConf
-                { tsconfSearchDirs     = (tsconfSearchDirs defaultTagsServerConf)
-                    { shallowPaths   = cfgSourceDirectories'
-                    , recursivePaths = cfgDirTrees'
-                    }
-                , tsconfEagerTagging   = cfgEagerTagging
-                , tsconfNameResolution = cfgNameResolution
-                }
-      state = TagsServerState
-                { tssLoadedModules   = mempty
-                , tssLoadsInProgress = mempty
-                }
   runSimpleLoggerT (Just Stderr) cfgDebugVerbosity $ do
-    logDebug $ ppDictHeader "Staring server with search cfg"
-      [ "Search conf" :-> pretty (tsconfSearchDirs conf)
-      ]
-    result <- runExceptT $ startTagsServer conf state
+    result <- runExceptT $ do
+      cfgSourceDirectories' <- S.fromList <$> traverse mkFullPath cfgSourceDirectories
+      cfgDirTrees'          <- S.fromList <$> traverse mkFullPath cfgDirTrees
+      let conf  = defaultTagsServerConf
+                    { tsconfSearchDirs     = (tsconfSearchDirs defaultTagsServerConf)
+                        { shallowPaths   = cfgSourceDirectories'
+                        , recursivePaths = cfgDirTrees'
+                        }
+                    , tsconfEagerTagging   = cfgEagerTagging
+                    , tsconfNameResolution = cfgNameResolution
+                    }
+          state = TagsServerState
+                    { tssLoadedModules   = mempty
+                    , tssLoadsInProgress = mempty
+                    }
+      logDebug $ ppDictHeader "Staring server with search cfg"
+        [ "Search conf" :-> pretty (tsconfSearchDirs conf)
+        ]
+      startTagsServer conf state :: ExceptT ErrorMessage (SimpleLoggerT IO) TagsServer
     case result of
       Left err         -> liftIO $ putDocLn $ pretty err
       Right tagsServer -> do

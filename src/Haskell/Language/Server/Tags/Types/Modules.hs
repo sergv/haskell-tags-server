@@ -6,6 +6,7 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE DeriveFoldable    #-}
 {-# LANGUAGE DeriveFunctor     #-}
 {-# LANGUAGE DeriveGeneric     #-}
@@ -54,7 +55,7 @@ import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
 import Data.ErrorMessage
 import Data.KeyMap (KeyMap, HasKey(..))
-import Data.Path (FullPath)
+import Data.Path (FullPath, FileType(..))
 import Data.SubkeyMap (SubkeyMap)
 import qualified Data.SubkeyMap as SubkeyMap
 import Data.SymbolMap (SymbolMap)
@@ -73,7 +74,7 @@ data Module a = Module
     -- relationships.
   , modAllSymbols       :: !SymbolMap
     -- | File the module was loaded from.
-  , modFile             :: !FullPath
+  , modFile             :: !(FullPath 'File)
     -- | Time as reported by getModificationTime.
   , modLastModified     :: !UTCTime
     -- | All names that this module brings into scope

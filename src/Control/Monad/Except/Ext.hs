@@ -12,11 +12,11 @@
 module Control.Monad.Except.Ext
   ( throwErrorWithCallStack
   , WithCallStack
-  , module ExceptExport
+  , module Control.Monad.Except
   ) where
 
-import Control.Monad.Except
-import qualified Control.Monad.Except as ExceptExport hiding (throwError)
+import Control.Monad.Except hiding (throwError)
+import qualified Control.Monad.Except as CME
 import Data.Text.Prettyprint.Doc.Ext
 import GHC.Stack.Ext (WithCallStack, callStack)
 import Data.Void (Void)
@@ -26,7 +26,7 @@ import Data.ErrorMessage
 throwErrorWithCallStack
   :: (WithCallStack, MonadError ErrorMessage m)
   => Doc Void -> m a
-throwErrorWithCallStack msg = throwError ErrorMessage
+throwErrorWithCallStack msg = CME.throwError ErrorMessage
   { errorMessageBody      = msg
   , errorMessageBacktrace = callStack
   }

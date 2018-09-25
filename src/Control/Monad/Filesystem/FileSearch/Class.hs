@@ -7,13 +7,10 @@
 -- Created     :  Thursday, 10 November 2016
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DataKinds #-}
+
 module Control.Monad.Filesystem.FileSearch.Class
   ( MonadFileSearch(..)
-  , FindEntry
-  , mkFindEntry
-  , findEntryRoot
-  , findEntryBasePath
-  , findEntryFullPath
   ) where
 
 import Control.Monad.EitherCPS
@@ -26,22 +23,9 @@ import Data.List.NonEmpty (NonEmpty)
 
 import Data.Path
 
-data FindEntry = FindEntry
-  { findEntryRoot     :: !FullPath
-  , findEntryBasePath :: !BasePath
-  , findEntryFullPath :: !FullPath
-  } deriving (Eq, Ord, Show)
-
-mkFindEntry :: FullPath -> BasePath -> FindEntry
-mkFindEntry root base = FindEntry
-  { findEntryRoot     = root
-  , findEntryBasePath = base
-  , findEntryFullPath = root </> base
-  }
-
 class Monad m => MonadFileSearch m where
-  findByPathSuffixSansExtension :: NonEmpty PathFragment -> m [FullPath]
-  findRec                       :: (FindEntry -> Maybe a) -> m [a]
+  findByPathSuffixSansExtension :: NonEmpty PathFragment  -> m [FullPath 'File]
+  findRec                       :: (FullPath 'File -> Maybe a) -> m [a]
 
 instance MonadFileSearch m => MonadFileSearch (ExceptT e m) where
   {-# INLINE findByPathSuffixSansExtension #-}

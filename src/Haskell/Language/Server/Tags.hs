@@ -8,6 +8,7 @@
 -- The actual server that handles tags
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
@@ -26,14 +27,12 @@ module Haskell.Language.Server.Tags
   ) where
 
 import Control.Concurrent
-import Control.Monad
 import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.Except.Ext
 import Control.Monad.Trans.Control
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup
-import Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext (Pretty(..), (<+>), (##))
 
 import Data.Promise (Promise)
@@ -42,7 +41,7 @@ import qualified Data.Promise as Promise
 import Control.Monad.Filesystem (MonadFS(..))
 import Control.Monad.Logging
 import Data.ErrorMessage
-import Data.Path (FullPath)
+import Data.Path (FullPath, FileType(..))
 import qualified Data.SubkeyMap as SubkeyMap
 import Haskell.Language.Server.Tags.LoadFiles
 import Haskell.Language.Server.Tags.Search
@@ -125,8 +124,10 @@ startTagsServer conf state = do
 
 ensureFileExists
   :: (WithCallStack, MonadFS m, MonadError ErrorMessage m)
-  => FullPath -> m ()
-ensureFileExists path = do
-  exists <- doesFileExist path
-  unless exists $
-    throwErrorWithCallStack $ "Error: file" <+> PP.dquotes (pretty path) <+> "does not exist"
+  => FullPath 'File -> m ()
+ensureFileExists _path = -- do
+  -- NB FullPath is guaranteed to exist by construction.
+  pure ()
+  -- exists <- doesFileExist path
+  -- unless exists $
+  --   throwErrorWithCallStack $ "Error: file" <+> PP.dquotes (pretty path) <+> "does not exist"

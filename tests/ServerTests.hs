@@ -6,10 +6,12 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE DeriveFoldable      #-}
 {-# LANGUAGE DeriveFunctor       #-}
 {-# LANGUAGE DeriveTraversable   #-}
 {-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE MonoLocalBinds      #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -41,6 +43,7 @@ import Network.BERT.Client
 import Network.BERT.Transport
 
 import Control.Monad.Filesystem.FileSearch (SearchCfg(..))
+import Data.ErrorMessage
 import Data.Path
 import Haskell.Language.Server.BERT
 import Haskell.Language.Server.Tags
@@ -54,11 +57,11 @@ testDataDir :: PathFragment
 testDataDir = "test-data"
 
 mkTestsConfig
-  :: MonadBase IO m
+  :: (MonadBase IO m, MonadError ErrorMessage m)
   => NameResolutionStrictness
   -> WorkingDirectory
   -> m TagsServerConf
-mkTestsConfig tsconfNameResolution srcDir = liftBase $ do
+mkTestsConfig tsconfNameResolution srcDir = do
   searchDirsCfg <- case srcDir of
     ShallowDir   dir -> do
       dir' <- mkFullPath $ testDataDir </> dir
@@ -1414,40 +1417,45 @@ mkFindSymbolTest
   -> TestTree
 mkFindSymbolTest pool ServerTest{stTestName, stNameResolutionStrictness, stWorkingDirectory, stFile, stSymbol, stExpectedResponse} =
  testCase stTestName $ do
-    conf <- mkTestsConfig stNameResolutionStrictness stWorkingDirectory
-    withConnection pool conf $ \conn -> do
-      let dir  = case stWorkingDirectory of
-            ShallowDir   x -> testDataDir </> x
-            RecursiveDir x -> testDataDir </> x
-          path = pathFragmentToUTF8 $ dir </> stFile
-      r    <- call conn "haskell-tags-server" "find" [ BinaryTerm path
-                                                     , BinaryTerm stSymbol
-                                                     ]
-      logs <- case conn of
-                ExistingServer _   -> pure mempty
-                LocalServer serv _ -> do
-                  logs <- getLogs serv
-                  pure $ "Logs:" ## PP.indent 2 (PP.vcat logs)
-      case r of
-        Left err  ->
-          assertFailure $ displayDocString $ ppShow err ## logs
-        Right res -> do
-          dir'   <- mkFullPath dir
-          actual <- relativizePathsInResponse dir' res
-          let msg = docFromString $ "expected: " ++ show expected ++ "\n but got: " ++ show actual
-          if responseType actual == responseType expected
-          then
-            unless (actual == expected) $
-              assertFailure $ displayDocString $ msg ## logs
-          else
-            assertFailure $ displayDocString $
-              case extractResponseError actual of
-                Nothing   ->
-                  msg ## logs
-                Just msg' ->
-                  "Error from server:" ## PP.nest 2 (docFromByteString msg') ## logs
-          where
-            expected = responseToTerm stExpectedResponse
+    result <- runExceptT $ do
+      conf <- mkTestsConfig stNameResolutionStrictness stWorkingDirectory
+      withConnection pool conf $ \conn -> do
+        let dir  = case stWorkingDirectory of
+              ShallowDir   x -> testDataDir </> x
+              RecursiveDir x -> testDataDir </> x
+            path = pathFragmentToUTF8 $ dir </> stFile
+        r    <- liftBase $
+          call conn "haskell-tags-server" "find"
+            [BinaryTerm path, BinaryTerm stSymbol]
+        logs <- case conn of
+                  ExistingServer _   -> pure mempty
+                  LocalServer serv _ -> do
+                    logs <- liftBase $ getLogs serv
+                    pure $ "Logs:" ## PP.indent 2 (PP.vcat logs)
+        case r of
+          Left err  ->
+            liftBase $ assertFailure $ displayDocString $ ppShow err ## logs
+          Right res -> do
+            dir'   <- mkFullPath dir
+            actual <- relativizePathsInResponse dir' res
+            let msg = docFromString $ "expected: " ++ show expected ++ "\n but got: " ++ show actual
+            if responseType actual == responseType expected
+            then
+              unless (actual == expected) $
+                liftBase $ assertFailure $ displayDocString $ msg ## logs
+            else
+              liftBase $ assertFailure $ displayDocString $
+                case extractResponseError actual of
+                  Nothing   ->
+                    msg ## logs
+                  Just msg' ->
+                    "Error from server:" ## PP.nest 2 (docFromByteString msg') ## logs
+            where
+              expected = responseToTerm stExpectedResponse
+    case result of
+      Right () -> pure ()
+      Left err -> liftBase $ assertFailure $ displayDocString $
+        "Failure:" ## pretty err
 
 responseType :: Term -> Maybe String
 responseType (TupleTerm (AtomTerm x : _)) = Just x
@@ -1458,8 +1466,8 @@ extractResponseError (TupleTerm [AtomTerm "error", BinaryTerm msg]) = Just msg
 extractResponseError _                                              = Nothing
 
 relativizePathsInResponse
-  :: forall m. MonadBase IO m
-  => FullPath -> Term -> m Term
+  :: forall m. (MonadBase IO m, MonadError ErrorMessage m)
+  => FullPath 'Dir -> Term -> m Term
 relativizePathsInResponse rootDir term =
   case term of
     TupleTerm [a@(AtomTerm "loc_known"), loc] -> do
@@ -1476,16 +1484,23 @@ relativizePathsInResponse rootDir term =
       pure $ TupleTerm [BinaryTerm path', line, typ]
     fixLoc x = error $ "invalid symbol location term: " ++ show x
     relativise :: UTF8.ByteString -> m UTF8.ByteString
-    relativise = fmap (pathFragmentToUTF8 . makeRelative rootDir) . fullPathFromUTF8
+    relativise = fmap (either mkRel mkRel) . fullPathFromUTF8
+    mkRel
+      :: MakeRelative (FullPath 'Dir) (FullPath a) PathFragment
+      => FullPath a -> UTF8.ByteString
+    mkRel = pathFragmentToUTF8 . makeRelative rootDir
 
-_baseNameToUTF8 :: BaseName -> UTF8.ByteString
-_baseNameToUTF8 = pathFragmentToUTF8 . unBaseName
+-- _baseNameToUTF8 :: BaseName -> UTF8.ByteString
+-- _baseNameToUTF8 = pathFragmentToUTF8 . unBaseName
 
-_fullPathToUTF8 :: FullPath -> UTF8.ByteString
-_fullPathToUTF8 = C8.fromStrict . TE.encodeUtf8 . unFullPath
+-- _fullPathToUTF8 :: FullPath -> UTF8.ByteString
+-- _fullPathToUTF8 = C8.fromStrict . TE.encodeUtf8 . unFullPath
 
-fullPathFromUTF8 :: MonadBase IO m => UTF8.ByteString -> m FullPath
-fullPathFromUTF8 = mkFullPath . TE.decodeUtf8 . C8.toStrict
+fullPathFromUTF8
+  :: (MonadBase IO m, MonadError ErrorMessage m)
+  => UTF8.ByteString
+  -> m (Either (FullPath 'File) (FullPath 'Dir))
+fullPathFromUTF8 = mkSomeFullPath . TE.decodeUtf8 . C8.toStrict
 
 pathFragmentToUTF8 :: PathFragment -> UTF8.ByteString
 pathFragmentToUTF8 = C8.fromStrict . TE.encodeUtf8 . unPathFragment

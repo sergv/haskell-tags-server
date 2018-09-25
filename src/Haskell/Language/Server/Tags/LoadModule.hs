@@ -6,6 +6,7 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE DoAndIfThenElse     #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE LambdaCase          #-}
@@ -154,7 +155,7 @@ loadModuleFromFile
   :: (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => ImportKey
   -> Maybe UTCTime
-  -> FullPath
+  -> FullPath 'File
   -> m ResolvedModule
 loadModuleFromFile key@ImportKey{ikModuleName} modifTime filename = do
   logInfo $ "[loadModuleFromFile] loading file" <+> pretty filename
@@ -169,7 +170,7 @@ loadModuleFromFile key@ImportKey{ikModuleName} modifTime filename = do
     { tssLoadsInProgress = M.update f key $ tssLoadsInProgress s }
   pure resolved
   where
-    f :: NonEmptyMap FullPath v -> Maybe (NonEmptyMap FullPath v)
+    f :: NonEmptyMap (FullPath 'File) v -> Maybe (NonEmptyMap (FullPath 'File) v)
     f = NEMap.delete filename
 
 checkLoadingModules
@@ -191,7 +192,7 @@ loadModuleFromSource
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => Maybe ModuleName
   -> UTCTime
-  -> FullPath
+  -> FullPath 'File
   -> BS.ByteString
   -> m UnresolvedModule
 loadModuleFromSource suggestedModuleName modifTime filename source =
@@ -204,7 +205,7 @@ makeModule
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => Maybe ModuleName -- ^ Suggested module name, will be used if source does not define it's own name.
   -> UTCTime
-  -> FullPath
+  -> FullPath 'File
   -> [Pos ServerToken]
   -> m UnresolvedModule
 makeModule suggestedModuleName modifTime filename tokens = do
@@ -270,7 +271,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
   where
     unresHeader :: UnresolvedModuleHeader
     unresHeader = modHeader mod
-    unresFile :: FullPath
+    unresFile :: FullPath 'File
     unresFile = modFile mod
 
     resolveImports
@@ -468,7 +469,7 @@ quasiResolveImportSpecWithLoadsInProgress
   => (ImportKey -> m (Maybe (NonEmpty UnresolvedModule, [ResolvedModule])))
   -> (ImportKey -> m (Maybe (NonEmpty ResolvedModule)))
   -> ModuleName                -- ^ Module we're currently analysing.
-  -> FullPath
+  -> FullPath 'File
   -> ImportKey                 -- ^ Import of the main module that caused the cycle.
   -> f UnresolvedModule        -- ^ Modules in progress that are being loaded and are going to be anayzed here
   -> t UnresolvedImportSpec    -- ^ Import specs to resolve

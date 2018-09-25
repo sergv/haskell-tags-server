@@ -6,6 +6,7 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE NamedFieldPuns    #-}
@@ -36,7 +37,7 @@ import Control.Monad.Filesystem.FileSearch (SearchCfg(..), versionControlDirs)
 import Data.CompiledRegex
 import Data.ErrorMessage
 import Data.Map.NonEmpty (NonEmptyMap)
-import Data.Path (FullPath, Extension)
+import Data.Path (FileType(..), FullPath, Extension)
 import Data.Promise (Promise)
 import Data.SubkeyMap (SubkeyMap)
 import Data.Symbols
@@ -46,10 +47,10 @@ import Haskell.Language.Server.Tags.Types.Modules
 -- | Types of user requests that can be handled.
 data Request =
     -- | Request to find vanilla name in module identified by file path.
-    FindSymbol FullPath SymbolName
+    FindSymbol (FullPath 'File) SymbolName
     -- | Request to find all names that match a gived regexp, starting with module
     -- identified by file path.
-  | FindSymbolByRegexp FullPath CompiledRegex
+  | FindSymbolByRegexp (FullPath 'File) CompiledRegex
   deriving (Eq, Ord, Show, Generic)
 
 instance Pretty Request where
@@ -107,7 +108,7 @@ data TagsServerState = TagsServerState
     tssLoadedModules   :: !(SubkeyMap ImportKey (NonEmpty ResolvedModule))
     -- | Set of modules we started loading. Mainly used for detecting
     -- import cycles.
-  , tssLoadsInProgress :: !(Map ImportKey (NonEmptyMap FullPath UnresolvedModule))
+  , tssLoadsInProgress :: !(Map ImportKey (NonEmptyMap (FullPath 'File) UnresolvedModule))
   } deriving (Eq, Ord, Show)
 
 emptyTagsServerState :: TagsServerState
