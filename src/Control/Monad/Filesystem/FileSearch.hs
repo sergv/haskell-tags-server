@@ -7,6 +7,7 @@
 -- Created     :  Thursday, 10 November 2016
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -26,13 +27,10 @@ module Control.Monad.Filesystem.FileSearch
   ) where
 
 import Control.Monad.Except.Ext
-import Control.Monad.Ext
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer
 
-import Data.DList (DList)
-import qualified Data.DList as DL
 import qualified Data.List as L
 import Data.Maybe
 import Data.Semigroup as Semigroup
@@ -51,11 +49,11 @@ import Data.Path
 data SearchCfg = SearchCfg
   { -- | Directories with files of interest. The files will be looked up in
     -- these directories but not in their children.
-    shallowPaths   :: !(Set FullPath)
+    shallowPaths   :: !(Set (FullPath 'Dir))
     -- | Directories with file hierarchies containing files of interest. The
     -- files will be looked up in both the directroies and all of their children.
-  , recursivePaths :: !(Set FullPath)
-  , ignoredDirs    :: !(Set BaseName)
+  , recursivePaths :: !(Set (FullPath 'Dir))
+  , ignoredDirs    :: !(Set (BaseName 'Dir))
   } deriving (Eq, Ord, Show)
 
 instance Semigroup SearchCfg where
@@ -110,13 +108,11 @@ instance (MonadError ErrorMessage m, MonadFS m) => MonadFileSearch (FileSearchT 
     findAllMatching cfg checkPath
     where
       components' = toList components
-      checkPath :: FindEntry -> Maybe FullPath
-      checkPath entry
-        | isTarget fullPath = Just fullPath
-        | otherwise         = Nothing
-        where
-          fullPath = findEntryFullPath entry
-      isTarget :: FullPath -> Bool
+      checkPath :: FullPath 'File -> Maybe (FullPath 'File)
+      checkPath path
+        | isTarget path = Just path
+        | otherwise     = Nothing
+      isTarget :: FullPath 'File -> Bool
       isTarget candidate = components' `L.isSuffixOf` candidateComponents
         where
           candidateComponents = map unBaseName (toList (splitDirectories (dropExtensions candidate)))
@@ -127,33 +123,30 @@ instance (MonadError ErrorMessage m, MonadFS m) => MonadFileSearch (FileSearchT 
 findAllMatching
   :: forall m a. MonadFS m
   => SearchCfg
-  -> (FindEntry -> Maybe a) -- ^ Predicate for files to collect.
+  -> (FullPath 'File -> Maybe a) -- ^ Predicate for files to collect.
   -> m [a]
 findAllMatching SearchCfg{shallowPaths, recursivePaths, ignoredDirs} collectPred = do
   shallowResults   <- foldForA shallowPaths $ \path ->
-    mapMaybe (collectPred . mkFindEntry path) <$> MonadFS.listDirectory path
+    mapMaybe collectPred . fst <$> MonadFS.listDirectory path
   recursiveResults <- foldForA recursivePaths $ \path ->
-    findRecursive ((`S.notMember` ignoredDirs) . bpFileName . findEntryBasePath) collectPred path
+    findRecursive ((`S.notMember` ignoredDirs) . takeFileName) collectPred path
   return $ shallowResults ++ recursiveResults
 
 findRecursive
   :: forall m a. MonadFS m
-  => (FindEntry -> Bool)    -- ^ Predicate for directories to visit.
-  -> (FindEntry -> Maybe a) -- ^ Predicate for files to collect.
-  -> FullPath               -- ^ Recursion root.
+  => (FullPath 'Dir  -> Bool)    -- ^ Predicate for directories to visit.
+  -> (FullPath 'File -> Maybe a) -- ^ Predicate for files to collect.
+  -> FullPath 'Dir          -- ^ Recursion root.
   -> m [a]
-findRecursive visitPred collectPred = fmap toList . go
+findRecursive visitPred collectPred = go
   where
-    go :: FullPath -> m (DList a)
+    go :: FullPath 'Dir -> m [a]
     go root = do
-      contents      <- map (mkFindEntry root) <$>
-                       MonadFS.listDirectory root
-      (dirs, files) <- partitionM (MonadFS.doesDirectoryExist . findEntryFullPath) contents
-      let interestingFiles = mapMaybe collectPred files
-      children      <- foldMapA (go . findEntryFullPath) $ filter visitPred dirs
-      pure $ DL.fromList interestingFiles <> children
+      (files, dirs) <- MonadFS.listDirectory root
+      children      <- foldMapA go $ filter visitPred dirs
+      pure $ mapMaybe collectPred files <> children
 
-versionControlDirs :: Set BaseName
+versionControlDirs :: Set (BaseName 'Dir)
 versionControlDirs = S.fromList
   [ ".git"
   , "_darcs"

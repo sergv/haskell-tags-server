@@ -8,13 +8,18 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE CPP                        #-}
+{-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE FunctionalDependencies     #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE InstanceSigs               #-}
+{-# LANGUAGE KindSignatures             #-}
+{-# LANGUAGE MonoLocalBinds             #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
+{-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TypeSynonymInstances       #-}
 {-# LANGUAGE UndecidableInstances       #-}
@@ -27,9 +32,11 @@
 #endif
 
 module Data.Path
-  ( FullPath
+  ( FileType(..)
+  , FullPath
   , unFullPath
   , MkFullPath(..)
+  , MkSomeFullPath(..)
   , doesFileExist
   , doesDirectoryExist
   , listDirectory
@@ -53,88 +60,139 @@ module Data.Path
   -- * Base path
   , BaseName
   , unBaseName
-  , BasePath
-  , mkBasePath
-  , bpFileName
-  , bpExtension
   ) where
 
 import Control.DeepSeq
 import Control.Monad.Base
+import Control.Monad.Except.Ext
+import Control.Monad.Ext
 
 import Data.Coerce
-import Data.Function
+import Data.ErrorMessage
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup as Semigroup
 import Data.Semigroup.Foldable.Class (foldMap1)
 import Data.String
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Prettyprint.Doc.Ext (Pretty(..))
+import Data.Text.Prettyprint.Doc.Ext
 import Data.Time.Clock (UTCTime)
 import qualified System.Directory as Directory
 import qualified System.FilePath as FilePath
 
+-- | A type-level label to distinguish directories and files.
+data FileType = Dir | File
+
 -- | Absolute path, canonicalised and normalised. Provides strictest invariants
 -- but must be created in derivatives of IO monad.
 -- Invariant: does not end with \/.
-newtype FullPath = FullPath { unFullPath :: Text }
+newtype FullPath (typ :: FileType) = FullPath { unFullPath :: Text }
   deriving (Show, Pretty, IsString, NFData)
 
 #ifdef WINDOWS
-instance Eq FullPath where
+instance Eq (FullPath a) where
   {-# INLINE (==) #-}
   (==) = coerce ((==) `on` T.toCaseFold)
 
-instance Ord FullPath where
+instance Ord (FullPath a) where
   {-# INLINE compare #-}
   compare = coerce (compare `on` T.toCaseFold)
 #else
-deriving instance Eq  FullPath
-deriving instance Ord FullPath
+deriving instance Eq  (FullPath a)
+deriving instance Ord (FullPath a)
 #endif
 
-class MkFullPath a m where
-  mkFullPath :: a -> m FullPath
+class MkSomeFullPath a m where
+  mkSomeFullPath :: a -> m (Either (FullPath 'File) (FullPath 'Dir))
 
-instance MonadBase IO m => MkFullPath FilePath.FilePath m where
-  mkFullPath path =
-    liftBase $
-    FullPath . T.pack . FilePath.dropTrailingPathSeparator . FilePath.normalise <$> Directory.canonicalizePath path
+instance (MonadBase IO m, MonadError ErrorMessage m) => MkSomeFullPath FilePath.FilePath m where
+  {-# INLINE mkSomeFullPath #-}
+  mkSomeFullPath
+    :: FilePath.FilePath
+    -> m (Either (FullPath 'File) (FullPath 'Dir))
+  mkSomeFullPath path = do
+    path'  <- liftBase $ do
+      isSymlink <- Directory.pathIsSymbolicLink path
+      if isSymlink
+      then Directory.makeAbsolute =<< Directory.getSymbolicLinkTarget path
+      else Directory.makeAbsolute path
+    isFile <- liftBase $ Directory.doesFileExist path'
+    if isFile
+    then pure $! Left $! FullPath $ T.pack path'
+    else do
+      isDir <- liftBase $ Directory.doesDirectoryExist path'
+      if isDir
+      then pure $! Right $! FullPath $ T.pack path'
+      else throwErrorWithCallStack $
+        "Path does not refer to either a file or a directory:" <+> pretty path'
 
--- MkFullPath FilePath.FilePath m
-instance MonadBase IO m => MkFullPath Text m where
+instance MkSomeFullPath FilePath.FilePath m => MkSomeFullPath Text m where
+  {-# INLINE mkSomeFullPath #-}
+  mkSomeFullPath = mkSomeFullPath . T.unpack
+
+instance MkSomeFullPath Text m => MkSomeFullPath PathFragment m where
+  {-# INLINE mkSomeFullPath #-}
+  mkSomeFullPath = mkSomeFullPath . unPathFragment
+
+class MkFullPath a typ m where
+  mkFullPath :: a -> m (FullPath typ)
+
+instance (MkSomeFullPath FilePath.FilePath m, MonadError ErrorMessage m) => MkFullPath FilePath.FilePath 'File m where
+  {-# INLINE mkFullPath #-}
+  mkFullPath path = do
+    somePath <- mkSomeFullPath path
+    case somePath of
+      Left  x -> pure x
+      Right _ -> throwErrorWithCallStack $ "Path does not refer to a file:" <+> pretty path
+
+instance (MkSomeFullPath FilePath.FilePath m, MonadError ErrorMessage m) => MkFullPath FilePath.FilePath 'Dir m where
+  {-# INLINE mkFullPath #-}
+  mkFullPath path = do
+    somePath <- mkSomeFullPath path
+    case somePath of
+      Left  _ -> throwErrorWithCallStack $ "Path does not refer to a directory:" <+> pretty path
+      Right x -> pure x
+
+instance MkFullPath FilePath.FilePath a m => MkFullPath Text a m where
   {-# INLINE mkFullPath #-}
   mkFullPath = mkFullPath . T.unpack
 
- -- MkFullPath Text m =>
-instance MonadBase IO m => MkFullPath PathFragment m where
+instance MkFullPath FilePath.FilePath a m => MkFullPath PathFragment a m where
   {-# INLINE mkFullPath #-}
   mkFullPath = mkFullPath . unPathFragment
 
 {-# INLINE doesFileExist #-}
-doesFileExist :: MonadBase IO m => FullPath -> m Bool
+doesFileExist :: MonadBase IO m => FullPath 'File -> m Bool
 doesFileExist =
   liftBase . Directory.doesFileExist . T.unpack . unFullPath
 
 {-# INLINE doesDirectoryExist #-}
-doesDirectoryExist :: MonadBase IO m => FullPath -> m Bool
+doesDirectoryExist :: MonadBase IO m => FullPath 'Dir -> m Bool
 doesDirectoryExist =
   liftBase . Directory.doesDirectoryExist . T.unpack . unFullPath
 
-listDirectory :: MonadBase IO m => FullPath -> m [BasePath]
-listDirectory (FullPath path) = liftBase $
-  map mkBasePath <$> Directory.listDirectory (T.unpack path)
+{-# INLINE listDirectory #-}
+listDirectory
+  :: MonadBase IO m
+  => FullPath 'Dir
+  -> m ([FullPath 'File], [FullPath 'Dir])
+listDirectory (FullPath path) = do
+  (dirs, files) <- liftBase $
+    partitionIO Directory.doesDirectoryExist . map (path' FilePath.</>) =<< Directory.listDirectory path'
+  pure $ coerce (map T.pack files, map T.pack dirs)
+  where
+    path' = T.unpack path
 
 {-# INLINE getModificationTime #-}
-getModificationTime :: MonadBase IO m => FullPath -> m UTCTime
+getModificationTime :: MonadBase IO m => FullPath 'File -> m UTCTime
 getModificationTime =
   liftBase . Directory.getModificationTime . T.unpack . unFullPath
 
 {-# INLINE splitDirectories #-}
-splitDirectories :: FullPath -> [BaseName]
-splitDirectories =
-  map (BaseName . PathFragment . T.pack) . FilePath.splitDirectories . T.unpack . unFullPath
+splitDirectories :: FullPath 'File -> ([BaseName 'Dir], BaseName 'File)
+splitDirectories p = (map BaseName $ init ps, BaseName $ last ps)
+  where
+    ps = map (PathFragment . T.pack) . FilePath.splitDirectories . T.unpack . unFullPath $ p
 
 {-# INLINE makeRelativeText #-}
 makeRelativeText :: Text -> Text -> Text
@@ -178,22 +236,14 @@ class JoinPaths a b c | a b -> c where
   default (</>) :: (Coercible a Text, Coercible b Text, Coercible c Text) => a -> b -> c
   (</>) = coerce joinPath
 
-instance JoinPaths FullPath     PathFragment FullPath
-instance JoinPaths FullPath     BaseName     FullPath
-instance JoinPaths PathFragment FullPath     PathFragment
-instance JoinPaths PathFragment PathFragment PathFragment
-instance JoinPaths PathFragment BaseName     PathFragment
-instance JoinPaths BaseName     FullPath     PathFragment
-instance JoinPaths BaseName     PathFragment PathFragment
-instance JoinPaths BaseName     BaseName     PathFragment
-
-instance JoinPaths FullPath     BasePath     FullPath where
-  {-# INLINE (</>) #-}
-  (</>) p BasePath{bpFileName} = p </> bpFileName
-
-instance JoinPaths PathFragment BasePath     PathFragment where
-  {-# INLINE (</>) #-}
-  (</>) p BasePath{bpFileName} = p </> bpFileName
+-- instance JoinPaths (FullPath 'Dir) PathFragment   (FullPath 'Dir)
+instance JoinPaths (FullPath 'Dir) (BaseName typ) (FullPath typ)
+-- -- instance JoinPaths PathFragment FullPath     PathFragment
+instance JoinPaths PathFragment    PathFragment PathFragment
+-- instance JoinPaths PathFragment    BaseName     PathFragment
+--  -- instance JoinPaths BaseName     FullPath     PathFragment
+-- instance JoinPaths BaseName        PathFragment PathFragment
+-- instance JoinPaths BaseName        BaseName     PathFragment
 
 class Contains a where
   isInfixOf :: Text -> a -> Bool
@@ -201,9 +251,9 @@ class Contains a where
   default isInfixOf :: Coercible a Text => Text -> a -> Bool
   isInfixOf = coerce T.isInfixOf
 
-instance Contains FullPath
+instance Contains (FullPath a)
 instance Contains PathFragment
-instance Contains BaseName
+instance Contains (BaseName a)
 
 -- | E.g. “.hs”.
 newtype Extension = Extension { unExtension :: Text }
@@ -232,9 +282,9 @@ class AddExtension a where
   default (<.>) :: Coercible a Text => a -> Extension -> a
   (<.>) = coerce addExt
 
-instance AddExtension FullPath
+instance AddExtension (FullPath 'File)
 instance AddExtension PathFragment
-instance AddExtension BaseName
+instance AddExtension (BaseName 'File)
 
 class DropExtensions a where
   dropExtensions :: a -> a
@@ -242,21 +292,19 @@ class DropExtensions a where
   default dropExtensions :: Coercible a Text => a -> a
   dropExtensions = coerce dropExts
 
-instance DropExtensions FullPath
+instance DropExtensions (FullPath 'File)
 instance DropExtensions PathFragment
-instance DropExtensions BaseName
+instance DropExtensions (BaseName 'File)
 
-class TakeFileName a where
-  takeFileName :: a -> BaseName
+class TakeFileName a typ | a -> typ where
+  takeFileName :: a -> BaseName typ
   {-# INLINE takeFileName #-}
-  default takeFileName :: Coercible a Text => a -> BaseName
+  default takeFileName :: Coercible a Text => a -> BaseName typ
   takeFileName = coerce getFileName
 
-instance TakeFileName FullPath
-instance TakeFileName PathFragment
-instance TakeFileName BasePath where
-  {-# INLINE takeFileName #-}
-  takeFileName = bpFileName
+instance TakeFileName (FullPath 'File) 'File
+instance TakeFileName (FullPath 'Dir) 'Dir
+instance TakeFileName PathFragment 'File
 
 class TakeExtension a where
   takeExtension :: a -> Extension
@@ -264,11 +312,8 @@ class TakeExtension a where
   default takeExtension :: Coercible a Text => a -> Extension
   takeExtension = coerce getExtension
 
-instance TakeExtension FullPath
+instance TakeExtension (FullPath 'File)
 instance TakeExtension PathFragment
-instance TakeExtension BasePath where
-  {-# INLINE takeExtension #-}
-  takeExtension = bpExtension
 
 class MakeRelative a b c | a b -> c where
   makeRelative
@@ -281,51 +326,26 @@ class MakeRelative a b c | a b -> c where
     => a -> b -> c
   makeRelative = coerce makeRelativeText
 
-instance MakeRelative FullPath     FullPath     PathFragment
-instance MakeRelative FullPath     PathFragment PathFragment
-instance MakeRelative PathFragment PathFragment PathFragment
+instance MakeRelative (FullPath 'Dir) (FullPath a) PathFragment
+-- instance MakeRelative (FullPath 'Dir) PathFragment PathFragment
+-- instance MakeRelative PathFragment    PathFragment PathFragment
 
 -- | File basename without directory but with extension.
-newtype BaseName = BaseName { unBaseName :: PathFragment }
+newtype BaseName (typ :: FileType) = BaseName { unBaseName :: PathFragment }
   deriving (Show, Pretty, IsString, NFData)
 
 #ifdef WINDOWS
-instance Eq BaseName where
+instance Eq (BaseName typ) where
   {-# INLINE (==) #-}
   (==) = coerce ((==) `on` T.toCaseFold)
 
-instance Ord BaseName where
+instance Ord (BaseName typ) where
   {-# INLINE compare #-}
   compare = coerce (compare `on` T.toCaseFold)
 #else
-deriving instance Eq  BaseName
-deriving instance Ord BaseName
+deriving instance Eq  (BaseName typ)
+deriving instance Ord (BaseName typ)
 #endif
-
-data BasePath = BasePath
-  { bpFileName  :: !BaseName
-  , bpExtension :: !Extension
-  }
-
-mkBasePath :: FilePath.FilePath -> BasePath
-mkBasePath p = BasePath
-  { bpFileName  = BaseName $ PathFragment $ T.pack p'
-  , bpExtension = Extension $ T.pack ext
-  }
-  where
-    p'  = FilePath.takeFileName p
-    ext = FilePath.takeExtensions p'
-
-instance Show BasePath where
-  show = show . bpFileName
-
-instance Eq BasePath where
-  {-# INLINE (==) #-}
-  (==) = (==) `on` bpFileName
-
-instance Ord BasePath where
-  {-# INLINE compare #-}
-  compare = compare `on` bpFileName
 
 -- Internals
 
@@ -358,3 +378,4 @@ dropExts =
 {-# INLINE extSeparator #-}
 extSeparator :: Text
 extSeparator = T.singleton FilePath.extSeparator
+

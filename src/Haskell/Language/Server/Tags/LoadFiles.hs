@@ -8,11 +8,13 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE DoAndIfThenElse     #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
 
 module Haskell.Language.Server.Tags.LoadFiles
   ( loadAllFilesIntoState
@@ -52,17 +54,16 @@ import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
 
 -- todo: handle header files here
-classifyPath :: TagsServerConf -> FindEntry -> Maybe (ImportTarget, FullPath)
-classifyPath TagsServerConf{tsconfVanillaExtensions, tsconfHsBootExtensions} entry
-  | ext `S.member` tsconfVanillaExtensions = Just (VanillaModule, path)
-  | ext `S.member` tsconfHsBootExtensions  = Just (HsBootModule, path)
+classifyPath :: TagsServerConf -> FullPath 'File -> Maybe ImportTarget
+classifyPath TagsServerConf{tsconfVanillaExtensions, tsconfHsBootExtensions} path
+  | ext `S.member` tsconfVanillaExtensions = Just VanillaModule
+  | ext `S.member` tsconfHsBootExtensions  = Just HsBootModule
   | otherwise                              = Nothing
   where
-    path = findEntryFullPath entry
-    ext  = bpExtension $ findEntryBasePath entry
+    ext  = takeExtension path
 
 data ResolveState = ResolveState
-  { rsLoadingModules :: !(HashMap ImportKey (NonEmptyMap FullPath UnresolvedModule))
+  { rsLoadingModules :: !(HashMap ImportKey (NonEmptyMap (FullPath 'File) UnresolvedModule))
   , rsLoadedModules  :: !(HashMap ImportKey (NonEmpty ResolvedModule))
   }
 
@@ -71,7 +72,7 @@ loadAllFilesIntoState
   => TagsServerConf
   -> m (Map ImportKey (NonEmpty ResolvedModule))
 loadAllFilesIntoState conf = do
-  allFiles <- runFileSearchT (tsconfSearchDirs conf) $ findRec (classifyPath conf)
+  allFiles <- runFileSearchT (tsconfSearchDirs conf) $ findRec (\x -> (,x) <$> classifyPath conf x)
 
   unresolvedModules <- for allFiles $ \(importType, filename) -> do
     modTime       <- MonadFS.getModificationTime filename

@@ -7,6 +7,7 @@
 -- Created     :  Saturday, 24 September 2016
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -47,10 +48,10 @@ instance MonadTransControl DiscardLogsT where
   liftWith f = DiscardLogsT $ f runDiscardLogsT
   restoreT   = DiscardLogsT
 
-instance (MonadBaseControl b m) => MonadBaseControl b (DiscardLogsT m) where
+instance MonadBaseControl b m => MonadBaseControl b (DiscardLogsT m) where
   type StM (DiscardLogsT m) a = ComposeSt DiscardLogsT m a
   liftBaseWith = defaultLiftBaseWith
   restoreM     = defaultRestoreM
 
-instance (Monad m) => MonadLog (DiscardLogsT m) where
+instance Monad m => MonadLog (DiscardLogsT m) where
   logDoc _ _ = pure ()

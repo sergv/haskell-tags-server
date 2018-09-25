@@ -6,6 +6,7 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
@@ -42,7 +43,7 @@ import Haskell.Language.Server.Tags.Types.Modules
 
 findSymbol
   :: (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => FullPath           -- ^ File name
+  => FullPath 'File     -- ^ File name
   -> SymbolName         -- ^ Symbol to find. Can be either qualified, unqualified, ascii name/utf name/operator
   -> m [ResolvedSymbol] -- ^ Found tags, may be empty when nothing was found.
 findSymbol filename sym = do
@@ -133,22 +134,22 @@ lookUpInSymbolMap sym sm =
             _                              -> False
 
 -- | Try to infer suitable module name from the file name. Tries to take
--- as much directory names that start with the uppercase letter as possible.
+-- as much directory names that start with an uppercase letter as possible.
 fileNameToModuleName
   :: (WithCallStack, MonadError ErrorMessage m)
-  => FullPath -> m ModuleName
+  => FullPath 'File -> m ModuleName
 fileNameToModuleName fname =
-  case reverse $ splitDirectories fname of
-    []            -> throwErrorWithCallStack "Cannot convert empty file name to module name"
-    fname' : dirs ->
+  case unPathFragment (unBaseName (dropExtensions fname')) : map (unPathFragment . unBaseName) (reverse dirs) of
+    []       ->
+      throwErrorWithCallStack "Cannot convert empty file name to module name"
+    xs@(_:_) ->
       pure $
       mkModuleName $
       T.intercalate "." $
       reverse $
-      takeWhile canBeModuleName $
-      map (unPathFragment . unBaseName) $
-      dropExtensions fname' : dirs
+      takeWhile canBeModuleName xs
   where
+    (dirs, fname') = splitDirectories fname
     canBeModuleName :: T.Text -> Bool
     canBeModuleName t = case T.uncons t of
       Nothing      -> False

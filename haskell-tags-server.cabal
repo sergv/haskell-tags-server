@@ -66,6 +66,7 @@ library
     transformers,
     transformers-base,
     unordered-containers,
+    unsafe,
     utf8-string >= 0.3
   exposed-modules:
     Control.Arrow.Ext

@@ -7,13 +7,18 @@
 -- Created     :  Tuesday, 23 August 2016
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE UndecidableInstances       #-}
 
 module Haskell.Language.Server.Tags.SearchM
   ( SearchT
   , runSearchT
   ) where
 
+import Control.Monad.Base
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
@@ -33,8 +38,10 @@ newtype SearchT m a = SearchM (ExceptT ErrorMessage (StateT TagsServerState (Rea
     , MonadReader TagsServerConf
     , MonadError ErrorMessage
     , MonadLog
-    , MonadFS
+    , MonadBase b
     )
+
+deriving instance MonadBase IO m => MonadFS (SearchT m)
 
 runSearchT :: TagsServerConf -> TagsServerState -> SearchT m a -> m (Either ErrorMessage a, TagsServerState)
 runSearchT conf serverState (SearchM action)

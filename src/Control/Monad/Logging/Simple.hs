@@ -7,6 +7,7 @@
 -- Created     :  Tuesday, 30 August 2016
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}

@@ -7,13 +7,17 @@
 -- Created     :  Sunday, 18 September 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DataKinds            #-}
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Control.Monad.Filesystem (MonadFS(..)) where
 
 import Prelude hiding (readFile)
 
+import Control.Monad.Base
 import Control.Monad.Except
 import Control.Monad.Reader
 import qualified Control.Monad.State.Lazy as Lazy
@@ -25,30 +29,31 @@ import qualified Data.ByteString as BS
 import qualified Data.Text as T
 import Data.Time.Clock (UTCTime)
 
-import Data.Path (FullPath, BasePath)
+import Data.ErrorMessage
+import Data.Path (FullPath, FileType(..))
 import qualified Data.Path as Path
 
 -- | Monad for interaction with filesystem.
 class Monad m => MonadFS m where
-  getModificationTime  :: FullPath -> m UTCTime
-  readFile             :: FullPath -> m BS.ByteString
-  doesFileExist        :: FullPath -> m Bool
-  doesDirectoryExist   :: FullPath -> m Bool
-  listDirectory        :: FullPath -> m [BasePath]
+  getModificationTime  :: FullPath 'File -> m UTCTime
+  readFile             :: FullPath 'File -> m BS.ByteString
+  doesFileExist        :: FullPath 'File -> m Bool
+  doesDirectoryExist   :: FullPath 'Dir  -> m Bool
+  listDirectory        :: FullPath 'Dir  -> m ([FullPath 'File], [FullPath 'Dir])
 
-instance MonadFS IO where
+instance {-# OVERLAPS #-} (Monad m, MonadBase IO m) => MonadFS (ExceptT ErrorMessage m) where
   {-# INLINE getModificationTime  #-}
   {-# INLINE readFile             #-}
   {-# INLINE doesFileExist        #-}
   {-# INLINE doesDirectoryExist   #-}
   {-# INLINE listDirectory        #-}
   getModificationTime  = Path.getModificationTime
-  readFile             = BS.readFile . T.unpack . Path.unFullPath
+  readFile             = liftBase . BS.readFile . T.unpack . Path.unFullPath
   doesFileExist        = Path.doesFileExist
   doesDirectoryExist   = Path.doesDirectoryExist
   listDirectory        = Path.listDirectory
 
-instance MonadFS m => MonadFS (ExceptT e m) where
+instance {-# OVERLAPPABLE #-} MonadFS m => MonadFS (ExceptT e m) where
   {-# INLINE getModificationTime  #-}
   {-# INLINE readFile             #-}
   {-# INLINE doesFileExist        #-}
