@@ -42,7 +42,7 @@ import Data.BERT
 import Network.BERT.Client
 import Network.BERT.Transport
 
-import Control.Monad.Filesystem.FileSearch (SearchCfg(..))
+import Control.Monad.Filesystem (SearchCfg(..))
 import Data.ErrorMessage
 import Data.Path
 import Haskell.Language.Server.BERT
@@ -65,10 +65,10 @@ mkTestsConfig tsconfNameResolution srcDir = do
   searchDirsCfg <- case srcDir of
     ShallowDir   dir -> do
       dir' <- mkFullPath $ testDataDir </> dir
-      pure defaultSearchDirsCfg { shallowPaths = S.singleton dir' }
+      pure defaultSearchDirsCfg { scShallowPaths = S.singleton dir' }
     RecursiveDir dir -> do
       dir' <- mkFullPath $ testDataDir </> dir
-      pure defaultSearchDirsCfg { recursivePaths = S.singleton dir' }
+      pure defaultSearchDirsCfg { scRecursivePaths = S.singleton dir' }
   pure defaultTagsServerConf
     { tsconfSearchDirs     = searchDirsCfg
     , tsconfEagerTagging   = False
@@ -1314,8 +1314,8 @@ testData = GroupTest "server tests"
           , ("ambiguous"
             , Ambiguous $ map (\(file, n) -> (file, n, "Function"))
               [ ("module1/Dependency.hs", 13)
-              , ("module3/Dependency.hs", 15)
               , ("module2/Dependency.hs", 14)
+              , ("module3/Dependency.hs", 15)
               ]
             )
           ]

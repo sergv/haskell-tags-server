@@ -7,24 +7,21 @@
 -- Created     :  Thursday, 10 November 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE DefaultSignatures          #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE FunctionalDependencies     #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE InstanceSigs               #-}
-{-# LANGUAGE KindSignatures             #-}
-{-# LANGUAGE MonoLocalBinds             #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE MultiWayIf                 #-}
-{-# LANGUAGE NamedFieldPuns             #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE StandaloneDeriving         #-}
-{-# LANGUAGE TypeSynonymInstances       #-}
-{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE CPP                    #-}
+{-# LANGUAGE DataKinds              #-}
+{-# LANGUAGE DefaultSignatures      #-}
+{-# LANGUAGE FlexibleContexts       #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE InstanceSigs           #-}
+{-# LANGUAGE MonoLocalBinds         #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE MultiWayIf             #-}
+{-# LANGUAGE NamedFieldPuns         #-}
+{-# LANGUAGE OverloadedStrings      #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE TypeSynonymInstances   #-}
+{-# LANGUAGE UndecidableInstances   #-}
 
 {-# OPTIONS_GHC -Wredundant-constraints          #-}
 {-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
@@ -64,7 +61,6 @@ module Data.Path
   , unBaseName
   ) where
 
-import Control.DeepSeq
 import Control.Exception
 import Control.Monad.Base
 import Control.Monad.Except.Ext
@@ -75,7 +71,6 @@ import Data.ErrorMessage
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup as Semigroup
 import Data.Semigroup.Foldable.Class (foldMap1)
-import Data.String
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Prettyprint.Doc as PP
@@ -84,31 +79,11 @@ import Data.Time.Clock (UTCTime)
 import qualified System.Directory as Directory
 import qualified System.FilePath as FilePath
 
+import Data.Path.Internal
+
 #ifdef WINDOWS
 #else
 import System.Posix.Files as Posix
-#endif
-
--- | A type-level label to distinguish directories and files.
-data FileType = Dir | File
-
--- | Absolute path, canonicalised and normalised. Provides strictest invariants
--- but must be created in derivatives of IO monad.
--- Invariant: does not end with \/.
-newtype FullPath (typ :: FileType) = FullPath { unFullPath :: Text }
-  deriving (Show, Pretty, IsString, NFData)
-
-#ifdef WINDOWS
-instance Eq (FullPath a) where
-  {-# INLINE (==) #-}
-  (==) = coerce ((==) `on` T.toCaseFold)
-
-instance Ord (FullPath a) where
-  {-# INLINE compare #-}
-  compare = coerce (compare `on` T.toCaseFold)
-#else
-deriving instance Eq  (FullPath a)
-deriving instance Ord (FullPath a)
 #endif
 
 class MkSomeFullPath a m where
@@ -230,24 +205,6 @@ splitDirectories p = (map BaseName $ init ps, BaseName $ last ps)
 makeRelativeText :: Text -> Text -> Text
 makeRelativeText x y = T.pack $ FilePath.makeRelative (T.unpack x) (T.unpack y)
 
--- | Path fragment, possibly with some directories but without etxension.
--- Invariant: does not start with \/, does not end with \/.
-newtype PathFragment = PathFragment { unPathFragment :: Text }
-  deriving (Show, Pretty, IsString, NFData)
-
-#ifdef WINDOWS
-instance Eq PathFragment where
-  {-# INLINE (==) #-}
-  (==) = coerce ((==) `on` T.toCaseFold)
-
-instance Ord PathFragment where
-  {-# INLINE compare #-}
-  compare = coerce (compare `on` T.toCaseFold)
-#else
-deriving instance Eq  PathFragment
-deriving instance Ord PathFragment
-#endif
-
 newtype PathJoin = PathJoin { unPathJoin :: Text }
 
 instance Semigroup PathJoin where
@@ -286,23 +243,6 @@ class Contains a where
 instance Contains (FullPath a)
 instance Contains PathFragment
 instance Contains (BaseName a)
-
--- | E.g. “.hs”.
-newtype Extension = Extension { unExtension :: Text }
-  deriving (Show, IsString, NFData)
-
-#ifdef WINDOWS
-instance Eq Extension where
-  {-# INLINE (==) #-}
-  (==) = coerce ((==) `on` T.toCaseFold)
-
-instance Ord Extension where
-  {-# INLINE compare #-}
-  compare = coerce (compare `on` T.toCaseFold)
-#else
-deriving instance Eq  Extension
-deriving instance Ord Extension
-#endif
 
 {-# INLINE mkExtension #-}
 mkExtension :: Text -> Extension
@@ -361,23 +301,6 @@ class MakeRelative a b c | a b -> c where
 instance MakeRelative (FullPath 'Dir) (FullPath a) PathFragment
 -- instance MakeRelative (FullPath 'Dir) PathFragment PathFragment
 -- instance MakeRelative PathFragment    PathFragment PathFragment
-
--- | File basename without directory but with extension.
-newtype BaseName (typ :: FileType) = BaseName { unBaseName :: PathFragment }
-  deriving (Show, Pretty, IsString, NFData)
-
-#ifdef WINDOWS
-instance Eq (BaseName typ) where
-  {-# INLINE (==) #-}
-  (==) = coerce ((==) `on` T.toCaseFold)
-
-instance Ord (BaseName typ) where
-  {-# INLINE compare #-}
-  compare = coerce (compare `on` T.toCaseFold)
-#else
-deriving instance Eq  (BaseName typ)
-deriving instance Ord (BaseName typ)
-#endif
 
 -- Internals
 
