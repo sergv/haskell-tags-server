@@ -37,6 +37,7 @@ library
     build-depends: unix >= 2.6, unix-compat
   build-depends:
     array,
+    async,
     attoparsec >= 0.13.1.0,
     base >= 4,
     bert >= 1.2.2.5,
@@ -52,6 +53,7 @@ library
     filepath,
     hashable,
     haskell-src-exts >= 1.16,
+    lifted-async,
     microlens,
     monad-control >= 1.0,
     mtl >= 2.2,
@@ -64,7 +66,9 @@ library
     regex-tdfa-text,
     semigroupoids,
     semigroups,
+    streaming-commons,
     stm,
+    stm-chans,
     text,
     time,
     transformers,
@@ -77,8 +81,6 @@ library
     Control.Monad.Ext
     Control.Monad.Except.Ext
     Control.Monad.Filesystem
-    Control.Monad.Filesystem.FileSearch
-    Control.Monad.Filesystem.FileSearch.Class
     Control.Monad.Logging
     Control.Monad.Logging.Simple
 
@@ -126,6 +128,11 @@ library
     Haskell.Language.Server.Tags.Types.Modules
   other-modules:
     Control.Monad.EitherCPS
+
+    Data.Filesystem
+    Data.NBSem
+    Data.Path.Internal
+
     Haskell.Language.Server.Tags.LoadModule
     Haskell.Language.Server.Tags.LoadFiles
     Haskell.Language.Server.Tags.Search

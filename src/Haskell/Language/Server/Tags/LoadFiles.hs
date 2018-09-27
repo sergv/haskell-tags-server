@@ -42,7 +42,6 @@ import Data.Traversable
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
-import Control.Monad.Filesystem.FileSearch
 import Control.Monad.Logging
 import Data.ErrorMessage
 import Data.Map.NonEmpty (NonEmptyMap)
@@ -72,9 +71,11 @@ loadAllFilesIntoState
   => TagsServerConf
   -> m (Map ImportKey (NonEmpty ResolvedModule))
 loadAllFilesIntoState conf = do
-  allFiles <- runFileSearchT (tsconfSearchDirs conf) $ findRec (\x -> (,x) <$> classifyPath conf x)
+  allFiles <- MonadFS.findRec (tsconfSearchDirs conf) $ \filename -> do
+    importType <- classifyPath conf filename
+    pure (importType, filename)
 
-  unresolvedModules <- for allFiles $ \(importType, filename) -> do
+  unresolvedModules <- for (toList allFiles) $ \(importType, filename) -> do
     modTime       <- MonadFS.getModificationTime filename
     source        <- MonadFS.readFile filename
     logInfo $ "[loadAllFilesIntoState] Loading" <+> PP.dquotes (pretty filename)

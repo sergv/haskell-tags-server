@@ -33,7 +33,7 @@ import qualified Data.Set as S
 import Data.Text.Prettyprint.Doc.Ext
 import GHC.Generics (Generic)
 
-import Control.Monad.Filesystem.FileSearch (SearchCfg(..), versionControlDirs)
+import Control.Monad.Filesystem (SearchCfg(..), versionControlDirs)
 import Data.CompiledRegex
 import Data.ErrorMessage
 import Data.Map.NonEmpty (NonEmptyMap)
@@ -95,7 +95,7 @@ data TagsServerConf = TagsServerConf
 
 defaultTagsServerConf :: TagsServerConf
 defaultTagsServerConf = TagsServerConf
-  { tsconfSearchDirs        = mempty { ignoredDirs = versionControlDirs }
+  { tsconfSearchDirs        = mempty { scIgnoredDirs = versionControlDirs }
   , tsconfVanillaExtensions = S.fromList [".hs", ".lhs", ".hsc", ".chs"]
   , tsconfHsBootExtensions  = S.fromList [".hs-boot", ".lhs-boot"]
   , tsconfEagerTagging      = False

@@ -26,7 +26,7 @@ import System.Directory
 import System.Exit
 import System.IO
 
-import Control.Monad.Filesystem.FileSearch (SearchCfg(..))
+import Control.Monad.Filesystem (SearchCfg(..))
 import Control.Monad.Logging
 import Control.Monad.Logging.Simple
 import Data.ErrorMessage
@@ -95,8 +95,8 @@ main = do
       cfgDirTrees'          <- S.fromList <$> traverse mkFullPath cfgDirTrees
       let conf  = defaultTagsServerConf
                     { tsconfSearchDirs     = (tsconfSearchDirs defaultTagsServerConf)
-                        { shallowPaths   = cfgSourceDirectories'
-                        , recursivePaths = cfgDirTrees'
+                        { scShallowPaths   = cfgSourceDirectories'
+                        , scRecursivePaths = cfgDirTrees'
                         }
                     , tsconfEagerTagging   = cfgEagerTagging
                     , tsconfNameResolution = cfgNameResolution

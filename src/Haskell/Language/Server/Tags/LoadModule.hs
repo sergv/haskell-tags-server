@@ -33,6 +33,7 @@ import qualified Control.Monad.Writer.Strict as Strict
 import qualified Data.ByteString as BS
 import Data.Foldable.Ext
 import Data.Functor.Product (Product(..))
+import qualified Data.List as L
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
@@ -54,7 +55,6 @@ import qualified Haskell.Language.Lexer.FastTags as FastTags
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
-import Control.Monad.Filesystem.FileSearch
 import Control.Monad.Logging
 import Data.ErrorMessage
 import Data.KeyMap (KeyMap)
@@ -120,16 +120,22 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
     doLoad = do
       logDebug $ "[loadModule.doLoad] module was not loaded before, loading now:" <+> pretty ikModuleName
       case T.splitOn "." $ getModuleName ikModuleName of
-        []     -> throwErrorWithCallStack $ "Invalid module name:" <+> pretty ikModuleName
-        x : xs -> do
+        []            -> throwErrorWithCallStack $ "Invalid module name:" <+> pretty ikModuleName
+        comps@(_ : _) -> do
           TagsServerConf{tsconfSearchDirs, tsconfVanillaExtensions, tsconfHsBootExtensions, tsconfNameResolution} <- ask
-          candidates <- runFileSearchT tsconfSearchDirs $
-            findByPathSuffixSansExtension $ mkSinglePathFragment <$> x :| xs
           let extensions = case ikImportTarget of
                 VanillaModule -> tsconfVanillaExtensions
                 HsBootModule  -> tsconfHsBootExtensions
               msg        = "Cannot load module " <> pretty ikModuleName Semigroup.<> ": no paths found"
-          case (tsconfNameResolution, filter ((`S.member` extensions) . takeExtension) candidates) of
+          candidates <- MonadFS.findRec tsconfSearchDirs $ \candidate ->
+            let (dirs, file)   = splitDirectories candidate
+                candidateComps :: [PathFragment]
+                candidateComps = map unBaseName dirs ++ [unBaseName $ dropExtensions file]
+            in
+            if (takeExtension candidate `S.member` extensions) && (fmap mkSinglePathFragment comps `L.isSuffixOf` candidateComps)
+            then Just candidate
+            else Nothing
+          case (tsconfNameResolution, toList candidates) of
             (NameResolutionStrict, []) -> throwErrorWithCallStack msg
             (NameResolutionLax,    []) -> do
               logWarning msg
