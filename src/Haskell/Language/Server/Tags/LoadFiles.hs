@@ -73,7 +73,7 @@ loadAllFilesIntoState
 loadAllFilesIntoState conf = do
   allFiles <- MonadFS.findRec (tsconfSearchDirs conf) $ \filename -> do
     importType <- classifyPath conf filename
-    pure (importType, filename)
+    pure ((filename, importType), (importType, filename))
 
   unresolvedModules <- for (toList allFiles) $ \(importType, filename) -> do
     modTime       <- MonadFS.getModificationTime filename

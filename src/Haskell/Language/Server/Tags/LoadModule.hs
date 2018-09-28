@@ -133,7 +133,7 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
                 candidateComps = map unBaseName dirs ++ [unBaseName $ dropExtensions file]
             in
             if (takeExtension candidate `S.member` extensions) && (fmap mkSinglePathFragment comps `L.isSuffixOf` candidateComps)
-            then Just candidate
+            then Just (candidate, candidate)
             else Nothing
           case (tsconfNameResolution, toList candidates) of
             (NameResolutionStrict, []) -> throwErrorWithCallStack msg

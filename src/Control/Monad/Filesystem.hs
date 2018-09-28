@@ -33,6 +33,7 @@ import Control.Monad.Writer as Lazy
 import Control.Monad.Writer.Strict as Strict
 
 import qualified Data.ByteString as BS
+import Data.Map.Strict (Map)
 import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
@@ -80,8 +81,8 @@ class Monad m => MonadFS m where
   doesDirectoryExist   :: FullPath 'Dir  -> m Bool
   listDirectory        :: FullPath 'Dir  -> m ([FullPath 'File], [FullPath 'Dir])
   findRec
-    :: Ord a
-    => SearchCfg -> (FullPath 'File -> Maybe a) -> m (Set a)
+    :: Ord k
+    => SearchCfg -> (FullPath 'File -> Maybe (k, v)) -> m (Map k v)
 
 instance {-# OVERLAPS #-} (Monad m, MonadBase IO m) => MonadFS (ExceptT ErrorMessage m) where
   {-# INLINE getModificationTime  #-}
