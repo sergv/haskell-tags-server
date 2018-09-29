@@ -281,7 +281,7 @@ resolveModule
   -> (ImportKey -> m (Maybe (NonEmpty ResolvedModule)))
   -> UnresolvedModule
   -> m ResolvedModule
-resolveModule checkIfModuleIsAlreadyBeingLoaded readFileAndLoad mod = do
+resolveModule checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
   logDebug $ "[resolveModule] resolving names of module" <+> pretty (mhModName unresHeader)
   (imports, symbols) <- resolveSymbols mod
   logVerboseDebug $ ppDictHeader ("[resolveModule] Resolved items for module" <+> pretty (mhModName unresHeader))
@@ -322,7 +322,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded readFileAndLoad mod = do
             -- resolved, use what was resolved.
             Nothing -> do
               logDebug $ "[resolveModule.resolveImports.resolveImport] Resolving import" <+> pretty (ikModuleName key)
-              modules <- lift $ readFileAndLoad key
+              modules <- lift $ readAndLoad key
               case modules of
                 Nothing       -> do
                   -- The import is not found. Record that it brings no names
@@ -356,7 +356,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded readFileAndLoad mod = do
                 pretty (map modFile toResolve)
               Just <$> quasiResolveImportSpecWithLoadsInProgress
                 (lift . checkIfModuleIsAlreadyBeingLoaded)
-                (lift . readFileAndLoad)
+                (lift . readAndLoad)
                 (mhModName unresHeader)
                 (modFile mod)
                 key
@@ -501,7 +501,7 @@ quasiResolveImportSpecWithLoadsInProgress
   -> m (t ResolvedImportSpec)
 quasiResolveImportSpecWithLoadsInProgress
   checkIfModuleIsAlreadyBeingLoaded
-  readFileAndLoad
+  readAndLoad
   mainModName
   mainModFile
   mainModImport
@@ -573,7 +573,7 @@ quasiResolveImportSpecWithLoadsInProgress
                       -- TODO: use '_finishedLoading' as it may help to
                       -- resolve some names.
                       (mempty, mhModName . modHeader <$> toList inProgress)
-              res <- resolveLoop readFileAndLoad wantedNames' canLoad
+              res <- resolveLoop readAndLoad wantedNames' canLoad
               case res of
                 Nothing -> do
                   logDebug $ ppDictHeader "Import cycle debug info"
@@ -627,7 +627,7 @@ resolveLoop
   -> KeyMap Set (EntryWithChildren () UnqualifiedSymbolName)
   -> [UnresolvedImportSpec]
   -> m (Maybe SymbolMap)
-resolveLoop readFileAndLoad wantedNames = go (KM.keysSet wantedNames) mempty
+resolveLoop readAndLoad wantedNames = go (KM.keysSet wantedNames) mempty
   where
     go
       :: Set UnqualifiedSymbolName
@@ -638,7 +638,7 @@ resolveLoop readFileAndLoad wantedNames = go (KM.keysSet wantedNames) mempty
       _ | S.null wanted -> pure $ Just found
       []                -> pure Nothing
       ImportSpec{ispecImportKey} : specs -> do
-        mod <- readFileAndLoad ispecImportKey
+        mod <- readAndLoad ispecImportKey
         case mod of
           Nothing   -> go wanted  found  specs
           Just mods -> go wanted' found' specs
