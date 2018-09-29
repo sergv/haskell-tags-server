@@ -14,8 +14,8 @@ module Haskell.Language.LexerSimple.Lexer (tokenize) where
 
 import Control.Monad
 import Control.Monad.Except.Ext
-import Control.Monad.Writer
-import Control.Monad.State
+import Control.Monad.Writer.Strict
+import Control.Monad.State.Strict
 
 import qualified Data.ByteString as BS
 import Data.Char (chr)
