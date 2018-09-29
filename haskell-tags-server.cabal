@@ -61,6 +61,7 @@ library
     monad-par-extras,
     mtl >= 2.2,
     network >= 2.6,
+    parallel,
     pointed,
     prettyprinter,
     prettyprinter-combinators,
