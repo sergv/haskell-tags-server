@@ -23,8 +23,8 @@ import Control.Exception (IOException, throwIO, ErrorCall(..))
 import Control.Monad
 import Control.Monad.Base
 import Control.Monad.Catch
+import Control.Monad.ErrorExcept
 import Control.Monad.Except
-import Control.Monad.Filesystem
 import Control.Monad.Trans.Control
 
 import qualified Data.ByteString.Lazy.Char8 as C8
@@ -42,7 +42,7 @@ import Data.BERT
 import Network.BERT.Client
 import Network.BERT.Transport
 
-import Control.Monad.Filesystem (SearchCfg(..))
+import Control.Monad.Filesystem
 import Data.ErrorMessage
 import Data.Path
 import Haskell.Language.Server.BERT
@@ -1393,7 +1393,7 @@ withConnection pool conf f = do
     startLocalServer = do
       pool' <- liftBase pool
       withPort pool' $ \port -> do
-        serv <- runExceptT $ mkLogCollectingServer conf port
+        serv <- runErrorExceptT $ mkLogCollectingServer conf port
         case serv of
           Left err -> reportErr $
             "Failed to start local server:" ## pretty err
@@ -1417,7 +1417,7 @@ mkFindSymbolTest
   -> TestTree
 mkFindSymbolTest pool ServerTest{stTestName, stNameResolutionStrictness, stWorkingDirectory, stFile, stSymbol, stExpectedResponse} =
  testCase stTestName $ do
-    result <- runExceptT $ do
+    result <- runErrorExceptT $ do
       conf <- mkTestsConfig stNameResolutionStrictness stWorkingDirectory
       withConnection pool conf $ \conn -> do
         let dir  = case stWorkingDirectory of

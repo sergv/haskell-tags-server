@@ -16,7 +16,6 @@ module Haskell.Language.Lexer.Monad
   , runAlexT
   ) where
 
-import Control.Applicative
 import Control.Monad.EitherCPS
 import Control.Monad.Except.Ext
 import Control.Monad.Reader
@@ -34,7 +33,6 @@ newtype AlexT m a = AlexT (EitherCPST ErrorMessage (ReaderT AlexEnv (StateT Alex
     ( Functor
     , Applicative
     , Monad
-    , Alternative
     , MonadError ErrorMessage
     , MonadReader AlexEnv
     , MonadState AlexState

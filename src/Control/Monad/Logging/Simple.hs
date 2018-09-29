@@ -70,6 +70,8 @@ instance MonadTrans SimpleLoggerT where
 
 instance MonadBaseControl n m => MonadBaseControl n (SimpleLoggerT m) where
   type StM (SimpleLoggerT m) a = StM (ReaderT (SimpleLoggerCfg m) m) a
+  {-# INLINE liftBaseWith #-}
+  {-# INLINE restoreM     #-}
   liftBaseWith f = SimpleLoggerT $ liftBaseWith (\g -> f (g . unSimpleLoggerT))
   restoreM :: forall a. StM (SimpleLoggerT m) a -> SimpleLoggerT m a
   restoreM = coerce . (restoreM :: StM (ReaderT (SimpleLoggerCfg m) m) a -> ReaderT (SimpleLoggerCfg m) m a)

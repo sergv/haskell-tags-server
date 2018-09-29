@@ -29,9 +29,12 @@ import Prelude hiding (mod)
 
 import Control.Concurrent
 import Control.Monad.Base
+import Control.Monad.Catch
+import Control.Monad.ErrorExcept
 import Control.Monad.Except (throwError)
 import Control.Monad.Except.Ext
 import Control.Monad.Trans.Control
+
 import qualified Data.ByteString.Lazy.Char8 as C8
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
 import Data.Foldable (toList)
@@ -102,7 +105,7 @@ waitForBertServerStart :: MonadBase IO m => BertServer -> m ()
 waitForBertServerStart = waitForCondition . stStartedLock . bsTransport
 
 runBertServer
-  :: forall m. (WithCallStack, MonadBase IO m, MonadBaseControl IO m, MonadLog m, StM m BERT.DispatchResult ~ BERT.DispatchResult)
+  :: forall m. (WithCallStack, MonadBase IO m, MonadBaseControl IO m, MonadLog m, MonadCatch m, StM m BERT.DispatchResult ~ BERT.DispatchResult)
   => Network.PortNumber
   -> RequestHandler
   -> m BertServer
@@ -120,7 +123,7 @@ runBertServer port reqHandler = do
     go :: WithCallStack => String -> String -> [Term] -> m BERT.DispatchResult
     go mod func args = do
       logDebug $ "[runBertServer.go] got request" <+> pretty mod <> ":" ## pretty func
-      res <- runExceptT $ go' mod func args
+      res <- runErrorExceptT $ go' mod func args
       case res of
         Left err ->
           pure $ BERT.Success $ TupleTerm
@@ -130,7 +133,7 @@ runBertServer port reqHandler = do
         Right x -> pure x
     go'
       :: WithCallStack
-      => String -> String -> [Term] -> ExceptT ErrorMessage m BERT.DispatchResult
+      => String -> String -> [Term] -> ErrorExceptT ErrorMessage m BERT.DispatchResult
     go' "haskell-tags-server" "find-regexp" args =
       case args of
         [BinaryTerm filename, BinaryTerm regexp] -> do

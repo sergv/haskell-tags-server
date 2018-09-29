@@ -6,7 +6,6 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -14,6 +13,7 @@ module Main (main) where
 
 import Control.Applicative
 import Control.Monad
+import Control.Monad.ErrorExcept
 import Control.Monad.Except
 
 import Data.Foldable (for_)
@@ -90,7 +90,7 @@ main = do
   for_ cfgDirTrees ensureDirExists
 
   runSimpleLoggerT (Just Stderr) cfgDebugVerbosity $ do
-    result <- runExceptT $ do
+    result <- runErrorExceptT $ do
       cfgSourceDirectories' <- S.fromList <$> traverse mkFullPath cfgSourceDirectories
       cfgDirTrees'          <- S.fromList <$> traverse mkFullPath cfgDirTrees
       let conf  = defaultTagsServerConf
@@ -108,7 +108,7 @@ main = do
       logDebug $ ppDictHeader "Staring server with search cfg"
         [ "Search conf" :-> pretty (tsconfSearchDirs conf)
         ]
-      startTagsServer conf state :: ExceptT ErrorMessage (SimpleLoggerT IO) TagsServer
+      startTagsServer conf state :: ErrorExceptT ErrorMessage (SimpleLoggerT IO) TagsServer
     case result of
       Left err         -> liftIO $ putDocLn $ pretty err
       Right tagsServer -> do
