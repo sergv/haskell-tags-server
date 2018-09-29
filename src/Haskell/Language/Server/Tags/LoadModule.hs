@@ -328,8 +328,9 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded readFileAndLoad mod = do
                   -- The import is not found. Record that it brings no names
                   -- under relevant qualifiers so that later on those names
                   -- could be defaulted as coming from the export list.
-                  for_ importSpecs $ \ImportSpec{ispecImportKey = ImportKey{ikModuleName = importedModName}, ispecQualification} ->
-                    tell [(ispecQualification, importedModName, mempty)]
+                  tell $ flip map (toList importSpecs) $
+                    \ImportSpec{ispecImportKey = ImportKey{ikModuleName = importedModName}, ispecQualification} ->
+                      (ispecQualification, importedModName, mempty)
                   pure Nothing
                 Just modules' -> do
                   let importedNames :: SymbolMap
@@ -745,8 +746,8 @@ filterVisibleNames
   -> SymbolMap            -- ^ All names from the set of imports.
   -> UnresolvedImportSpec -- ^ Import spec for this particular set of imports.
   -> m SymbolMap
-filterVisibleNames moduleName importedMods allImportedNames ImportSpec{ispecImportList} = do
-  visibleNames <- case ispecImportList of
+filterVisibleNames moduleName importedMods allImportedNames ImportSpec{ispecImportList} =
+  case ispecImportList of
     NoImportList                                        ->
       pure allImportedNames
     AssumedWildcardImportList                           ->
@@ -757,7 +758,6 @@ filterVisibleNames moduleName importedMods allImportedNames ImportSpec{ispecImpo
                 Hidden   -> SM.withoutKeys
       importedNames <- foldMapA (allNamesFromEntry moduleName importedMods allImportedNames) ilEntries
       pure $ f allImportedNames importedNames
-  pure visibleNames
 
 -- | Get names referred to by @EntryWithChildren@ given a @SymbolMap@
 -- of names currently in scope.
