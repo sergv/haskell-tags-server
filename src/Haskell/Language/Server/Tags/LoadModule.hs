@@ -32,7 +32,7 @@ import Control.Monad.State
 import Control.Monad.Writer (MonadWriter(..))
 import qualified Control.Monad.Writer as Lazy
 import qualified Control.Monad.Writer.Strict as Strict
-import Control.Parallel.Strategies
+import Control.Parallel.Strategies.Ext
 
 import qualified Data.ByteString as BS
 import Data.Either
@@ -448,8 +448,8 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
                             $ M.fromSet (\childName -> mkResolvedSymbolFromParts posFile posLine childName childrenType (Just name')) presentChildren
                       pure (MM.singleton qualifier names :: MonoidalMap (Maybe ImportQualifier) (Map UnqualifiedSymbolName ResolvedSymbol))
               let (errors, xs) = partitionEithers exportedFromExportList'
-                  exportedFromExportList :: MonoidalMap (Maybe ImportQualifier) (Map UnqualifiedSymbolName ResolvedSymbol)
-                  exportedFromExportList = fold xs
+              (exportedFromExportList :: MonoidalMap (Maybe ImportQualifier) (Map UnqualifiedSymbolName ResolvedSymbol)) <-
+                foldPar xs
               (presentExports :: SymbolMap) <- rpar
                   $ fold
                   $ M.intersectionWith SM.restrictKeys namesInScopeByNamespace
@@ -458,13 +458,12 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
               -- logVerboseDebug $ "[resolveSymbols] exportedFromExportList =" ## ppMonoidalMapWith pretty ppMap exportedFromExportList
               (extra :: Map UnqualifiedSymbolName (Set UnqualifiedSymbolName)) <- rpar
                 $ inferExtraParents header
-              (allSymbols :: SymbolMap) <- rseq
-                $ mconcat
+              (allSymbols :: SymbolMap) <- foldPar
                 [ if reexportsItself then modAllSymbols else mempty
                 , reexports
                 , presentExports
                 ]
-              (allSymbols' :: SymbolMap) <- rseq $ SM.registerChildren extra allSymbols
+              (allSymbols' :: SymbolMap) <- rpar $ SM.registerChildren extra allSymbols
               -- logVerboseDebug $ "[resolveModule.resolveSymbols] inferred extra parents =" ##
               --   ppMapWith pretty ppSet extra
 
