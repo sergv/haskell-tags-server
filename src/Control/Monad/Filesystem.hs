@@ -25,12 +25,10 @@ module Control.Monad.Filesystem
 import Prelude hiding (readFile)
 
 import Control.Monad.Base
-import Control.Monad.Except
+import Control.Monad.Catch
+-- import Control.Monad.Except
 import Control.Monad.Reader
-import qualified Control.Monad.State.Lazy as Lazy
-import qualified Control.Monad.State.Strict as Strict
-import Control.Monad.Writer as Lazy
-import Control.Monad.Writer.Strict as Strict
+import Control.Monad.Trans.Control
 
 import qualified Data.ByteString as BS
 import Data.Map.Strict (Map)
@@ -42,7 +40,7 @@ import Data.Text.Prettyprint.Doc.Ext
 import Data.Time.Clock (UTCTime)
 import GHC.Generics (Generic)
 
-import Data.ErrorMessage
+-- import Data.ErrorMessage
 import Data.Filesystem
 import Data.Path (FullPath, FileType(..), BaseName)
 import qualified Data.Path as Path
@@ -82,9 +80,9 @@ class Monad m => MonadFS m where
   listDirectory        :: FullPath 'Dir  -> m ([FullPath 'File], [FullPath 'Dir])
   findRec
     :: Ord k
-    => SearchCfg -> (FullPath 'File -> Maybe (k, v)) -> m (Map k v)
+    => SearchCfg -> (FullPath 'File -> m (Maybe (k, v))) -> m (Map k v)
 
-instance {-# OVERLAPS #-} (Monad m, MonadBase IO m) => MonadFS (ExceptT ErrorMessage m) where
+instance {-# OVERLAPS #-} (Monad m, MonadBaseControl IO m, MonadMask m) => MonadFS m where
   {-# INLINE getModificationTime  #-}
   {-# INLINE readFile             #-}
   {-# INLINE doesFileExist        #-}
@@ -96,22 +94,22 @@ instance {-# OVERLAPS #-} (Monad m, MonadBase IO m) => MonadFS (ExceptT ErrorMes
   doesFileExist        = Path.doesFileExist
   doesDirectoryExist   = Path.doesDirectoryExist
   listDirectory        = Path.listDirectory
-  findRec SearchCfg{scShallowPaths, scRecursivePaths, scIgnoredDirs} f = liftBase $
-    findRecur scIgnoredDirs scShallowPaths scRecursivePaths f
+  findRec SearchCfg{scShallowPaths, scRecursivePaths, scIgnoredDirs} =
+    findRecur scIgnoredDirs scShallowPaths scRecursivePaths
 
-instance {-# OVERLAPPABLE #-} MonadFS m => MonadFS (ExceptT e m) where
-  {-# INLINE getModificationTime  #-}
-  {-# INLINE readFile             #-}
-  {-# INLINE doesFileExist        #-}
-  {-# INLINE doesDirectoryExist   #-}
-  {-# INLINE listDirectory        #-}
-  {-# INLINE findRec              #-}
-  getModificationTime  = lift . getModificationTime
-  readFile             = lift . readFile
-  doesFileExist        = lift . doesFileExist
-  doesDirectoryExist   = lift . doesDirectoryExist
-  listDirectory        = lift . listDirectory
-  findRec cfg          = lift . findRec cfg
+-- instance {-# OVERLAPPABLE #-} MonadFS m => MonadFS (ExceptT e m) where
+--   {-# INLINE getModificationTime  #-}
+--   {-# INLINE readFile             #-}
+--   {-# INLINE doesFileExist        #-}
+--   {-# INLINE doesDirectoryExist   #-}
+--   {-# INLINE listDirectory        #-}
+--   {-# INLINE findRec              #-}
+--   getModificationTime  = lift . getModificationTime
+--   readFile             = lift . readFile
+--   doesFileExist        = lift . doesFileExist
+--   doesDirectoryExist   = lift . doesDirectoryExist
+--   listDirectory        = lift . listDirectory
+--   findRec cfg f        = lift . findRec cfg (lift . f)
 
 instance MonadFS m => MonadFS (ReaderT r m) where
   {-# INLINE getModificationTime  #-}
@@ -125,63 +123,65 @@ instance MonadFS m => MonadFS (ReaderT r m) where
   doesFileExist        = lift . doesFileExist
   doesDirectoryExist   = lift . doesDirectoryExist
   listDirectory        = lift . listDirectory
-  findRec cfg          = lift . findRec cfg
+  findRec cfg f        = do
+    env <- ask
+    lift $ findRec cfg ((`runReaderT` env) . f)
 
-instance (MonadFS m, Monoid w) => MonadFS (Lazy.WriterT w m) where
-  {-# INLINE getModificationTime  #-}
-  {-# INLINE readFile             #-}
-  {-# INLINE doesFileExist        #-}
-  {-# INLINE doesDirectoryExist   #-}
-  {-# INLINE listDirectory        #-}
-  {-# INLINE findRec              #-}
-  getModificationTime  = lift . getModificationTime
-  readFile             = lift . readFile
-  doesFileExist        = lift . doesFileExist
-  doesDirectoryExist   = lift . doesDirectoryExist
-  listDirectory        = lift . listDirectory
-  findRec cfg          = lift . findRec cfg
-
-instance (MonadFS m, Monoid w) => MonadFS (Strict.WriterT w m) where
-  {-# INLINE getModificationTime  #-}
-  {-# INLINE readFile             #-}
-  {-# INLINE doesFileExist        #-}
-  {-# INLINE doesDirectoryExist   #-}
-  {-# INLINE listDirectory        #-}
-  {-# INLINE findRec              #-}
-  getModificationTime  = lift . getModificationTime
-  readFile             = lift . readFile
-  doesFileExist        = lift . doesFileExist
-  doesDirectoryExist   = lift . doesDirectoryExist
-  listDirectory        = lift . listDirectory
-  findRec cfg          = lift . findRec cfg
-
-instance MonadFS m => MonadFS (Lazy.StateT s m) where
-  {-# INLINE getModificationTime  #-}
-  {-# INLINE readFile             #-}
-  {-# INLINE doesFileExist        #-}
-  {-# INLINE doesDirectoryExist   #-}
-  {-# INLINE listDirectory        #-}
-  {-# INLINE findRec              #-}
-  getModificationTime  = lift . getModificationTime
-  readFile             = lift . readFile
-  doesFileExist        = lift . doesFileExist
-  doesDirectoryExist   = lift . doesDirectoryExist
-  listDirectory        = lift . listDirectory
-  findRec cfg          = lift . findRec cfg
-
-instance MonadFS m => MonadFS (Strict.StateT s m) where
-  {-# INLINE getModificationTime  #-}
-  {-# INLINE readFile             #-}
-  {-# INLINE doesFileExist        #-}
-  {-# INLINE doesDirectoryExist   #-}
-  {-# INLINE listDirectory        #-}
-  {-# INLINE findRec              #-}
-  getModificationTime  = lift . getModificationTime
-  readFile             = lift . readFile
-  doesFileExist        = lift . doesFileExist
-  doesDirectoryExist   = lift . doesDirectoryExist
-  listDirectory        = lift . listDirectory
-  findRec cfg          = lift . findRec cfg
+-- instance (MonadFS m, Monoid w) => MonadFS (Lazy.WriterT w m) where
+--   {-# INLINE getModificationTime  #-}
+--   {-# INLINE readFile             #-}
+--   {-# INLINE doesFileExist        #-}
+--   {-# INLINE doesDirectoryExist   #-}
+--   {-# INLINE listDirectory        #-}
+--   {-# INLINE findRec              #-}
+--   getModificationTime  = lift . getModificationTime
+--   readFile             = lift . readFile
+--   doesFileExist        = lift . doesFileExist
+--   doesDirectoryExist   = lift . doesDirectoryExist
+--   listDirectory        = lift . listDirectory
+--   findRec cfg          = lift . findRec cfg
+--
+-- instance (MonadFS m, Monoid w) => MonadFS (Strict.WriterT w m) where
+--   {-# INLINE getModificationTime  #-}
+--   {-# INLINE readFile             #-}
+--   {-# INLINE doesFileExist        #-}
+--   {-# INLINE doesDirectoryExist   #-}
+--   {-# INLINE listDirectory        #-}
+--   {-# INLINE findRec              #-}
+--   getModificationTime  = lift . getModificationTime
+--   readFile             = lift . readFile
+--   doesFileExist        = lift . doesFileExist
+--   doesDirectoryExist   = lift . doesDirectoryExist
+--   listDirectory        = lift . listDirectory
+--   findRec cfg          = lift . findRec cfg
+--
+-- instance MonadFS m => MonadFS (Lazy.StateT s m) where
+--   {-# INLINE getModificationTime  #-}
+--   {-# INLINE readFile             #-}
+--   {-# INLINE doesFileExist        #-}
+--   {-# INLINE doesDirectoryExist   #-}
+--   {-# INLINE listDirectory        #-}
+--   {-# INLINE findRec              #-}
+--   getModificationTime  = lift . getModificationTime
+--   readFile             = lift . readFile
+--   doesFileExist        = lift . doesFileExist
+--   doesDirectoryExist   = lift . doesDirectoryExist
+--   listDirectory        = lift . listDirectory
+--   findRec cfg          = lift . findRec cfg
+--
+-- instance MonadFS m => MonadFS (Strict.StateT s m) where
+--   {-# INLINE getModificationTime  #-}
+--   {-# INLINE readFile             #-}
+--   {-# INLINE doesFileExist        #-}
+--   {-# INLINE doesDirectoryExist   #-}
+--   {-# INLINE listDirectory        #-}
+--   {-# INLINE findRec              #-}
+--   getModificationTime  = lift . getModificationTime
+--   readFile             = lift . readFile
+--   doesFileExist        = lift . doesFileExist
+--   doesDirectoryExist   = lift . doesDirectoryExist
+--   listDirectory        = lift . listDirectory
+--   findRec cfg          = lift . findRec cfg
 
 versionControlDirs :: Set (BaseName 'Dir)
 versionControlDirs = S.fromList

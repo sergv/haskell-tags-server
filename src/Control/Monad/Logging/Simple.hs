@@ -18,6 +18,7 @@
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
 
@@ -38,7 +39,7 @@ import qualified Data.Text.Lazy.IO as TLIO
 import Data.Void (Void)
 import System.IO
 
-import Control.Monad.Filesystem
+import Control.Monad.Filesystem as MonadFS
 import Control.Monad.Logging
 import Data.Text.Prettyprint.Doc.Ext
 
@@ -57,7 +58,7 @@ newtype SimpleLoggerT m a = SimpleLoggerT
     , MonadError e
     , MonadThrow
     , MonadCatch
-    , MonadFS
+    , MonadMask
     , MonadIO
     )
 
@@ -72,6 +73,8 @@ instance MonadBaseControl n m => MonadBaseControl n (SimpleLoggerT m) where
   liftBaseWith f = SimpleLoggerT $ liftBaseWith (\g -> f (g . unSimpleLoggerT))
   restoreM :: forall a. StM (SimpleLoggerT m) a -> SimpleLoggerT m a
   restoreM = coerce . (restoreM :: StM (ReaderT (SimpleLoggerCfg m) m) a -> ReaderT (SimpleLoggerCfg m) m a)
+
+deriving instance (MonadBaseControl IO m, MonadMask m) => MonadFS (SimpleLoggerT m)
 
 instance Monad m => MonadLog (SimpleLoggerT m) where
   logDoc severity msg = SimpleLoggerT $ do

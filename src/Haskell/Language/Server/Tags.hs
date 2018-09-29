@@ -12,6 +12,7 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Haskell.Language.Server.Tags
@@ -66,7 +67,7 @@ waitForTagsServerFinish = liftBase . readMVar . tsFinishState
 -- | Start new tags server thread that will serve requests supplied via returned
 -- RequestHandler.
 startTagsServer
-  :: forall m. (WithCallStack, MonadBase IO m, MonadBaseControl IO m, MonadCatch m, MonadError ErrorMessage m, MonadLog m, MonadFS m)
+  :: forall m. (WithCallStack, MonadBase IO m, MonadBaseControl IO m, MonadCatch m, MonadError ErrorMessage m, MonadLog m, MonadFS m, MonadMask m)
   => TagsServerConf
   -> TagsServerState
   -> m TagsServer
@@ -75,7 +76,7 @@ startTagsServer conf state = do
     if tsconfEagerTagging conf
     then do
       logInfo "[startTagsServer] collecting tags eagerly"
-      modules <- loadAllFilesIntoState conf
+      modules <- loadAllFilesIntoState id conf
       logInfo $ "[startTagsServer] finished collecting tags eagerly, processed" <+> pretty (getSum $ foldMap (Sum . length) modules) <+> "modules"
       pure $ state { tssLoadedModules = SubkeyMap.fromMap modules <> tssLoadedModules state }
     else pure state
@@ -111,7 +112,7 @@ startTagsServer conf state = do
         case request of
           FindSymbol filename symbol -> do
             ensureFileExists filename
-            symbols <- findSymbol filename symbol
+            symbols <- findSymbol id filename symbol
             case symbols of
               []   -> pure $ NotFound symbol
               s:ss -> pure $ Found $ s :| ss

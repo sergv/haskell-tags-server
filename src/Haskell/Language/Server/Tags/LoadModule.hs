@@ -12,10 +12,12 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Haskell.Language.Server.Tags.LoadModule
   ( loadModule
+  , readFileAndLoad
   , loadModuleFromSource
   , resolveModule
   ) where
@@ -80,10 +82,12 @@ defaultModuleName = mkModuleName "Main"
 -- | Fetch module by it's name from cache or load it. Check modification time
 -- of module files and reload if anything changed
 loadModule
-  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => ImportKey
+  :: forall m n. (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
+  => (forall a. n a -> m a)
+  -> ImportKey
   -> m (Maybe (NonEmpty ResolvedModule))
-loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
+loadModule liftN key@ImportKey{ikModuleName, ikImportTarget} = do
   logInfo $ "[loadModule] loading" <+> pretty ikModuleName
   s <- get
   if key `M.member` tssLoadsInProgress s
@@ -104,7 +108,7 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
       Just ms -> do
         logDebug $ "[loadModule] module was loaded before, reusing:" <+> pretty key
         (ms', Any anyReloaded) <- Strict.runWriterT $ for ms $ \m -> do
-          m' <- reloadIfNecessary key m
+          m' <- lift $ reloadIfNecessary liftN key m
           case m' of
             Nothing  -> pure m
             Just m'' -> m'' <$ tell (Any True)
@@ -127,57 +131,71 @@ loadModule key@ImportKey{ikModuleName, ikImportTarget} = do
                 VanillaModule -> tsconfVanillaExtensions
                 HsBootModule  -> tsconfHsBootExtensions
               msg        = "Cannot load module " <> pretty ikModuleName Semigroup.<> ": no paths found"
-          candidates <- MonadFS.findRec tsconfSearchDirs $ \candidate ->
+          candidates <- liftN $ MonadFS.findRec tsconfSearchDirs $ \candidate -> do
             let (dirs, file)   = splitDirectories candidate
                 candidateComps :: [PathFragment]
                 candidateComps = map unBaseName dirs ++ [unBaseName $ dropExtensions file]
-            in
             if (takeExtension candidate `S.member` extensions) && (fmap mkSinglePathFragment comps `L.isSuffixOf` candidateComps)
-            then Just (candidate, candidate)
-            else Nothing
+            then do
+              modifTime <- MonadFS.getModificationTime candidate
+              unresMod  <- readFileAndLoad (Just ikModuleName) modifTime candidate
+              pure $ Just (candidate, unresMod)
+            else pure Nothing
           case (tsconfNameResolution, toList candidates) of
             (NameResolutionStrict, []) -> throwErrorWithCallStack msg
             (NameResolutionLax,    []) -> do
               logWarning msg
               pure Nothing
             (_, p : ps)                ->
-              Just <$> traverse (loadModuleFromFile key Nothing) (p :| ps)
+              Just <$> traverse (registerAndResolve liftN key) (p :| ps)
 
 -- TODO: consider using hashes to track whether a module needs reloading?
 reloadIfNecessary
   :: (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => ImportKey
+  => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
+  => (forall a. n a -> m a)
+  -> ImportKey
   -> ResolvedModule
   -> m (Maybe ResolvedModule)
-reloadIfNecessary key m = do
+reloadIfNecessary liftN key@ImportKey{ikModuleName} m@Module{modFile, modHeader} = do
   (needsReloading, modifTime) <- moduleNeedsReloading m
   if needsReloading
   then do
-    logInfo $ "[reloadIfNecessary] reloading module" <+> pretty (mhModName $ modHeader m)
-    Just <$> loadModuleFromFile key (Just modifTime) (modFile m)
+    logInfo $ "[reloadIfNecessary] reloading module" <+> pretty (mhModName modHeader)
+    m' <- registerAndResolve liftN key =<< readFileAndLoad (Just ikModuleName) modifTime modFile
+    pure $ Just m'
   else pure Nothing
 
-loadModuleFromFile
+registerAndResolve
   :: (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => ImportKey
-  -> Maybe UTCTime
-  -> FullPath 'File
+  => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
+  => (forall a. n a -> m a)
+  -> ImportKey
+  -> UnresolvedModule
   -> m ResolvedModule
-loadModuleFromFile key@ImportKey{ikModuleName} modifTime filename = do
-  logInfo $ "[loadModuleFromFile] loading file" <+> pretty filename
-  modifTime'    <- maybe (MonadFS.getModificationTime filename) pure modifTime
-  source        <- MonadFS.readFile filename
-  unresolvedMod <- loadModuleFromSource (Just ikModuleName) modifTime' filename source
-
+registerAndResolve liftN key unresolvedMod@Module{modFile} = do
   modify $ \s -> s
-    { tssLoadsInProgress = M.insertWith NEMap.union key (NEMap.singleton filename unresolvedMod) $ tssLoadsInProgress s }
-  resolved      <- resolveModule checkLoadingModules loadModule unresolvedMod
+    { tssLoadsInProgress =
+      M.insertWith NEMap.union key (NEMap.singleton modFile unresolvedMod) $ tssLoadsInProgress s
+    }
+  resolved <- resolveModule checkLoadingModules (loadModule liftN) unresolvedMod
   modify $ \s -> s
     { tssLoadsInProgress = M.update f key $ tssLoadsInProgress s }
   pure resolved
   where
     f :: NonEmptyMap (FullPath 'File) v -> Maybe (NonEmptyMap (FullPath 'File) v)
-    f = NEMap.delete filename
+    f = NEMap.delete modFile
+
+readFileAndLoad
+  :: (MonadFS m, MonadError ErrorMessage m, MonadLog m)
+  => Maybe ModuleName
+  -> UTCTime
+  -> FullPath 'File
+  -> m UnresolvedModule
+readFileAndLoad suggestedModName modTime filename = do
+  source <- MonadFS.readFile filename
+  logInfo $ "[loadAllFilesIntoState] Loading" <+> PP.dquotes (pretty filename)
+  loadModuleFromSource suggestedModName modTime filename source
 
 checkLoadingModules
   :: forall m. MonadState TagsServerState m
@@ -263,7 +281,7 @@ resolveModule
   -> (ImportKey -> m (Maybe (NonEmpty ResolvedModule)))
   -> UnresolvedModule
   -> m ResolvedModule
-resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
+resolveModule checkIfModuleIsAlreadyBeingLoaded readFileAndLoad mod = do
   logDebug $ "[resolveModule] resolving names of module" <+> pretty (mhModName unresHeader)
   (imports, symbols) <- resolveSymbols mod
   logVerboseDebug $ ppDictHeader ("[resolveModule] Resolved items for module" <+> pretty (mhModName unresHeader))
@@ -304,7 +322,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
             -- resolved, use what was resolved.
             Nothing -> do
               logDebug $ "[resolveModule.resolveImports.resolveImport] Resolving import" <+> pretty (ikModuleName key)
-              modules <- lift $ loadMod key
+              modules <- lift $ readFileAndLoad key
               case modules of
                 Nothing       -> do
                   -- The import is not found. Record that it brings no names
@@ -337,7 +355,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded loadMod mod = do
                 pretty (map modFile toResolve)
               Just <$> quasiResolveImportSpecWithLoadsInProgress
                 (lift . checkIfModuleIsAlreadyBeingLoaded)
-                (lift . loadMod)
+                (lift . readFileAndLoad)
                 (mhModName unresHeader)
                 (modFile mod)
                 key
@@ -482,7 +500,7 @@ quasiResolveImportSpecWithLoadsInProgress
   -> m (t ResolvedImportSpec)
 quasiResolveImportSpecWithLoadsInProgress
   checkIfModuleIsAlreadyBeingLoaded
-  loadMod
+  readFileAndLoad
   mainModName
   mainModFile
   mainModImport
@@ -554,7 +572,7 @@ quasiResolveImportSpecWithLoadsInProgress
                       -- TODO: use '_finishedLoading' as it may help to
                       -- resolve some names.
                       (mempty, mhModName . modHeader <$> toList inProgress)
-              res <- resolveLoop loadMod wantedNames' canLoad
+              res <- resolveLoop readFileAndLoad wantedNames' canLoad
               case res of
                 Nothing -> do
                   logDebug $ ppDictHeader "Import cycle debug info"
@@ -608,7 +626,7 @@ resolveLoop
   -> KeyMap Set (EntryWithChildren () UnqualifiedSymbolName)
   -> [UnresolvedImportSpec]
   -> m (Maybe SymbolMap)
-resolveLoop loadMod wantedNames = go (KM.keysSet wantedNames) mempty
+resolveLoop readFileAndLoad wantedNames = go (KM.keysSet wantedNames) mempty
   where
     go
       :: Set UnqualifiedSymbolName
@@ -619,7 +637,7 @@ resolveLoop loadMod wantedNames = go (KM.keysSet wantedNames) mempty
       _ | S.null wanted -> pure $ Just found
       []                -> pure Nothing
       ImportSpec{ispecImportKey} : specs -> do
-        mod <- loadMod ispecImportKey
+        mod <- readFileAndLoad ispecImportKey
         case mod of
           Nothing   -> go wanted  found  specs
           Just mods -> go wanted' found' specs

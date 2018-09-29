@@ -13,6 +13,7 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
 
@@ -23,7 +24,6 @@ module Haskell.Language.Server.Tags.LoadFiles
 import Prelude hiding (mod, readFile)
 
 import Control.Arrow ((&&&))
-import Control.Monad.Catch
 import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State.Strict
@@ -38,7 +38,6 @@ import qualified Data.Semigroup as Semigroup
 import qualified Data.Set as S
 import qualified Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext
-import Data.Traversable
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
@@ -47,7 +46,7 @@ import Data.ErrorMessage
 import Data.Map.NonEmpty (NonEmptyMap)
 import qualified Data.Map.NonEmpty as NEMap
 import Data.Path
-import Haskell.Language.Server.Tags.LoadModule (loadModuleFromSource, resolveModule)
+import Haskell.Language.Server.Tags.LoadModule (readFileAndLoad, resolveModule)
 import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
@@ -66,21 +65,28 @@ data ResolveState = ResolveState
   , rsLoadedModules  :: !(HashMap ImportKey (NonEmpty ResolvedModule))
   }
 
-loadAllFilesIntoState
-  :: forall m. (WithCallStack, MonadCatch m, MonadError ErrorMessage m, MonadLog m, MonadFS m)
+loadMod
+  :: (MonadFS m, MonadError ErrorMessage m, MonadLog m)
   => TagsServerConf
-  -> m (Map ImportKey (NonEmpty ResolvedModule))
-loadAllFilesIntoState conf = do
-  allFiles <- MonadFS.findRec (tsconfSearchDirs conf) $ \filename -> do
-    importType <- classifyPath conf filename
-    pure ((filename, importType), (importType, filename))
+  -> FullPath 'File
+  -> m (Maybe ((FullPath 'File, ImportTarget), (ImportTarget, UnresolvedModule)))
+loadMod conf filename =
+  case classifyPath conf filename of
+    Nothing         -> pure Nothing
+    Just importType -> do
+      modTime       <- MonadFS.getModificationTime filename
+      logInfo $ "[loadAllFilesIntoState] Loading" <+> PP.dquotes (pretty filename)
+      unresolvedMod <- readFileAndLoad Nothing modTime filename
+      unresolvedMod `seq` pure (Just ((filename, importType), (importType, unresolvedMod)))
 
-  unresolvedModules <- for (toList allFiles) $ \(importType, filename) -> do
-    modTime       <- MonadFS.getModificationTime filename
-    source        <- MonadFS.readFile filename
-    logInfo $ "[loadAllFilesIntoState] Loading" <+> PP.dquotes (pretty filename)
-    unresolvedMod <- loadModuleFromSource Nothing modTime filename source
-    unresolvedMod `seq` pure (importType, unresolvedMod)
+loadAllFilesIntoState
+  :: forall m k. (WithCallStack, MonadError ErrorMessage m, MonadLog m)
+  => (MonadFS k, MonadError ErrorMessage k, MonadLog k)
+  => (forall a. k a -> m a)
+  -> TagsServerConf
+  -> m (Map ImportKey (NonEmpty ResolvedModule))
+loadAllFilesIntoState liftK conf = do
+  unresolvedModules <- liftK $ MonadFS.findRec (tsconfSearchDirs conf) (loadMod conf)
   let mkImportKey :: (ImportTarget, UnresolvedModule) -> ImportKey
       mkImportKey (target, mod) = ImportKey
         { ikImportTarget = target
@@ -88,7 +94,8 @@ loadAllFilesIntoState conf = do
         }
       unresolvedModulesMap :: Map ImportKey (NonEmpty UnresolvedModule)
       unresolvedModulesMap = M.fromListWith (Semigroup.<>)
-                           $ map (mkImportKey &&& ((:| []) . snd)) unresolvedModules
+                           $ map (mkImportKey &&& ((:| []) . snd))
+                           $ toList unresolvedModules
       initState :: ResolveState
       initState = ResolveState
         { rsLoadingModules = mempty

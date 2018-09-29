@@ -11,6 +11,7 @@
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE PatternGuards       #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Haskell.Language.Server.Tags.Search (findSymbol) where
@@ -43,20 +44,24 @@ import Haskell.Language.Server.Tags.Types.Modules
 
 findSymbol
   :: (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => FullPath 'File     -- ^ File name
+  => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
+  => (forall a. n a -> m a)
+  -> FullPath 'File     -- ^ File name
   -> SymbolName         -- ^ Symbol to find. Can be either qualified, unqualified, ascii name/utf name/operator
   -> m [ResolvedSymbol] -- ^ Found tags, may be empty when nothing was found.
-findSymbol filename sym = do
+findSymbol liftN filename sym = do
   modName <- fileNameToModuleName filename
-  foldMapA (foldMapA (findInModule sym)) =<< loadModule (ImportKey VanillaModule modName)
+  foldMapA (foldMapA (findInModule liftN sym)) =<< loadModule liftN (ImportKey VanillaModule modName)
 
 -- | Try to find out what @sym@ refers to in the context of module @mod@.
 findInModule
-  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => SymbolName
+  :: forall m n. (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
+  => (forall a. n a -> m a)
+  -> SymbolName
   -> ResolvedModule
   -> m [ResolvedSymbol]
-findInModule sym mod =
+findInModule liftN sym mod =
   case qualifier of
     -- Unqualified name
     Nothing -> do
@@ -65,7 +70,7 @@ findInModule sym mod =
           relevantImports = filter importBringsUnqualifiedNames
                           $ foldMap toList
                           $ mhImports header
-      (localSyms ++) <$> lookUpInImportedModules sym' relevantImports
+      (localSyms ++) <$> lookUpInImportedModules liftN sym' relevantImports
     -- Qualified name
     Just qualifier' -> do
       resolvedSpecs <- resolveQualifier qualifier' header
@@ -75,7 +80,7 @@ findInModule sym mod =
             "not listed among module's import qualifiers:" ##
             ppMapWith pretty ppNE (mhImportQualifiers header)
         Just specs ->
-          lookUpInImportedModules sym' specs
+          lookUpInImportedModules liftN sym' specs
   where
     qualifier :: Maybe ImportQualifier
     sym'      :: UnqualifiedSymbolName
@@ -84,12 +89,14 @@ findInModule sym mod =
     header = modHeader mod
 
 lookUpInImportedModules
-  :: forall m f. (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: forall m n f. (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
   => (Functor f, Foldable f)
-  => UnqualifiedSymbolName
+  => (forall a. n a -> m a)
+  -> UnqualifiedSymbolName
   -> f ResolvedImportSpec
   -> m [ResolvedSymbol]
-lookUpInImportedModules name specs = do
+lookUpInImportedModules liftN name specs = do
   logDebug $ ppFoldableHeader
     ("[lookUpInImportedModules] searching for name" <+> pretty name <+> "in modules")
     (ikModuleName . ispecImportKey <$> specs)
@@ -97,7 +104,7 @@ lookUpInImportedModules name specs = do
     let nameVisible = SM.member name ispecImportedNames
     if nameVisible
     then do
-      mods <- loadModule ispecImportKey
+      mods <- loadModule liftN ispecImportKey
       foldForA mods $ foldMapA $ \mod -> do
         logDebug $ "[lookUpInImportedModules] searching for name" <+> pretty name <+> "in module" <+> pretty (ikModuleName ispecImportKey)
         lookUpInImportedModule name mod
