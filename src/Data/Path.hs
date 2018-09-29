@@ -118,6 +118,9 @@ instance (MonadBase IO m, MonadError ErrorMessage m) => MkSomeFullPath FilePath.
     :: FilePath.FilePath
     -> m (Either (FullPath 'File) (FullPath 'Dir))
   mkSomeFullPath path = do
+    exists <- liftBase $ Posix.fileExist path
+    unless exists $
+      throwErrorWithCallStack $ "Path does not exist:" <+> pretty path
     status <- liftBase $ Posix.getSymbolicLinkStatus path
     path'  <- liftBase $ T.pack <$> Directory.makeAbsolute path
     if | Posix.isRegularFile  status -> pure $! Left  $! FullPath path'
