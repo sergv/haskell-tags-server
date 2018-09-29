@@ -90,7 +90,7 @@ main = do
   for_ cfgDirTrees ensureDirExists
 
   runSimpleLoggerT (Just Stderr) cfgDebugVerbosity $ do
-    result <- runErrorExceptT $ do
+    tagsServer <- runErrorExceptT $ do
       cfgSourceDirectories' <- S.fromList <$> traverse mkFullPath cfgSourceDirectories
       cfgDirTrees'          <- S.fromList <$> traverse mkFullPath cfgDirTrees
       let conf  = defaultTagsServerConf
@@ -109,13 +109,13 @@ main = do
         [ "Search conf" :-> pretty (tsconfSearchDirs conf)
         ]
       startTagsServer conf state :: ErrorExceptT ErrorMessage (SimpleLoggerT IO) TagsServer
-    case result of
+    case tagsServer of
       Left err         -> liftIO $ putDocLn $ pretty err
-      Right tagsServer -> do
-        bertServer <- runBertServer cfgPort $ tsRequestHandler tagsServer
+      Right tagsServer' -> do
+        bertServer <- runBertServer cfgPort $ tsRequestHandler tagsServer'
         waitForBertServerStart bertServer
         -- Wait for tag server to finish
-        void $ waitForTagsServerFinish tagsServer
+        void $ waitForTagsServerFinish tagsServer'
 
 ensureDirExists :: FilePath -> IO ()
 ensureDirExists dir = do

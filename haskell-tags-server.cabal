@@ -89,6 +89,7 @@ library
     Control.Monad.Logging
     Control.Monad.Logging.Simple
     Control.Monad.Par.Combinator.Ext
+    Control.Parallel.Strategies.Ext
 
     Data.CompiledRegex
     Data.Condition
