@@ -35,7 +35,7 @@ import Control.Monad.Except (throwError)
 import Control.Monad.Except.Ext
 import Control.Monad.Trans.Control
 
-import qualified Data.ByteString.Lazy.Char8 as C8
+import qualified Data.ByteString.Lazy.Char8 as CL8
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -57,7 +57,7 @@ import Data.ErrorMessage
 import Data.Path
 import qualified Data.Promise as Promise
 import Data.Symbols
-import Haskell.Language.Lexer.FastTags (SrcPos(..), Type, Line(..))
+import Haskell.Language.Lexer.FastTags (Type, Line(..))
 import Haskell.Language.Server.Tags.Types
 
 defaultPort :: Network.PortNumber
@@ -67,7 +67,7 @@ decodeUtf8
   :: (WithCallStack, MonadError ErrorMessage m)
   => Doc Void -> UTF8.ByteString -> m T.Text
 decodeUtf8 thing =
-  either (throwErrorWithCallStack . mkErr) pure . TE.decodeUtf8' . C8.toStrict
+  either (throwErrorWithCallStack . mkErr) pure . TE.decodeUtf8' . CL8.toStrict
   where
     mkErr = (msg <+>) . ppShow
     msg :: Doc ann
@@ -176,11 +176,11 @@ responseToTerm = \case
 symbolToBERT :: ResolvedSymbol -> Term
 symbolToBERT sym =
   TupleTerm
-    [ BinaryTerm $ UTF8.fromString posFile
-    , IntTerm $ unLine posLine
+    [ BinaryTerm $ CL8.fromStrict $ fullPathAsUtf8 file
+    , IntTerm $ unLine line
     , AtomTerm $ show typ
     ]
   where
-    SrcPos{posFile, posLine} = resolvedSymbolPosition sym
+    (file, line) = resolvedSymbolPosition sym
     typ :: Type
     typ = resolvedSymbolType sym

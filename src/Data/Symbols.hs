@@ -7,7 +7,10 @@
 -- Created     :  Tuesday, 27 September 2016
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE TypeFamilies               #-}
 
@@ -38,11 +41,9 @@ module Data.Symbols
   , resolvedSymbolParent
   , resolvedSymbolPosition
   , resolvedSymbolFile
-    -- -- * Reexports
-  -- , SrcPos(..)
-  -- Type(..)
   ) where
 
+import Control.Arrow ((&&&))
 import Control.Applicative
 import Control.DeepSeq
 
@@ -54,10 +55,12 @@ import Data.Hashable
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc.Ext
+import GHC.Generics (Generic)
 
 import Haskell.Language.Lexer.FastTags (Pos(..), TagVal(..), Type(..), SrcPos(..), Line(..))
 
 import Data.KeyMap (HasKey(..))
+import Data.Path
 
 -- | e.g. Foo, Foo.Bar. Assume that this is not an import qualifier.
 -- Import qualifiers should be labeled as 'ImportQualifer'.
@@ -133,8 +136,16 @@ splitQualifiedPart sym =
 
 -- | A symbolic name that identifier some Haskell entity. Has position,
 -- entity type and possibly a parent.
-newtype ResolvedSymbol = ResolvedSymbol (Pos TagVal)
-  deriving (Eq, Ord, Show, Hashable, NFData)
+data ResolvedSymbol = ResolvedSymbol
+  { rsFile   :: !(FullPath 'File)
+  , rsLine   :: {-# UNPACK #-} !Line
+  , rsName   :: {-# UNPACK #-} !Text
+  , rsType   :: !Type
+  , rsParent :: !(Maybe Text)
+  } deriving (Eq, Ord, Show, Generic)
+
+instance Hashable ResolvedSymbol
+instance NFData   ResolvedSymbol
 
 instance HasKey ResolvedSymbol where
   type Key ResolvedSymbol = UnqualifiedSymbolName
@@ -142,55 +153,51 @@ instance HasKey ResolvedSymbol where
   getKey = resolvedSymbolName
 
 instance Pretty ResolvedSymbol where
-  pretty sym@(ResolvedSymbol _) =
-    ppDictHeader "ResolvedSymbol" $
-      [ "name"     :-> pretty (resolvedSymbolName sym)
-      , "type"     :-> ppType (resolvedSymbolType sym)
-      ] ++
-      [ "parent"   :-> pretty parent
-      | Just parent <- [resolvedSymbolParent sym]
-      ] ++
-      [ "position" :-> ppSrcPos (resolvedSymbolPosition sym)
-      ]
-    where
-      ppType :: Type -> Doc ann
-      ppType = ppShow
-
-      ppSrcPos :: SrcPos -> Doc ann
-      ppSrcPos (SrcPos file line _) =
-        docFromString file <> ":" <> pretty (unLine line)
+  pretty = ppGeneric
 
 {-# INLINE mkResolvedSymbol #-}
-mkResolvedSymbol :: Pos TagVal -> ResolvedSymbol
-mkResolvedSymbol = ResolvedSymbol
+mkResolvedSymbol :: FullPath 'File -> Pos TagVal -> ResolvedSymbol
+mkResolvedSymbol rsFile (Pos SrcPos{posLine} TagVal{tvName, tvType, tvParent}) =
+  ResolvedSymbol
+    { rsFile
+    , rsLine   = posLine
+    , rsName   = tvName
+    , rsType   = tvType
+    , rsParent = tvParent
+    }
 
 mkResolvedSymbolFromParts
-  :: SrcPos                      -- ^ Position
+  :: FullPath 'File
+  -> Line
   -> UnqualifiedSymbolName       -- ^ Symbol name
   -> Type                        -- ^ Type of entity symbol will refer to
   -> Maybe UnqualifiedSymbolName -- ^ Optional parent
   -> ResolvedSymbol
-mkResolvedSymbolFromParts pos name typ parent =
-  ResolvedSymbol $ Pos pos $ TagVal (unqualSymNameText name) typ (unqualSymNameText <$> parent)
+mkResolvedSymbolFromParts rsFile rsLine name rsType parent =
+  ResolvedSymbol
+    { rsFile
+    , rsLine
+    , rsName   = unqualSymNameText name
+    , rsType
+    , rsParent = unqualSymNameText <$> parent
+    }
 
 {-# INLINE resolvedSymbolName #-}
 resolvedSymbolName :: ResolvedSymbol -> UnqualifiedSymbolName
-resolvedSymbolName (ResolvedSymbol (Pos _ (TagVal name _ _))) =
-  UnqualifiedSymbolName $ SymbolName name
+resolvedSymbolName = UnqualifiedSymbolName . SymbolName . rsName
 
 {-# INLINE resolvedSymbolType #-}
 resolvedSymbolType :: ResolvedSymbol -> Type
-resolvedSymbolType (ResolvedSymbol (Pos _ (TagVal _ typ _))) = typ
+resolvedSymbolType = rsType
 
 {-# INLINE resolvedSymbolParent #-}
 resolvedSymbolParent :: ResolvedSymbol -> Maybe UnqualifiedSymbolName
-resolvedSymbolParent (ResolvedSymbol (Pos _ (TagVal _ _ parent))) =
-  UnqualifiedSymbolName . SymbolName <$> parent
+resolvedSymbolParent = coerce rsParent
 
 {-# INLINE resolvedSymbolPosition #-}
-resolvedSymbolPosition :: ResolvedSymbol -> SrcPos
-resolvedSymbolPosition (ResolvedSymbol (Pos pos _)) = pos
+resolvedSymbolPosition :: ResolvedSymbol -> (FullPath 'File, Line)
+resolvedSymbolPosition = rsFile &&& rsLine
 
 {-# INLINE resolvedSymbolFile #-}
-resolvedSymbolFile :: ResolvedSymbol -> FilePath
-resolvedSymbolFile (ResolvedSymbol (Pos (SrcPos file _ _) _)) = file
+resolvedSymbolFile :: ResolvedSymbol -> FullPath 'File
+resolvedSymbolFile = rsFile

@@ -7,12 +7,13 @@
 -- Created     :  20 June 2017
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE BangPatterns       #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE LambdaCase         #-}
-{-# LANGUAGE NamedFieldPuns     #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE BangPatterns               #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE NamedFieldPuns             #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -55,7 +56,7 @@ import FastTags.Tag
   , UnstrippedTokens(..)
   , unstrippedTokensOf
   )
-import FastTags.Token (Line(..), SrcPos(..), increaseLine, posFile, posLine, unLine)
+import FastTags.Token (Line(..), Offset(..), SrcPos(..), increaseLine, posFile, posLine, unLine)
 
 data PragmaType = SourcePragma
   deriving (Show, Eq, Ord, Generic)
@@ -147,20 +148,12 @@ instance NFData   FastTags.TokenVal
 instance Pretty FastTags.TokenVal where
   pretty = ppGeneric
 
-deriving instance Generic Line
-instance Hashable Line
-
-deriving instance Generic SrcPos
-instance Hashable SrcPos
+deriving instance Generic  Line
+deriving instance Hashable Line
+deriving instance Pretty   Line
 
 instance Pretty SrcPos where
   pretty SrcPos{posFile, posLine} = pretty posFile <> ":" <> pretty (unLine posLine)
-
-deriving instance Generic (Pos a)
-instance Hashable a => Hashable (Pos a)
-
-instance Pretty a => Pretty (Pos a) where
-  pretty = ppGeneric
 
 deriving instance Generic Type
 instance Hashable Type

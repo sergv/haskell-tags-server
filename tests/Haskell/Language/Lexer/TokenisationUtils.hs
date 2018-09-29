@@ -6,6 +6,7 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Haskell.Language.Lexer.TokenisationUtils
@@ -52,7 +53,7 @@ import Haskell.Language.Lexer.FastTags
   )
 
 filename :: FilePath
-filename = "fn.hs"
+filename = "/foo/bar/fn.hs"
 
 testFullTagsWithoutPrefixes
   :: WithCallStack

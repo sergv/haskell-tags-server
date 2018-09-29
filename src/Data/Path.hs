@@ -34,6 +34,7 @@ module Data.Path
   ( FileType(..)
   , FullPath
   , unFullPath
+  , fullPathAsUtf8
   , MkFullPath(..)
   , MkSomeFullPath(..)
   , doesFileExist
@@ -66,6 +67,7 @@ import Control.Monad.Base
 import Control.Monad.Except.Ext
 import Control.Monad.Ext
 
+import qualified Data.ByteString as BS
 import Data.Coerce
 import Data.ErrorMessage
 import Data.List.NonEmpty (NonEmpty(..))
@@ -73,6 +75,7 @@ import Data.Semigroup as Semigroup
 import Data.Semigroup.Foldable.Class (foldMap1)
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext
 import Data.Time.Clock (UTCTime)
@@ -334,3 +337,5 @@ dropExts =
 extSeparator :: Text
 extSeparator = T.singleton FilePath.extSeparator
 
+fullPathAsUtf8 :: FullPath typ -> BS.ByteString
+fullPathAsUtf8 = TE.encodeUtf8 . unFullPath

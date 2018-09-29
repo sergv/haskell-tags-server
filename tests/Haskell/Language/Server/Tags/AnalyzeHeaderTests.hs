@@ -7,6 +7,7 @@
 -- Created     :  Friday, 23 September 2016
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE NamedFieldPuns      #-}
@@ -31,10 +32,11 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import Haskell.Language.Lexer (tokenize)
-import Haskell.Language.Lexer.FastTags (Pos, ServerToken, SrcPos(..), Line(..), Type(..))
+import Haskell.Language.Lexer.FastTags (Pos, ServerToken, Line(..), Type(..))
 
 import Control.Monad.Logging.Simple
 import qualified Data.KeyMap as KM
+import Data.Path
 import qualified Data.SubkeyMap as SubkeyMap
 import Data.Symbols
 import Haskell.Language.Server.Tags.AnalyzeHeader
@@ -46,8 +48,11 @@ import Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions
 
 type Test = TestCase T.Text UnresolvedModuleHeader
 
+filename :: FullPath 'File
+filename = "/foo/bar/test.hs"
+
 pt :: Int -> Type -> PosAndType
-pt n = PosAndType (SrcPos "test.hs" (Line n) mempty)
+pt n = PosAndType filename (Line n)
 
 simpleHeaderTest :: Test
 simpleHeaderTest = TestCase
@@ -2336,8 +2341,8 @@ tests = testGroup "Header analysis tests"
 doTest :: WithCallStack => Test -> TestTree
 doTest TestCase{testName, input, expectedResult} =
   testCase testName $ do
-    (res, logs) <- runWriterT $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runErrorExceptT $ analyzeHeader tokens
-    let logsDoc     = "Logs, size " <> pretty (length logs) <> ":" ## PP.indent 2 (PP.vcat logs)
+    (res, logs) <- runWriterT $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runErrorExceptT $ analyzeHeader filename tokens
+    let logsDoc = "Logs, size " <> pretty (length logs) <> ":" ## PP.indent 2 (PP.vcat logs)
     case res of
       Left msg               -> assertFailure $ displayDocString $ pretty msg ## logsDoc
       Right (Nothing, _)     -> assertFailure $ displayDocString $
@@ -2374,4 +2379,4 @@ doTest TestCase{testName, input, expectedResult} =
           assertFailure $ displayDocString $ msg ## logsDoc
   where
     tokens :: [Pos ServerToken]
-    tokens = tokenize "test.hs" $ TE.encodeUtf8 input
+    tokens = tokenize (T.unpack (unFullPath filename)) $ TE.encodeUtf8 input

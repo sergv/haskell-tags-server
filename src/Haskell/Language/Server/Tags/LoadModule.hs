@@ -236,10 +236,10 @@ makeModule
   -> [Pos ServerToken]
   -> m UnresolvedModule
 makeModule suggestedModuleName modifTime filename tokens = do
-  (header, tokens') <- analyzeHeader tokens
+  (header, tokens') <- analyzeHeader filename tokens
   let syms           :: [ResolvedSymbol]
       errors         :: [Doc Void]
-      (syms, errors) = first (fmap mkResolvedSymbol . FastTags.removeDuplicatePatterns)
+      (syms, errors) = first (fmap (mkResolvedSymbol filename) . FastTags.removeDuplicatePatterns)
                      $ processTokens tokens'
       allSymbols     :: SymbolMap
       allSymbols     = SM.fromList syms
@@ -421,7 +421,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
               -- resolving to a location within the export list.
               (exportedFromExportList' :: [Either ErrorMessage (MonoidalMap (Maybe ImportQualifier) (Map UnqualifiedSymbolName ResolvedSymbol))]) <-
                 parList (evalTraversable rseq) $ flip map (concatMap toList $ KM.elems meExportedEntries) $ \(entry :: EntryWithChildren PosAndType (SymbolName, PosAndType)) ->
-                  let (name, PosAndType pos typ) = entryName entry
+                  let (name, PosAndType posFile posLine typ) = entryName entry
                       name' :: UnqualifiedSymbolName
                       (qualifier, name') = splitQualifiedPart name
                   in case M.lookup qualifier namesInScopeByNamespace of
@@ -444,8 +444,8 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
                             typ'            -> typ'
                           names :: Map UnqualifiedSymbolName ResolvedSymbol
                           names
-                            = M.insert name' (mkResolvedSymbolFromParts pos name' typ Nothing)
-                            $ M.fromSet (\childName -> mkResolvedSymbolFromParts pos childName childrenType (Just name')) presentChildren
+                            = M.insert name' (mkResolvedSymbolFromParts posFile posLine name' typ Nothing)
+                            $ M.fromSet (\childName -> mkResolvedSymbolFromParts posFile posLine childName childrenType (Just name')) presentChildren
                       pure (MM.singleton qualifier names :: MonoidalMap (Maybe ImportQualifier) (Map UnqualifiedSymbolName ResolvedSymbol))
               let (errors, xs) = partitionEithers exportedFromExportList'
                   exportedFromExportList :: MonoidalMap (Maybe ImportQualifier) (Map UnqualifiedSymbolName ResolvedSymbol)

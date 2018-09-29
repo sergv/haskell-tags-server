@@ -60,7 +60,7 @@ import Data.SubkeyMap (SubkeyMap)
 import qualified Data.SubkeyMap as SubkeyMap
 import Data.SymbolMap (SymbolMap)
 import Data.Symbols
-import Haskell.Language.Lexer.FastTags (SrcPos, Type)
+import Haskell.Language.Lexer.FastTags (Type, Line)
 import Haskell.Language.Server.Tags.Types.Imports
 
 isModuleNameConstituentChar :: Char -> Bool
@@ -227,8 +227,9 @@ instance HasKey (EntryWithChildren ann (SymbolName, PosAndType)) where
 
 -- | Tag position and type stored for later analysis
 data PosAndType = PosAndType
-  { patPos  :: !SrcPos
-  , patType :: !Type
+  { patPosFile  :: !(FullPath 'File)
+  , patPosLine  :: {-# UNPACK #-} !Line
+  , patType     :: !Type
   } deriving (Eq, Ord, Show, Generic)
 
 instance Hashable PosAndType

@@ -23,7 +23,7 @@ module Haskell.Language.Lexer.Types
 
 import Data.Text.Prettyprint.Doc.Ext (Pretty(..))
 
-import Haskell.Language.Lexer.FastTags (Line, SrcPos(..))
+import Haskell.Language.Lexer.FastTags (Line, Offset(..), SrcPos(..))
 
 {-# INLINE mkSrcPos #-}
 mkSrcPos :: FilePath -> Line -> SrcPos
@@ -31,6 +31,8 @@ mkSrcPos filename line = SrcPos
   { posFile   = filename
   , posLine   = line
   , posPrefix = mempty
+  , posOffset = Offset 0
+  , posSuffix = mempty
   }
 
 data LiterateMode = Literate | Vanilla
