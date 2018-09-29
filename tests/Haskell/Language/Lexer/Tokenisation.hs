@@ -597,20 +597,18 @@ testProcess = testGroup "Process"
 
 testPrefixes :: TestTree
 testPrefixes = testGroup "Prefix tracking"
-  [ "module Bar.Foo where\n"
-    ==>
-    [Pos (SrcPos fn 1 "") (TagVal "Foo" Module Nothing)]
+  [ "module Bar.Foo where\n" ==>
+      [Pos (SrcPos fn 1 0 "" "") (TagVal "Foo" Module Nothing)]
   , "newtype Foo a b =\n\
-    \\tBar x y z\n"
-    ==>
-    [ Pos (SrcPos fn 1 "") (TagVal "Foo" Type Nothing)
-    , Pos (SrcPos fn 2 "") (TagVal "Bar" Constructor (Just "Foo"))
+    \\tBar x y z\n" ==>
+    [ Pos (SrcPos fn 1 0 "" "") (TagVal "Foo" Type Nothing)
+    , Pos (SrcPos fn 2 0 "" "") (TagVal "Bar" Constructor (Just "Foo"))
     ]
   , "data Foo a b =\n\
     \\tBar x y z\n"
     ==>
-    [ Pos (SrcPos fn 1 "") (TagVal "Foo" Type Nothing)
-    , Pos (SrcPos fn 2 "") (TagVal "Bar" Constructor (Just "Foo"))
+    [ Pos (SrcPos fn 1 0 "" "") (TagVal "Foo" Type Nothing)
+    , Pos (SrcPos fn 2 0 "" "") (TagVal "Bar" Constructor (Just "Foo"))
     ]
   , "f :: A -> B\n\
     \g :: C -> D\n\
@@ -618,55 +616,47 @@ testPrefixes = testGroup "Prefix tracking"
     \\tf :: A\n\
     \\t}\n"
     ==>
-    [ Pos (SrcPos fn 1 "") (TagVal "f" Function Nothing)
-    , Pos (SrcPos fn 2 "") (TagVal "g" Function Nothing)
-    , Pos (SrcPos fn 3 "") (TagVal "C" Constructor (Just "D"))
-    , Pos (SrcPos fn 3 "") (TagVal "D" Type Nothing)
-    , Pos (SrcPos fn 4 "") (TagVal "f" Function (Just "D"))
+    [ Pos (SrcPos fn 1 0 "" "") (TagVal "f" Function Nothing)
+    , Pos (SrcPos fn 2 0 "" "") (TagVal "g" Function Nothing)
+    , Pos (SrcPos fn 3 0 "" "") (TagVal "C" Constructor (Just "D"))
+    , Pos (SrcPos fn 3 0 "" "") (TagVal "D" Type Nothing)
+    , Pos (SrcPos fn 4 0 "" "") (TagVal "f" Function (Just "D"))
     ]
   , "instance Foo Bar where\n\
     \  newtype FooFam Bar = BarList [Int]"
     ==>
-    [ Pos (SrcPos fn 2 "")
-          (TagVal "BarList" Constructor (Just "FooFam"))
+    [ Pos (SrcPos fn 2 0 "" "") (TagVal "BarList" Constructor (Just "FooFam"))
     ]
   , "instance Foo Bar where\n\
     \  newtype FooFam Bar = BarList { getBarList :: [Int] }"
     ==>
-    [ Pos (SrcPos fn 2 "" )
-          (TagVal "BarList" Constructor (Just "FooFam"))
-    , Pos (SrcPos fn 2 "" )
-          (TagVal "getBarList" Function (Just "FooFam"))
+    [ Pos (SrcPos fn 2 0 "" "") (TagVal "BarList" Constructor (Just "FooFam"))
+    , Pos (SrcPos fn 2 0 "" "") (TagVal "getBarList" Function (Just "FooFam"))
     ]
   , "instance Foo Bar where\n\
     \  data (Ord a) => FooFam Bar a = BarList { getBarList :: [a] }\n\
     \                               | BarMap { getBarMap :: Map a Int }"
     ==>
-    [ Pos (SrcPos fn 2 "")
-          (TagVal "BarList" Constructor (Just "FooFam"))
-    , Pos (SrcPos fn 2 "")
-          (TagVal "getBarList" Function (Just "FooFam"))
-    , Pos (SrcPos fn 3 "")
-          (TagVal "BarMap" Constructor (Just "FooFam"))
-    , Pos (SrcPos fn 3 "")
-          (TagVal "getBarMap" Function (Just "FooFam"))
+    [ Pos (SrcPos fn 2 0 "" "")  (TagVal "BarList" Constructor (Just "FooFam"))
+    , Pos (SrcPos fn 2 0 "" "")  (TagVal "getBarList" Function (Just "FooFam"))
+    , Pos (SrcPos fn 3 0 "" "") (TagVal "BarMap" Constructor (Just "FooFam"))
+    , Pos (SrcPos fn 3 0 "" "") (TagVal "getBarMap" Function (Just "FooFam"))
     ]
   , "newtype instance FooFam Bar = BarList { getBarList :: [Int] }"
     ==>
-    [ Pos (SrcPos fn 1 "")
-          (TagVal "BarList" Constructor (Just "FooFam"))
-    , Pos (SrcPos fn 1 "")
-          (TagVal "getBarList" Function (Just "FooFam"))
+    [ Pos (SrcPos fn 1 0 "" "") (TagVal "BarList" Constructor (Just "FooFam"))
+    , Pos (SrcPos fn 1 0 "" "") (TagVal "getBarList" Function (Just "FooFam"))
     ]
   , "data instance (Ord a) => FooFam Bar a = BarList { getBarList :: [a] }\n\
     \                                      | BarMap { getBarMap :: Map a Int }"
     ==>
-    [ Pos (SrcPos fn 1 "") (TagVal "BarList" Constructor (Just "FooFam"))
-    , Pos (SrcPos fn 1 "") (TagVal "getBarList" Function (Just "FooFam"))
-    , Pos (SrcPos fn 2 "") (TagVal "BarMap" Constructor (Just "FooFam"))
-    , Pos (SrcPos fn 2 "") (TagVal "getBarMap" Function (Just "FooFam"))
+    [ Pos (SrcPos fn 1 0 "" "")  (TagVal "BarList" Constructor (Just "FooFam"))
+    , Pos (SrcPos fn 1 0 "" "")  (TagVal "getBarList" Function (Just "FooFam"))
+    , Pos (SrcPos fn 2 0 "" "") (TagVal "BarMap" Constructor (Just "FooFam"))
+    , Pos (SrcPos fn 2 0 "" "") (TagVal "getBarMap" Function (Just "FooFam"))
     ]
   ]
+
   where
     (==>) = testFullTagsWithoutPrefixes fn Vanilla
     fn = filename

@@ -787,41 +787,41 @@ testFullPipeline :: TestTree
 testFullPipeline = testGroup "Full processing pipeline"
   [ ["data X", "module X"]
     ==>
-    [ Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "X" Type Nothing)
-    , Pos (SrcPos "fn1" (Line 1) mempty) (TagVal "X" Module Nothing)
+    [ Pos (SrcPos "fn0" (Line 1) 0 mempty mempty) (TagVal "X" Type Nothing)
+    , Pos (SrcPos "fn1" (Line 1) 0 mempty mempty) (TagVal "X" Module Nothing)
     ]
   -- Type goes ahead of Module.
   , [ "module X\n\
        \data X"
     ]
     ==>
-    [ Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "X" Module Nothing)
-    , Pos (SrcPos "fn0" (Line 2) mempty) (TagVal "X" Type Nothing)
+    [ Pos (SrcPos "fn0" (Line 1) 0 mempty mempty) (TagVal "X" Module Nothing)
+    , Pos (SrcPos "fn0" (Line 2) 0 mempty mempty) (TagVal "X" Type Nothing)
     ]
   , [ "module Z\n\
       \data X = Y\n"
     ]
     ==>
-    [ Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "Z" Module Nothing)
-    , Pos (SrcPos "fn0" (Line 2) mempty) (TagVal "X" Type Nothing)
-    , Pos (SrcPos "fn0" (Line 2) mempty) (TagVal "Y" Constructor (Just "X"))
+    [ Pos (SrcPos "fn0" (Line 1) 0 mempty mempty) (TagVal "Z" Module Nothing)
+    , Pos (SrcPos "fn0" (Line 2) 0 mempty mempty) (TagVal "X" Type Nothing)
+    , Pos (SrcPos "fn0" (Line 2) 0 mempty mempty) (TagVal "Y" Constructor (Just "X"))
     ]
   , [ "module Z\n\
       \data X a =\n\
       \  Y a\n"
     ]
     ==>
-    [ Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "Z" Module Nothing)
-    , Pos (SrcPos "fn0" (Line 2) mempty) (TagVal "X" Type Nothing)
-    , Pos (SrcPos "fn0" (Line 3) mempty) (TagVal "Y" Constructor (Just "X"))
+    [ Pos (SrcPos "fn0" (Line 1) 0 mempty mempty) (TagVal "Z" Module Nothing)
+    , Pos (SrcPos "fn0" (Line 2) 0 mempty mempty) (TagVal "X" Type Nothing)
+    , Pos (SrcPos "fn0" (Line 3) 0 mempty mempty) (TagVal "Y" Constructor (Just "X"))
     ]
   , [ "newtype A f a b = A\n\
       \  { unA :: f (a -> b) }"
     ]
     ==>
-    [ Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "A" Type Nothing)
-    , Pos (SrcPos "fn0" (Line 1) mempty) (TagVal "A" Constructor (Just "A"))
-    , Pos (SrcPos "fn0" (Line 2) mempty) (TagVal "unA" Function (Just "A"))
+    [ Pos (SrcPos "fn0" (Line 1) 0 mempty mempty) (TagVal "A" Type Nothing)
+    , Pos (SrcPos "fn0" (Line 1) 0 mempty mempty) (TagVal "A" Constructor (Just "A"))
+    , Pos (SrcPos "fn0" (Line 2) 0 mempty mempty) (TagVal "unA" Function (Just "A"))
     ]
   ]
   where

@@ -7,6 +7,7 @@
 -- Created     :  Friday, 14 October 2016
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes       #-}
@@ -25,19 +26,23 @@ import qualified Data.Set as S
 import qualified Data.Text as T
 
 import Data.Symbols
-import Haskell.Language.Lexer.FastTags (SrcPos(..), Type(..), Line(..))
+import Haskell.Language.Lexer.FastTags (Type(..), Line(..))
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
 
 import qualified Data.KeyMap as KM
+import Data.Path
 import qualified Data.SubkeyMap as SubkeyMap
 import TestUtils
 import qualified Text.RawString.QQ as QQ
 
 type Test = TestCase T.Text UnresolvedModuleHeader
 
+filename :: FullPath 'File
+filename = "/foo/bar/test.hs"
+
 pt :: Int -> Type -> PosAndType
-pt n typ = PosAndType (SrcPos "test.hs" (Line n) mempty) typ
+pt n = PosAndType filename (Line n)
 
 aesonHeaderTest :: Test
 aesonHeaderTest = TestCase

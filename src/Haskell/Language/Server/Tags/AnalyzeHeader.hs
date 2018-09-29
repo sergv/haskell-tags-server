@@ -8,6 +8,7 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
@@ -41,13 +42,14 @@ import Data.Text.Prettyprint.Doc.Ext
 import Data.Void (Void)
 
 import Haskell.Language.Lexer.FastTags
-  (stripNewlines, tokToName, Pos(..), SrcPos, Type, posFile, posLine, unLine, PragmaType(..), ServerToken(..), Type(..))
+  (stripNewlines, tokToName, Pos(..), Line, SrcPos(..), Type, posFile, posLine, unLine, PragmaType(..), ServerToken(..), Type(..))
 import qualified Haskell.Language.Lexer.FastTags as FastTags
 
 import Control.Monad.Logging
 import Data.ErrorMessage
 import Data.KeyMap (KeyMap)
 import qualified Data.KeyMap as KM
+import Data.Path
 import Data.SubkeyMap (SubkeyMap)
 import qualified Data.SubkeyMap as SubkeyMap
 import Data.Symbols
@@ -56,16 +58,17 @@ import Haskell.Language.Server.Tags.Types.Modules
 
 analyzeHeader
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
-  => [Pos ServerToken]
+  => FullPath 'File
+  -> [Pos ServerToken]
   -> m (Maybe UnresolvedModuleHeader, [Pos ServerToken])
-analyzeHeader ts =
+analyzeHeader filename ts =
   -- logDebug $ "[analyzeHeader] ts =" <+> ppTokens ts
   case dropWhile ((/= KWModule) . valOf) ts of
     Pos _ KWModule :
       (dropNLs -> Pos _ (T modName) :
         (break ((== KWWhere) . valOf) . dropNLs -> (exportList, Pos _ KWWhere : body))) -> do
-      (importSpecs, importQualifiers, body') <- analyzeImports mempty mempty body
-      exports                                <- analyzeExports importQualifiers exportList
+      (importSpecs, importQualifiers, body') <- analyzeImports filename mempty mempty body
+      exports                                <- analyzeExports filename importQualifiers exportList
       let header = ModuleHeader
             { mhModName          = mkModuleName modName
             , mhImports          = importSpecs
@@ -113,14 +116,15 @@ pattern PAnyName' pos name <- Pos pos (tokToName -> Just name)
 
 analyzeImports
   :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadLog m)
-  => SubkeyMap ImportKey (NonEmpty UnresolvedImportSpec)
+  => FullPath 'File
+  -> SubkeyMap ImportKey (NonEmpty UnresolvedImportSpec)
   -> Map ImportQualifier (NonEmpty ModuleName)
   -> [Pos ServerToken]
   -> m ( SubkeyMap ImportKey (NonEmpty UnresolvedImportSpec)
        , Map ImportQualifier (NonEmpty ModuleName)
        , [Pos ServerToken]
        )
-analyzeImports imports qualifiers ts = do
+analyzeImports filename imports qualifiers ts = do
   -- logDebug $ "[analyzeImports] ts =" <+> ppTokens ts
   res <- runMaybeT $ do
     -- Drop initial "import" keyword and {-# SOURCE #-} pragma, if any
@@ -176,7 +180,7 @@ analyzeImports imports qualifiers ts = do
                        (ImportKey importTarget modName)
                        (spec :| [])
                        imports
-      analyzeImports imports' qualifiers' toks'
+      analyzeImports filename imports' qualifiers' toks'
       where
         modName :: ModuleName
         modName = mkModuleName name
@@ -228,15 +232,15 @@ analyzeImports imports qualifiers ts = do
             -- Pattern import
             PPattern : restWithName@(PName name : rest)
               | isVanillaTypeName name
-              , not $ isChildrenList rest ->
+              , not $ isChildrenList filename rest ->
                 entryWithoutChildren name rest
-              | otherwise                 ->
+              | otherwise                          ->
                 entryWithoutChildren "pattern" restWithName
             PPattern : restWithName@(PLParen : PAnyName name : PRParen : rest)
               | isOpTypeName name
-              , not $ isChildrenList rest ->
+              , not $ isChildrenList filename rest ->
                 entryWithoutChildren name rest
-              | otherwise                 ->
+              | otherwise                          ->
                 entryWithoutChildren "pattern" restWithName
             -- Vanilla function/operator/consturtor/type import
             PLParen : PAnyName name : PRParen : rest         ->
@@ -266,7 +270,7 @@ analyzeImports imports qualifiers ts = do
               -> [Pos ServerToken]
               -> m (ImportListSpec ImportList, [Pos ServerToken])
             entryWithChildren descr name rest = do
-              (children, rest') <- snd $ analyzeChildren descr $ dropNLs rest
+              (children, rest') <- snd $ analyzeChildren descr filename $ dropNLs rest
               name'             <- mkUnqualName name
               let newEntry = EntryWithChildren name' $ (() <$) <$> children
               findImportListEntries importType (KM.insert newEntry acc) $ dropCommas rest'
@@ -284,15 +288,16 @@ analyzeImports imports qualifiers ts = do
 
 analyzeExports
   :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadLog m)
-  => Map ImportQualifier (NonEmpty ModuleName)
+  => FullPath 'File
+  -> Map ImportQualifier (NonEmpty ModuleName)
   -> [Pos ServerToken]
   -> m (ModuleExportSpec ModuleExports)
-analyzeExports importQualifiers ts = do
+analyzeExports filename importQualifiers ts = do
   -- logDebug $ "[analyzeExports] ts =" <+> ppTokens ts
   case stripNewlines ts of
     []                        -> pure NoExports
     -- Drop any other module declarations that could have arisen thanks to e.g. CPP.
-    PModule : PName _ : rest -> analyzeExports importQualifiers rest
+    PModule : PName _ : rest -> analyzeExports filename importQualifiers rest
     PLParen : PRParen : _    -> pure EmptyExports
     PLParen : rest           -> SpecificExports <$> go mempty mempty rest
     toks                     ->
@@ -311,30 +316,30 @@ analyzeExports importQualifiers ts = do
     go entries reexports toks = do
       -- logDebug $ "[analyzeExports.go] toks =" <+> ppTokens toks
       case toks of
-        []                                                                ->
+        [] ->
           pure exports
-        PRParen : _                                                       ->
+        PRParen : _ ->
           pure exports
         -- Pattern export
-        PPattern : restWithName@(PName' pos name : rest)
+        PPattern : restWithName@(PName' SrcPos{posLine} name : rest)
           | isVanillaTypeName name
-          , not $ isChildrenList rest ->
-            entryWithoutChildren name pos FastTags.Pattern rest
+          , not $ isChildrenList filename rest ->
+            entryWithoutChildren name posLine FastTags.Pattern rest
           | otherwise                 ->
-            entryWithoutChildren "pattern" pos FastTags.Function restWithName
-        PPattern : restWithName@(PLParen : PAnyName' pos name : PRParen : rest)
+            entryWithoutChildren "pattern" posLine FastTags.Function restWithName
+        PPattern : restWithName@(PLParen : PAnyName' SrcPos{posLine} name : PRParen : rest)
           | isOpTypeName name
-          , not $ isChildrenList rest ->
-            entryWithoutChildren name pos FastTags.Pattern rest
+          , not $ isChildrenList filename rest ->
+            entryWithoutChildren name posLine FastTags.Pattern rest
           | otherwise                 ->
-            entryWithoutChildren "pattern" pos FastTags.Function restWithName
+            entryWithoutChildren "pattern" posLine FastTags.Function restWithName
         -- Type export
-        PType : PName' pos name : rest                                      ->
-          entryWithoutChildren name pos FastTags.Family rest
-        PType : PLParen : PAnyName' pos name : PRParen : rest               ->
-          entryWithoutChildren name pos FastTags.Family rest
+        PType : PName' SrcPos{posLine} name : rest ->
+          entryWithoutChildren name posLine FastTags.Family rest
+        PType : PLParen : PAnyName' SrcPos{posLine} name : PRParen : rest ->
+          entryWithoutChildren name posLine FastTags.Family rest
         -- Module reexport
-        PModule : PName name : rest                                         ->
+        PModule : PName name : rest ->
           consumeComma entries (newReexports <> reexports) rest
           where
             modName = mkModuleName name
@@ -344,16 +349,16 @@ analyzeExports importQualifiers ts = do
               $ toList
               $ M.findWithDefault (modName :| []) (mkImportQualifier modName) importQualifiers
         -- Vanilla function/operator/consturtor/type export
-        PLParen : PName' pos name : PRParen : rest                        ->
-          entryWithChildren "operator in export list" name pos (typeForName FastTags.Type name) rest
-        PLParen : Pos pos (tokToName -> Just name) : PRParen : rest       ->
-          entryWithChildren "operator in export list" name pos (typeForName FastTags.Type name) rest
-        PName' pos name : rest                                            ->
+        PLParen : PName' SrcPos{posLine} name : PRParen : rest ->
+          entryWithChildren "operator in export list" name posLine (typeForName FastTags.Type name) rest
+        PLParen : Pos SrcPos{posLine} (tokToName -> Just name) : PRParen : rest ->
+          entryWithChildren "operator in export list" name posLine (typeForName FastTags.Type name) rest
+        PName' SrcPos{posLine} name : rest ->
 
-          entryWithChildren "name in export list" name pos (typeForName FastTags.Type name) rest
-        PLParen : rest                                                    ->
+          entryWithChildren "name in export list" name posLine (typeForName FastTags.Type name) rest
+        PLParen : rest ->
           go entries reexports rest
-        toks'                                                             ->
+        toks' ->
           throwErrorWithCallStack $ "Unrecognised export list structure:" <+> ppTokens toks'
       where
         exports :: ModuleExports
@@ -365,13 +370,13 @@ analyzeExports importQualifiers ts = do
         entryWithChildren
           :: Doc Void
           -> Text
-          -> SrcPos
+          -> Line
           -> Type
           -> [Pos ServerToken]
           -> m ModuleExports
-        entryWithChildren listType name pos typIfNoChildren rest = do
+        entryWithChildren listType name !line typIfNoChildren rest = do
           -- logDebug $ "[analyzeExports.entryWithChildren] rest =" <+> ppTokens rest
-          let (presence, getChildren) = analyzeChildren listType rest
+          let (presence, getChildren) = analyzeChildren listType filename rest
           (children, rest') <- getChildren
           entryType <-
             -- TODO: eliminate potential memory leak with a stricter fold?
@@ -386,17 +391,17 @@ analyzeExports importQualifiers ts = do
                 "Unexpected children specification for exported name" <+> PP.squotes (pretty name) <> "." <+>
                 "It specifies both constructor names and type names among children:" ##
                   ppTokens rest
-          let newEntry = EntryWithChildren (mkSymbolName name, PosAndType pos entryType) children
+          let newEntry = EntryWithChildren (mkSymbolName name, PosAndType filename line entryType) children
           consumeComma (KM.insert newEntry entries) reexports rest'
         entryWithoutChildren
           :: Text
-          -> SrcPos
+          -> Line
           -> Type
           -> [Pos ServerToken]
           -> m ModuleExports
-        entryWithoutChildren name pos typ rest = do
+        entryWithoutChildren name !line typ rest = do
           -- logDebug $ "[analyzeExports.entryWithoutChildren] rest =" <+> ppTokens rest
-          let newEntry = mkEntryWithoutChildren (mkSymbolName name, PosAndType pos typ)
+          let newEntry = mkEntryWithoutChildren (mkSymbolName name, PosAndType filename line typ)
           consumeComma (KM.insert newEntry entries) reexports rest
         exportsAllChildren :: EntryWithChildren PosAndType a -> Any
         exportsAllChildren (EntryWithChildren _ visibility) =
@@ -423,9 +428,9 @@ typeForName constructorLikeTag name =
       | otherwise -> FastTags.Operator
     Nothing -> FastTags.Function
 
-isChildrenList :: [Pos ServerToken] -> Bool
-isChildrenList toks =
-  case fst (analyzeChildren mempty toks :: (ChildrenPresence, Either ErrorMessage (Maybe (ChildrenVisibility PosAndType), [Pos ServerToken]))) of
+isChildrenList :: FullPath 'File -> [Pos ServerToken] -> Bool
+isChildrenList filename toks =
+  case fst (analyzeChildren mempty filename toks :: (ChildrenPresence, Either ErrorMessage (Maybe (ChildrenVisibility PosAndType), [Pos ServerToken]))) of
     ChildrenPresent -> True
     ChildrenAbsent  -> False
 
@@ -444,8 +449,11 @@ instance Monoid WildcardPresence where
 
 analyzeChildren
   :: forall m. (WithCallStack, MonadError ErrorMessage m)
-  => Doc Void -> [Pos ServerToken] -> (ChildrenPresence, m (Maybe (ChildrenVisibility PosAndType), [Pos ServerToken]))
-analyzeChildren listType toks =
+  => Doc Void
+  -> FullPath 'File
+  -> [Pos ServerToken]
+  -> (ChildrenPresence, m (Maybe (ChildrenVisibility PosAndType), [Pos ServerToken]))
+analyzeChildren listType filename toks =
   case dropNLs toks of
     []                                               -> (ChildrenAbsent, pure (Nothing, []))
     toks'@(PComma : _)                               -> (ChildrenAbsent, pure (Nothing, toks'))
@@ -499,23 +507,23 @@ analyzeChildren listType toks =
       -> [Pos ServerToken]
       -> (ChildrenPresence, m (Map UnqualifiedSymbolName PosAndType, WildcardPresence, [Pos ServerToken]))
     extractChildren wildcardPresence !names = \case
-      []                                                     ->
+      []                                                                ->
         (childrenPresence, pure (names, wildcardPresence, []))
-      PRParen : rest                                        ->
+      PRParen : rest                                                    ->
         (childrenPresence, pure (names, wildcardPresence, rest))
-      PType : PName' pos name : rest                        ->
-        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType pos Type) names) $ dropCommas rest
-      PType : PLParen : PAnyName' pos name : PRParen : rest ->
-        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType pos Type) names) $ dropCommas rest
-      PName ".." : rest                                     ->
+      PType : PName' SrcPos{posLine} name : rest                        ->
+        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType filename posLine Type) names) $ dropCommas rest
+      PType : PLParen : PAnyName' SrcPos{posLine} name : PRParen : rest ->
+        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType filename posLine Type) names) $ dropCommas rest
+      PName ".." : rest                                                 ->
         extractChildren (wildcardPresence <> WildcardPresent) names $ dropCommas rest
-      PAnyName' pos name : rest                             ->
-        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType pos (typeForName Constructor name)) names) $ dropCommas rest
-      PLParen : PAnyName' pos name : PRParen : rest         ->
-        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType pos (typeForName Constructor name)) names) $ dropCommas rest
-      PLParen : rest                                        ->
+      PAnyName' SrcPos{posLine} name : rest                             ->
+        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType filename posLine (typeForName Constructor name)) names) $ dropCommas rest
+      PLParen : PAnyName' SrcPos{posLine} name : PRParen : rest         ->
+        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType filename posLine (typeForName Constructor name)) names) $ dropCommas rest
+      PLParen : rest                                                    ->
         extractChildren wildcardPresence names $ dropNLs rest
-      toks'                                                 ->
+      toks'                                                             ->
         (ChildrenAbsent, throwErrorWithCallStack $ "Unrecognised children list structure:" ## ppTokens toks')
       where
         childrenPresence
@@ -550,8 +558,8 @@ instance Pretty Tokens where
       ]
     where
       ppTokenVal :: Pos ServerToken -> Doc ann
-      ppTokenVal (Pos pos tok) =
-        pretty (unLine (posLine pos)) <> PP.colon <> pretty tok
+      ppTokenVal (Pos SrcPos{posLine} tok) =
+        pretty (unLine posLine) <> PP.colon <> pretty tok
 
 ppTokens :: [Pos ServerToken] -> Doc ann
 ppTokens = pretty . Tokens . take 16
