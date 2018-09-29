@@ -36,6 +36,7 @@ library
   else
     build-depends: unix >= 2.6, unix-compat
   build-depends:
+    abstract-par,
     array,
     async,
     attoparsec >= 0.13.1.0,
@@ -56,6 +57,8 @@ library
     lifted-async,
     microlens,
     monad-control >= 1.0,
+    monad-par,
+    monad-par-extras,
     mtl >= 2.2,
     network >= 2.6,
     pointed,
@@ -84,6 +87,7 @@ library
     Control.Monad.Filesystem
     Control.Monad.Logging
     Control.Monad.Logging.Simple
+    Control.Monad.Par.Combinator.Ext
 
     Data.CompiledRegex
     Data.Condition
