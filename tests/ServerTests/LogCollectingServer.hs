@@ -44,7 +44,7 @@ data LogCollectingServer = LogCollectingServer
   }
 
 mkLogCollectingServer
-  :: (MonadBaseControl IO m, MonadError ErrorMessage m, MonadCatch m, MonadFS m)
+  :: (MonadBaseControl IO m, MonadError ErrorMessage m, MonadMask m, MonadFS m)
   => TagsServerConf -> PortNumber -> m LogCollectingServer
 mkLogCollectingServer conf port = do
   logOutputVar <- liftBase $ newMVar mempty

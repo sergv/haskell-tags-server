@@ -19,9 +19,11 @@ module Haskell.Language.Server.Tags.SearchM
   ) where
 
 import Control.Monad.Base
+import Control.Monad.Catch
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
+import Control.Monad.Trans.Control
 
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging (MonadLog)
@@ -41,7 +43,7 @@ newtype SearchT m a = SearchM (ExceptT ErrorMessage (StateT TagsServerState (Rea
     , MonadBase b
     )
 
-deriving instance MonadBase IO m => MonadFS (SearchT m)
+deriving instance (MonadBaseControl IO m, MonadMask m) => MonadFS (SearchT m)
 
 runSearchT :: TagsServerConf -> TagsServerState -> SearchT m a -> m (Either ErrorMessage a, TagsServerState)
 runSearchT conf serverState (SearchM action)

@@ -23,10 +23,13 @@ module Data.Filesystem
   , findRecursive
   ) where
 
-import Control.Concurrent.Async
+import Control.Concurrent.Async.Lifted
 import Control.Concurrent.STM
 import Control.Concurrent.STM.TMQueue
-import Control.Exception
+import qualified Control.Exception as Exception
+import Control.Monad.Base
+import Control.Monad.Catch
+import Control.Monad.Trans.Control
 
 import Data.Foldable.Ext
 import Data.Map.Strict (Map)
@@ -48,19 +51,19 @@ import System.Posix.Files as Posix
 import Data.Path.Internal
 
 findRecursive
-  :: forall a. WithCallStack
-  => Int                         -- ^ Extra search threads to run in parallel.
-  -> (FullPath 'Dir -> Bool)     -- ^ Whether to visit directory.
-  -> (FullPath 'File -> Maybe a) -- ^ What to do with a file.
-  -> (a -> IO ())                -- ^ Consume output
-  -> Set (FullPath 'Dir)         -- ^ Dirs to search non-recursively.
-  -> Set (FullPath 'Dir)         -- ^ Dirs to search recursively.
-  -> IO ()
+  :: forall a m. (WithCallStack, MonadBaseControl IO m, MonadMask m)
+  => Int                             -- ^ Extra search threads to run in parallel.
+  -> (FullPath 'Dir -> Bool)         -- ^ Whether to visit directory.
+  -> (FullPath 'File -> m (Maybe a)) -- ^ What to do with a file.
+  -> (a -> m ())                     -- ^ Consume output
+  -> Set (FullPath 'Dir)             -- ^ Dirs to search non-recursively.
+  -> Set (FullPath 'Dir)             -- ^ Dirs to search recursively.
+  -> m ()
 findRecursive extraJobs dirPred filePred consumeOutput shallowDirs recursiveDirs = do
   sem <- newNBSem extraJobs
   findRecursive' sem
   where
-    findRecursive' :: NBSem -> IO ()
+    findRecursive' :: NBSem -> m ()
     findRecursive' sem =
       foldr
         (goDirRec (const False))
@@ -70,10 +73,10 @@ findRecursive extraJobs dirPred filePred consumeOutput shallowDirs recursiveDirs
           recursiveDirs)
         shallowDirs
       where
-        goDirRec :: (FullPath 'Dir -> Bool) -> FullPath 'Dir -> IO () -> IO ()
+        goDirRec :: (FullPath 'Dir -> Bool) -> FullPath 'Dir -> m () -> m ()
         goDirRec dirPred' = goDirAsyncOrSync . (T.unpack . unFullPath)
           where
-            goDirAsyncOrSync :: FilePath -> IO () -> IO ()
+            goDirAsyncOrSync :: FilePath -> m () -> m ()
             goDirAsyncOrSync root next = do
               acquired <- tryAcquireNBSem sem
               if acquired
@@ -81,21 +84,24 @@ findRecursive extraJobs dirPred filePred consumeOutput shallowDirs recursiveDirs
                 withAsync (goDir root `finally` releaseNBSem sem) $ \yAsync ->
                   next *> wait yAsync
               else goDir root *> next
-            goDir :: FilePath -> IO ()
+            goDir :: FilePath -> m ()
             goDir root =
-              bracket (Streaming.openDirStream root) Streaming.closeDirStream goDirStream
+              bracket
+                (liftBase (Streaming.openDirStream root))
+                (liftBase . Streaming.closeDirStream)
+                goDirStream
               where
-                goDirStream :: Streaming.DirStream -> IO ()
+                goDirStream :: Streaming.DirStream -> m ()
                 goDirStream stream = go
                   where
-                    go :: IO ()
+                    go :: m ()
                     go = do
-                      x <- Streaming.readDirStream stream
+                      x <- liftBase $ Streaming.readDirStream stream
                       for_ x $ \y -> do
                         let y' :: FilePath
                             y' = root FilePath.</> y
                         let doFile =
-                              for_ (filePred y'') consumeOutput *> go
+                              (filePred y'' >>= traverse_ consumeOutput) *> go
                               where
                                 y'' :: FullPath 'File
                                 y'' = FullPath $ T.pack y'
@@ -107,7 +113,7 @@ findRecursive extraJobs dirPred filePred consumeOutput shallowDirs recursiveDirs
                                 y'' :: FullPath 'Dir
                                 y'' = FullPath $ T.pack y'
 #ifdef WINDOWS
-                        ft <- Streaming.getFileType y'
+                        ft <- liftBase $ Streaming.getFileType y'
                         case ft of
                           Streaming.FTOther        -> go
                           Streaming.FTFile         -> doFile
@@ -115,13 +121,13 @@ findRecursive extraJobs dirPred filePred consumeOutput shallowDirs recursiveDirs
                           Streaming.FTDirectory    -> doDir
                           Streaming.FTDirectorySym -> doDir
 #else
-                        status <- Posix.getSymbolicLinkStatus y'
+                        status <- liftBase $ Posix.getSymbolicLinkStatus y'
                         if | Posix.isRegularFile  status -> doFile
                            | Posix.isDirectory    status -> doDir
                            | Posix.isSymbolicLink status -> do
-                             status' <- try $ Posix.getFileStatus y'
+                             status' <- liftBase $ Exception.try $ Posix.getFileStatus y'
                              case status' of
-                               Left (_ :: IOException) -> go
+                               Left (_ :: Exception.IOException) -> go
                                Right status''
                                  | Posix.isRegularFile status'' -> doFile
                                  | Posix.isDirectory   status'' -> doDir
@@ -131,18 +137,19 @@ findRecursive extraJobs dirPred filePred consumeOutput shallowDirs recursiveDirs
 
 
 findRecur
-  :: forall k v. Ord k
+  :: forall k v m. (WithCallStack, Ord k, MonadBaseControl IO m, MonadMask m)
   => Set (BaseName 'Dir)
   -> Set (FullPath 'Dir)
   -> Set (FullPath 'Dir)
-  -> (FullPath 'File -> Maybe (k, v))
-  -> IO (Map k v)
+  -> (FullPath 'File -> m (Maybe (k, v)))
+  -> m (Map k v)
 findRecur ignoredDirs shallowPaths recursivePaths f = do
-  n       <- getNumCapabilities
-  results <- newTMQueueIO
-  let collect :: (k, v) -> IO ()
-      collect = atomically . writeTMQueue results
+  n       <- liftBase getNumCapabilities
+  results <- liftBase newTMQueueIO
+  let collect :: (k, v) -> m ()
+      collect = liftBase . atomically . writeTMQueue results
 
+      consumeOutput :: Map k v -> IO (Map k v)
       consumeOutput !xs = do
         res <- atomically $ readTMQueue results
         case res of
@@ -151,5 +158,5 @@ findRecur ignoredDirs shallowPaths recursivePaths f = do
 
       doFind =
         findRecursive n ((`S.notMember` ignoredDirs) . takeFileName) f collect shallowPaths recursivePaths
-  withAsync (doFind `finally` atomically (closeTMQueue results)) $ \searchAsync ->
-    consumeOutput M.empty <* wait searchAsync
+  withAsync (doFind `finally` liftBase (atomically (closeTMQueue results))) $ \searchAsync ->
+    liftBase (consumeOutput M.empty) <* (wait searchAsync :: m ())
