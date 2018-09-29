@@ -12,7 +12,9 @@
 
 module Data.ErrorMessage (ErrorMessage(..)) where
 
-import Data.String
+import Control.Exception
+
+-- import Data.String
 import Data.Text.Prettyprint.Doc.Ext
 import Data.Void (Void, vacuous)
 import GHC.Stack.Ext
@@ -20,7 +22,9 @@ import GHC.Stack.Ext
 data ErrorMessage = ErrorMessage
   { errorMessageBody      :: Doc Void
   , errorMessageBacktrace :: CallStack
-  }
+  } deriving (Show)
+
+instance Exception ErrorMessage
 
 instance Pretty ErrorMessage where
   pretty ErrorMessage{errorMessageBody, errorMessageBacktrace} =
@@ -28,8 +32,8 @@ instance Pretty ErrorMessage where
       "Backtrace:" ##
         ppCallStack errorMessageBacktrace
 
-instance IsString ErrorMessage where
-  fromString msg = ErrorMessage
-    { errorMessageBody      = docFromString msg
-    , errorMessageBacktrace = callStack
-    }
+-- instance IsString ErrorMessage where
+--   fromString msg = ErrorMessage
+--     { errorMessageBody      = docFromString msg
+--     , errorMessageBacktrace = callStack
+--     }

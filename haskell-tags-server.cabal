@@ -79,6 +79,7 @@ library
   exposed-modules:
     Control.Arrow.Ext
     Control.Monad.Ext
+    Control.Monad.ErrorExcept
     Control.Monad.Except.Ext
     Control.Monad.Filesystem
     Control.Monad.Logging

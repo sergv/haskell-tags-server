@@ -16,6 +16,7 @@
 module Haskell.Language.Server.Tags.AnalyzeHeaderTests (tests) where
 
 import Control.Arrow
+import Control.Monad.ErrorExcept
 import Control.Monad.Except.Ext
 import Control.Monad.Writer
 
@@ -46,7 +47,7 @@ import Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions
 type Test = TestCase T.Text UnresolvedModuleHeader
 
 pt :: Int -> Type -> PosAndType
-pt n typ = PosAndType (SrcPos "test.hs" (Line n) mempty) typ
+pt n = PosAndType (SrcPos "test.hs" (Line n) mempty)
 
 simpleHeaderTest :: Test
 simpleHeaderTest = TestCase
@@ -2335,8 +2336,8 @@ tests = testGroup "Header analysis tests"
 doTest :: WithCallStack => Test -> TestTree
 doTest TestCase{testName, input, expectedResult} =
   testCase testName $ do
-    let (res, logs) = runWriter $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runExceptT $ analyzeHeader tokens
-        logsDoc     = "Logs, size " <> pretty (length logs) <> ":" ## PP.indent 2 (PP.vcat logs)
+    (res, logs) <- runWriterT $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runErrorExceptT $ analyzeHeader tokens
+    let logsDoc     = "Logs, size " <> pretty (length logs) <> ":" ## PP.indent 2 (PP.vcat logs)
     case res of
       Left msg               -> assertFailure $ displayDocString $ pretty msg ## logsDoc
       Right (Nothing, _)     -> assertFailure $ displayDocString $
