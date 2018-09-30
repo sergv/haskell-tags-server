@@ -28,6 +28,7 @@ import qualified Data.Set as S
 import Data.Text.Prettyprint.Doc.Ext
 
 import Control.Monad.Filesystem (MonadFS)
+import qualified Control.Monad.Filesystem as MonadFS
 import Control.Monad.Logging
 import Data.ErrorMessage
 import Data.Path
@@ -48,8 +49,11 @@ findSymbol
   -> SymbolName         -- ^ Symbol to find. Can be either qualified, unqualified, ascii name/utf name/operator
   -> m [ResolvedSymbol] -- ^ Found tags, may be empty when nothing was found.
 findSymbol liftN filename sym = do
-  modName <- fileNameToModuleName filename
-  foldMapA (foldMapA (findInModule liftN sym)) =<< loadModule liftN (ImportKey VanillaModule modName)
+  modifTime <- MonadFS.getModificationTime filename
+  name      <- fileNameToModuleName filename
+  findInModule liftN sym =<<
+    resolveModule checkLoadingModules (loadModule liftN) =<<
+      readFileAndLoad (Just name) modifTime filename
 
 -- | Try to find out what @sym@ refers to in the context of module @mod@.
 findInModule
