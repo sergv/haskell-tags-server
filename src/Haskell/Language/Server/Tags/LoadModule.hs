@@ -38,7 +38,6 @@ import qualified Data.ByteString as BS
 import Data.Either
 import Data.Foldable.Ext
 import Data.Functor.Product (Product(..))
-import qualified Data.List as L
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
@@ -90,7 +89,7 @@ loadModule
   => (forall a. n a -> m a)
   -> ImportKey
   -> m (Maybe (NonEmpty ResolvedModule))
-loadModule liftN key@ImportKey{ikModuleName, ikImportTarget} = do
+loadModule liftN key@ImportKey{ikModuleName} = do
   logInfo $ "[loadModule] loading" <+> pretty ikModuleName
   s <- get
   if key `M.member` tssLoadsInProgress s
@@ -118,39 +117,55 @@ loadModule liftN key@ImportKey{ikModuleName, ikImportTarget} = do
         when anyReloaded $
           modify $ \s' -> s' { tssLoadedModules = SubkeyMap.insert key ms' $ tssLoadedModules s' }
         pure $ Just ms'
-    for mods $ \mods' -> do
-      loadedMods <- gets (SubkeyMap.keys . tssLoadedModules)
-      logDebug $ "[loadModule] loaded modules:" ## ppList loadedMods
-      pure mods'
+    for_ mods $ \mods' ->
+      logDebug $ ppFoldableHeader "[loadModule] loaded modules:" mods'
+    pure mods
   where
     doLoad :: WithCallStack => m (Maybe (NonEmpty ResolvedModule))
     doLoad = do
       logDebug $ "[loadModule.doLoad] module was not loaded before, loading now:" <+> pretty ikModuleName
-      case T.splitOn "." $ getModuleName ikModuleName of
-        []            -> throwErrorWithCallStack $ "Invalid module name:" <+> pretty ikModuleName
-        comps@(_ : _) -> do
-          TagsServerConf{tsconfSearchDirs, tsconfVanillaExtensions, tsconfHsBootExtensions, tsconfNameResolution} <- ask
-          let extensions = case ikImportTarget of
-                VanillaModule -> tsconfVanillaExtensions
-                HsBootModule  -> tsconfHsBootExtensions
-              msg        = "Cannot load module " <> pretty ikModuleName Semigroup.<> ": no paths found"
-          candidates <- liftN $ MonadFS.findRec tsconfSearchDirs $ \candidate -> do
-            let (dirs, file)   = splitDirectories candidate
-                candidateComps :: [PathFragment]
-                candidateComps = map unBaseName dirs ++ [unBaseName $ dropExtensions file]
-            if (takeExtension candidate `S.member` extensions) && (fmap mkSinglePathFragment comps `L.isSuffixOf` candidateComps)
-            then do
-              modifTime <- MonadFS.getModificationTime candidate
-              unresMod  <- readFileAndLoad (Just ikModuleName) modifTime candidate
-              pure $ Just (candidate, unresMod)
-            else pure Nothing
-          case (tsconfNameResolution, toList candidates) of
-            (NameResolutionStrict, []) -> throwErrorWithCallStack msg
-            (NameResolutionLax,    []) -> do
-              logWarning msg
-              pure Nothing
-            (_, p : ps)                ->
-              Just <$> traverse (registerAndResolve liftN key) (p :| ps)
+      TagsServerState{tssUnloadedFiles} <- get
+      case M.updateLookupWithKey (\_ _ -> Nothing) key tssUnloadedFiles of
+        (Nothing, _) -> do
+          let msg = "Cannot load module " <> pretty ikModuleName Semigroup.<> ": no paths found"
+          TagsServerConf{tsconfNameResolution} <- ask
+          case tsconfNameResolution of
+            NameResolutionStrict -> throwErrorWithCallStack msg
+            NameResolutionLax    -> Nothing <$ logWarning msg
+        (Just mods, tssUnloadedFiles') -> do
+          modify $ \s -> s { tssUnloadedFiles = tssUnloadedFiles' }
+          fmap Just $ for mods $ \m -> do
+            m' <- reloadIfNecessary liftN key m
+            case m' of
+              Nothing  -> registerAndResolve liftN key m
+              Just m'' -> pure m''
+
+      -- case T.splitOn "." $ getModuleName ikModuleName of
+      --   []            -> throwErrorWithCallStack $ "Invalid module name:" <+> pretty ikModuleName
+      --   comps@(_ : _) -> do
+      --     TagsServerConf{tsconfSearchDirs, tsconfVanillaExtensions, tsconfHsBootExtensions, tsconfNameResolution} <- ask
+      --
+      --     let extensions = case ikImportTarget of
+      --           VanillaModule -> tsconfVanillaExtensions
+      --           HsBootModule  -> tsconfHsBootExtensions
+      --         msg        = "Cannot load module " <> pretty ikModuleName Semigroup.<> ": no paths found"
+      --     candidates <- liftN $ MonadFS.findRec tsconfSearchDirs $ \candidate -> do
+      --       let (dirs, file)   = splitDirectories candidate
+      --           candidateComps :: [PathFragment]
+      --           candidateComps = map unBaseName dirs ++ [unBaseName $ dropExtensions file]
+      --       if (takeExtension candidate `S.member` extensions) && (fmap mkSinglePathFragment comps `L.isSuffixOf` candidateComps)
+      --       then do
+      --         modifTime <- MonadFS.getModificationTime candidate
+      --         unresMod  <- readFileAndLoad (Just ikModuleName) modifTime candidate
+      --         pure $ Just (candidate, unresMod)
+      --       else pure Nothing
+      --     case (tsconfNameResolution, toList candidates) of
+      --       (NameResolutionStrict, []) -> throwErrorWithCallStack msg
+      --       (NameResolutionLax,    []) -> do
+      --         logWarning msg
+      --         pure Nothing
+      --       (_, p : ps)                ->
+      --         Just <$> traverse (registerAndResolve liftN key) (p :| ps)
 
 -- TODO: consider using hashes to track whether a module needs reloading?
 reloadIfNecessary
@@ -158,7 +173,7 @@ reloadIfNecessary
   => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
   => (forall a. n a -> m a)
   -> ImportKey
-  -> ResolvedModule
+  -> Module b
   -> m (Maybe ResolvedModule)
 reloadIfNecessary liftN key@ImportKey{ikModuleName} m@Module{modFile, modHeader} = do
   (needsReloading, modifTime) <- moduleNeedsReloading m
@@ -197,7 +212,7 @@ readFileAndLoad
   -> m UnresolvedModule
 readFileAndLoad suggestedModName modTime filename = do
   source <- MonadFS.readFile filename
-  logInfo $ "[loadAllFilesIntoState] Loading" <+> PP.dquotes (pretty filename)
+  logInfo $ "[readFileAndLoad] Loading" <+> PP.dquotes (pretty filename)
   loadModuleFromSource suggestedModName modTime filename source
 
 checkLoadingModules
@@ -247,15 +262,19 @@ makeModule suggestedModuleName modifTime filename tokens = do
     logError $ ppFoldableHeaderWith id
       ("fast-tags errors while loading" <+> pretty filename)
       errors
-  case (suggestedModuleName, header) of
-    (Just name, Just ModuleHeader{mhModName}) ->
-      unless (name == mhModName) $
-        throwErrorWithCallStack $ ppDictHeader "Module name within file differs from the expected module name"
-          [ "file"                 --> filename
-          , "module name in file"  --> mhModName
-          , "expected module name" --> name
-          ]
-    _ -> pure ()
+  -- case (suggestedModuleName, header) of
+  --   (Just name, Just ModuleHeader{mhModName})
+  --     | name == mkModuleName "Setup" || mhModName == mkModuleName "Main"
+  --     -> pure ()
+  --     | otherwise
+  --     ->
+  --       unless (name == mhModName) $
+  --         throwErrorWithCallStack $ ppDictHeader "Module name within file differs from the expected module name"
+  --           [ "file"                 --> filename
+  --           , "module name in file"  --> mhModName
+  --           , "expected module name" --> name
+  --           ]
+  --   _ -> pure ()
   let moduleHeader :: UnresolvedModuleHeader
       moduleHeader = fromMaybe defaultHeader header
       mod :: UnresolvedModule

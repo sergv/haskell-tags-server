@@ -79,7 +79,7 @@ class Monad m => MonadFS m where
   doesDirectoryExist   :: FullPath 'Dir  -> m Bool
   listDirectory        :: FullPath 'Dir  -> m ([FullPath 'File], [FullPath 'Dir])
   findRec
-    :: Ord k
+    :: (Ord k, Semigroup v)
     => SearchCfg -> (FullPath 'File -> m (Maybe (k, v))) -> m (Map k v)
 
 instance {-# OVERLAPS #-} (Monad m, MonadBaseControl IO m, MonadMask m) => MonadFS m where

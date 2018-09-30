@@ -22,11 +22,9 @@ import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
 
-import Data.Char
 import Data.Foldable.Ext (toList, foldMapA, foldForA)
 import qualified Data.List as L
 import qualified Data.Set as S
-import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc.Ext
 
 import Control.Monad.Filesystem (MonadFS)
@@ -139,25 +137,3 @@ lookUpInSymbolMap sym sm =
           case (resolvedSymbolType x, resolvedSymbolParent x) of
             (FastTags.Constructor, Just p) -> p == resolvedSymbolName x
             _                              -> False
-
--- | Try to infer suitable module name from the file name. Tries to take
--- as much directory names that start with an uppercase letter as possible.
-fileNameToModuleName
-  :: (WithCallStack, MonadError ErrorMessage m)
-  => FullPath 'File -> m ModuleName
-fileNameToModuleName fname =
-  case unPathFragment (unBaseName (dropExtensions fname')) : map (unPathFragment . unBaseName) (reverse dirs) of
-    []       ->
-      throwErrorWithCallStack "Cannot convert empty file name to module name"
-    xs@(_:_) ->
-      pure $
-      mkModuleName $
-      T.intercalate "." $
-      reverse $
-      takeWhile canBeModuleName xs
-  where
-    (dirs, fname') = splitDirectories fname
-    canBeModuleName :: T.Text -> Bool
-    canBeModuleName t = case T.uncons t of
-      Nothing      -> False
-      Just (c, cs) -> isUpper c && T.all isModuleNameConstituentChar cs

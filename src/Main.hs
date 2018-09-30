@@ -101,14 +101,10 @@ main = do
                     , tsconfEagerTagging   = cfgEagerTagging
                     , tsconfNameResolution = cfgNameResolution
                     }
-          state = TagsServerState
-                    { tssLoadedModules   = mempty
-                    , tssLoadsInProgress = mempty
-                    }
       logDebug $ ppDictHeader "Staring server with search cfg"
         [ "Search conf" :-> pretty (tsconfSearchDirs conf)
         ]
-      startTagsServer conf state :: ErrorExceptT ErrorMessage (SimpleLoggerT IO) TagsServer
+      startTagsServer conf :: ErrorExceptT ErrorMessage (SimpleLoggerT IO) TagsServer
     case tagsServer of
       Left err         -> liftIO $ putDocLn $ pretty err
       Right tagsServer' -> do

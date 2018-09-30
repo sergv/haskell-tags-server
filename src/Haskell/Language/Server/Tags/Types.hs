@@ -109,7 +109,8 @@ data TagsServerState = TagsServerState
     -- | Set of modules we started loading. Mainly used for detecting
     -- import cycles.
   , tssLoadsInProgress :: !(Map ImportKey (NonEmptyMap (FullPath 'File) UnresolvedModule))
+  , tssUnloadedFiles   :: !(Map ImportKey (NonEmpty UnresolvedModule))
   } deriving (Eq, Ord, Show)
 
 emptyTagsServerState :: TagsServerState
-emptyTagsServerState = TagsServerState mempty mempty
+emptyTagsServerState = TagsServerState mempty mempty mempty

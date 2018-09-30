@@ -32,29 +32,39 @@ import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.Except.Ext
 import Control.Monad.Trans.Control
+
+import Data.Function
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Semigroup
-import Data.Text.Prettyprint.Doc.Ext (Pretty(..), (<+>), (##))
+import qualified Data.List.NonEmpty as NE
+import qualified Data.Set as S
+import Data.Text.Prettyprint.Doc.Ext (Pretty(..), (##))
 
 import Data.Promise (Promise)
 import qualified Data.Promise as Promise
 
 import Control.Monad.Filesystem (MonadFS(..))
+import qualified Control.Monad.Filesystem as MonadFS
 import Control.Monad.Logging
 import Data.ErrorMessage
-import Data.Path (FullPath, FileType(..))
+import Data.Path
 import qualified Data.SubkeyMap as SubkeyMap
+import Data.Symbols (fileNameToModuleName)
 import Haskell.Language.Server.Tags.LoadFiles
+import Haskell.Language.Server.Tags.LoadModule
 import Haskell.Language.Server.Tags.Search
 import Haskell.Language.Server.Tags.SearchM
 import Haskell.Language.Server.Tags.Types
+import Haskell.Language.Server.Tags.Types.Imports
+import Haskell.Language.Server.Tags.Types.Modules
 
 data TagsServer = TagsServer
-  { tsRequestHandler :: RequestHandler
+  { -- | The way to communicate with running tags server: send requests and
+    -- get promises of responses.
+    tsRequestHandler :: RequestHandler
     -- | Lock that becomes available when server exits.
   , tsFinishState    :: MVar TagsServerState
-    -- | Id of thread serving requests.
-  , tsThreadId       :: ThreadId
+    -- | Id of the requent serving thread.
+  , tsThreadId       :: !ThreadId
   }
 
 stopTagsServer :: MonadBase IO m => TagsServer -> m ()
@@ -69,17 +79,25 @@ waitForTagsServerFinish = liftBase . readMVar . tsFinishState
 startTagsServer
   :: forall m. (WithCallStack, MonadBase IO m, MonadBaseControl IO m, MonadCatch m, MonadError ErrorMessage m, MonadLog m, MonadFS m, MonadMask m)
   => TagsServerConf
-  -> TagsServerState
   -> m TagsServer
-startTagsServer conf state = do
+startTagsServer conf = do
+  knownFiles <-
+    fmap (NE.sortBy (compare `on` modFile)) <$> MonadFS.findRec (tsconfSearchDirs conf) (loadMod conf)
   state' <-
     if tsconfEagerTagging conf
     then do
       logInfo "[startTagsServer] collecting tags eagerly"
-      modules <- loadAllFilesIntoState id conf
-      logInfo $ "[startTagsServer] finished collecting tags eagerly, processed" <+> pretty (getSum $ foldMap (Sum . length) modules) <+> "modules"
-      pure $ state { tssLoadedModules = SubkeyMap.fromMap modules <> tssLoadedModules state }
-    else pure state
+      tssLoadedModules <- SubkeyMap.fromMap <$> loadAllFilesIntoState knownFiles conf
+      pure TagsServerState
+        { tssLoadedModules
+        , tssLoadsInProgress = mempty
+        , tssUnloadedFiles   = mempty
+        }
+    else pure TagsServerState
+      { tssLoadedModules   = mempty
+      , tssLoadsInProgress = mempty
+      , tssUnloadedFiles   = knownFiles
+      }
   reqChan <- liftBase newChan
   lock    <- liftBase newEmptyMVar
   tid     <- liftBaseDiscard forkIO $ handleRequests lock reqChan state'
@@ -133,3 +151,28 @@ ensureFileExists _path = -- do
   -- exists <- doesFileExist path
   -- unless exists $
   --   throwErrorWithCallStack $ "Error: file" <+> PP.dquotes (pretty path) <+> "does not exist"
+
+-- todo: handle header files here
+classifyPath :: TagsServerConf -> FullPath 'File -> Maybe ImportTarget
+classifyPath TagsServerConf{tsconfVanillaExtensions, tsconfHsBootExtensions} path
+  | ext `S.member` tsconfVanillaExtensions = Just VanillaModule
+  | ext `S.member` tsconfHsBootExtensions  = Just HsBootModule
+  | otherwise                              = Nothing
+  where
+    ext  = takeExtension path
+
+loadMod
+  :: (MonadFS m, MonadError ErrorMessage m, MonadLog m)
+  => TagsServerConf
+  -> FullPath 'File
+  -> m (Maybe (ImportKey, NonEmpty UnresolvedModule))
+loadMod conf filename =
+  case classifyPath conf filename of
+    Nothing         -> pure Nothing
+    Just importType -> do
+      modTime       <- MonadFS.getModificationTime filename
+      suggestedName <- fileNameToModuleName filename
+      unresolvedMod@Module{modHeader = ModuleHeader{mhModName}} <-
+        readFileAndLoad (Just suggestedName) modTime filename
+      unresolvedMod `seq` pure (Just (ImportKey importType mhModName, unresolvedMod :| []))
+
