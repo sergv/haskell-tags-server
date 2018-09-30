@@ -10,6 +10,7 @@ module Main (main) where
 
 import Test.Tasty
 
+import qualified Data.Map.NonEmpty.Tests as Data.Map.NonEmptyTests
 import qualified Haskell.Language.Lexer.Tests as LexerTests
 import qualified Haskell.Language.Lexer.Preprocessor.Tests as PreprocessorTests
 import qualified Haskell.Language.Server.Tags.AnalyzeHeaderTests as AnalyzeHeaderTests
@@ -19,7 +20,8 @@ import qualified ServerTests
 main :: IO ()
 main = do
   let tests = testGroup "Tests"
-        [ ServerTests.tests
+        [ Data.Map.NonEmptyTests.tests
+        , ServerTests.tests
         , TypesTests.tests
         , AnalyzeHeaderTests.tests
         , LexerTests.tests
