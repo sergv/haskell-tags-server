@@ -30,6 +30,7 @@ module Data.Map.NonEmpty
   , unionWith
   ) where
 
+import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
@@ -39,6 +40,7 @@ import Prelude hiding (lookup)
 -- | A map that always contains at least one key-value pair.
 data NonEmptyMap k v =
   -- Invariant: map never contains root key stored in the constructor itself.
+  -- @k@ is always the smallest key.
   NonEmptyMap !k !v !(Map k v)
   deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
@@ -70,22 +72,28 @@ insert = insertWith const
 insertWith
   :: Ord k
   => (v -> v -> v) -> k -> v -> NonEmptyMap k v -> NonEmptyMap k v
-insertWith f k v (NonEmptyMap k' v' m)
-  | k == k'   = NonEmptyMap k (f v v') m
-  | otherwise = NonEmptyMap k' v' $ M.insertWith f k v m
+insertWith f k v (NonEmptyMap k' v' m) =
+  case compare k k' of
+    LT -> NonEmptyMap k v $ M.insertWith f k' v' m
+    EQ -> NonEmptyMap k (f v v') m
+    GT -> NonEmptyMap k' v' $ M.insertWith f k v m
 
 {-# INLINE delete #-}
 delete :: Ord k => k -> NonEmptyMap k v -> Maybe (NonEmptyMap k v)
 delete k (NonEmptyMap k' v' m)
   | k == k'   =
     case M.minViewWithKey m of
-      Nothing -> Nothing
+      Nothing               -> Nothing
       Just ((k'', v''), m') -> Just $ NonEmptyMap k'' v'' m'
   | otherwise = Just $ NonEmptyMap k' v' $ M.delete k m
 
 {-# INLINE fromNonEmpty #-}
 fromNonEmpty :: Ord k => NonEmpty (k, v) -> NonEmptyMap k v
-fromNonEmpty ((k, v) :| xs) = NonEmptyMap k v $ M.fromList xs
+fromNonEmpty kvs =
+  case M.minViewWithKey $ M.fromList $ toList kvs of
+    Nothing ->
+      error "impossible: map with non-empty number of elements has no minimum"
+    Just ((k', v'), m) -> NonEmptyMap k' v' m
 
 {-# INLINE toNonEmpty #-}
 toNonEmpty :: NonEmptyMap k v -> NonEmpty (k, v)
@@ -110,8 +118,8 @@ unionWith
   -> NonEmptyMap k v
   -> NonEmptyMap k v
   -> NonEmptyMap k v
-unionWith f (NonEmptyMap k v m) (NonEmptyMap k' v' m') =
-  insertWith f k' v' $
-  case M.updateLookupWithKey (\_ _ -> Nothing) k m' of
-    (Nothing,  m'') -> NonEmptyMap k v $ M.unionWith f m m''
-    (Just v'', m'') -> NonEmptyMap k (v `f` v'') $ M.unionWith f m m''
+unionWith f (NonEmptyMap k1 v1 m1) (NonEmptyMap k2 v2 m2) =
+  case compare k1 k2 of
+    LT -> NonEmptyMap k1 v1          $ M.unionWith f m1 (M.insert k2 v2 m2)
+    EQ -> NonEmptyMap k1 (v1 `f` v2) $ M.unionWith f m1 m2
+    GT -> NonEmptyMap k2 v2          $ M.unionWith f (M.insert k1 v1 m1) m2

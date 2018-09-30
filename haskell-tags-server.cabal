@@ -201,6 +201,7 @@ test-suite test-haskell-tags-server
     Main.hs
   other-modules:
     Control.Monad.Logging.DiscardLogs
+    Data.Map.NonEmpty.Tests
     Haskell.Language.Lexer.Preprocessor.Tests
     Haskell.Language.Lexer.Tests
     Haskell.Language.Lexer.Tokenisation
@@ -213,6 +214,7 @@ test-suite test-haskell-tags-server
     ServerTests.LogCollectingServer
     TestUtils
   build-depends:
+    QuickCheck,
     base,
     bert,
     bytestring,
@@ -234,6 +236,7 @@ test-suite test-haskell-tags-server
     haskell-tags-server,
     tasty >= 0.7,
     tasty-hunit >= 0.4,
+    tasty-quickcheck,
     template-haskell,
     text,
     transformers-base,
