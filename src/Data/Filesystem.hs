@@ -36,6 +36,7 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import Data.NBSem
 import Data.Path
+import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Streaming.Filesystem as Streaming
@@ -137,7 +138,7 @@ findRecursive extraJobs dirPred filePred consumeOutput shallowDirs recursiveDirs
 
 
 findRecur
-  :: forall k v m. (WithCallStack, Ord k, MonadBaseControl IO m, MonadMask m)
+  :: forall k v m. (WithCallStack, Ord k, Semigroup v, MonadBaseControl IO m, MonadMask m)
   => Set (BaseName 'Dir)
   -> Set (FullPath 'Dir)
   -> Set (FullPath 'Dir)
@@ -154,7 +155,7 @@ findRecur ignoredDirs shallowPaths recursivePaths f = do
         res <- atomically $ readTMQueue results
         case res of
           Nothing     -> pure xs
-          Just (k, v) -> consumeOutput $ M.insert k v xs
+          Just (k, v) -> consumeOutput $ M.insertWith (Semigroup.<>) k v xs
 
       doFind =
         findRecursive n ((`S.notMember` ignoredDirs) . takeFileName) f collect shallowPaths recursivePaths

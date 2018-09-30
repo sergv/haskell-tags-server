@@ -7,7 +7,6 @@
 -- Created     :  Wednesday, 12 October 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE DoAndIfThenElse     #-}
 {-# LANGUAGE FlexibleContexts    #-}
@@ -15,13 +14,10 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections       #-}
 
 module Haskell.Language.Server.Tags.LoadFiles
   ( loadAllFilesIntoState
   ) where
-
-import Prelude hiding (mod, readFile)
 
 import Control.Arrow ((&&&))
 import Control.Monad.Except.Ext
@@ -35,68 +31,36 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import qualified Data.Semigroup as Semigroup
-import qualified Data.Set as S
 import qualified Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext
 
-import Control.Monad.Filesystem (MonadFS)
-import qualified Control.Monad.Filesystem as MonadFS
 import Control.Monad.Logging
 import Data.ErrorMessage
 import Data.Map.NonEmpty (NonEmptyMap)
 import qualified Data.Map.NonEmpty as NEMap
 import Data.Path
-import Haskell.Language.Server.Tags.LoadModule (readFileAndLoad, resolveModule)
+import Haskell.Language.Server.Tags.LoadModule (resolveModule)
 import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
-
--- todo: handle header files here
-classifyPath :: TagsServerConf -> FullPath 'File -> Maybe ImportTarget
-classifyPath TagsServerConf{tsconfVanillaExtensions, tsconfHsBootExtensions} path
-  | ext `S.member` tsconfVanillaExtensions = Just VanillaModule
-  | ext `S.member` tsconfHsBootExtensions  = Just HsBootModule
-  | otherwise                              = Nothing
-  where
-    ext  = takeExtension path
 
 data ResolveState = ResolveState
   { rsLoadingModules :: !(HashMap ImportKey (NonEmptyMap (FullPath 'File) UnresolvedModule))
   , rsLoadedModules  :: !(HashMap ImportKey (NonEmpty ResolvedModule))
   }
 
-loadMod
-  :: (MonadFS m, MonadError ErrorMessage m, MonadLog m)
-  => TagsServerConf
-  -> FullPath 'File
-  -> m (Maybe ((FullPath 'File, ImportTarget), (ImportTarget, UnresolvedModule)))
-loadMod conf filename =
-  case classifyPath conf filename of
-    Nothing         -> pure Nothing
-    Just importType -> do
-      modTime       <- MonadFS.getModificationTime filename
-      logInfo $ "[loadAllFilesIntoState] Loading" <+> PP.dquotes (pretty filename)
-      unresolvedMod <- readFileAndLoad Nothing modTime filename
-      unresolvedMod `seq` pure (Just ((filename, importType), (importType, unresolvedMod)))
-
+{-# INLINE loadAllFilesIntoState #-}
+-- | A quick way to resolve all known modules, assuming there're no other
+-- modules we don't know about.
+--
+-- Most of the speed comes from not touching the file system.
 loadAllFilesIntoState
-  :: forall m k. (WithCallStack, MonadError ErrorMessage m, MonadLog m)
-  => (MonadFS k, MonadError ErrorMessage k, MonadLog k)
-  => (forall a. k a -> m a)
+  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadLog m)
+  => Map ImportKey (NonEmpty UnresolvedModule)
   -> TagsServerConf
   -> m (Map ImportKey (NonEmpty ResolvedModule))
-loadAllFilesIntoState liftK conf = do
-  unresolvedModules <- liftK $ MonadFS.findRec (tsconfSearchDirs conf) (loadMod conf)
-  let mkImportKey :: (ImportTarget, UnresolvedModule) -> ImportKey
-      mkImportKey (target, mod) = ImportKey
-        { ikImportTarget = target
-        , ikModuleName   = mhModName $ modHeader mod
-        }
-      unresolvedModulesMap :: Map ImportKey (NonEmpty UnresolvedModule)
-      unresolvedModulesMap = M.fromListWith (Semigroup.<>)
-                           $ map (mkImportKey &&& ((:| []) . snd))
-                           $ toList unresolvedModules
-      initState :: ResolveState
+loadAllFilesIntoState unresolvedModules conf@TagsServerConf{tsconfNameResolution} = do
+  let initState :: ResolveState
       initState = ResolveState
         { rsLoadingModules = mempty
         , rsLoadedModules  = mempty
@@ -133,14 +97,14 @@ loadAllFilesIntoState liftK conf = do
                 , "was required while being loaded"
                 ]
             else
-              case M.lookup key unresolvedModulesMap of
+              case M.lookup key unresolvedModules of
                 Nothing         -> do
                   let msg = PP.hsep
                         [ "[loadAllFilesIntoState.doResolve] imported module"
                         , PP.dquotes (pretty key)
                         , "not found"
                         ]
-                  case tsconfNameResolution conf of
+                  case tsconfNameResolution of
                     NameResolutionLax -> do
                       logWarning msg
                       pure Nothing
@@ -163,5 +127,5 @@ loadAllFilesIntoState liftK conf = do
                   pure $ Just resolved
 
   flip evalStateT initState $
-    flip M.traverseMaybeWithKey unresolvedModulesMap $ \importKey _ ->
+    flip M.traverseMaybeWithKey unresolvedModules $ \importKey _ ->
       doResolve importKey

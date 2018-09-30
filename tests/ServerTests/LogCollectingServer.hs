@@ -50,10 +50,10 @@ mkLogCollectingServer conf port = do
   logOutputVar <- liftBase $ newMVar mempty
   let addLogEntry x = modifyMVar_ logOutputVar (pure . (x :))
   tagsServer <- runSimpleLoggerT (Just (Custom (liftBase . addLogEntry))) VerboseDebug
-              $ startTagsServer conf emptyTagsServerState
+    $ startTagsServer conf
   bertServer <- liftBase
-                  $ runSimpleLoggerT (Just (Custom addLogEntry)) VerboseDebug
-                  $ runBertServer port $ tsRequestHandler tagsServer
+    $ runSimpleLoggerT (Just (Custom addLogEntry)) VerboseDebug
+    $ runBertServer port $ tsRequestHandler tagsServer
   pure LogCollectingServer
     { lcsLogs       = logOutputVar
     , lcsTagsServer = tagsServer

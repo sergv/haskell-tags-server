@@ -9,18 +9,22 @@
 
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE TypeFamilies               #-}
 
-{-# OPTIONS_GHC -Wredundant-constraints          #-}
+-- {-# OPTIONS_GHC -Wredundant-constraints          #-}
 {-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
 
 module Data.Symbols
   ( ModuleName
   , getModuleName
   , mkModuleName
+  , isModuleNameConstituentChar
+  , fileNameToModuleName
   , ImportQualifier
   , mkImportQualifier
   , getImportQualifier
@@ -43,15 +47,17 @@ module Data.Symbols
   , resolvedSymbolFile
   ) where
 
-import Control.Arrow ((&&&))
 import Control.Applicative
+import Control.Arrow ((&&&))
 import Control.DeepSeq
+import Control.Monad.Except.Ext
 
 import Data.Attoparsec.Text
 import qualified Data.Attoparsec.Text as Attoparsec
-import Data.Char (isUpper)
+import Data.Char (isUpper, isAlphaNum)
 import Data.Coerce
 import Data.Hashable
+import qualified Data.List as L
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc.Ext
@@ -59,6 +65,7 @@ import GHC.Generics (Generic)
 
 import Haskell.Language.Lexer.FastTags (Pos(..), TagVal(..), Type(..), SrcPos(..), Line(..))
 
+import Data.ErrorMessage
 import Data.KeyMap (HasKey(..))
 import Data.Path
 
@@ -70,6 +77,34 @@ newtype ModuleName = ModuleName { getModuleName :: Text }
 {-# INLINE mkModuleName #-}
 mkModuleName :: Text -> ModuleName
 mkModuleName = ModuleName
+
+isModuleNameConstituentChar :: Char -> Bool
+isModuleNameConstituentChar = \case
+  '\'' -> True
+  '_'  -> True
+  c    -> isAlphaNum c
+
+-- | Try to infer suitable module name from the file name. Tries to take
+-- as much directory names that start with an uppercase letter as possible.
+fileNameToModuleName
+  :: (WithCallStack, MonadError ErrorMessage m)
+  => FullPath 'File -> m ModuleName
+fileNameToModuleName fname =
+  case unPathFragment (unBaseName (dropExtensions fname')) : map (unPathFragment . unBaseName) (reverse dirs) of
+    []       ->
+      throwErrorWithCallStack "Cannot convert empty file name to module name"
+    xs@(_:_) ->
+      pure $
+      mkModuleName $
+      T.intercalate "." $
+      reverse $
+      L.takeWhile canBeModuleName xs
+  where
+    (dirs, fname') = splitDirectories fname
+    canBeModuleName :: T.Text -> Bool
+    canBeModuleName t = case T.uncons t of
+      Nothing      -> False
+      Just (c, cs) -> isUpper c && T.all isModuleNameConstituentChar cs
 
 -- | Custom module name used for qualification. This is the XXX part of the
 -- import statement:

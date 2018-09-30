@@ -20,8 +20,7 @@
 module Haskell.Language.Server.Tags.Types.Modules
   (
     -- * Types for representing Haskell modules
-    isModuleNameConstituentChar
-  , Module(..)
+    Module(..)
   , UnresolvedModule
   , ResolvedModule
   , moduleNeedsReloading
@@ -39,7 +38,6 @@ import Prelude hiding (mod)
 import Control.Monad.Except.Ext
 import Control.DeepSeq
 
-import Data.Char
 import Data.Hashable
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
@@ -62,11 +60,6 @@ import Data.SymbolMap (SymbolMap)
 import Data.Symbols
 import Haskell.Language.Lexer.FastTags (Type, Line)
 import Haskell.Language.Server.Tags.Types.Imports
-
-isModuleNameConstituentChar :: Char -> Bool
-isModuleNameConstituentChar '\'' = True
-isModuleNameConstituentChar '_'  = True
-isModuleNameConstituentChar c    = isAlphaNum c
 
 data Module a = Module
   { modHeader           :: !(ModuleHeader a)
@@ -92,9 +85,9 @@ type ResolvedModule   = Module SymbolMap
 -- TODO: if module is dirty it is only needed to recompute its @modAllExportedName@
 -- field. There's no need
 moduleNeedsReloading :: MonadFS m => Module a -> m (Bool, UTCTime)
-moduleNeedsReloading m = do
-  modifTime <- MonadFS.getModificationTime $ modFile m
-  pure (modLastModified m /= modifTime || modIsDirty m, modifTime)
+moduleNeedsReloading Module{modFile, modIsDirty, modLastModified} = do
+  modifTime <- MonadFS.getModificationTime modFile
+  pure (modIsDirty || modLastModified /= modifTime, modifTime)
 
 instance Pretty a => Pretty (Module a) where
   pretty mod =
