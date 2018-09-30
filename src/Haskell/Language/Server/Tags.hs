@@ -98,9 +98,10 @@ startTagsServer conf state = do
       -> Chan (Request, Promise (Either ErrorMessage Response))
       -> TagsServerState
       -> m ()
-    handleRequests lock reqChan serverState = do
-      state' <- handleReq reqChan serverState `onException` liftBase (putMVar lock serverState)
-      handleRequests lock reqChan state'
+    handleRequests lock reqChan = go
+      where
+        go s =
+          go =<< (handleReq reqChan s `onException` liftBase (putMVar lock s))
     handleReq
       :: Chan (Request, Promise (Either ErrorMessage Response))
       -> TagsServerState
