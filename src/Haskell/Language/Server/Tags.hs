@@ -33,9 +33,8 @@ import Control.Monad.Catch
 import Control.Monad.Except.Ext
 import Control.Monad.Trans.Control
 
-import Data.Function
 import Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as NE
+import Data.Semigroup.Foldable
 import qualified Data.Set as S
 import Data.Text.Prettyprint.Doc.Ext (Pretty(..), (##))
 
@@ -46,6 +45,8 @@ import Control.Monad.Filesystem (MonadFS(..))
 import qualified Control.Monad.Filesystem as MonadFS
 import Control.Monad.Logging
 import Data.ErrorMessage
+import Data.Map.NonEmpty (NonEmptyMap)
+import qualified Data.Map.NonEmpty as NEMap
 import Data.Path
 import qualified Data.SubkeyMap as SubkeyMap
 import Data.Symbols (fileNameToModuleName)
@@ -81,13 +82,13 @@ startTagsServer
   => TagsServerConf
   -> m TagsServer
 startTagsServer conf = do
-  knownFiles <-
-    fmap (NE.sortBy (compare `on` modFile)) <$> MonadFS.findRec (tsconfSearchDirs conf) (loadMod conf)
+  knownFiles <- MonadFS.findRec (tsconfSearchDirs conf) (loadMod conf)
   state' <-
     if tsconfEagerTagging conf
     then do
-      logInfo "[startTagsServer] collecting tags eagerly"
-      tssLoadedModules <- SubkeyMap.fromMap <$> loadAllFilesIntoState knownFiles conf
+      logInfo "[startTagsServer] collecting tags eagerly..."
+      tssLoadedModules <- SubkeyMap.fromMap <$> loadAllFilesIntoState (fold1 . NEMap.elemsNE <$> knownFiles) conf
+      logInfo "[startTagsServer] collecting tags eagerly... OK"
       pure TagsServerState
         { tssLoadedModules
         , tssLoadsInProgress = mempty
@@ -96,7 +97,7 @@ startTagsServer conf = do
     else pure TagsServerState
       { tssLoadedModules   = mempty
       , tssLoadsInProgress = mempty
-      , tssUnloadedFiles   = knownFiles
+      , tssUnloadedFiles   = fold1 . NEMap.elemsNE <$> knownFiles
       }
   reqChan <- liftBase newChan
   lock    <- liftBase newEmptyMVar
@@ -165,7 +166,7 @@ loadMod
   :: (MonadFS m, MonadError ErrorMessage m, MonadLog m)
   => TagsServerConf
   -> FullPath 'File
-  -> m (Maybe (ImportKey, NonEmpty UnresolvedModule))
+  -> m (Maybe (ImportKey, NonEmptyMap (FullPath 'File) (NonEmpty UnresolvedModule)))
 loadMod conf filename =
   case classifyPath conf filename of
     Nothing         -> pure Nothing
@@ -174,5 +175,5 @@ loadMod conf filename =
       suggestedName <- fileNameToModuleName filename
       unresolvedMod@Module{modHeader = ModuleHeader{mhModName}} <-
         readFileAndLoad (Just suggestedName) modTime filename
-      unresolvedMod `seq` pure (Just (ImportKey importType mhModName, unresolvedMod :| []))
+      unresolvedMod `seq` pure (Just (ImportKey importType mhModName, NEMap.singleton filename (unresolvedMod :| [])))
 
