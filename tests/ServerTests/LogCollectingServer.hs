@@ -30,7 +30,7 @@ import Data.Text.Prettyprint.Doc (Doc)
 import Data.Void (Void)
 import Network.Socket (PortNumber)
 
-import Control.Monad.Filesystem (MonadFS)
+import Control.Monad.Filesystem (MonadFS, SearchCfg)
 import Control.Monad.Logging
 import Control.Monad.Logging.Simple
 import Data.ErrorMessage
@@ -45,12 +45,12 @@ data LogCollectingServer = LogCollectingServer
 
 mkLogCollectingServer
   :: (MonadBaseControl IO m, MonadError ErrorMessage m, MonadMask m, MonadFS m)
-  => TagsServerConf -> PortNumber -> m LogCollectingServer
-mkLogCollectingServer conf port = do
+  => SearchCfg -> TagsServerConf -> PortNumber -> m LogCollectingServer
+mkLogCollectingServer searchDirs conf port = do
   logOutputVar <- liftBase $ newMVar mempty
   let addLogEntry x = modifyMVar_ logOutputVar (pure . (x :))
   tagsServer <- runSimpleLoggerT (Just (Custom (liftBase . addLogEntry))) VerboseDebug
-    $ startTagsServer conf
+    $ startTagsServer searchDirs conf
   bertServer <- liftBase
     $ runSimpleLoggerT (Just (Custom addLogEntry)) VerboseDebug
     $ runBertServer port $ tsRequestHandler tagsServer

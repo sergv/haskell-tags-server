@@ -28,6 +28,7 @@ module Data.SubkeyMap
   , insert
   , insertWith
   , lookup
+  , member
   , lookupSubkey
   , lookupSubkeyKeys
   , alter'
@@ -119,6 +120,10 @@ insertWith f k v SubkeyMap{smMainMap, smSubMap} = SubkeyMap
 {-# INLINE lookup #-}
 lookup :: Ord k => k -> SubkeyMap k v -> Maybe v
 lookup k = M.lookup k . smMainMap
+
+{-# INLINE member #-}
+member :: Ord k => k -> SubkeyMap k v -> Bool
+member k = M.member k . smMainMap
 
 {-# INLINE lookupSubkey #-}
 lookupSubkey :: HasSubkey k => Subkey k -> SubkeyMap k v -> [v]

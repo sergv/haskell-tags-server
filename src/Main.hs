@@ -27,6 +27,7 @@ import System.Exit
 import System.IO
 
 import Control.Monad.Filesystem (SearchCfg(..))
+import qualified Control.Monad.Filesystem as MonadFS
 import Control.Monad.Logging
 import Control.Monad.Logging.Simple
 import Data.ErrorMessage
@@ -93,18 +94,20 @@ main = do
     tagsServer <- runErrorExceptT $ do
       cfgSourceDirectories' <- S.fromList <$> traverse mkFullPath cfgSourceDirectories
       cfgDirTrees'          <- S.fromList <$> traverse mkFullPath cfgDirTrees
-      let conf  = defaultTagsServerConf
-                    { tsconfSearchDirs     = (tsconfSearchDirs defaultTagsServerConf)
-                        { scShallowPaths   = cfgSourceDirectories'
-                        , scRecursivePaths = cfgDirTrees'
-                        }
-                    , tsconfEagerTagging   = cfgEagerTagging
-                    , tsconfNameResolution = cfgNameResolution
-                    }
-      logDebug $ ppDictHeader "Staring server with search cfg"
-        [ "Search conf" :-> pretty (tsconfSearchDirs conf)
+      let searchDirs = SearchCfg
+            { scShallowPaths   = cfgSourceDirectories'
+            , scRecursivePaths = cfgDirTrees'
+            , scIgnoredDirs    = MonadFS.versionControlDirs
+            , scIgnoredGlobs   = mempty
+            }
+          conf = defaultTagsServerConf
+            { tsconfEagerTagging   = cfgEagerTagging
+            , tsconfNameResolution = cfgNameResolution
+            }
+      logDebug $ ppDictHeader "Staring server with search dirs"
+        [ "Search conf" --> searchDirs
         ]
-      startTagsServer conf :: ErrorExceptT ErrorMessage (SimpleLoggerT IO) TagsServer
+      startTagsServer searchDirs conf :: ErrorExceptT ErrorMessage (SimpleLoggerT IO) TagsServer
     case tagsServer of
       Left err         -> liftIO $ putDocLn $ pretty err
       Right tagsServer' -> do

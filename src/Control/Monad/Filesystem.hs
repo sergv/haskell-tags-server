@@ -26,7 +26,6 @@ import Prelude hiding (readFile)
 
 import Control.Monad.Base
 import Control.Monad.Catch
--- import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.Trans.Control
 
@@ -35,6 +34,7 @@ import Data.Map.Strict (Map)
 import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
+import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc.Ext
 import Data.Time.Clock (UTCTime)
@@ -54,17 +54,19 @@ data SearchCfg = SearchCfg
     -- files will be looked up in both the directroies and all of their children.
   , scRecursivePaths :: !(Set (FullPath 'Dir))
   , scIgnoredDirs    :: !(Set (BaseName 'Dir))
+    -- | The globs will be matched against full paths.
+  , scIgnoredGlobs   :: !(Set Text)
   } deriving (Eq, Ord, Show, Generic)
 
 instance Semigroup SearchCfg where
   {-# INLINE (<>) #-}
-  (<>) (SearchCfg x y z) (SearchCfg x' y' z') =
-    SearchCfg (x <> x') (y <> y') (z <> z')
+  (<>) (SearchCfg a b c d) (SearchCfg a' b' c' d') =
+    SearchCfg (a <> a') (b <> b') (c <> c') (d <> d')
 
 instance Monoid SearchCfg where
   {-# INLINE mempty  #-}
   {-# INLINE mappend #-}
-  mempty = SearchCfg mempty mempty mempty
+  mempty = SearchCfg mempty mempty mempty mempty
   mappend = (Semigroup.<>)
 
 instance Pretty SearchCfg where

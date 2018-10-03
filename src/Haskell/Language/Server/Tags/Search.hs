@@ -24,6 +24,7 @@ import Control.Monad.State
 
 import Data.Foldable.Ext (toList, foldMapA, foldForA)
 import qualified Data.List as L
+import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Text.Prettyprint.Doc.Ext
 
@@ -45,9 +46,9 @@ findSymbol
   :: (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
   => (forall a. n a -> m a)
-  -> FullPath 'File     -- ^ File name
-  -> SymbolName         -- ^ Symbol to find. Can be either qualified, unqualified, ascii name/utf name/operator
-  -> m [ResolvedSymbol] -- ^ Found tags, may be empty when nothing was found.
+  -> FullPath 'File         -- ^ File name
+  -> SymbolName             -- ^ Symbol to find. Can be either qualified, unqualified, ascii name/utf name/operator
+  -> m (Set ResolvedSymbol) -- ^ Found tags, may be empty when nothing was found.
 findSymbol liftN filename sym = do
   modifTime <- MonadFS.getModificationTime filename
   name      <- fileNameToModuleName filename
@@ -62,17 +63,17 @@ findInModule
   => (forall a. n a -> m a)
   -> SymbolName
   -> ResolvedModule
-  -> m [ResolvedSymbol]
+  -> m (Set ResolvedSymbol)
 findInModule liftN sym mod =
   case qualifier of
     -- Unqualified name
     Nothing -> do
-      let localSyms :: [ResolvedSymbol]
-          localSyms       = lookUpInSymbolMap sym' $ modAllSymbols mod
+      let localSyms :: Set ResolvedSymbol
+          localSyms       = S.fromList $ lookUpInSymbolMap sym' $ modAllSymbols mod
           relevantImports = filter importBringsUnqualifiedNames
                           $ foldMap toList
                           $ mhImports header
-      (localSyms ++) <$> lookUpInImportedModules liftN sym' relevantImports
+      (localSyms <>) <$> lookUpInImportedModules liftN sym' relevantImports
     -- Qualified name
     Just qualifier' -> do
       resolvedSpecs <- resolveQualifier qualifier' header
@@ -97,7 +98,7 @@ lookUpInImportedModules
   => (forall a. n a -> m a)
   -> UnqualifiedSymbolName
   -> f ResolvedImportSpec
-  -> m [ResolvedSymbol]
+  -> m (Set ResolvedSymbol)
 lookUpInImportedModules liftN name specs = do
   logDebug $ ppFoldableHeader
     ("[lookUpInImportedModules] searching for name" <+> pretty name <+> "in modules")
@@ -107,7 +108,7 @@ lookUpInImportedModules liftN name specs = do
     if nameVisible
     then do
       mods <- loadModule liftN ispecImportKey
-      foldForA mods $ foldMapA $ \mod -> do
+      fmap S.fromList $ foldForA mods $ foldMapA $ \mod -> do
         logDebug $ "[lookUpInImportedModules] searching for name" <+> pretty name <+> "in module" <+> pretty (ikModuleName ispecImportKey)
         lookUpInImportedModule name mod
     else pure mempty

@@ -6,18 +6,28 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE NamedFieldPuns    #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE DataKinds          #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE FlexibleContexts   #-}
+{-# LANGUAGE GADTs              #-}
+{-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE NamedFieldPuns     #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeFamilies       #-}
 
 module Haskell.Language.Server.Tags.Types
   ( -- * API types
-    Request(..)
-  , Response(..)
+    SomeRequest(..)
+  , Request(..)
+  , UserRequest(..)
+  , QueryRequest(..)
+  , DirRequest(..)
+  , FSNotifyEvent(..)
+  , QueryResponse(..)
   , RequestHandler
+  , NameResolutionScope(..)
     -- * Tag server types
   , NameResolutionStrictness(..)
   , TagsServerConf(..)
@@ -26,14 +36,15 @@ module Haskell.Language.Server.Tags.Types
   , emptyTagsServerState
   ) where
 
+import Data.Kind
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
 import Data.Set (Set)
 import qualified Data.Set as S
+import Data.Text (Text)
 import Data.Text.Prettyprint.Doc.Ext
 import GHC.Generics (Generic)
 
-import Control.Monad.Filesystem (SearchCfg(..), versionControlDirs)
 import Data.CompiledRegex
 import Data.ErrorMessage
 import Data.Map.NonEmpty (NonEmptyMap)
@@ -44,28 +55,96 @@ import Data.Symbols
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
 
+data SomeRequest = forall resp. SomeRequest !(Request resp) !resp
+
 -- | Types of user requests that can be handled.
-data Request =
-    -- | Request to find vanilla name in module identified by file path.
-    FindSymbol (FullPath 'File) SymbolName
-    -- | Request to find all names that match a gived regexp, starting with module
-    -- identified by file path.
-  | FindSymbolByRegexp (FullPath 'File) CompiledRegex
+data Request (resp :: Type) where
+    -- | Request to find a name in module identified by file path.
+  UserReq     :: !(UserRequest resp) -> Request (Promise (Either ErrorMessage resp))
+  FSNotifyReq :: !FSNotifyEvent      -> Request ()
+
+deriving instance Eq   (Request resp)
+deriving instance Ord  (Request resp)
+deriving instance Show (Request resp)
+
+instance Pretty (Request resp) where
+  pretty = \case
+    UserReq req       -> ppDictHeader "UserReq"
+      [ "req" --> req
+      ]
+    FSNotifyReq event -> ppDictHeader "FSNotifyReq"
+      [ "event" --> event
+      ]
+
+-- | Types of user requests that can be handled.
+data UserRequest (resp :: Type) where
+    -- | Request to find a name in module identified by file path.
+  QueryReq :: !(FullPath 'File) -> !QueryRequest -> UserRequest QueryResponse
+  DirReq   :: !DirRequest       -> UserRequest ()
+
+deriving instance Eq   (UserRequest resp)
+deriving instance Ord  (UserRequest resp)
+deriving instance Show (UserRequest resp)
+
+instance Pretty (UserRequest resp) where
+  pretty = \case
+    QueryReq file req -> ppDictHeader "QueryReq"
+      [ "file" --> file
+      , "req"  --> req
+      ]
+    DirReq req -> ppDictHeader "DirReq"
+      [ "req" --> req
+      ]
+
+-- | Query server for some information.
+data DirRequest =
+    AddShallowRecursiveIgnored
+      !(Set (FullPath 'Dir)) -- ^ Set of extra watched shallow directories. Subdirectories will not be watched.
+      !(Set (FullPath 'Dir)) -- ^ Set extra of watched recursive directories. -- The directory and all its subdirectories will be watched.
+      !(Set Text)
   deriving (Eq, Ord, Show, Generic)
 
-instance Pretty Request where
+instance Pretty DirRequest where
   pretty = ppGeneric
 
-data Response =
-    Found (NonEmpty ResolvedSymbol)
-  | NotFound SymbolName
+data NameResolutionScope =
+    ScopeCurrentModule
+  | ScopeAllModules
+  deriving (Eq, Ord, Show, Enum, Bounded, Generic)
+
+instance Pretty NameResolutionScope where
+  pretty = ppGeneric
+
+-- | Query server for some information.
+data QueryRequest =
+    -- | Request to find vanilla name in current module and all its imports.
+    FindSymbol !SymbolName
+    -- | Request to find all names that match a gived regexp starting from
+    -- current module.
+  | FindSymbolByRegexp !NameResolutionScope !CompiledRegex
   deriving (Eq, Ord, Show, Generic)
 
-instance Pretty Response where
+instance Pretty QueryRequest where
   pretty = ppGeneric
 
-type RequestHandler = Request -> IO (Promise (Either ErrorMessage Response))
+data FSNotifyEvent =
+    FSAdded    !(FullPath 'File)
+  | FSRemoved  !(FullPath 'File)
+  | FSModified !(FullPath 'File)
+  deriving (Eq, Ord, Show, Generic)
 
+instance Pretty FSNotifyEvent where
+  pretty = ppGeneric
+
+data QueryResponse =
+    Found !(NonEmpty ResolvedSymbol)
+  | NotFound !SymbolName
+  deriving (Eq, Ord, Show, Generic)
+
+instance Pretty QueryResponse where
+  pretty = ppGeneric
+
+type RequestHandler = forall resp. UserRequest resp -> IO (Promise (Either ErrorMessage resp))
 
 -- | Whether to ignore some issues when resolving names.
 data NameResolutionStrictness =
@@ -84,8 +163,7 @@ instance Pretty NameResolutionStrictness where
   pretty = ppGeneric
 
 data TagsServerConf = TagsServerConf
-  { tsconfSearchDirs        :: !SearchCfg
-  , tsconfVanillaExtensions :: !(Set Extension)
+  { tsconfVanillaExtensions :: !(Set Extension)
   , tsconfHsBootExtensions  :: !(Set Extension)
     -- | Whether to read and compute tags lazily or read them all at once when
     -- server starts.
@@ -95,8 +173,7 @@ data TagsServerConf = TagsServerConf
 
 defaultTagsServerConf :: TagsServerConf
 defaultTagsServerConf = TagsServerConf
-  { tsconfSearchDirs        = mempty { scIgnoredDirs = versionControlDirs }
-  , tsconfVanillaExtensions = S.fromList [".hs", ".lhs", ".hsc", ".chs"]
+  { tsconfVanillaExtensions = S.fromList [".hs", ".lhs", ".hsc", ".chs"]
   , tsconfHsBootExtensions  = S.fromList [".hs-boot", ".lhs-boot"]
   , tsconfEagerTagging      = False
   , tsconfNameResolution    = NameResolutionLax

@@ -60,22 +60,20 @@ mkTestsConfig
   :: (MonadBase IO m, MonadError ErrorMessage m)
   => NameResolutionStrictness
   -> WorkingDirectory
-  -> m TagsServerConf
+  -> m (SearchCfg, TagsServerConf)
 mkTestsConfig tsconfNameResolution srcDir = do
-  searchDirsCfg <- case srcDir of
+  searchDirs <- case srcDir of
     ShallowDir   dir -> do
       dir' <- mkFullPath $ testDataDir </> dir
-      pure defaultSearchDirsCfg { scShallowPaths = S.singleton dir' }
+      pure mempty { scShallowPaths = S.singleton dir' }
     RecursiveDir dir -> do
       dir' <- mkFullPath $ testDataDir </> dir
-      pure defaultSearchDirsCfg { scRecursivePaths = S.singleton dir' }
-  pure defaultTagsServerConf
-    { tsconfSearchDirs     = searchDirsCfg
-    , tsconfEagerTagging   = False
-    , tsconfNameResolution -- = NameResolutionLax -- NameResolutionStrict
-    }
-  where
-    defaultSearchDirsCfg = tsconfSearchDirs defaultTagsServerConf
+      pure mempty { scRecursivePaths = S.singleton dir' }
+  let conf = defaultTagsServerConf
+        { tsconfEagerTagging   = False
+        , tsconfNameResolution
+        }
+  pure (searchDirs, conf)
 
 type SymbolType = String
 
@@ -1377,10 +1375,11 @@ reportErr = liftBase . throwIO . ErrorCall . displayDocString
 withConnection
   :: forall m a. (MonadMask m, MonadBaseControl IO m, MonadFS m)
   => IO PortPool
+  -> SearchCfg
   -> TagsServerConf
   -> (ServerConnection -> m a)
   -> m a
-withConnection pool conf f = do
+withConnection pool searchDirs conf f = do
   -- Try to connect to a server. If attempt succeeds then server is running
   -- and there's no need to run server ourselves.
   existing <- tryConnect defaultPort
@@ -1393,7 +1392,7 @@ withConnection pool conf f = do
     startLocalServer = do
       pool' <- liftBase pool
       withPort pool' $ \port -> do
-        serv <- runErrorExceptT $ mkLogCollectingServer conf port
+        serv <- runErrorExceptT $ mkLogCollectingServer searchDirs conf port
         case serv of
           Left err -> reportErr $
             "Failed to start local server:" ## pretty err
@@ -1418,44 +1417,58 @@ mkFindSymbolTest
 mkFindSymbolTest pool ServerTest{stTestName, stNameResolutionStrictness, stWorkingDirectory, stFile, stSymbol, stExpectedResponse} =
  testCase stTestName $ do
     result <- runErrorExceptT $ do
-      conf <- mkTestsConfig stNameResolutionStrictness stWorkingDirectory
-      withConnection pool conf $ \conn -> do
+      (searchDirs, conf) <- mkTestsConfig stNameResolutionStrictness stWorkingDirectory
+      withConnection pool searchDirs conf $ \conn -> do
         let dir  = case stWorkingDirectory of
               ShallowDir   x -> testDataDir </> x
               RecursiveDir x -> testDataDir </> x
             path = pathFragmentToUTF8 $ dir </> stFile
         r    <- liftBase $
           call conn "haskell-tags-server" "find"
-            [BinaryTerm path, BinaryTerm stSymbol]
+            [IntTerm 1337, TupleTerm [BinaryTerm path, BinaryTerm stSymbol]]
         logs <- case conn of
-                  ExistingServer _   -> pure mempty
-                  LocalServer serv _ -> do
-                    logs <- liftBase $ getLogs serv
-                    pure $ "Logs:" ## PP.indent 2 (PP.vcat logs)
+          ExistingServer _   -> pure mempty
+          LocalServer serv _ -> do
+            logs <- liftBase $ getLogs serv
+            pure $ "Logs:" ## PP.indent 2 (PP.vcat logs)
         case r of
-          Left err  ->
-            liftBase $ assertFailure $ displayDocString $ ppShow err ## logs
-          Right res -> do
-            dir'   <- mkFullPath dir
-            actual <- relativizePathsInResponse dir' res
-            let msg = docFromString $ "expected: " ++ show expected ++ "\n but got: " ++ show actual
-            if responseType actual == responseType expected
-            then
-              unless (actual == expected) $
-                liftBase $ assertFailure $ displayDocString $ msg ## logs
-            else
-              liftBase $ assertFailure $ displayDocString $
-                case extractResponseError actual of
-                  Nothing   ->
-                    msg ## logs
-                  Just msg' ->
-                    "Error from server:" ## PP.nest 2 (docFromByteString msg') ## logs
+          Left err  -> assertFailure' $ ppShow err ## logs
+          Right res ->
+            case res of
+              TupleTerm [callId, res'] -> do
+                case callId of
+                  IntTerm 1337 -> pure ()
+                  unexpected   -> assertFailure' $
+                    "Unexpected call id was returned:" <+> ppShow unexpected
+                case res' of
+                  TupleTerm [AtomTerm "error", err] -> assertFailure' $
+                    "Unexpected error from tags server:" <+> ppShow err
+                  TupleTerm [AtomTerm "ok", res''] -> do
+                    dir'   <- mkFullPath dir
+                    actual <- relativizePathsInResponse dir' res''
+                    let msg = docFromString $ "expected: " ++ show expected ++ "\n but got: " ++ show actual
+                    if responseType actual == responseType expected
+                    then
+                      unless (actual == expected) $
+                        assertFailure' $ msg ## logs
+                    else
+                      assertFailure' $
+                        case extractResponseError actual of
+                          Nothing   -> msg ## logs
+                          Just msg' -> "Error from server:" ##
+                            PP.nest 2 (docFromByteString msg') ## logs
+                  unexpected -> assertFailure' $
+                    "Unexpected response from tags server:" <+> ppShow unexpected
+              invalid -> assertFailure' $
+                "Invalid repsonse:" <+> ppShow invalid
             where
               expected = responseToTerm stExpectedResponse
     case result of
       Right () -> pure ()
-      Left err -> liftBase $ assertFailure $ displayDocString $
-        "Failure:" ## pretty err
+      Left err -> assertFailure' $ "Failure:" ## pretty err
+  where
+    assertFailure' :: MonadBase IO m => Doc ann -> m a
+    assertFailure' = liftBase . assertFailure . displayDocString
 
 responseType :: Term -> Maybe String
 responseType (TupleTerm (AtomTerm x : _)) = Just x
