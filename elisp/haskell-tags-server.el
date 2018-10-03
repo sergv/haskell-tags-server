@@ -19,50 +19,97 @@
   :group 'haskell
   :link '(url-link :tag "Github" "https://github.com/sergv/haskell-tags-server"))
 
-(defcustom haskell-tags-server-port 9000 ;; 10000
+(defcustom haskell-tags-server-executable "haskell-tags-server"
+  "Path to the haskell-tags-server executable."
+  :group 'haskell-completions
+  :type 'stringp)
+
+(defcustom haskell-tags-server-port 10000
   "Port to user for connecting to Haskell tags server."
   :group 'haskell-completions
   :type 'integerp)
 
-(defconst haskell-tags-server--buffer-name "*Haskell-tags-server*")
+(defconst haskell-tags-server--network-buffer-name " *haskell-tags-server-network*")
+(defconst haskell-tags-server--subprocess-buffer-name " *haskell-tags-server-subprocess*")
 
-(defvar haskell-tags-server--buffer nil)
-(defvar haskell-tags-server--proc nil)
+(defvar haskell-tags-server--network-buffer nil)
+(defvar haskell-tags-server--network-proc nil)
+(defvar haskell-tags-server--subprocess-buffer nil)
+(defvar haskell-tags-server--subprocess-proc nil)
 
-(defvar haskell-tags-server--reported-shallow-dirs (make-hash-table :test #'equal))
+(defvar haskell-tags-server--reported-shallow-dirs   (make-hash-table :test #'equal))
 (defvar haskell-tags-server--reported-recursive-dirs (make-hash-table :test #'equal))
-(defvar haskell-tags-server--reported-ignored-globs (make-hash-table :test #'equal))
+(defvar haskell-tags-server--reported-ignored-globs  (make-hash-table :test #'equal))
+
+(defun haskell-tags-server-ensure-connected ()
+  (unless (haskell-tags-server--is-connected? haskell-tags-server--network-proc)
+    (unless (haskell-tags-server--connect)
+      (setf haskell-tags-server--subprocess-buffer
+            (get-buffer-create haskell-tags-server--subprocess-buffer-name))
+      (let ((proc (make-process
+                   :name "haskell-tags-server"
+                   :buffer haskell-tags-server--subprocess-buffer
+                   :command (list haskell-tags-server-executable
+                                  "--port"
+                                  (number-to-string haskell-tags-server-port)
+                                  "--verbosity"
+                                  "error"
+                                  ;; "--eager-tagging"
+                                  )
+                   :noquery t
+                   :sentinel #'haskell-tags-server--subprocess-sentinel)))
+        (let ((tries 10)
+              (done nil))
+          (while (not done)
+            (setf tries (- tries 1)
+                  done (or (haskell-tags-server--connect)
+                           (= 0 tries)))
+            (sit-for 0.1))
+          (when (not done)
+            (delete-process proc)
+            (kill-buffer haskell-tags-server--subprocess-buffer)
+            (error "Failed to initiate connection to the freshly created haskell-tags-server subprocess")))))))
+
+(defun haskell-tags-server--subprocess-sentinel (proc event-description)
+  (unless (memq (process-status proc) '(run open))
+    (message "The haskell-tags-server subprocess terminated: %s" event-description)))
+
+(defun haskell-tags-server--is-connected? (proc)
+  "Check whether we are connected to a `haskell-tags-server' process."
+  (and proc
+       (and (eq 'open (process-status proc)))))
 
 (defun haskell-tags-server-connect ()
-  (setf haskell-tags-server--buffer
-        (get-buffer-create haskell-tags-server--buffer-name))
+  (unless (haskell-tags-server--connect)
+    (error "Failed to connect: %s" err)))
+
+(defun haskell-tags-server--connect ()
+  (setf haskell-tags-server--network-buffer
+        (get-buffer-create haskell-tags-server--network-buffer-name))
   (condition-case err
       (progn
-        (setf haskell-tags-server--proc
+        (setf haskell-tags-server--network-proc
               (make-network-process
                :name "haskell-tags-server"
                :host 'local
                :service haskell-tags-server-port
-               :buffer haskell-tags-server--buffer
+               :buffer haskell-tags-server--network-buffer
                :coding 'no-conversion
                :filter-multibyte nil
                ;; Don't query to close this process on Emacs exit.
                :noquery t
                :filter #'haskell-tags-server--process-filter
-               ;; :filter nil
-               ;; :sentinel nil
-               )
+               :sentinel #'haskell-tags-server--network-sentinel)
               haskell-tags-server--response-decoder
               (haskell-tags-server--make-bert-decoder #'haskell-tags-server--register-response-for-processing))
-        nil
+        t
 
-        ;; (set-process-filter-multibyte haskell-tags-server--proc nil)
-        ;; (set-process-filter-multibyte haskell-tags-server--proc t)
-        ;; (set-process-coding-system    haskell-tags-server--proc 'utf-8 'utf-8)
-        ;; (set-process-filter           haskell-tags-server--proc #'haskell-tags-server--process-filter)
+        ;; (set-process-filter-multibyte haskell-tags-server--network-proc nil)
+        ;; (set-process-filter-multibyte haskell-tags-server--network-proc t)
+        ;; (set-process-coding-system    haskell-tags-server--network-proc 'utf-8 'utf-8)
+        ;; (set-process-filter           haskell-tags-server--network-proc #'haskell-tags-server--process-filter)
         )
-    (file-error
-     (error "Failed to connect: %s" err))))
+    (file-error nil)))
 
 (defvar haskell-tags-server--response-timer nil
   "Variable that contains the next scheduled action that will handle the
@@ -116,12 +163,14 @@ reply) that should process the reply when it arrives.")
 (defun haskell-tags-server--call (proc func-name args callback)
   (cl-assert (symbolp func-name))
   (cl-assert (vectorp args))
+  (unless proc
+    (error "No server process to send to"))
   (let* ((next-call-id (haskell-tags-server--next-call-id))
          (invocation
           (vector 'call 'haskell-tags-server func-name (list next-call-id args))))
     (puthash next-call-id callback haskell-tags-server--response-handlers)
     (condition-case err
-        (process-send-string haskell-tags-server--proc
+        (process-send-string haskell-tags-server--network-proc
                              (haskell-tasg-server--bert-encode-message
                               (bert-pack invocation)))
       (error
@@ -208,18 +257,24 @@ arrive."
   "State machine that will receive chunked response and reconstruct it into
 separate requests.")
 
+(defun haskell-tags-server--network-sentinel (proc event-description)
+  (unless (memq (process-status proc) '(run open))
+    (message "Lost connection to haskell-tags-server: %s" event-description)
+    (haskell-tags-server--disconnect)))
+
 (defun haskell-tags-server--process-filter (proc data)
   (cl-assert (stringp data))
   (funcall haskell-tags-server--response-decoder data))
 
 (defun haskell-tags-server--disconnect ()
   (setf haskell-tags-server--response-decoder nil)
-  (let ((proc haskell-tags-server--proc))
-    (setf haskell-tags-server--proc nil)
+  (let ((proc haskell-tags-server--network-proc))
+    (setf haskell-tags-server--network-proc nil)
     (clrhash haskell-tags-server--reported-shallow-dirs)
     (clrhash haskell-tags-server--reported-recursive-dirs)
     (clrhash haskell-tags-server--reported-ignored-globs)
-    (delete-process proc)))
+    (delete-process proc)
+    (kill-buffer haskell-tags-server--network-buffer)))
 
 (defun haskell-tasg-server--bert-encode-message (message)
   (cl-assert (stringp message))
@@ -362,7 +417,7 @@ uppercase or lowercase names)."
 
 
 
-(defun haskell-tags-server--goto-loc (filename line prev-loc search-query is-regexp)
+(defun haskell-tags-server--goto-loc (filename line prev-loc search-query use-regexp?)
   "Go to a given position in a given file and maintain navigation information."
   (cl-assert (stringp filename))
   (cl-assert (numberp line))
@@ -377,7 +432,7 @@ uppercase or lowercase names)."
     (widen)
     (goto-line line)
     (save-match-data
-      (when (re-search-forward (if is-regexp
+      (when (re-search-forward (if use-regexp?
                                    (concat "\\<" (regexp-quote search-query) "\\>")
                                  search-query)
                                (line-end-position)
@@ -391,7 +446,7 @@ uppercase or lowercase names)."
           (make-haskell-tags-server-home-entry (current-buffer)
                                                (point-marker)
                                                search-query
-                                               is-regexp)
+                                               use-regexp?)
           haskell-tags-server--next-homes nil)))
 
 (defun haskell-tags-server-add-watched-dirs (shallow-dirs recursive-dirs ignored-globs)
@@ -414,7 +469,7 @@ uppercase or lowercase names)."
               filtered-recursive-dirs
               filtered-ignored-globs)
       (haskell-tags-server--call
-       haskell-tags-server--proc
+       haskell-tags-server--network-proc
        'add-shallow-recursive-ignored-entries
        (vector filtered-shallow-dirs
                filtered-recursive-dirs
@@ -455,15 +510,15 @@ uppercase or lowercase names)."
     (define-key (current-local-map) (kbd "M-,") #'haskell-tags-server-go-back)))
 
 ;;;###autoload
-(defun haskell-tags-server-goto-definition (&optional use-regexp)
+(defun haskell-tags-server-goto-definition (&optional use-regexp?)
   "Go to the definition of a name at point."
   (interactive "P")
   (let ((filename (buffer-file-name))
-        (identifier (if use-regexp
+        (identifier (if use-regexp?
                         (read-regexp "Enter regexp to search for")
                       (haskell-tags-server--identifier-at-point)))
         (search-func
-         (if use-regexp
+         (if use-regexp?
              'find-regexp
            'find))
         (next-home-entry
@@ -481,7 +536,7 @@ uppercase or lowercase names)."
                         (haskell-tags-server-home-entry--search-query next-home-entry))
                        (next-symbol-regex?
                         (haskell-tags-server-home-entry--is-regex? next-home-entry)))
-                   (if use-regexp
+                   (if use-regexp?
                        (if next-symbol-regex?
                            nil
                          (string-match-p identifier next-symbol))
@@ -496,16 +551,19 @@ uppercase or lowercase names)."
                     (pop haskell-tags-server--next-homes)))
           (progn
             ;; Connect to tags-server if not already connected.
-            (unless haskell-tags-server--proc (haskell-tags-server-connect))
+            (unless haskell-tags-server--network-proc (haskell-tags-server-connect))
             ;; Proceed only if connection was succesful.
-            (when haskell-tags-server--proc
+            (when haskell-tags-server--network-proc
               (haskell-tags-server--call
-               haskell-tags-server--proc
+               haskell-tags-server--network-proc
                search-func
                (vector filename identifier)
                (lambda (response)
-                 (message "Got response: %s" response)
-                 (haskell-tags-server--handle-reply response current-home-entry identifier use-regexp))))))))))
+                 ;; (message "Got response: %s" response)
+                 (haskell-tags-server--handle-reply response
+                                                    current-home-entry
+                                                    identifier
+                                                    use-regexp?))))))))))
 
 
 (defmacro haskell-tags-server--for-buffer-with-file (filename &rest body)
@@ -535,7 +593,7 @@ buffer if no such buffer exists."
 (defsubst haskell-tags-server--loc-entry--type (entry)
   (aref entry 2))
 
-(defun haskell-tags-server--handle-reply (reply prev-loc search-query is-regexp)
+(defun haskell-tags-server--handle-reply (reply prev-loc search-query use-regexp?)
   (pcase reply
     (`[loc_known ,loc-entry]
      (haskell-tags-server--goto-loc
@@ -543,7 +601,7 @@ buffer if no such buffer exists."
       (haskell-tags-server--loc-entry--line loc-entry)
       prev-loc
       search-query
-      is-regexp))
+      use-regexp?))
     (`[loc_ambiguous ,entries]
      (cl-assert (listp entries))
      (select-mode-start-selection
@@ -558,7 +616,7 @@ buffer if no such buffer exists."
          (haskell-tags-server--loc-entry--line loc-entry)
          prev-loc
          search-query
-         is-regexp))
+         use-regexp?))
       :item-show-function
       (lambda (symbol-entry)
         (haskell-tags-server--tag->string search-query
@@ -569,7 +627,7 @@ buffer if no such buffer exists."
       (lambda () "Choose symbol\n\n")))
     (`not_found
      (message "No entries for %s %s"
-              (if is-regexp "regexp" "identifier")
+              (if use-regexp? "regexp" "identifier")
               search-query))
     (`error
      (error "haskell-tags-server error: %s" (aref reply 1)))
@@ -646,10 +704,10 @@ buffer if no such buffer exists."
 ;; (pack-verbose [1000])
 ;; [131 104 1 98 0 0 3 232]
 ;;
-;; (process-sentinel haskell-tags-server--proc)
+;; (process-sentinel haskell-tags-server--network-proc)
 ;; internal-default-process-sentinel
 ;;
-;; (process-filter haskell-tags-server--proc)
+;; (process-filter haskell-tags-server--network-proc)
 ;; internal-default-process-filter
 ;;
 ;; ;; (defun haskell-tags-server--call (enctod))
@@ -658,14 +716,14 @@ buffer if no such buffer exists."
 ;;
 ;; (network-interface-info "wlan0")
 
-
+;;
 ;; (haskell-tags-server-add-watched-dirs
 ;;  nil
 ;;  '("/home/sergey/projects/haskell/projects/dev-tools/haskell-tags-server/src")
 ;;  nil)
 ;;
 ;; (haskell-tags-server--call
-;;  haskell-tags-server--proc
+;;  haskell-tags-server--network-proc
 ;;  'find
 ;;  '["/home/sergey/projects/haskell/projects/dev-tools/fast-tags/src/FastTags/Tag.hs" "processFile"]
 ;;  (lambda (response)
@@ -675,57 +733,59 @@ buffer if no such buffer exists."
 ;;
 ;; (haskell-tags-server--disconnect)
 ;;
+;; (process-status haskell-tags-server--network-proc)
+;;
 ;; (haskell-tags-server--call
-;;  haskell-tags-server--proc
+;;  haskell-tags-server--network-proc
 ;;  'find
 ;;  '["foo" "bar"]
 ;;  (lambda (response)
 ;;    (message "Got response: %s" response)))
 ;;
 ;; (haskell-tags-server--call
-;;  haskell-tags-server--proc
+;;  haskell-tags-server--network-proc
 ;;  'find
 ;;  '["baz" "bar"]
 ;;  (lambda (response)
 ;;    (message "Got response: %s" response)))
 ;;
 ;; (haskell-tags-server--call
-;;  haskell-tags-server--proc
+;;  haskell-tags-server--network-proc
 ;;  'find
 ;;  '["/home/sergey/projects/haskell/packages/all-packages/base-4.11.1.0/Control/Applicative.hs" "Const"]
 ;;  (lambda (response)
 ;;    (message "Got response: %s" response)))
 ;;
 ;; (haskell-tags-server--call
-;;  haskell-tags-server--proc
+;;  haskell-tags-server--network-proc
 ;;  'find
 ;;  '["/home/sergey/projects/haskell/packages/all-packages/base-4.11.1.0/Control/Applicative.hs" "Applicative"]
 ;;  (lambda (response)
 ;;    (message "Got response: %s" response)))
 ;;
 ;; (haskell-tags-server--call
-;;  haskell-tags-server--proc
+;;  haskell-tags-server--network-proc
 ;;  'find
 ;;  '["/home/sergey/projects/haskell/packages/all-packages/base-4.11.1.0/Control/Applicative.hs" "WrappedArrow"]
 ;;  (lambda (response)
 ;;    (message "Got response: %s" response)))
 ;;
 ;; (haskell-tags-server--call
-;;  haskell-tags-server--proc
+;;  haskell-tags-server--network-proc
 ;;  'find
 ;;  '["/home/sergey/projects/haskell/packages/all-packages/base-4.11.1.0/Control/Applicative.hs" "Functor"]
 ;;  (lambda (response)
 ;;    (message "Got response: %s" response)))
 ;;
 ;; (haskell-tags-server--call
-;;  haskell-tags-server--proc
+;;  haskell-tags-server--network-proc
 ;;  'find
 ;;  '["/home/sergey/projects/haskell/packages/all-packages/base-4.11.1.0/Control/Applicative.hs" "liftA3"]
 ;;  (lambda (response)
 ;;    (message "Got response: %s" response)))
 ;;
 ;; (haskell-tags-server--call
-;;  haskell-tags-server--proc
+;;  haskell-tags-server--network-proc
 ;;  'find
 ;;  '["/home/sergey/projects/haskell/packages/all-packages/base-4.11.1.0/Control/Applicative.hs" "ZipList"]
 ;;  (lambda (response)
