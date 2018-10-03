@@ -37,7 +37,6 @@ import Data.ErrorMessage
 import Data.Map.NonEmpty (NonEmptyMap)
 import qualified Data.Map.NonEmpty as NEMap
 import Data.Path
-import qualified Data.SubkeyMap as SubkeyMap
 import Haskell.Language.Server.Tags.LoadModule (resolveModule)
 import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports
@@ -65,7 +64,7 @@ loadAllFilesIntoState unresolvedModules conf@TagsServerConf{tsconfNameResolution
           Just modules -> Just (NEMap.elemsNE modules, loadedMods)
             where
               loadedMods :: [ResolvedModule]
-              loadedMods = foldMap toList $ SubkeyMap.lookup key tssLoadedModules
+              loadedMods = foldMap toList $ M.lookup key tssLoadedModules
           Nothing      -> Nothing
 
       doResolve
@@ -74,7 +73,7 @@ loadAllFilesIntoState unresolvedModules conf@TagsServerConf{tsconfNameResolution
         -> n (Maybe (NonEmpty ResolvedModule))
       doResolve key = do
         resolveState <- get
-        case SubkeyMap.lookup key $ tssLoadedModules resolveState of
+        case M.lookup key $ tssLoadedModules resolveState of
           Just resolved -> pure $ Just resolved
           Nothing       -> do
             logInfo $ "[loadAllFilesIntoState.doResolve] Resolving" <+> PP.dquotes (pretty (ikModuleName key))
@@ -112,7 +111,7 @@ loadAllFilesIntoState unresolvedModules conf@TagsServerConf{tsconfNameResolution
                     { tssLoadsInProgress =
                         M.update (`NEMap.difference` unresolvedMap) key $ tssLoadsInProgress s
                     , tssLoadedModules   =
-                        SubkeyMap.insertWith (Semigroup.<>) key resolved $ tssLoadedModules s
+                        M.insertWith (Semigroup.<>) key resolved $ tssLoadedModules s
                     }
                   logInfo $ "[loadAllFilesIntoState.doResolve] Resolved" <+> PP.dquotes (pretty (ikModuleName key))
                   pure $ Just resolved

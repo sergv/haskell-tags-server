@@ -50,7 +50,6 @@ import Data.ErrorMessage
 import Data.Map.NonEmpty (NonEmptyMap)
 import Data.Path (FileType(..), FullPath, Extension)
 import Data.Promise (Promise)
-import Data.SubkeyMap (SubkeyMap)
 import Data.Symbols
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
@@ -182,7 +181,7 @@ defaultTagsServerConf = TagsServerConf
 -- | Server state that may change while a request is processed.
 data TagsServerState = TagsServerState
   { -- | Single module name can refer to multiple modules.
-    tssLoadedModules   :: !(SubkeyMap ImportKey (NonEmpty ResolvedModule))
+    tssLoadedModules   :: !(Map ImportKey (NonEmpty ResolvedModule))
     -- | Set of modules we started loading. Mainly used for detecting
     -- import cycles.
   , tssLoadsInProgress :: !(Map ImportKey (NonEmptyMap (FullPath 'File) UnresolvedModule))
