@@ -182,7 +182,7 @@ runBertServer port reqHandler = do
             <*> (FindSymbol <$> (mkSymbolName <$> decodeUtf8 "symbol to find" symbol))
           response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
           BERT.Success <$> either throwError (pure . responseToTerm) response
-        _                                    ->
+        _ ->
           throwErrorWithCallStack $
             "Expected 2 arguments but got:" ## ppShow args
     go' "haskell-tags-server" "find-regexp" args =
@@ -191,10 +191,10 @@ runBertServer port reqHandler = do
           let scope = if isLocal then ScopeCurrentModule else ScopeAllModules
           request  <- QueryReq
             <$> (mkFullPath =<< decodeUtf8 "filename" filename)
-            <*> (FindSymbolByRegexp scope <$> (compileRegex False . T.unpack =<< decodeUtf8 "regexp" regexp))
+            <*> (FindSymbolByRegexp scope <$> (compileRegex =<< decodeUtf8 "regexp" regexp))
           response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
           BERT.Success <$> either throwError (pure . responseToTerm) response
-        _                                    ->
+        _ ->
           throwErrorWithCallStack $
             "Expected 3 arguments but got:" ## ppShow args
     go' "haskell-tags-server" _ _ = pure BERT.NoSuchFunction

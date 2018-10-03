@@ -30,6 +30,7 @@ import Control.Monad.Trans.Control
 import qualified Data.ByteString.Lazy.Char8 as C8
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
 import qualified Data.Set as S
+import Data.Text (Text)
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext
@@ -69,6 +70,12 @@ mkTestsConfig tsconfNameResolution srcDir = do
     RecursiveDir dir -> do
       dir' <- mkFullPath $ testDataDir </> dir
       pure mempty { scRecursivePaths = S.singleton dir' }
+    RecursiveWithIgnored dir globs -> do
+      dir' <- mkFullPath $ testDataDir </> dir
+      pure mempty
+        { scRecursivePaths = S.singleton dir'
+        , scIgnoredGlobs   = S.fromList globs
+        }
   let conf = defaultTagsServerConf
         { tsconfEagerTagging   = False
         , tsconfNameResolution
@@ -104,6 +111,7 @@ responseToTerm resp =
 data WorkingDirectory =
     ShallowDir PathFragment
   | RecursiveDir PathFragment
+  | RecursiveWithIgnored PathFragment [Text]
   deriving (Eq, Ord, Show)
 
 data ServerTest = ServerTest
@@ -1342,6 +1350,54 @@ testData = GroupTest "server tests"
           , ("Quux",      Known "ModuleWithReexport.hs" 14 "Type")
           ]
         ]
+  , withDirAndFile NameResolutionLax (ShallowDir "0017ignored_dirs_and_files") "Main.hs" $
+      group "Shallow dir does not find dependency in subdirectory"
+        [ (C8.unpack sym, sym, response)
+        | (sym, response) <-
+          [ ("foo",       NotFound)
+          , ("bar",       NotFound)
+          ]
+        ]
+  , withDirAndFile NameResolutionLax (RecursiveDir "0017ignored_dirs_and_files") "Main.hs" $
+      group "Recursive dir does find dependency in subdirectory"
+        [ (C8.unpack sym, sym, response)
+        | (sym, response) <-
+          [ ("foo",       Known "dep/Dependency.hs" 12 "Function")
+          , ("bar",       NotFound)
+          ]
+        ]
+  , withDirAndFile NameResolutionLax (RecursiveWithIgnored "0017ignored_dirs_and_files" ["*/dep/*"]) "Main.hs" $
+      group "Recursive dir with ignored glob that matches directory only"
+        [ (C8.unpack sym, sym, response)
+        | (sym, response) <-
+          [ ("foo",       NotFound)
+          , ("bar",       NotFound)
+          ]
+        ]
+  , withDirAndFile NameResolutionLax (RecursiveWithIgnored "0017ignored_dirs_and_files" ["*/dep*"]) "Main.hs" $
+      group "Recursive dir with ignored glob that matches directory and its contents"
+        [ (C8.unpack sym, sym, response)
+        | (sym, response) <-
+          [ ("foo",       NotFound)
+          , ("bar",       NotFound)
+          ]
+        ]
+  , withDirAndFile NameResolutionLax (RecursiveWithIgnored "0017ignored_dirs_and_files" ["*"]) "Main.hs" $
+      group "Recursive dir with ignored glob that matches everything"
+        [ (C8.unpack sym, sym, response)
+        | (sym, response) <-
+          [ ("foo",       NotFound)
+          , ("bar",       NotFound)
+          ]
+        ]
+  , withDirAndFile NameResolutionLax (RecursiveWithIgnored "0017ignored_dirs_and_files" ["*.hs"]) "Main.hs" $
+      group "Recursive dir with ignored glob that matches all files"
+        [ (C8.unpack sym, sym, response)
+        | (sym, response) <-
+          [ ("foo",       NotFound)
+          , ("bar",       NotFound)
+          ]
+        ]
   ]
 
 tests :: TestTree
@@ -1420,8 +1476,9 @@ mkFindSymbolTest pool ServerTest{stTestName, stNameResolutionStrictness, stWorki
       (searchDirs, conf) <- mkTestsConfig stNameResolutionStrictness stWorkingDirectory
       withConnection pool searchDirs conf $ \conn -> do
         let dir  = case stWorkingDirectory of
-              ShallowDir   x -> testDataDir </> x
-              RecursiveDir x -> testDataDir </> x
+              ShallowDir   x           -> testDataDir </> x
+              RecursiveDir x           -> testDataDir </> x
+              RecursiveWithIgnored x _ -> testDataDir </> x
             path = pathFragmentToUTF8 $ dir </> stFile
         r    <- liftBase $
           call conn "haskell-tags-server" "find"

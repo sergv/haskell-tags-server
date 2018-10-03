@@ -48,6 +48,7 @@ import qualified Data.Promise as Promise
 import Control.Monad.Filesystem (MonadFS(..), SearchCfg(..))
 import qualified Control.Monad.Filesystem as MonadFS
 import Control.Monad.Logging
+import Data.CompiledRegex
 import Data.ErrorMessage
 import Data.Map.NonEmpty (NonEmptyMap)
 import qualified Data.Map.NonEmpty as NEMap
@@ -84,8 +85,9 @@ preloadFiles
   -> TagsServerConf
   -> TagsServerState
   -> m TagsServerState
-preloadFiles searchCfg conf initState = do
-  knownFiles <- MonadFS.findRec searchCfg (loadMod conf)
+preloadFiles searchCfg@SearchCfg{scIgnoredGlobs} conf initState = do
+  ignoredGlobsRE <- fileGlobsToRegex (scIgnoredGlobs <> MonadFS.defaultInoredGlobs)
+  knownFiles     <- MonadFS.findRec searchCfg ignoredGlobsRE (loadMod conf)
   if tsconfEagerTagging conf
   then do
     logInfo "[preloadFiles] collecting tags eagerly..."
