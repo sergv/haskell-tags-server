@@ -39,6 +39,7 @@ import qualified Data.ByteString.Lazy.Char8 as CL8
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy.Encoding as TLE
@@ -72,6 +73,15 @@ decodeUtf8 thing =
     mkErr = (msg <+>) . ppShow
     msg :: Doc ann
     msg = "Invalid utf8 encoding of" <+> vacuous thing <> ":"
+
+extractString
+  :: (WithCallStack, MonadError ErrorMessage m)
+  => Doc Void -> Term -> m T.Text
+extractString thing = \case
+  BinaryTerm str -> decodeUtf8 thing str
+  invalid        -> throwErrorWithCallStack $
+    "Expected a string for" <+> vacuous thing <> ", but got:" <+> ppShow invalid
+
 
 -- | Bert transport that can be waiter for.
 data SynchronizedTransport = SynchronizedTransport
@@ -123,43 +133,74 @@ runBertServer port reqHandler = do
     go :: WithCallStack => String -> String -> [Term] -> m BERT.DispatchResult
     go mod func args = do
       logDebug $ "[runBertServer.go] got request" <+> pretty mod <> ":" ## pretty func
-      res <- runErrorExceptT $ go' mod func args
-      case res of
-        Left err ->
-          pure $ BERT.Success $ TupleTerm
-            [ AtomTerm "error"
-            , BinaryTerm $ TLE.encodeUtf8 $ displayDoc $ pretty err
+      case args of
+        [callId, TupleTerm args'] -> do
+          res <- runErrorExceptT $ go' mod func args'
+          pure $ case res of
+            Left err ->
+              BERT.Success $ TupleTerm
+                [ callId
+                , TupleTerm [AtomTerm "error", BinaryTerm err']
+                ]
+              where
+                err' = TLE.encodeUtf8 $ displayDoc $ pretty err
+            Right (BERT.Success x) ->
+              BERT.Success $ TupleTerm
+                [ callId
+                , TupleTerm [AtomTerm "ok", x]
+                ]
+            Right x -> x
+        _ -> pure $
+          BERT.Success $ TupleTerm
+            [ NilTerm -- dummy call id
+            , TupleTerm
+                [ AtomTerm "error"
+                , BinaryTerm "Call argument must be of the form {call-id, actual-args-tuple}."
+                ]
             ]
-        Right x -> pure x
     go'
       :: WithCallStack
       => String -> String -> [Term] -> ErrorExceptT ErrorMessage m BERT.DispatchResult
-    go' "haskell-tags-server" "find-regexp" args =
+    go' "haskell-tags-server" "add-shallow-recursive-ignored-entries" args =
       case args of
-        [BinaryTerm filename, BinaryTerm regexp] -> do
-          request  <- FindSymbolByRegexp
-                        <$> (mkFullPath =<< decodeUtf8 "filename" filename)
-                        <*> (compileRegex False . T.unpack =<< decodeUtf8 "regexp" regexp)
-          response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
-          BERT.Success <$> either throwError (pure . responseToTerm) response
-        _                                    ->
+        [ListTerm shallowDirs, ListTerm recursiveDirs, ListTerm ignoredGlobs] -> do
+          request <- DirReq <$>
+            (AddShallowRecursiveIgnored
+              <$> (S.fromList <$> traverse (mkFullPath <=< extractString "shallow directory") shallowDirs)
+              <*> (S.fromList <$> traverse (mkFullPath <=< extractString "recursive directory") recursiveDirs)
+              <*> (S.fromList <$> traverse (extractString "ignore glob") ignoredGlobs))
+          res <- liftBase $ Promise.getPromisedValue =<< reqHandler request
+          BERT.Success <$> either throwError (\() -> pure $ AtomTerm "ok") res
+        _ ->
           throwErrorWithCallStack $
-            "Expected 2 arguments but got:" ## ppShow args
+            "Expected 3 arguments but got:" ## ppShow args
     go' "haskell-tags-server" "find" args =
       case args of
         [BinaryTerm filename, BinaryTerm symbol] -> do
-          request  <- FindSymbol
-                        <$> (mkFullPath =<< decodeUtf8 "filename" filename)
-                        <*> (mkSymbolName <$> decodeUtf8 "symbol to find" symbol)
+          request  <- QueryReq
+            <$> (mkFullPath =<< decodeUtf8 "filename" filename)
+            <*> (FindSymbol <$> (mkSymbolName <$> decodeUtf8 "symbol to find" symbol))
           response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
           BERT.Success <$> either throwError (pure . responseToTerm) response
         _                                    ->
           throwErrorWithCallStack $
             "Expected 2 arguments but got:" ## ppShow args
+    go' "haskell-tags-server" "find-regexp" args =
+      case args of
+        [BinaryTerm filename, BinaryTerm regexp, BoolTerm isLocal] -> do
+          let scope = if isLocal then ScopeCurrentModule else ScopeAllModules
+          request  <- QueryReq
+            <$> (mkFullPath =<< decodeUtf8 "filename" filename)
+            <*> (FindSymbolByRegexp scope <$> (compileRegex False . T.unpack =<< decodeUtf8 "regexp" regexp))
+          response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
+          BERT.Success <$> either throwError (pure . responseToTerm) response
+        _                                    ->
+          throwErrorWithCallStack $
+            "Expected 3 arguments but got:" ## ppShow args
     go' "haskell-tags-server" _ _ = pure BERT.NoSuchFunction
     go' _                     _ _ = pure BERT.NoSuchModule
 
-responseToTerm :: Response -> Term
+responseToTerm :: QueryResponse -> Term
 responseToTerm = \case
   NotFound _ -> AtomTerm "not_found"
   Found (sym :| []) ->

@@ -20,6 +20,7 @@ module Haskell.Language.Server.Tags.LoadModule
   , readFileAndLoad
   , loadModuleFromSource
   , resolveModule
+  , checkLoadingModules
   ) where
 
 import Prelude hiding (mod)

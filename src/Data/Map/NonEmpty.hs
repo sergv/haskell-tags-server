@@ -28,6 +28,8 @@ module Data.Map.NonEmpty
   , elemsNE
   , union
   , unionWith
+  , difference
+  , differenceWith
   ) where
 
 import Data.Foldable
@@ -123,3 +125,23 @@ unionWith f (NonEmptyMap k1 v1 m1) (NonEmptyMap k2 v2 m2) =
     LT -> NonEmptyMap k1 v1          $ M.unionWith f m1 (M.insert k2 v2 m2)
     EQ -> NonEmptyMap k1 (v1 `f` v2) $ M.unionWith f m1 m2
     GT -> NonEmptyMap k2 v2          $ M.unionWith f (M.insert k1 v1 m1) m2
+
+{-# INLINE difference #-}
+difference
+  :: Ord k
+  => NonEmptyMap k a
+  -> NonEmptyMap k b
+  -> Maybe (NonEmptyMap k a)
+difference = differenceWith (\_ _ -> Nothing)
+
+{-# INLINE differenceWith #-}
+differenceWith
+  :: Ord k
+  => (a -> b -> Maybe a)
+  -> NonEmptyMap k a
+  -> NonEmptyMap k b
+  -> Maybe (NonEmptyMap k a)
+differenceWith f (NonEmptyMap k1 v1 m1) (NonEmptyMap k2 v2 m2) =
+  case M.minViewWithKey $ M.differenceWith f (M.insert k1 v1 m1) (M.insert k2 v2 m2) of
+    Nothing          -> Nothing
+    Just ((k, v), m) -> Just $ NonEmptyMap k v m

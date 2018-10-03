@@ -57,5 +57,3 @@ runSearchT conf serverState (SearchM action)
   = flip runReaderT conf
   $ flip runStateT serverState
   $ runErrorExceptT action
-
-

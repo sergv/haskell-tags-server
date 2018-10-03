@@ -9,7 +9,10 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE DoAndIfThenElse     #-}
 {-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
@@ -33,22 +36,22 @@ import Control.Monad.Catch
 import Control.Monad.Except.Ext
 import Control.Monad.Trans.Control
 
+import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.Map.Strict as M
 import Data.Semigroup.Foldable
 import qualified Data.Set as S
 import Data.Text.Prettyprint.Doc.Ext (Pretty(..), (##))
 
-import Data.Promise (Promise)
 import qualified Data.Promise as Promise
 
-import Control.Monad.Filesystem (MonadFS(..))
+import Control.Monad.Filesystem (MonadFS(..), SearchCfg(..))
 import qualified Control.Monad.Filesystem as MonadFS
 import Control.Monad.Logging
 import Data.ErrorMessage
 import Data.Map.NonEmpty (NonEmptyMap)
 import qualified Data.Map.NonEmpty as NEMap
 import Data.Path
-import qualified Data.SubkeyMap as SubkeyMap
 import Data.Symbols (fileNameToModuleName)
 import Haskell.Language.Server.Tags.LoadFiles
 import Haskell.Language.Server.Tags.LoadModule
@@ -75,73 +78,97 @@ stopTagsServer = liftBase . killThread . tsThreadId
 waitForTagsServerFinish :: MonadBase IO m => TagsServer -> m TagsServerState
 waitForTagsServerFinish = liftBase . readMVar . tsFinishState
 
+preloadFiles
+  :: (WithCallStack, MonadError ErrorMessage m, MonadLog m, MonadFS m)
+  => SearchCfg
+  -> TagsServerConf
+  -> TagsServerState
+  -> m TagsServerState
+preloadFiles searchCfg conf initState = do
+  knownFiles <- MonadFS.findRec searchCfg (loadMod conf)
+  if tsconfEagerTagging conf
+  then do
+    logInfo "[preloadFiles] collecting tags eagerly..."
+    initState' <- loadAllFilesIntoState (fold1 . NEMap.elemsNE <$> knownFiles) conf initState
+    logInfo "[preloadFiles] collecting tags eagerly... OK"
+    pure initState'
+  else pure initState
+    { tssUnloadedFiles =
+      M.unionWith (<>) (fold1 . NEMap.elemsNE <$> knownFiles) (tssUnloadedFiles initState)
+    }
+
 -- | Start new tags server thread that will serve requests supplied via returned
 -- RequestHandler.
 startTagsServer
   :: forall m. (WithCallStack, MonadBase IO m, MonadBaseControl IO m, MonadCatch m, MonadError ErrorMessage m, MonadLog m, MonadFS m, MonadMask m)
-  => TagsServerConf
+  => SearchCfg
+  -> TagsServerConf
   -> m TagsServer
-startTagsServer conf = do
-  knownFiles <- MonadFS.findRec (tsconfSearchDirs conf) (loadMod conf)
-  state' <-
-    if tsconfEagerTagging conf
-    then do
-      logInfo "[startTagsServer] collecting tags eagerly..."
-      tssLoadedModules <- SubkeyMap.fromMap <$> loadAllFilesIntoState (fold1 . NEMap.elemsNE <$> knownFiles) conf
-      logInfo "[startTagsServer] collecting tags eagerly... OK"
-      pure TagsServerState
-        { tssLoadedModules
-        , tssLoadsInProgress = mempty
-        , tssUnloadedFiles   = mempty
-        }
-    else pure TagsServerState
-      { tssLoadedModules   = mempty
-      , tssLoadsInProgress = mempty
-      , tssUnloadedFiles   = fold1 . NEMap.elemsNE <$> knownFiles
-      }
-  reqChan <- liftBase newChan
-  lock    <- liftBase newEmptyMVar
-  tid     <- liftBaseDiscard forkIO $ handleRequests lock reqChan state'
-  let requestHandler req = do
-        respPromise <- Promise.newPromise
-        writeChan reqChan (req, respPromise)
-        pure respPromise
+startTagsServer searchCfg conf = do
+  initState <- preloadFiles searchCfg conf emptyTagsServerState
+  reqChan   <- liftBase newChan
+  lock      <- liftBase newEmptyMVar
+  tid       <- liftBaseDiscard forkIO $ handleRequests lock reqChan initState
+  let tsRequestHandler :: RequestHandler
+      tsRequestHandler = \case
+        req@QueryReq{} -> do
+          respPromise <- Promise.newPromise
+          writeChan reqChan (SomeRequest (UserReq req) respPromise)
+          pure respPromise
+        req@DirReq{} -> do
+          respPromise <- Promise.newPromise
+          writeChan reqChan (SomeRequest (UserReq req) respPromise)
+          pure respPromise
   pure TagsServer
-    { tsRequestHandler = requestHandler
-    , tsFinishState    = lock
-    , tsThreadId       = tid
+    { tsRequestHandler
+    , tsFinishState = lock
+    , tsThreadId    = tid
     }
   where
     handleRequests
       :: MVar TagsServerState
-      -> Chan (Request, Promise (Either ErrorMessage Response))
+      -> Chan SomeRequest
       -> TagsServerState
       -> m ()
     handleRequests lock reqChan = go
       where
-        go s =
-          go =<< (handleReq reqChan s `onException` liftBase (putMVar lock s))
+        go s = go =<< (handleReq reqChan s `onException` liftBase (putMVar lock s))
     handleReq
-      :: Chan (Request, Promise (Either ErrorMessage Response))
+      :: Chan SomeRequest
       -> TagsServerState
       -> m TagsServerState
     handleReq reqChan serverState = do
-      (request, responsePromise) <- liftBase $ readChan reqChan
-      logInfo $ "[startTagsServer.handleReq] request:" ## pretty request
-      (response, state') <- runSearchT conf serverState $
-        case request of
-          FindSymbol filename symbol -> do
-            ensureFileExists filename
-            symbols <- findSymbol id filename symbol
-            case symbols of
-              []   -> pure $ NotFound symbol
-              s:ss -> pure $ Found $ s :| ss
-          FindSymbolByRegexp filename _ -> do
-            ensureFileExists filename
-            throwErrorWithCallStack "Search by regexp is not implemented yet"
-      logInfo $ "[startTagsServer.handleReq] response:" ## either pretty pretty response
-      Promise.putValue responsePromise response
-      pure state'
+      req <- liftBase $ readChan reqChan
+      case req of
+        SomeRequest FSNotifyReq{} () ->
+          undefined
+        SomeRequest (UserReq request) respPromise -> do
+          -- (request, responsePromise) <- liftBase $ readChan reqChan
+          logInfo $ "[startTagsServer.handleReq] request:" ## pretty request
+          case request of
+            QueryReq filename request' -> do
+              ensureFileExists filename
+              (response, serverState') <- runSearchT conf serverState $ case request' of
+                FindSymbol symbol -> do
+                  symbols <- findSymbol id filename symbol
+                  pure $ case toList symbols of
+                    []   -> NotFound symbol
+                    s:ss -> Found $ s :| ss
+                FindSymbolByRegexp{} ->
+                  throwErrorWithCallStack "Search by regexp is not implemented yet"
+              logInfo $ "[startTagsServer.handleReq] response:" ## either pretty pretty response
+              Promise.putValue respPromise response
+              pure serverState'
+            DirReq (AddShallowRecursiveIgnored scShallowPaths scRecursivePaths scIgnoredGlobs) -> do
+              let searchCfg' = SearchCfg
+                    { scShallowPaths
+                    , scRecursivePaths
+                    , scIgnoredDirs = scIgnoredDirs searchCfg
+                    , scIgnoredGlobs
+                    }
+              serverState' <- preloadFiles searchCfg' conf serverState
+              Promise.putValue respPromise (Right ())
+              pure serverState'
 
 ensureFileExists
   :: (WithCallStack, MonadFS m, MonadError ErrorMessage m)
