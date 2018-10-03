@@ -298,13 +298,18 @@ separate requests.")
     (save-match-data
       (replace-regexp-in-string "\\(?:\\`[ \t\v\f\r\n]*\\|[ \t\v\f\r\n]*\\'\\)" "" str))))
 
-(defparameter haskell-tags-server--haskell-symbol-re
+(defvar haskell-tags-server--haskell-symbol-re
   (rx (or (group (+ ;; (regexp "[-!#$%&*+./<=>?@^|~:\\]")
                   (any ?\- ?\! ?\# ?\$ ?\% ?\& ?\* ?\+ ?\. ?\/ ?\< ?\= ?\> ?\? ?\@ ?^ ?\| ?\~ ?\: ?\\ )))
           (group
-           (seq ;; allow _ as a first char to fit GHC
+           (seq
+            ;; Optional qualification - important to resolve qualified imports.
+            (? upper
+               (* (char alnum ?_ ))
+               ".")
+            ;; Allow _ as a first char to fit GHC.
             (or (regexp "\\<[_a-z]")
-                ;; allow ' preceding conids because of DataKinds/PolyKinds
+                ;; Allow ' preceding conids because of DataKinds/PolyKinds.
                 (regexp "'*[A-Z]")
                 (syntax word))
             (group
@@ -312,11 +317,12 @@ separate requests.")
   "Regexp to recognize haskell symbols as generic entities for search
 (with e.g. \"*\" in vim).")
 
-(defparameter haskell-tags-server--forward-haskell-symbol-syntax-table
+(defvar haskell-tags-server--forward-haskell-symbol-syntax-table
   (let ((tbl (copy-syntax-table haskell-mode-syntax-table)))
     (modify-syntax-entry ?#  "w" tbl)
     (modify-syntax-entry ?_  "w" tbl)
     (modify-syntax-entry ?\' "w" tbl)
+    (modify-syntax-entry ?.  "w" tbl) ;; So that we match qualified names.
     tbl)
   "Special syntax table for haskell that allows to recognize symbols that contain
 both unicode and ascii characters.")
@@ -332,7 +338,7 @@ uppercase or lowercase names)."
         ;; via `bounds-of-thing-at-point', not the "''Foobar".
         (beginning-quotes "'")
         (operator-chars "\\-!#$%&*+./<=>?@\\^|~:\\\\"))
-    (with-syntax-table forward-haskell-symbol-syntax-table
+    (with-syntax-table haskell-tags-server--forward-haskell-symbol-syntax-table
       (if (natnump arg)
           (re-search-forward haskell-tags-server--haskell-symbol-re nil t arg)
         (while (< arg 0)
@@ -340,12 +346,12 @@ uppercase or lowercase names)."
             (cond ((not (null? (match-beginning 1)))
                    (skip-chars-backward operator-chars)
                    ;; we may have matched # thas ends a name
-                   (skip-syntax-backward "w")
+                   (skip-syntax-backward "w_")
                    (skip-chars-forward beginning-quotes))
                   ((not (null? (match-beginning 2)))
                    ;; (goto-char (match-beginning 2))
                    (when (not (null? (match-beginning 3)))
-                     (skip-syntax-backward "w")
+                     (skip-syntax-backward "w_")
                      (skip-chars-forward beginning-quotes)))
                   (t
                    (error "No group of haskell-tags-server--haskell-symbol-re matched, should not happen"))))
@@ -416,6 +422,11 @@ uppercase or lowercase names)."
   (goto-char (haskell-tags-server-home-entry--point home-entry)))
 
 
+(defun haskell-tags-server--strip-qualified-prefix (str)
+  (save-match-data
+    (if (string-match "^\\([[:upper:]][[:alnum:]]*\\.\\)+" str)
+        (replace-match "" nil nil str)
+      str)))
 
 (defun haskell-tags-server--goto-loc (filename line prev-loc search-query use-regexp?)
   "Go to a given position in a given file and maintain navigation information."
@@ -432,11 +443,14 @@ uppercase or lowercase names)."
     (widen)
     (goto-line line)
     (save-match-data
-      (when (re-search-forward (if use-regexp?
-                                   (concat "\\<" (regexp-quote search-query) "\\>")
-                                 search-query)
-                               (line-end-position)
-                               t)
+      (when (re-search-forward
+             (if use-regexp?
+                 (concat "\\<" (regexp-quote search-query) "\\>")
+               ;; Must strip qualification prefix here in order to be able
+               ;; to locate bare name within current module.
+               (haskell-tags-server--strip-qualified-prefix search-query))
+             (line-end-position)
+             t)
         (goto-char (match-beginning 0))))
     ;; remove annoying "Mark set" message
     (message "")
