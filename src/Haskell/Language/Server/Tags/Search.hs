@@ -26,6 +26,7 @@ import Data.Foldable.Ext (toList, foldMapA, foldForA)
 import qualified Data.List as L
 import Data.Set (Set)
 import qualified Data.Set as S
+import qualified Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext
 
 import Control.Monad.Filesystem (MonadFS)
@@ -50,6 +51,8 @@ findSymbol
   -> SymbolName             -- ^ Symbol to find. Can be either qualified, unqualified, ascii name/utf name/operator
   -> m (Set ResolvedSymbol) -- ^ Found tags, may be empty when nothing was found.
 findSymbol liftN filename sym = do
+  logVerboseDebug $
+    "[findSymbol] searching for" <+> pretty sym <+> "within" <+> pretty filename
   modifTime <- MonadFS.getModificationTime filename
   name      <- fileNameToModuleName filename
   findInModule liftN sym =<<
@@ -64,7 +67,9 @@ findInModule
   -> SymbolName
   -> ResolvedModule
   -> m (Set ResolvedSymbol)
-findInModule liftN sym mod =
+findInModule liftN sym mod = do
+  logVerboseDebug $
+    "[findSymbol] qualifier for" <+> pretty sym <> ":" <+> pretty qualifier
   case qualifier of
     -- Unqualified name
     Nothing -> do
@@ -79,10 +84,12 @@ findInModule liftN sym mod =
       resolvedSpecs <- resolveQualifier qualifier' header
       case resolvedSpecs of
         Nothing     ->
-          throwErrorWithCallStack $ "Qualifier" <+> pretty qualifier' <+>
+          throwErrorWithCallStack $ "Qualifier" <+> PP.squotes (pretty qualifier') <+>
             "not listed among module's import qualifiers:" ##
             ppMapWith pretty ppNE (mhImportQualifiers header)
-        Just specs ->
+        Just specs -> do
+          logVerboseDebug $
+            "[lookUpInImportedModules] resolved qualifier" <+> pretty qualifier' <+> "to modules:" ## pretty specs
           lookUpInImportedModules liftN sym' specs
   where
     qualifier :: Maybe ImportQualifier
