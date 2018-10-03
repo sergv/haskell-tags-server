@@ -98,7 +98,7 @@ main = do
             { scShallowPaths   = cfgSourceDirectories'
             , scRecursivePaths = cfgDirTrees'
             , scIgnoredDirs    = MonadFS.versionControlDirs
-            , scIgnoredGlobs   = mempty
+            , scIgnoredGlobs   = MonadFS.defaultInoredGlobs
             }
           conf = defaultTagsServerConf
             { tsconfEagerTagging   = cfgEagerTagging

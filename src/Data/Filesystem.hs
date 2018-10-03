@@ -50,6 +50,7 @@ import System.Posix.Files as Posix
 #endif
 
 import Data.Path.Internal
+import Data.CompiledRegex
 
 findRecursive
   :: forall a m. (WithCallStack, MonadBaseControl IO m, MonadMask m)
@@ -140,15 +141,21 @@ findRecursive extraJobs dirPred filePred consumeOutput shallowDirs recursiveDirs
 findRecur
   :: forall k v m. (WithCallStack, Ord k, Semigroup v, MonadBaseControl IO m, MonadMask m)
   => Set (BaseName 'Dir)
+  -> CompiledRegex
   -> Set (FullPath 'Dir)
   -> Set (FullPath 'Dir)
   -> (FullPath 'File -> m (Maybe (k, v)))
   -> m (Map k v)
-findRecur ignoredDirs shallowPaths recursivePaths f = do
+findRecur ignoredDirs ignoredGlobsRE shallowPaths recursivePaths f = do
   n       <- liftBase getNumCapabilities
   results <- liftBase newTMQueueIO
   let collect :: (k, v) -> m ()
       collect = liftBase . atomically . writeTMQueue results
+
+      shouldVisit :: FullPath 'Dir -> Bool
+      shouldVisit path =
+        takeFileName path `S.notMember` ignoredDirs &&
+        not (reMatches ignoredGlobsRE (unFullPath path))
 
       consumeOutput :: Map k v -> IO (Map k v)
       consumeOutput !xs = do
@@ -157,7 +164,14 @@ findRecur ignoredDirs shallowPaths recursivePaths f = do
           Nothing     -> pure xs
           Just (k, v) -> consumeOutput $ M.insertWith (Semigroup.<>) k v xs
 
+      f' :: FullPath 'File -> m (Maybe (k, v))
+      f' path
+        | reMatches ignoredGlobsRE (unFullPath path)
+        = pure Nothing
+        | otherwise
+        = f path
+
       doFind =
-        findRecursive n ((`S.notMember` ignoredDirs) . takeFileName) f collect shallowPaths recursivePaths
+        findRecursive n shouldVisit f' collect shallowPaths recursivePaths
   withAsync (doFind `finally` liftBase (atomically (closeTMQueue results))) $ \searchAsync ->
     liftBase (consumeOutput M.empty) <* (wait searchAsync :: m ())
