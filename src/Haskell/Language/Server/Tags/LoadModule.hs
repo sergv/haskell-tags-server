@@ -118,8 +118,8 @@ loadModule liftN key@ImportKey{ikModuleName} = do
         when anyReloaded $
           modify $ \s' -> s' { tssLoadedModules = M.insert key ms' $ tssLoadedModules s' }
         pure $ Just ms'
-    for_ mods $ \mods' ->
-      logDebug $ ppFoldableHeader "[loadModule] loaded modules:" mods'
+    -- for_ mods $ \mods' ->
+    --   logDebug $ ppFoldableHeader "[loadModule] loaded modules:" mods'
     pure mods
   where
     doLoad :: WithCallStack => m (Maybe (NonEmpty ResolvedModule))
