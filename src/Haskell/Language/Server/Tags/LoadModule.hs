@@ -102,11 +102,11 @@ loadModule liftN key@ImportKey{ikModuleName} = do
       , ppFoldableHeaderWith ppNEMap "All imports in progress:" $ tssLoadsInProgress s
       ]
   else do
-    mods <- case SubkeyMap.lookup key (tssLoadedModules s) of
+    mods <- case M.lookup key (tssLoadedModules s) of
       Nothing -> do
         mods' <- doLoad
         for_ mods' $ \mods'' ->
-          modify (\s' -> s' { tssLoadedModules = SubkeyMap.insert key mods'' $ tssLoadedModules s' })
+          modify (\s' -> s' { tssLoadedModules = M.insert key mods'' $ tssLoadedModules s' })
         pure mods'
       Just ms -> do
         logDebug $ "[loadModule] module was loaded before, reusing:" <+> pretty key
@@ -116,7 +116,7 @@ loadModule liftN key@ImportKey{ikModuleName} = do
             Nothing  -> pure m
             Just m'' -> m'' <$ tell (Any True)
         when anyReloaded $
-          modify $ \s' -> s' { tssLoadedModules = SubkeyMap.insert key ms' $ tssLoadedModules s' }
+          modify $ \s' -> s' { tssLoadedModules = M.insert key ms' $ tssLoadedModules s' }
         pure $ Just ms'
     for_ mods $ \mods' ->
       logDebug $ ppFoldableHeader "[loadModule] loaded modules:" mods'
@@ -140,33 +140,6 @@ loadModule liftN key@ImportKey{ikModuleName} = do
             case m' of
               Nothing  -> registerAndResolve liftN key m
               Just m'' -> pure m''
-
-      -- case T.splitOn "." $ getModuleName ikModuleName of
-      --   []            -> throwErrorWithCallStack $ "Invalid module name:" <+> pretty ikModuleName
-      --   comps@(_ : _) -> do
-      --     TagsServerConf{tsconfSearchDirs, tsconfVanillaExtensions, tsconfHsBootExtensions, tsconfNameResolution} <- ask
-      --
-      --     let extensions = case ikImportTarget of
-      --           VanillaModule -> tsconfVanillaExtensions
-      --           HsBootModule  -> tsconfHsBootExtensions
-      --         msg        = "Cannot load module " <> pretty ikModuleName Semigroup.<> ": no paths found"
-      --     candidates <- liftN $ MonadFS.findRec tsconfSearchDirs $ \candidate -> do
-      --       let (dirs, file)   = splitDirectories candidate
-      --           candidateComps :: [PathFragment]
-      --           candidateComps = map unBaseName dirs ++ [unBaseName $ dropExtensions file]
-      --       if (takeExtension candidate `S.member` extensions) && (fmap mkSinglePathFragment comps `L.isSuffixOf` candidateComps)
-      --       then do
-      --         modifTime <- MonadFS.getModificationTime candidate
-      --         unresMod  <- readFileAndLoad (Just ikModuleName) modifTime candidate
-      --         pure $ Just (candidate, unresMod)
-      --       else pure Nothing
-      --     case (tsconfNameResolution, toList candidates) of
-      --       (NameResolutionStrict, []) -> throwErrorWithCallStack msg
-      --       (NameResolutionLax,    []) -> do
-      --         logWarning msg
-      --         pure Nothing
-      --       (_, p : ps)                ->
-      --         Just <$> traverse (registerAndResolve liftN key) (p :| ps)
 
 -- TODO: consider using hashes to track whether a module needs reloading?
 reloadIfNecessary
@@ -226,7 +199,7 @@ checkLoadingModules key = do
     Just modules -> Just (NEMap.elemsNE modules, loadedMods)
       where
         loadedMods :: [ResolvedModule]
-        loadedMods = foldMap toList $ SubkeyMap.lookup key tssLoadedModules
+        loadedMods = foldMap toList $ M.lookup key tssLoadedModules
     Nothing      -> Nothing
 
 -- | Load single module from the given file. Does not load any imports or exports.
@@ -287,7 +260,7 @@ makeModule suggestedModuleName modifTime filename tokens = do
         , modAllExportedNames = ()
         , modIsDirty          = False
         }
-  logVerboseDebug $ "[makeModule] created module" <+> pretty mod
+  -- logVerboseDebug $ "[makeModule] created module" <+> pretty mod
   pure mod
   where
     defaultHeader :: UnresolvedModuleHeader
@@ -308,8 +281,9 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
   logDebug $ "[resolveModule] resolving names of module" <+> pretty (mhModName unresHeader)
   (imports, symbols) <- resolveSymbols mod
   logVerboseDebug $ ppDictHeader ("[resolveModule] Resolved items for module" <+> pretty (mhModName unresHeader))
-    [ "imports"                          :-> ppSubkeyMapWith pretty pretty ppNE imports
-    , "all symbols exported by a module" --> symbols
+    [ -- "imports"                          :-> ppSubkeyMapWith pretty pretty ppNE imports
+    -- ,
+      "all symbols exported by a module" --> symbols
     ]
   pure $ mod
     { modHeader           = unresHeader { mhImports = imports }
