@@ -87,6 +87,8 @@ pattern PHiding       :: Pos ServerToken
 pattern PHiding       <- Pos _ (T "hiding")
 pattern PImport       :: Pos ServerToken
 pattern PImport       <- Pos _ KWImport
+pattern PForeign      :: Pos ServerToken
+pattern PForeign      <- Pos _ KWForeign
 pattern PLParen       :: Pos ServerToken
 pattern PLParen       <- Pos _ LParen
 pattern PModule       :: Pos ServerToken
@@ -128,10 +130,10 @@ analyzeImports filename imports qualifiers ts = do
   -- logDebug $ "[analyzeImports] ts =" <+> ppTokens ts
   res <- runMaybeT $ do
     -- Drop initial "import" keyword and {-# SOURCE #-} pragma, if any
-    (ts2, importTarget) <- case dropWhile (\case { PImport -> False; _ -> True }) $ dropNLs ts of
-      PImport : (d -> PSourcePragma : rest) -> pure (rest, HsBootModule)
-      PImport :                       rest  -> pure (rest, VanillaModule)
-      _                                     -> mzero
+    (ts2, importTarget) <- case dropWhile (\case { PImport -> False; PForeign -> False; _ -> True }) $ dropNLs ts of
+      PImport  : (d -> PSourcePragma : rest) -> pure (rest, HsBootModule)
+      PImport  :                       rest  -> pure (rest, VanillaModule)
+      _                                      -> mzero
     let dropSafeImport = \case
           PName "safe" : rest -> rest
           rest                -> rest
@@ -142,9 +144,13 @@ analyzeImports filename imports qualifiers ts = do
           PQualified : rest -> (rest, True)
           rest              -> (rest, False)
 
-        (ts3, isQual) = dropNLs >>> dropSafeImport >>>
-                             dropNLs >>> extractQualified >>>
-                             first (dropNLs >>> dropPackageImport) $ ts2
+        (ts3, isQual)
+          = first (dropNLs >>> dropPackageImport)
+          . extractQualified
+          . dropNLs
+          . dropSafeImport
+          . dropNLs
+          $ ts2
     -- Extract import name and renaming alias, if any
     (ts4, name, qualName) <- case dropNLs ts3 of
       PName name : (d -> PAs : (d -> PName qualName : rest)) -> pure (rest, name, Just qualName)

@@ -1398,6 +1398,17 @@ testData = GroupTest "server tests"
           , ("bar",       NotFound)
           ]
         ]
+  , withDirAndFile NameResolutionLax (RecursiveDir "0018definitions_between_import_and_foreign_import") "Main.hs" $
+      group "Recursive dir with ignored glob that matches all files"
+        [ (C8.unpack sym, sym, response)
+        | (sym, response) <-
+          [ ("foo",       NotFound)
+          , ("bar",       Known "Dependency1.hs" 19 "Function")
+          , ("test",      Known "Dependency1.hs" 22 "Function")
+          , ("baz",       Known "Dependency1.hs" 24 "Function")
+          , ("quux",      Known "Dependency2.hs" 11 "Function")
+          ]
+        ]
   ]
 
 tests :: TestTree
