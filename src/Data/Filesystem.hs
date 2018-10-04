@@ -171,7 +171,10 @@ findRecur ignoredDirs ignoredGlobsRE shallowPaths recursivePaths f = do
         | otherwise
         = f path
 
+      -- Reserve 1 capability for synchronous processing
+      extraJobs = n - 1
+
       doFind =
-        findRecursive n shouldVisit f' collect shallowPaths recursivePaths
+        findRecursive extraJobs shouldVisit f' collect shallowPaths recursivePaths
   withAsync (doFind `finally` liftBase (atomically (closeTMQueue results))) $ \searchAsync ->
     liftBase (consumeOutput M.empty) <* (wait searchAsync :: m ())
