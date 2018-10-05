@@ -185,13 +185,13 @@ runBertServer port reqHandler = do
         _ ->
           throwErrorWithCallStack $
             "Expected 2 arguments but got:" ## ppShow args
-    go' "haskell-tags-server" "find-regexp" args =
+    go' "haskell-tags-server" "find-regex" args =
       case args of
-        [BinaryTerm filename, BinaryTerm regexp, BoolTerm isLocal] -> do
-          let scope = if isLocal then ScopeCurrentModule else ScopeAllModules
+        [BinaryTerm filename, BinaryTerm regexp, BoolTerm isGlobal] -> do
+          let scope = if isGlobal then ScopeAllModules else ScopeCurrentModule
           request  <- QueryReq
             <$> (mkFullPath =<< decodeUtf8 "filename" filename)
-            <*> (FindSymbolByRegexp scope <$> (compileRegex =<< decodeUtf8 "regexp" regexp))
+            <*> (FindSymbolByRegex scope <$> (compileRegex =<< decodeUtf8 "regexp" regexp))
           response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
           BERT.Success <$> either throwError (pure . responseToTerm) response
         _ ->
@@ -202,7 +202,7 @@ runBertServer port reqHandler = do
 
 responseToTerm :: QueryResponse -> Term
 responseToTerm = \case
-  NotFound _ -> AtomTerm "not_found"
+  NotFound -> AtomTerm "not_found"
   Found (sym :| []) ->
     TupleTerm
       [ AtomTerm "loc_known"

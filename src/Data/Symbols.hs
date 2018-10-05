@@ -58,6 +58,7 @@ import Data.Char (isUpper, isAlphaNum)
 import Data.Coerce
 import Data.Hashable
 import qualified Data.List as L
+import Data.Maybe
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc.Ext
@@ -174,7 +175,7 @@ splitQualifiedPart sym =
 data ResolvedSymbol = ResolvedSymbol
   { rsFile   :: !(FullPath 'File)
   , rsLine   :: {-# UNPACK #-} !Line
-  , rsName   :: {-# UNPACK #-} !Text
+  , rsName   :: {-# UNPACK #-} !UnqualifiedSymbolName -- !Text
   , rsType   :: !Type
   , rsParent :: !(Maybe Text)
   } deriving (Eq, Ord, Show, Generic)
@@ -191,15 +192,17 @@ instance Pretty ResolvedSymbol where
   pretty = ppGeneric
 
 {-# INLINE mkResolvedSymbol #-}
-mkResolvedSymbol :: FullPath 'File -> Pos TagVal -> ResolvedSymbol
+mkResolvedSymbol :: WithCallStack => FullPath 'File -> Pos TagVal -> ResolvedSymbol
 mkResolvedSymbol rsFile (Pos SrcPos{posLine} TagVal{tvName, tvType, tvParent}) =
   ResolvedSymbol
     { rsFile
     , rsLine   = posLine
-    , rsName   = tvName
+    , rsName   = fromMaybe err $ mkUnqualifiedSymbolName $ mkSymbolName tvName
     , rsType   = tvType
     , rsParent = tvParent
     }
+  where
+    err = error $ "Invalid tag val name: " ++ T.unpack tvName
 
 mkResolvedSymbolFromParts
   :: FullPath 'File
@@ -208,18 +211,18 @@ mkResolvedSymbolFromParts
   -> Type                        -- ^ Type of entity symbol will refer to
   -> Maybe UnqualifiedSymbolName -- ^ Optional parent
   -> ResolvedSymbol
-mkResolvedSymbolFromParts rsFile rsLine name rsType parent =
+mkResolvedSymbolFromParts rsFile rsLine rsName rsType parent =
   ResolvedSymbol
     { rsFile
     , rsLine
-    , rsName   = unqualSymNameText name
+    , rsName
     , rsType
     , rsParent = unqualSymNameText <$> parent
     }
 
 {-# INLINE resolvedSymbolName #-}
 resolvedSymbolName :: ResolvedSymbol -> UnqualifiedSymbolName
-resolvedSymbolName = UnqualifiedSymbolName . SymbolName . rsName
+resolvedSymbolName = rsName
 
 {-# INLINE resolvedSymbolType #-}
 resolvedSymbolType :: ResolvedSymbol -> Type

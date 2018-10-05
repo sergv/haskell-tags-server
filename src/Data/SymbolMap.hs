@@ -26,6 +26,7 @@ module Data.SymbolMap
   , member
   , isSubsetNames
   , fromList
+  , toList
   , restrictKeys
   , withoutKeys
   , keysSet
@@ -36,7 +37,7 @@ import Prelude hiding (lookup, null)
 import Control.Arrow ((&&&), second)
 import Control.DeepSeq
 
-import Data.Foldable (toList)
+import qualified Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
 import Data.Map.Strict (Map)
@@ -135,7 +136,7 @@ registerChildren extraChildrenMap SymbolMap{smParentMap, smChildrenMap, smAllSym
     extraParents :: Map UnqualifiedSymbolName (Set UnqualifiedSymbolName)
     extraParents
       = M.fromListWith (<>)
-      $ concatMap (\(parent, children) -> map (\c -> (c, S.singleton parent)) $ toList children)
+      $ concatMap (\(parent, children) -> map (\c -> (c, S.singleton parent)) $ Data.Foldable.toList children)
       $ M.toList extraChildrenMap'
     smAllSymbolsKeys :: Set UnqualifiedSymbolName
     smAllSymbolsKeys = M.keysSet smAllSymbols
@@ -174,6 +175,10 @@ fromList syms = SymbolMap
     symbolsWithParents :: [(UnqualifiedSymbolName, UnqualifiedSymbolName)]
     symbolsWithParents =
       mapMaybe (\sym -> (resolvedSymbolName sym,) <$> resolvedSymbolParent sym) syms
+
+{-# INLINE toList #-}
+toList :: SymbolMap -> [ResolvedSymbol]
+toList = foldMap Data.Foldable.toList . smAllSymbols
 
 restrictKeys :: SymbolMap -> Set UnqualifiedSymbolName -> SymbolMap
 restrictKeys SymbolMap{smParentMap, smChildrenMap, smAllSymbols} syms =

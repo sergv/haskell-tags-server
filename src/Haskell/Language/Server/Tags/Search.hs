@@ -14,16 +14,21 @@
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Haskell.Language.Server.Tags.Search (findSymbol) where
+module Haskell.Language.Server.Tags.Search
+  ( findSymbol
+  , findSymbolByRegexp
+  ) where
 
 import Prelude hiding (mod)
 
 import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
+import Control.Parallel.Strategies.Ext
 
 import Data.Foldable.Ext (toList, foldMapA, foldForA)
 import qualified Data.List as L
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text.Prettyprint.Doc as PP
@@ -32,6 +37,7 @@ import Data.Text.Prettyprint.Doc.Ext
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS
 import Control.Monad.Logging
+import Data.CompiledRegex
 import Data.ErrorMessage
 import Data.Path
 import Data.SymbolMap (SymbolMap)
@@ -47,8 +53,8 @@ findSymbol
   :: (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
   => (forall a. n a -> m a)
-  -> FullPath 'File         -- ^ File name
-  -> SymbolName             -- ^ Symbol to find. Can be either qualified, unqualified, ascii name/utf name/operator
+  -> FullPath 'File         -- ^ File name.
+  -> SymbolName             -- ^ Symbol to find. Can be either qualified, unqualified, ascii name/utf name/operator.
   -> m (Set ResolvedSymbol) -- ^ Found tags, may be empty when nothing was found.
 findSymbol liftN filename sym = do
   logVerboseDebug $
@@ -58,6 +64,41 @@ findSymbol liftN filename sym = do
   findInModule liftN sym =<<
     resolveModule checkLoadingModules (loadModule liftN) =<<
       readFileAndLoad (Just name) modifTime filename
+
+findSymbolByRegexp
+  :: (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
+  => (forall a. n a -> m a)
+  -> NameResolutionScope
+  -> FullPath 'File         -- ^ File name.
+  -> CompiledRegex          -- ^ Regexp to look for.
+  -> m (Set ResolvedSymbol) -- ^ Found tags, may be empty when nothing was found.
+findSymbolByRegexp liftN scope filename re = do
+  logVerboseDebug $
+    "[findSymbolByRegexp] searching for" <+> pretty re <+> "within" <+> pretty filename
+  modifTime <- MonadFS.getModificationTime filename
+  name      <- fileNameToModuleName filename
+  currMod   <-
+    resolveModule checkLoadingModules (loadModule liftN) =<<
+    readFileAndLoad (Just name) modifTime filename
+  (mods :: NonEmpty SymbolMap) <-
+    case scope of
+      ScopeCurrentModule -> pure $
+        modAllSymbols currMod :| foldMap (fmap ispecImportedNames . toList) (mhImports (modHeader currMod))
+      ScopeAllModules    -> gets $
+        fmap modAllExportedNames . (currMod :|) . foldMap (filter ((/= currFile) . modFile) . toList) . tssLoadedModules
+        where
+          currFile = modFile currMod
+  pure $ findInScopeByRegexp re mods
+
+findInScopeByRegexp
+  :: (WithCallStack, Foldable f)
+  => CompiledRegex      -- ^ Regexp to look for.
+  -> f SymbolMap
+  -> Set ResolvedSymbol -- ^ Found tags, may be empty when nothing was found.
+findInScopeByRegexp re xs = runEval $
+  foldPar =<< parTraversable rseq
+    (S.fromList . filter (reMatches re . unqualSymNameText . resolvedSymbolName) . SM.toList <$> toList xs)
 
 -- | Try to find out what @sym@ refers to in the context of module @mod@.
 findInModule

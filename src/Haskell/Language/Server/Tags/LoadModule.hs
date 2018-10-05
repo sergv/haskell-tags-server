@@ -377,7 +377,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
       logDebug $ "[resolveModule.resolveSymbols] Resolving symbols of module" <+> pretty mhModName
       (resolvedImports, namesAndQualifiersFromImports) <- resolveImports mhImports
       logDebug $ "[resolveModule.resolveSymbols] analysing export list of module" <+> pretty mhModName
-      logVerboseDebug $ "[resolveModule.resolveSymbols] Resolved imports" ## ppSubkeyMapWith pretty pretty ppNE resolvedImports
+      -- logVerboseDebug $ "[resolveModule.resolveSymbols] Resolved imports" ## ppSubkeyMapWith pretty pretty ppNE resolvedImports
       case mhExports header of
         NoExports                                                     ->
           pure (resolvedImports, modAllSymbols)

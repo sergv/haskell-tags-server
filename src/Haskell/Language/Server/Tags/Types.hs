@@ -118,9 +118,9 @@ instance Pretty NameResolutionScope where
 data QueryRequest =
     -- | Request to find vanilla name in current module and all its imports.
     FindSymbol !SymbolName
-    -- | Request to find all names that match a gived regexp starting from
+    -- | Request to find all names that match a gived regex starting from
     -- current module.
-  | FindSymbolByRegexp !NameResolutionScope !CompiledRegex
+  | FindSymbolByRegex !NameResolutionScope !CompiledRegex
   deriving (Eq, Ord, Show, Generic)
 
 instance Pretty QueryRequest where
@@ -137,7 +137,7 @@ instance Pretty FSNotifyEvent where
 
 data QueryResponse =
     Found !(NonEmpty ResolvedSymbol)
-  | NotFound !SymbolName
+  | NotFound
   deriving (Eq, Ord, Show, Generic)
 
 instance Pretty QueryResponse where

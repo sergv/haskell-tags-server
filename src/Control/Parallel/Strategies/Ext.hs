@@ -10,10 +10,13 @@
 
 module Control.Parallel.Strategies.Ext
   ( foldPar
+  , foldParNE
   , module Control.Parallel.Strategies
   ) where
 
 import Control.Parallel.Strategies
+
+import Data.List.NonEmpty (NonEmpty(..))
 
 {-# INLINE foldPar #-}
 -- | Reduce argument in a tree-like fashion.
@@ -22,7 +25,14 @@ import Control.Parallel.Strategies
 foldPar :: Monoid a => [a] -> Eval a
 foldPar = \case
   []     -> pure mempty
-  x : xs -> go [] x xs
+  x : xs -> foldParNE $ x :| xs
+
+{-# INLINE foldParNE #-}
+-- | Reduce argument in a tree-like fashion.
+--
+-- NB only safe when used with commutative monoids.
+foldParNE :: Semigroup a => NonEmpty a -> Eval a
+foldParNE (a :| as) = go [] a as
   where
     go []  x []         = pure x
     go acc x []         = go [] x acc

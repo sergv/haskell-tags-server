@@ -35,8 +35,9 @@ module Haskell.Language.Server.Tags.Types.Modules
 
 import Prelude hiding (mod)
 
-import Control.Monad.Except.Ext
 import Control.DeepSeq
+import Control.Monad.Except.Ext
+import Control.Parallel.Strategies.Ext
 
 import Data.Hashable
 import Data.List.NonEmpty (NonEmpty(..))
@@ -82,8 +83,6 @@ instance NFData a => NFData (Module a)
 type UnresolvedModule = Module ()
 type ResolvedModule   = Module SymbolMap
 
--- TODO: if module is dirty it is only needed to recompute its @modAllExportedName@
--- field. There's no need
 moduleNeedsReloading :: MonadFS m => Module a -> m (Bool, UTCTime)
 moduleNeedsReloading Module{modFile, modIsDirty, modLastModified} = do
   modifTime <- MonadFS.getModificationTime modFile
@@ -149,7 +148,7 @@ resolveQualifier qual ModuleHeader{mhImports, mhImportQualifiers} =
       case M.lookup qual mhImportQualifiers of
         Nothing    -> pure Nothing
         Just names ->
-          fmap (Just . foldr1 (<>)) $ for names $ \modName ->
+          fmap (Just . runEval . foldParNE) $ for names $ \modName ->
             case SubkeyMap.lookupSubkey modName mhImports of
               []    ->
                 -- If module's not found then this is a violation of internal
