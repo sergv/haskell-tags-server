@@ -313,7 +313,6 @@ tokenize filename litLoc input =
       LiterateOutside  -> literateCode
       LiterateInside x -> absurd x
 
--- TODO: add unsafe interleave here for producing tokens
 scanTokens :: WithCallStack => FilePath -> AlexM ()
 scanTokens filename = go
   where

@@ -523,18 +523,28 @@ uppercase or lowercase names)."
     (define-key (current-local-map) (kbd "M-.") #'haskell-tags-server-goto-definition)
     (define-key (current-local-map) (kbd "M-,") #'haskell-tags-server-go-back)))
 
+(defvar haskell-tags-server-regexp-history nil
+  "History of regexp inputs to `haskell-tags-server-goto-definition'.")
+
 ;;;###autoload
 (defun haskell-tags-server-goto-definition (&optional use-regexp?)
   "Go to the definition of a name at point."
   (interactive "P")
   (let ((filename (buffer-file-name))
         (identifier (if use-regexp?
-                        (read-regexp "Enter regexp to search for")
+                        (read-regexp "Enter regexp to search for"
+                                     (haskell-tags-server--identifier-at-point)
+                                     'haskell-tags-server-regexp-history)
                       (haskell-tags-server--identifier-at-point)))
         (search-func
          (if use-regexp?
-             'find-regexp
+             'find-regex
            'find))
+        (args (if use-regexp?
+                  (vector filename identifier)
+                (vector filename
+                        identifier
+                        (y-or-n-p "Search globally?"))))
         (next-home-entry
          (car-safe haskell-tags-server--next-homes)))
     (when filename
@@ -571,7 +581,7 @@ uppercase or lowercase names)."
               (haskell-tags-server--call
                haskell-tags-server--network-proc
                search-func
-               (vector filename identifier)
+               args
                (lambda (response)
                  ;; (message "Got response: %s" response)
                  (haskell-tags-server--handle-reply response

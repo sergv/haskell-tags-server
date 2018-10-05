@@ -150,14 +150,18 @@ startTagsServer searchCfg conf = do
           case request of
             QueryReq filename request' -> do
               ensureFileExists filename
-              (response, serverState') <- runSearchT conf serverState $ case request' of
-                FindSymbol symbol -> do
-                  symbols <- findSymbol id filename symbol
-                  pure $ case toList symbols of
-                    []   -> NotFound symbol
-                    s:ss -> Found $ s :| ss
-                FindSymbolByRegexp{} ->
-                  throwErrorWithCallStack "Search by regexp is not implemented yet"
+              (response, serverState') <- runSearchT conf serverState $
+                case request' of
+                  FindSymbol symbol -> do
+                    symbols <- findSymbol id filename symbol
+                    pure $ case toList symbols of
+                      []   -> NotFound
+                      s:ss -> Found $ s :| ss
+                  FindSymbolByRegex scope regexp -> do
+                    symbols <- findSymbolByRegexp id scope filename regexp
+                    pure $ case toList symbols of
+                      []   -> NotFound
+                      s:ss -> Found $ s :| ss
               logInfo $ "[startTagsServer.handleReq] response:" ## either pretty pretty response
               Promise.putValue respPromise response
               pure serverState'
