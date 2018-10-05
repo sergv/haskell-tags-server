@@ -34,6 +34,7 @@ import qualified Data.Map.Strict as M
 import Data.Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
+import qualified Data.Strict.Pair as Strict
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Prettyprint.Doc as PP
@@ -385,15 +386,14 @@ analyzeExports filename importQualifiers ts = do
           let (presence, getChildren) = analyzeChildren listType filename rest
           (children, rest') <- getChildren
           entryType <-
-            -- TODO: eliminate potential memory leak with a stricter fold?
             case ( presence
                  , foldFor children $ foldMap $ \PosAndType{patType} ->
-                     (Any $ patType == Constructor, Any $ patType == Type)) of
+                     Strict.Pair (Any (patType == Constructor)) (Any (patType == Type))) of
               (ChildrenAbsent,  _)                      -> pure typIfNoChildren
-              (ChildrenPresent, (Any False, Any False)) -> pure Type
-              (ChildrenPresent, (Any True,  Any False)) -> pure Type
-              (ChildrenPresent, (Any False, Any True))  -> pure Family
-              (ChildrenPresent, (Any True,  Any True))  -> throwErrorWithCallStack $
+              (ChildrenPresent, Strict.Pair (Any False) (Any False)) -> pure Type
+              (ChildrenPresent, Strict.Pair (Any True)  (Any False)) -> pure Type
+              (ChildrenPresent, Strict.Pair (Any False) (Any True))  -> pure Family
+              (ChildrenPresent, Strict.Pair (Any True)  (Any True))  -> throwErrorWithCallStack $
                 "Unexpected children specification for exported name" <+> PP.squotes (pretty name) <> "." <+>
                 "It specifies both constructor names and type names among children:" ##
                   ppTokens rest

@@ -139,6 +139,7 @@ library
     Data.Filesystem
     Data.NBSem
     Data.Path.Internal
+    Data.Strict.Pair
 
     Haskell.Language.Server.Tags.LoadModule
     Haskell.Language.Server.Tags.LoadFiles
