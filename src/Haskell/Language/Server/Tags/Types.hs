@@ -117,7 +117,7 @@ instance Pretty NameResolutionScope where
 -- | Query server for some information.
 data QueryRequest =
     -- | Request to find vanilla name in current module and all its imports.
-    FindSymbol !SymbolName
+    FindSymbol !NameResolutionScope !SymbolName
     -- | Request to find all names that match a gived regex starting from
     -- current module.
   | FindSymbolByRegex !NameResolutionScope !CompiledRegex

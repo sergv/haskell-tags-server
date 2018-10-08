@@ -58,13 +58,13 @@
                                   )
                    :noquery t
                    :sentinel #'haskell-tags-server--subprocess-sentinel)))
-        (let ((tries 10)
+        (let ((tries 50)
               (done nil))
           (while (not done)
             (setf tries (- tries 1)
                   done (or (haskell-tags-server--connect)
                            (= 0 tries)))
-            (sit-for 0.1))
+            (sleep-for 0.1))
           (when (not done)
             (delete-process proc)
             (kill-buffer haskell-tags-server--subprocess-buffer)
@@ -159,6 +159,21 @@ reply) that should process the reply when it arrives.")
   (setf haskell-tags-server--last-call-id
         (+ (or haskell-tags-server--last-call-id -1) 1))
   haskell-tags-server--last-call-id)
+
+(defun haskell-tags-server--blocking-call (proc func-name args)
+  (let ((done nil)
+        (result (list nil)))
+    (haskell-tags-server--call proc
+                               func-name
+                               args
+                               (lambda (res)
+                                 (setf done t)
+                                 (setcar result res)))
+    (while (not done)
+      (sleep-for 0.01)
+      (when (eval-when-compile (fboundp #'thread-yield))
+        (thread-yield)))
+    (car result)))
 
 (defun haskell-tags-server--call (proc func-name args callback)
   (cl-assert (symbolp func-name))
@@ -331,7 +346,6 @@ both unicode and ascii characters.")
 (defun haskell-tags-server--forward-haskell-symbol (arg)
   "Like `forward-symbol' but for generic Haskell symbols (either operators,
 uppercase or lowercase names)."
-  (interactive "p")
   (let (;; (name-chars "a-zA-Z0-9_#'")
 
         ;; NB constructs like "''Foobar" we'd like to mach "Foobar"
@@ -428,14 +442,14 @@ uppercase or lowercase names)."
         (replace-match "" nil nil str)
       str)))
 
-(defun haskell-tags-server--goto-loc (filename line prev-loc search-query use-regexp?)
+(defun haskell-tags-server--goto-loc (filename line prev-loc search-query use-regexp? visit-file-name)
   "Go to a given position in a given file and maintain navigation information."
   (cl-assert (stringp filename))
   (cl-assert (numberp line))
   (cl-assert (stringp search-query))
   (unless (file-exists-p filename)
     (error "File %s does not exist" filename))
-  (find-file filename)
+  (funcall visit-file-name filename)
   ;; Remove any narrowing because `line' is an absolute line number in
   ;; a file (counted relative to the beginning of the file, not to the
   ;; beginning of the accessible portion of the buffer).
@@ -517,77 +531,110 @@ uppercase or lowercase names)."
         (setf haskell-tags-server--selected-loc prev-home)
         (haskell-tags-server--switch-to-home-entry prev-home)))))
 
-;;;###autoload
-(defun setup-haskell-tags-server ()
-  (when (current-local-map)
-    (define-key (current-local-map) (kbd "M-.") #'haskell-tags-server-goto-definition)
-    (define-key (current-local-map) (kbd "M-,") #'haskell-tags-server-go-back)))
+;; ;;;###autoload
+;; (defun setup-haskell-tags-server (keymap)
+;;   (when keymap
+;;     (define-key keymap (kbd "M-.") #'haskell-tags-server-goto-definition)
+;;     (define-key keymap (kbd "M-,") #'haskell-tags-server-go-back)))
+;;
+;; (defvar haskell-tags-server-regexp-history nil
+;;   "History of regexp inputs to `haskell-tags-server-goto-definition'.")
+;;
+;; ;;;###autoload
+;; (defun haskell-tags-server-goto-local-definition (&optional use-regexp?))
+;; ;;;###autoload
+;; (defun haskell-tags-server-goto-global-definition (&optional use-regexp?))
 
-(defvar haskell-tags-server-regexp-history nil
-  "History of regexp inputs to `haskell-tags-server-goto-definition'.")
-
-;;;###autoload
-(defun haskell-tags-server-goto-definition (&optional use-regexp?)
+(defun haskell-tags-server-goto-definition (is-local? use-regexp?)
   "Go to the definition of a name at point."
-  (interactive "P")
-  (let ((filename (buffer-file-name))
-        (identifier (if use-regexp?
-                        (read-regexp "Enter regexp to search for"
-                                     (haskell-tags-server--identifier-at-point)
-                                     'haskell-tags-server-regexp-history)
-                      (haskell-tags-server--identifier-at-point)))
-        (search-func
-         (if use-regexp?
-             'find-regex
-           'find))
-        (args (if use-regexp?
-                  (vector filename identifier)
-                (vector filename
-                        identifier
-                        (y-or-n-p "Search globally?"))))
-        (next-home-entry
-         (car-safe haskell-tags-server--next-homes)))
-    (when filename
-      (let ((current-home-entry
-             (make-haskell-tags-server-home-entry (current-buffer)
-                                                  (point-marker)
-                                                  nil
-                                                  nil)))
-        ;; Try to avoid search if there's entry in the next homes that
-        ;; matches current query.
-        (if (and next-home-entry
-                 (let ((next-symbol
-                        (haskell-tags-server-home-entry--search-query next-home-entry))
-                       (next-symbol-regex?
-                        (haskell-tags-server-home-entry--is-regex? next-home-entry)))
-                   (if use-regexp?
-                       (if next-symbol-regex?
-                           nil
-                         (string-match-p identifier next-symbol))
+  (let* ((buffer-name (buffer-name))
+         (curr-buf (current-buffer))
+         (filename (buffer-file-name))
+         (identifier (if use-regexp?
+                         (read-regexp "Enter regexp to search for"
+                                      (ignore-errors
+                                          (haskell-tags-server--identifier-at-point))
+                                      'haskell-tags-server-regexp-history)
+                       (haskell-tags-server--identifier-at-point)))
+         (search-func
+          (if use-regexp?
+              'find-regex
+            'find))
+         (temp-file-name nil)
+         (target (if filename
+                     filename
+                   (progn
+                     (setf temp-file-name
+                           (make-temp-file
+                            "tags-query"
+                            nil ;; not a directory
+                            nil ;; no suffix
+                            (buffer-substring-no-properties
+                             (point-min)
+                             (point-max)) ;; initial contents
+                            ))
+                     (command-line-normalize-file-name temp-file-name))))
+         (args (vector target
+                       identifier
+                       (if is-local? 'local 'global)))
+         (next-home-entry
+          (car-safe haskell-tags-server--next-homes)))
+    (let ((current-home-entry
+           (make-haskell-tags-server-home-entry (current-buffer)
+                                                (point-marker)
+                                                nil
+                                                nil)))
+      (unless target
+        (error "Could not come up with a target file name. Aborting"))
+      ;; Try to avoid search if there's entry in the next homes that
+      ;; matches current query.
+      (if (and next-home-entry
+               (let ((next-symbol
+                      (haskell-tags-server-home-entry--search-query next-home-entry))
+                     (next-symbol-regex?
+                      (haskell-tags-server-home-entry--is-regex? next-home-entry)))
+                 (if use-regexp?
                      (if next-symbol-regex?
                          nil
-                       (string= identifier next-symbol)))))
-            (progn
-              (haskell-tags-server--switch-to-home-entry next-home-entry)
-              (push current-home-entry
-                    haskell-tags-server--previous-homes)
-              (setf haskell-tags-server--selected-loc
-                    (pop haskell-tags-server--next-homes)))
+                       (string-match-p identifier next-symbol))
+                   (if next-symbol-regex?
+                       nil
+                     (string= identifier next-symbol)))))
           (progn
-            ;; Connect to tags-server if not already connected.
-            (unless haskell-tags-server--network-proc (haskell-tags-server-connect))
-            ;; Proceed only if connection was succesful.
-            (when haskell-tags-server--network-proc
-              (haskell-tags-server--call
-               haskell-tags-server--network-proc
-               search-func
-               args
-               (lambda (response)
-                 ;; (message "Got response: %s" response)
-                 (haskell-tags-server--handle-reply response
-                                                    current-home-entry
-                                                    identifier
-                                                    use-regexp?))))))))))
+            (haskell-tags-server--switch-to-home-entry next-home-entry)
+            (push current-home-entry
+                  haskell-tags-server--previous-homes)
+            (setf haskell-tags-server--selected-loc
+                  (pop haskell-tags-server--next-homes)))
+        (progn
+          ;; Connect to tags-server if not already connected.
+          (unless haskell-tags-server--network-proc (haskell-tags-server-connect))
+          ;; Proceed only if connection was succesful.
+          (when haskell-tags-server--network-proc
+            (let ((response
+                   (haskell-tags-server--blocking-call
+                    haskell-tags-server--network-proc
+                    search-func
+                    args)))
+              (haskell-tags-server--handle-reply
+               response
+               current-home-entry
+               identifier
+               use-regexp?
+               (if temp-file-name
+                   (lambda (str)
+                     (cl-assert (stringp str))
+                     (if (string= str temp-file-name)
+                         (concat "buffer:" buffer-name)
+                       str))
+                 #'identity)
+               (if temp-file-name
+                   (lambda (str)
+                     (cl-assert (stringp str))
+                     (if (string= str temp-file-name)
+                         (switch-to-buffer curr-buf)
+                       (find-file str)))
+                 #'find-file)))))))))
 
 
 (defmacro haskell-tags-server--for-buffer-with-file (filename &rest body)
@@ -608,24 +655,28 @@ buffer if no such buffer exists."
                                    )
              (funcall ,exec-func)))))))
 
-(defsubst haskell-tags-server--loc-entry--filename (entry)
+(defsubst haskell-tags-server--loc-entry--name (entry)
   (aref entry 0))
 
-(defsubst haskell-tags-server--loc-entry--line (entry)
+(defsubst haskell-tags-server--loc-entry--filename (entry)
   (aref entry 1))
 
-(defsubst haskell-tags-server--loc-entry--type (entry)
+(defsubst haskell-tags-server--loc-entry--line (entry)
   (aref entry 2))
 
-(defun haskell-tags-server--handle-reply (reply prev-loc search-query use-regexp?)
-  (pcase reply
+(defsubst haskell-tags-server--loc-entry--type (entry)
+  (aref entry 3))
+
+(defun haskell-tags-server--handle-reply (response prev-loc search-query use-regexp? show-file-name visit-file-name)
+  (pcase response
     (`[loc_known ,loc-entry]
      (haskell-tags-server--goto-loc
       (haskell-tags-server--loc-entry--filename loc-entry)
       (haskell-tags-server--loc-entry--line loc-entry)
       prev-loc
       search-query
-      use-regexp?))
+      use-regexp?
+      visit-file-name))
     (`[loc_ambiguous ,entries]
      (cl-assert (listp entries))
      (select-mode-start-selection
@@ -640,21 +691,26 @@ buffer if no such buffer exists."
          (haskell-tags-server--loc-entry--line loc-entry)
          prev-loc
          search-query
-         use-regexp?))
+         use-regexp?
+         visit-file-name))
       :item-show-function
       (lambda (symbol-entry)
-        (haskell-tags-server--tag->string search-query
-                                          (haskell-tags-server--loc-entry--filename symbol-entry)
+        (haskell-tags-server--tag->string (haskell-tags-server--loc-entry--name symbol-entry)
+                                          (funcall show-file-name
+                                                   (haskell-tags-server--loc-entry--filename symbol-entry))
                                           (haskell-tags-server--loc-entry--line symbol-entry)
                                           (haskell-tags-server--loc-entry--type symbol-entry)))
       :preamble-function
-      (lambda () "Choose symbol\n\n")))
+      (lambda ()
+        (format "Results for %s %s\n"
+                (if use-regexp? "regexp" "identifier")
+                search-query))))
     (`not_found
      (message "No entries for %s %s"
               (if use-regexp? "regexp" "identifier")
               search-query))
-    (`error
-     (error "haskell-tags-server error: %s" (aref reply 1)))
+    (`[error ,data]
+     (error "haskell-tags-server error: %s" ,data))
     (unexpected
      (error "Unexpected reply from haskell-tags-server: %s" unexpected))))
 
