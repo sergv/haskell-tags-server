@@ -91,14 +91,14 @@ data SynchronizedTransport = SynchronizedTransport
 
 instance BERT.Server SynchronizedTransport where
   type ServerTransport SynchronizedTransport = BERT.TCP
-  runServer SynchronizedTransport{stTransport, stStartedLock} handle = do
+  runServer SynchronizedTransport{stTransport, stStartedLock} f = do
     let sock = BERT.getTcpListenSocket stTransport
     Network.listen sock Network.maxListenQueue
     setCondition stStartedLock
     forever $ do
       (clientsock, _) <- Network.accept sock
       Network.setSocketOption clientsock Network.NoDelay 1
-      handle $ BERT.TCP clientsock
+      f $ BERT.TCP clientsock
   cleanup = BERT.cleanup . stTransport
 
 data BertServer = BertServer
@@ -132,7 +132,7 @@ runBertServer port reqHandler = do
   where
     go :: WithCallStack => String -> String -> [Term] -> m BERT.DispatchResult
     go mod func args = do
-      logDebug $ "[runBertServer.go] got request" <+> pretty mod <> ":" ## pretty func
+      logInfo $ "[runBertServer.go] got request" <+> pretty mod <> ":" ## pretty func
       case args of
         [callId, TupleTerm args'] -> do
           res <- runErrorExceptT $ go' mod func args'
@@ -176,22 +176,23 @@ runBertServer port reqHandler = do
             "Expected 3 arguments but got:" ## ppShow args
     go' "haskell-tags-server" "find" args =
       case args of
-        [BinaryTerm filename, BinaryTerm symbol] -> do
-          request  <- QueryReq
-            <$> (mkFullPath =<< decodeUtf8 "filename" filename)
-            <*> (FindSymbol <$> (mkSymbolName <$> decodeUtf8 "symbol to find" symbol))
+        [BinaryTerm filename, BinaryTerm symbol, scope] -> do
+          filename' <- mkFullPath =<< decodeUtf8 "filename" filename
+          scope'    <- decodeScope scope
+          request   <- QueryReq filename'
+            <$> (FindSymbol scope' <$> (mkSymbolName <$> decodeUtf8 "symbol to find" symbol))
           response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
           BERT.Success <$> either throwError (pure . responseToTerm) response
         _ ->
           throwErrorWithCallStack $
-            "Expected 2 arguments but got:" ## ppShow args
+            "Expected 3 arguments but got:" ## ppShow args
     go' "haskell-tags-server" "find-regex" args =
       case args of
-        [BinaryTerm filename, BinaryTerm regexp, BoolTerm isGlobal] -> do
-          let scope = if isGlobal then ScopeAllModules else ScopeCurrentModule
-          request  <- QueryReq
-            <$> (mkFullPath =<< decodeUtf8 "filename" filename)
-            <*> (FindSymbolByRegex scope <$> (compileRegex =<< decodeUtf8 "regexp" regexp))
+        [BinaryTerm filename, BinaryTerm regexp, scope] -> do
+          filename' <- mkFullPath =<< decodeUtf8 "filename" filename
+          scope'    <- decodeScope scope
+          request   <- QueryReq filename'
+            <$> (FindSymbolByRegex scope' <$> (compileRegex =<< decodeUtf8 "regexp" regexp))
           response <- liftBase $ Promise.getPromisedValue =<< reqHandler request
           BERT.Success <$> either throwError (pure . responseToTerm) response
         _ ->
@@ -199,6 +200,14 @@ runBertServer port reqHandler = do
             "Expected 3 arguments but got:" ## ppShow args
     go' "haskell-tags-server" _ _ = pure BERT.NoSuchFunction
     go' _                     _ _ = pure BERT.NoSuchModule
+
+decodeScope :: MonadError ErrorMessage m => Term -> m NameResolutionScope
+decodeScope = \case
+  AtomTerm "local"  -> pure ScopeCurrentModule
+  AtomTerm "global" -> pure ScopeAllModules
+  invalid           ->
+    throwErrorWithCallStack $
+      "Invalid scope specification:" ## ppShow invalid
 
 responseToTerm :: QueryResponse -> Term
 responseToTerm = \case
@@ -217,7 +226,8 @@ responseToTerm = \case
 symbolToBERT :: ResolvedSymbol -> Term
 symbolToBERT sym =
   TupleTerm
-    [ BinaryTerm $ CL8.fromStrict $ fullPathAsUtf8 file
+    [ BinaryTerm $ CL8.fromStrict $ TE.encodeUtf8 $ unqualSymNameText $ resolvedSymbolName sym
+    , BinaryTerm $ CL8.fromStrict $ fullPathAsUtf8 file
     , IntTerm $ unLine line
     , AtomTerm $ show typ
     ]

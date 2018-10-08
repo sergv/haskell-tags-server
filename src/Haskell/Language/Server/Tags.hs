@@ -149,11 +149,10 @@ startTagsServer searchCfg conf = do
           logInfo $ "[startTagsServer.handleReq] request:" ## pretty request
           case request of
             QueryReq filename request' -> do
-              ensureFileExists filename
               (response, serverState') <- runSearchT conf serverState $
                 case request' of
-                  FindSymbol symbol -> do
-                    symbols <- findSymbol id filename symbol
+                  FindSymbol scope symbol -> do
+                    symbols <- findSymbol id scope filename symbol
                     pure $ case toList symbols of
                       []   -> NotFound
                       s:ss -> Found $ s :| ss
@@ -175,16 +174,6 @@ startTagsServer searchCfg conf = do
               serverState' <- preloadFiles searchCfg' conf serverState
               Promise.putValue respPromise (Right ())
               pure serverState'
-
-ensureFileExists
-  :: (WithCallStack, MonadFS m, MonadError ErrorMessage m)
-  => FullPath 'File -> m ()
-ensureFileExists _path = -- do
-  -- NB FullPath is guaranteed to exist by construction.
-  pure ()
-  -- exists <- doesFileExist path
-  -- unless exists $
-  --   throwErrorWithCallStack $ "Error: file" <+> PP.dquotes (pretty path) <+> "does not exist"
 
 -- todo: handle header files here
 classifyPath :: TagsServerConf -> FullPath 'File -> Maybe ImportTarget

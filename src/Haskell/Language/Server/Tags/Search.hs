@@ -10,7 +10,6 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE PatternGuards       #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -21,6 +20,7 @@ module Haskell.Language.Server.Tags.Search
 
 import Prelude hiding (mod)
 
+import Control.Monad.Base
 import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
@@ -50,27 +50,34 @@ import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
 
 findSymbol
-  :: (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m, MonadBase IO m)
   => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
   => (forall a. n a -> m a)
-  -> FullPath 'File         -- ^ File name.
+  -> NameResolutionScope
+  -> FullPath 'File
   -> SymbolName             -- ^ Symbol to find. Can be either qualified, unqualified, ascii name/utf name/operator.
   -> m (Set ResolvedSymbol) -- ^ Found tags, may be empty when nothing was found.
-findSymbol liftN filename sym = do
+findSymbol liftN scope filename sym = do
   logVerboseDebug $
     "[findSymbol] searching for" <+> pretty sym <+> "within" <+> pretty filename
-  modifTime <- MonadFS.getModificationTime filename
-  name      <- fileNameToModuleName filename
-  findInModule liftN sym =<<
+  currMod <- do
+    modifTime <- MonadFS.getModificationTime filename
+    name      <- fileNameToModuleName filename
     resolveModule checkLoadingModules (loadModule liftN) =<<
       readFileAndLoad (Just name) modifTime filename
+  case scope of
+    ScopeCurrentModule -> findInModule liftN sym currMod
+    ScopeAllModules    ->
+      foldMapPar (foldMap (S.fromList . toList) . SM.lookup sym') <$> gets (scopeFromAllModules currMod)
+      where
+        (_, sym') = splitQualifiedPart sym
 
 findSymbolByRegexp
   :: (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
   => (forall a. n a -> m a)
   -> NameResolutionScope
-  -> FullPath 'File         -- ^ File name.
+  -> FullPath 'File
   -> CompiledRegex          -- ^ Regexp to look for.
   -> m (Set ResolvedSymbol) -- ^ Found tags, may be empty when nothing was found.
 findSymbolByRegexp liftN scope filename re = do
@@ -85,20 +92,27 @@ findSymbolByRegexp liftN scope filename re = do
     case scope of
       ScopeCurrentModule -> pure $
         modAllSymbols currMod :| foldMap (fmap ispecImportedNames . toList) (mhImports (modHeader currMod))
-      ScopeAllModules    -> gets $
-        fmap modAllExportedNames . (currMod :|) . foldMap (filter ((/= currFile) . modFile) . toList) . tssLoadedModules
-        where
-          currFile = modFile currMod
-  pure $ findInScopeByRegexp re mods
+      ScopeAllModules    -> gets $ scopeFromAllModules currMod
+  pure $
+    foldMapPar
+      (S.fromList . filter (reMatches re . unqualSymNameText . resolvedSymbolName) . SM.toList)
+      mods
 
-findInScopeByRegexp
-  :: (WithCallStack, Foldable f)
-  => CompiledRegex      -- ^ Regexp to look for.
-  -> f SymbolMap
-  -> Set ResolvedSymbol -- ^ Found tags, may be empty when nothing was found.
-findInScopeByRegexp re xs = runEval $
-  foldPar =<< parTraversable rseq
-    (S.fromList . filter (reMatches re . unqualSymNameText . resolvedSymbolName) . SM.toList <$> toList xs)
+scopeFromAllModules :: Module a -> TagsServerState -> NonEmpty SymbolMap
+scopeFromAllModules currMod TagsServerState{tssLoadedModules, tssUnloadedFiles} =
+  modAllSymbols currMod :| go tssLoadedModules <> go tssUnloadedFiles
+  where
+    currFile = modFile currMod
+    go :: (Foldable f, Foldable g) => f (g (Module a)) -> [SymbolMap]
+    go = foldMap (fmap modAllSymbols . filter ((/= currFile) . modFile) . toList)
+
+foldMapPar
+  :: (Foldable f, Monoid b)
+  => (a -> b)
+  -> f a
+  -> b
+foldMapPar f xs = runEval $
+  foldPar =<< parTraversable rseq (f <$> toList xs)
 
 -- | Try to find out what @sym@ refers to in the context of module @mod@.
 findInModule
@@ -171,10 +185,11 @@ lookUpInImportedModule name importedMod =
 
 lookUpInSymbolMap :: UnqualifiedSymbolName -> SymbolMap -> [ResolvedSymbol]
 lookUpInSymbolMap sym sm =
-  -- If a name refers to both constructor and type and construcutor constructs
-  -- values for the type in question then
   case SM.lookup sym sm of
     Nothing -> []
+    -- Just syms -> toList syms
+    -- If a name refers to both constructor and type and construcutor constructs
+    -- values for the type in question then
     Just syms
       | (redundant@(_ : _), other) <- L.partition isRedundantConstructor syms'
       , (_reallyRedundant, haveNoCorrespondingParents) <-
