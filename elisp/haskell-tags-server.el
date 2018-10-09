@@ -332,48 +332,43 @@ separate requests.")
   "Regexp to recognize haskell symbols as generic entities for search
 (with e.g. \"*\" in vim).")
 
-(defvar haskell-tags-server--forward-haskell-symbol-syntax-table
+(defvar haskell-tags-server--identifier-syntax-table
   (let ((tbl (copy-syntax-table haskell-mode-syntax-table)))
     (modify-syntax-entry ?#  "w" tbl)
     (modify-syntax-entry ?_  "w" tbl)
     (modify-syntax-entry ?\' "w" tbl)
-    (modify-syntax-entry ?.  "w" tbl) ;; So that we match qualified names.
+    (modify-syntax-entry ?,  "/" tbl) ;; Disable , since it's part of syntax
+    (modify-syntax-entry ?.  "_" tbl) ;; So that we match qualified names.
     tbl)
   "Special syntax table for haskell that allows to recognize symbols that contain
 both unicode and ascii characters.")
 
 
-(defun haskell-tags-server--forward-haskell-symbol (arg)
+(defun haskell-tags-server--bounds-of-haskell-symbol ()
   "Like `forward-symbol' but for generic Haskell symbols (either operators,
 uppercase or lowercase names)."
-  (let (;; (name-chars "a-zA-Z0-9_#'")
-
-        ;; NB constructs like "''Foobar" we'd like to mach "Foobar"
-        ;; via `bounds-of-thing-at-point', not the "''Foobar".
-        (beginning-quotes "'")
-        (operator-chars "\\-!#$%&*+./<=>?@\\^|~:\\\\"))
-    (with-syntax-table haskell-tags-server--forward-haskell-symbol-syntax-table
-      (if (natnump arg)
-          (re-search-forward haskell-tags-server--haskell-symbol-re nil t arg)
-        (while (< arg 0)
-          (when (re-search-backward haskell-tags-server--haskell-symbol-re nil t)
-            (cond ((not (null? (match-beginning 1)))
-                   (skip-chars-backward operator-chars)
-                   ;; we may have matched # thas ends a name
-                   (skip-syntax-backward "w_")
-                   (skip-chars-forward beginning-quotes))
-                  ((not (null? (match-beginning 2)))
-                   ;; (goto-char (match-beginning 2))
-                   (when (not (null? (match-beginning 3)))
-                     (skip-syntax-backward "w_")
-                     (skip-chars-forward beginning-quotes)))
-                  (t
-                   (error "No group of haskell-tags-server--haskell-symbol-re matched, should not happen"))))
-          (setf arg (1+ arg)))))))
-
-(put 'haskell-tags-server--haskell-symbol
-     'forward-op
-     #'haskell-tags-server--forward-haskell-symbol)
+  (save-excursion
+    (save-match-data
+      (with-syntax-table haskell-tags-server--identifier-syntax-table
+        (forward-char 1)
+        (let ((start nil)
+              (end nil)
+              (beginning-quotes "'"))
+          (if (zerop (skip-syntax-backward "w_"))
+              (progn
+                (skip-syntax-backward "._")
+                ;; To get qualified part
+                (skip-syntax-backward "w_")
+                (skip-chars-forward beginning-quotes))
+            (progn
+              (skip-chars-forward beginning-quotes)))
+          (setf start (point))
+          (when (looking-at (rx (+ (char upper) (* (char alnum ?_)) ".")))
+            (goto-char (match-end 0)))
+          (when (zerop (skip-syntax-forward "w_"))
+            (skip-syntax-forward "._"))
+          (setf end (point))
+          (cons start end))))))
 
 (defun haskell-tags-server--identifier-at-point ()
   "Grab a Haskell identifier around current point."
@@ -382,7 +377,7 @@ uppercase or lowercase names)."
        (buffer-substring-no-properties
         (region-beginning)
         (region-end)))
-    (let ((bounds (bounds-of-thing-at-point 'haskell-tags-server--haskell-symbol)))
+    (let ((bounds (haskell-tags-server--bounds-of-haskell-symbol)))
       (cond (bounds
              (buffer-substring-no-properties (car bounds)
                                              (cdr bounds)))
@@ -553,7 +548,7 @@ uppercase or lowercase names)."
          (identifier (if use-regexp?
                          (read-regexp "Enter regexp to search for"
                                       (ignore-errors
-                                          (haskell-tags-server--identifier-at-point))
+                                        (haskell-tags-server--identifier-at-point))
                                       'haskell-tags-server-regexp-history)
                        (haskell-tags-server--identifier-at-point)))
          (search-func
