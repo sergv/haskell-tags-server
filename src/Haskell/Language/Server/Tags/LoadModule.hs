@@ -330,6 +330,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
                       (ispecQualification, importedModName, mempty)
                   pure Nothing
                 Just modules' -> do
+                  -- This import was found to refer to modules in modules'.
                   let importedNames :: SymbolMap
                       !importedNames = foldMap modAllExportedNames modules'
                       importedMods :: NonEmpty ModuleName

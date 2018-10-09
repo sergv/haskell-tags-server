@@ -22,7 +22,7 @@ module Haskell.Language.Server.Tags.Types.Imports
   , UnresolvedImportSpec
   , ResolvedImportSpec
   , importBringsUnqualifiedNames
-  , importBringQualifiedNames
+  , importBringsQualifiedNames
   , importBringsNamesQualifiedWith
   , ImportQualification(..)
   , hasQualifier
@@ -46,7 +46,9 @@ import GHC.Generics (Generic)
 import Data.KeyMap (KeyMap, HasKey(..))
 import Data.SubkeyMap (HasSubkey(..))
 import Data.SymbolMap (SymbolMap)
+import qualified Data.SymbolMap as SM
 import Data.Symbols
+import qualified Haskell.Language.Lexer.FastTags as FastTags
 
 -- | Handle for when particular module enters another module's scope.
 data ImportKey = ImportKey
@@ -94,15 +96,23 @@ type ResolvedImportSpec   = ImportSpec SymbolMap
 instance Pretty a => Pretty (ImportSpec a) where
   pretty = ppGeneric
 
-importBringsUnqualifiedNames :: ImportSpec a -> Bool
-importBringsUnqualifiedNames ImportSpec{ispecQualification} =
+importBringsUnqualifiedNames :: ResolvedImportSpec -> Maybe SymbolMap
+importBringsUnqualifiedNames ImportSpec{ispecQualification, ispecImportedNames} =
   case ispecQualification of
-    Qualified _                   -> False
-    Unqualified                   -> True
-    BothQualifiedAndUnqualified _ -> True
+    Qualified _                   ->
+      case foldMap
+        (\(p, children) ->
+          if resolvedSymbolType p == FastTags.Type
+          then filter ((== FastTags.Function) . resolvedSymbolType) children
+          else [])
+        (SM.childrenRelations ispecImportedNames) of
+        [] -> Nothing
+        xs -> Just $ SM.fromList xs
+    Unqualified                   -> Just ispecImportedNames
+    BothQualifiedAndUnqualified _ -> Just ispecImportedNames
 
-importBringQualifiedNames :: ImportSpec a -> Bool
-importBringQualifiedNames ImportSpec{ispecQualification} =
+importBringsQualifiedNames :: ImportSpec a -> Bool
+importBringsQualifiedNames ImportSpec{ispecQualification} =
   case ispecQualification of
     Qualified _                   -> True
     Unqualified                   -> False
