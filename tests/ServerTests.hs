@@ -1421,6 +1421,20 @@ testData = GroupTest "server tests"
           , ("quux",      known "quux" "Dependency2.hs" 11 "Function")
           ]
         ]
+  , withDirAndFile NameResolutionLax (RecursiveDir "0019field_names") "Main.hs" $
+      group "Record fields enter scope as unqualified, even from qualified-only imports"
+        [ (CL8.unpack sym, sym, response)
+        | (sym, response) <-
+          [ ("foo",       NotFound)
+          , ("D.foo",     known "foo" "Dependency.hs" 11 "Function")
+          , ("Foo",       NotFound)
+          , ("D.Foo",     known "Foo" "Dependency.hs" 14 "Type")
+          , ("bar",       known "bar" "Dependency.hs" 15 "Function")
+          , ("baz",       known "baz" "Dependency.hs" 16 "Function")
+          , ("D.bar",     known "bar" "Dependency.hs" 15 "Function")
+          , ("D.baz",     known "baz" "Dependency.hs" 16 "Function")
+          ]
+        ]
   ]
 
 tests :: TestTree

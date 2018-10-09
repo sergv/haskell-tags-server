@@ -30,6 +30,7 @@ module Data.SymbolMap
   , restrictKeys
   , withoutKeys
   , keysSet
+  , childrenRelations
   ) where
 
 import Prelude hiding (lookup, null)
@@ -62,7 +63,7 @@ data SymbolMap = SymbolMap
     -- module headers, but, unfortunately, cannot be ruled out entirely because
     -- we're not a Haskell compiler.
     smParentMap   :: !(Map UnqualifiedSymbolName (Set UnqualifiedSymbolName))
-    -- | Map from parents to chidrens
+    -- | Map from parents to children.
   , smChildrenMap :: !(Map UnqualifiedSymbolName (Set UnqualifiedSymbolName))
   , smAllSymbols  :: !(Map UnqualifiedSymbolName (NonEmpty ResolvedSymbol))
   } deriving (Eq, Ord, Show, Generic)
@@ -199,3 +200,12 @@ withoutKeys SymbolMap{smParentMap, smChildrenMap, smAllSymbols} syms =
 {-# INLINE keysSet #-}
 keysSet :: SymbolMap -> Set UnqualifiedSymbolName
 keysSet = M.keysSet . smAllSymbols
+
+childrenRelations :: SymbolMap -> [(ResolvedSymbol, [ResolvedSymbol])]
+childrenRelations SymbolMap{smChildrenMap, smAllSymbols} =
+  foldMap
+    (\(parent, children) -> map (\p -> (p, foldMap resolve children)) $ resolve parent)
+    (M.toList smChildrenMap)
+  where
+    resolve :: UnqualifiedSymbolName -> [ResolvedSymbol]
+    resolve = maybe [] Data.Foldable.toList . (`M.lookup` smAllSymbols)

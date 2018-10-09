@@ -26,9 +26,10 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Parallel.Strategies.Ext
 
-import Data.Foldable.Ext (toList, foldMapA, foldForA)
+import Data.Foldable.Ext (toList)
 import qualified Data.List as L
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.Maybe
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text.Prettyprint.Doc as PP
@@ -66,7 +67,7 @@ findSymbol liftN scope filename sym = do
     resolveModule checkLoadingModules (loadModule liftN) =<<
       readFileAndLoad (Just name) modifTime filename
   case scope of
-    ScopeCurrentModule -> findInModule liftN sym currMod
+    ScopeCurrentModule -> findInModule sym currMod
     ScopeAllModules    ->
       foldMapPar (foldMap (S.fromList . toList) . SM.lookup sym') <$> gets (scopeFromAllModules currMod)
       where
@@ -116,13 +117,11 @@ foldMapPar f xs = runEval $
 
 -- | Try to find out what @sym@ refers to in the context of module @mod@.
 findInModule
-  :: forall m n. (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
-  => (forall a. n a -> m a)
-  -> SymbolName
+  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  => SymbolName
   -> ResolvedModule
   -> m (Set ResolvedSymbol)
-findInModule liftN sym mod = do
+findInModule sym mod = do
   logVerboseDebug $
     "[findSymbol] qualifier for" <+> pretty sym <> ":" <+> pretty qualifier
   case qualifier of
@@ -130,10 +129,13 @@ findInModule liftN sym mod = do
     Nothing -> do
       let localSyms :: Set ResolvedSymbol
           localSyms       = S.fromList $ lookUpInSymbolMap sym' $ modAllSymbols mod
-          relevantImports = filter importBringsUnqualifiedNames
+          relevantImports :: [SymbolMap]
+          relevantImports = mapMaybe importBringsUnqualifiedNames
                           $ foldMap toList
                           $ mhImports header
-      (localSyms <>) <$> lookUpInImportedModules liftN sym' relevantImports
+      logVerboseDebug $
+        "[findInModule] relevant imports:" ## pretty relevantImports
+      pure $ localSyms <> foldMapPar (S.fromList . lookUpInSymbolMap sym') relevantImports
     -- Qualified name
     Just qualifier' -> do
       resolvedSpecs <- resolveQualifier qualifier' header
@@ -145,7 +147,7 @@ findInModule liftN sym mod = do
         Just specs -> do
           logVerboseDebug $
             "[lookUpInImportedModules] resolved qualifier" <+> pretty qualifier' <+> "to modules:" ## pretty specs
-          lookUpInImportedModules liftN sym' specs
+          lookUpInImportedModules sym' specs
   where
     qualifier :: Maybe ImportQualifier
     sym'      :: UnqualifiedSymbolName
@@ -154,34 +156,16 @@ findInModule liftN sym mod = do
     header = modHeader mod
 
 lookUpInImportedModules
-  :: forall m n f. (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
+  :: forall m f. (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => (Functor f, Foldable f)
-  => (forall a. n a -> m a)
-  -> UnqualifiedSymbolName
+  => UnqualifiedSymbolName
   -> f ResolvedImportSpec
   -> m (Set ResolvedSymbol)
-lookUpInImportedModules liftN name specs = do
+lookUpInImportedModules name specs = do
   logDebug $ ppFoldableHeader
     ("[lookUpInImportedModules] searching for name" <+> pretty name <+> "in modules")
     (ikModuleName . ispecImportKey <$> specs)
-  foldForA specs $ \ImportSpec{ispecImportKey, ispecImportedNames} -> do
-    let nameVisible = SM.member name ispecImportedNames
-    if nameVisible
-    then do
-      mods <- loadModule liftN ispecImportKey
-      fmap S.fromList $ foldForA mods $ foldMapA $ \mod -> do
-        logDebug $ "[lookUpInImportedModules] searching for name" <+> pretty name <+> "in module" <+> pretty (ikModuleName ispecImportKey)
-        lookUpInImportedModule name mod
-    else pure mempty
-
-lookUpInImportedModule
-  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => UnqualifiedSymbolName
-  -> ResolvedModule
-  -> m [ResolvedSymbol]
-lookUpInImportedModule name importedMod =
-  pure $ lookUpInSymbolMap name $ modAllExportedNames importedMod
+  pure $ foldMapPar (S.fromList . lookUpInSymbolMap name . ispecImportedNames) specs
 
 lookUpInSymbolMap :: UnqualifiedSymbolName -> SymbolMap -> [ResolvedSymbol]
 lookUpInSymbolMap sym sm =
