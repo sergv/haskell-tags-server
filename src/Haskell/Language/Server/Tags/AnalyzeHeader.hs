@@ -61,7 +61,7 @@ analyzeHeader
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => FullPath 'File
   -> [Pos ServerToken]
-  -> m (Maybe UnresolvedModuleHeader, [Pos ServerToken])
+  -> m (Maybe ModuleHeader, [Pos ServerToken])
 analyzeHeader filename ts =
   -- logDebug $ "[analyzeHeader] ts =" <+> ppTokens ts
   case dropWhile ((/= KWModule) . valOf) ts of
@@ -120,10 +120,10 @@ pattern PAnyName' pos name <- Pos pos (tokToName -> Just name)
 analyzeImports
   :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => FullPath 'File
-  -> SubkeyMap ImportKey (NonEmpty UnresolvedImportSpec)
+  -> SubkeyMap ImportKey (NonEmpty ImportSpec)
   -> Map ImportQualifier (NonEmpty ModuleName)
   -> [Pos ServerToken]
-  -> m ( SubkeyMap ImportKey (NonEmpty UnresolvedImportSpec)
+  -> m ( SubkeyMap ImportKey (NonEmpty ImportSpec)
        , Map ImportQualifier (NonEmpty ModuleName)
        , [Pos ServerToken]
        )
@@ -175,7 +175,7 @@ analyzeImports filename imports qualifiers ts = do
       -> ImportQualification
       -> ImportTarget
       -> [Pos ServerToken]
-      -> m ( SubkeyMap ImportKey (NonEmpty UnresolvedImportSpec)
+      -> m ( SubkeyMap ImportKey (NonEmpty ImportSpec)
            , Map ImportQualifier (NonEmpty ModuleName)
            , [Pos ServerToken]
            )
@@ -195,7 +195,7 @@ analyzeImports filename imports qualifiers ts = do
         qualifiers' = case getQualifier qual of
                         Just q  -> M.insertWith (<>) q (modName :| []) qualifiers
                         Nothing -> qualifiers
-        mkNewSpec :: ImportListSpec ImportList -> UnresolvedImportSpec
+        mkNewSpec :: ImportListSpec ImportList -> ImportSpec
         mkNewSpec importList = ImportSpec
           { ispecImportKey     = ImportKey
               { ikModuleName   = modName
@@ -203,7 +203,6 @@ analyzeImports filename imports qualifiers ts = do
               }
           , ispecQualification = qual
           , ispecImportList    = importList
-          , ispecImportedNames = ()
           }
     -- Analyze comma-separated list of entries, starting at _|_:
     -- - Foo_|_

@@ -36,7 +36,7 @@ import qualified Data.SubkeyMap as SubkeyMap
 import TestUtils
 import qualified Text.RawString.QQ as QQ
 
-type Test = TestCase T.Text UnresolvedModuleHeader
+type Test = TestCase T.Text ModuleHeader
 
 filename :: FullPath 'File
 filename = "/foo/bar/test.hs"
@@ -102,7 +102,6 @@ aesonHeaderTest = TestCase
                   { ilEntries       = KM.fromList entries
                   , ilImportType    = Imported
                   }
-              , ispecImportedNames = ()
               }
           | (modName, qual, imported) <-
               [ ( "Control.Applicative"
@@ -451,7 +450,6 @@ unixCompatHeaderTest = TestCase
                       ]
                   , ilImportType = Hidden
                   }
-              , ispecImportedNames = ()
               }
           ]
       }

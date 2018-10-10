@@ -126,7 +126,7 @@ member :: Ord k => k -> SubkeyMap k v -> Bool
 member k = M.member k . smMainMap
 
 {-# INLINE lookupSubkey #-}
-lookupSubkey :: HasSubkey k => Subkey k -> SubkeyMap k v -> [v]
+lookupSubkey :: HasSubkey k => Subkey k -> SubkeyMap k v -> [(k, v)]
 lookupSubkey k SubkeyMap{smMainMap, smSubMap} =
   case M.lookup k smSubMap of
     Nothing   -> []
@@ -190,7 +190,7 @@ toMap = smMainMap
 {-# INLINE toSubmap #-}
 toSubmap :: Ord k => SubkeyMap k v -> Map (Subkey k) [v]
 toSubmap SubkeyMap{smMainMap, smSubMap} =
-  (smMainMap `indexBySet`) <$> smSubMap
+  map snd . (smMainMap `indexBySet`) <$> smSubMap
 
 {-# INLINE toList #-}
 toList :: SubkeyMap k v -> [(k, v)]
@@ -233,5 +233,5 @@ withoutKeys SubkeyMap{smMainMap, smSubMap} ks =
 -- Utils
 
 {-# INLINE indexBySet #-}
-indexBySet :: Ord k => Map k v -> Set k -> [v]
-indexBySet m ixs = M.elems $ M.restrictKeys m ixs
+indexBySet :: Ord k => Map k v -> Set k -> [(k, v)]
+indexBySet m ixs = M.toList $ M.restrictKeys m ixs
