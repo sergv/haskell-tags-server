@@ -25,8 +25,6 @@ module Haskell.Language.Server.Tags.Types.Modules
   , ResolvedModule
   , moduleNeedsReloading
   , ModuleHeader(..)
-  , UnresolvedModuleHeader
-  , ResolvedModuleHeader
   , resolveQualifier
   , ModuleExportSpec(..)
   , ModuleExports(..)
@@ -43,7 +41,6 @@ import Data.Hashable
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import Data.Semigroup
 import Data.Set (Set)
 import Data.Text.Prettyprint.Doc.Ext
 import Data.Time.Clock (UTCTime(..))
@@ -63,7 +60,7 @@ import Haskell.Language.Lexer.FastTags (Type, Line)
 import Haskell.Language.Server.Tags.Types.Imports
 
 data Module a = Module
-  { modHeader           :: !(ModuleHeader a)
+  { modHeader           :: !ModuleHeader
     -- | All symbols defined in this module. SymbolMap tracks all children-parent
     -- relationships.
   , modAllSymbols       :: !SymbolMap
@@ -103,7 +100,7 @@ instance Pretty a => Pretty (Module a) where
 -- > module Foo (...) where
 -- > import Bar
 -- > import qualified Baz hiding (frob)
-data ModuleHeader a = ModuleHeader
+data ModuleHeader = ModuleHeader
   { mhModName          :: !ModuleName
     -- | Exports of a module. Nothing - everything is exported
   , mhExports          :: !(ModuleExportSpec ModuleExports)
@@ -113,15 +110,12 @@ data ModuleHeader a = ModuleHeader
     -- | All imports of a given module, including qualified ones.
     -- NB same module name may be present several times with different qualifications
     -- because it may be imported several times.
-  , mhImports          :: !(SubkeyMap ImportKey (NonEmpty (ImportSpec a)))
-  } deriving (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
+  , mhImports          :: !(SubkeyMap ImportKey (NonEmpty ImportSpec))
+  } deriving (Eq, Ord, Show, Generic)
 
-instance NFData a => NFData (ModuleHeader a)
+instance NFData ModuleHeader
 
-type UnresolvedModuleHeader = ModuleHeader ()
-type ResolvedModuleHeader   = ModuleHeader SymbolMap
-
-instance Pretty a => Pretty (ModuleHeader a) where
+instance Pretty ModuleHeader where
   pretty ModuleHeader{mhModName, mhExports, mhImportQualifiers, mhImports} =
     ppDictHeader "Module" $
       [ "Name"             :-> pretty mhModName
@@ -140,8 +134,8 @@ instance Pretty a => Pretty (ModuleHeader a) where
 resolveQualifier
   :: (WithCallStack, MonadError ErrorMessage m)
   => ImportQualifier
-  -> ModuleHeader a
-  -> m (Maybe (NonEmpty (ImportSpec a)))
+  -> ModuleHeader
+  -> m (Maybe (NonEmpty (ImportKey, NonEmpty ImportSpec)))
 resolveQualifier qual ModuleHeader{mhImports, mhImportQualifiers} =
   case SubkeyMap.lookupSubkey qualifiedModName mhImports of
     []     ->
@@ -156,8 +150,8 @@ resolveQualifier qual ModuleHeader{mhImports, mhImportQualifiers} =
                 throwErrorWithCallStack $
                   "Internal error: module" <+> pretty modName <+>
                   "for qualifier" <+> pretty qual <+> "not found in the imports map"
-              s:ss -> pure $ sconcat $ s :| ss
-    s : ss -> pure $ Just $ sconcat $ s :| ss
+              s:ss -> pure $ s :| ss
+    s : ss -> pure $ Just $ s :| ss
   where
     qualifiedModName = getImportQualifier qual
 

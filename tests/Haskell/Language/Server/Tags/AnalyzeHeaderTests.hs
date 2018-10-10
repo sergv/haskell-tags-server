@@ -46,7 +46,7 @@ import Haskell.Language.Server.Tags.Types.Modules
 import TestUtils
 import Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions
 
-type Test = TestCase T.Text UnresolvedModuleHeader
+type Test = TestCase T.Text ModuleHeader
 
 filename :: FullPath 'File
 filename = "/foo/bar/test.hs"
@@ -85,7 +85,6 @@ moduleWithUnqualifiedImportTest = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = NoImportList
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -109,7 +108,6 @@ moduleWithUnqualifiedSourceImportTest = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = NoImportList
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -133,7 +131,6 @@ moduleWithUnqualifiedSafeImportTest = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = NoImportList
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -165,7 +162,6 @@ moduleWithPatternImportTest = TestCase
                       ]
                   , ilImportType = Imported
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -192,7 +188,6 @@ moduleWithUnqualifiedImportAndEmptyImportListTest = TestCase
                   { ilEntries    = mempty
                   , ilImportType = Imported
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -219,7 +214,6 @@ moduleWithUnqualifiedImportAndEmptyHiddenImportListTest = TestCase
                   { ilEntries    = mempty
                   , ilImportType = Hidden
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -251,7 +245,6 @@ moduleWithUnqualifiedImportAndSingletonImportListTest = TestCase
                       ]
                   , ilImportType = Imported
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -291,7 +284,6 @@ moduleWithUnqualifiedImportAndNonemptyImportListTest = TestCase
                       ]
                   , ilImportType = Imported
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -366,7 +358,6 @@ moduleWithUnqualifiedImportAndNonemptyImportListWithDifferentVisibilitiesTest = 
                       ]
                   , ilImportType = Imported
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -395,7 +386,6 @@ moduleWithQualifiedImportTest = TestCase
               , ispecQualification =
                   Qualified $ mkImportQualifier $ mkModuleName "Imported1"
               , ispecImportList    = NoImportList
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -425,7 +415,6 @@ moduleWithQualifiedSafeAndPackageImportTest = TestCase
               , ispecQualification =
                   Qualified $ mkImportQualifier $ mkModuleName "Imported1"
               , ispecImportList    = NoImportList
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -454,7 +443,6 @@ moduleWithQualifiedImportAndAliasTest = TestCase
               , ispecQualification =
                   Qualified $ mkImportQualifier $ mkModuleName "Imp"
               , ispecImportList    = NoImportList
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -483,7 +471,6 @@ moduleWithImportAndAliasTest = TestCase
               , ispecQualification =
                   BothQualifiedAndUnqualified $ mkImportQualifier $ mkModuleName "Imp"
               , ispecImportList    = NoImportList
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -530,7 +517,6 @@ moduleWithImportAndAliasAndHidingImportListTest = TestCase
                       ]
                   , ilImportType = Hidden
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -576,7 +562,6 @@ moduleWithImportOfSpeciallyNamedOperatorsTest = TestCase
                       ]
                   , ilImportType = Imported
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -604,7 +589,6 @@ moduleWithMultipleImports = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = NoImportList
-              , ispecImportedNames = ()
               }
           , neSingleton ImportSpec
               { ispecImportKey     = ImportKey
@@ -614,7 +598,6 @@ moduleWithMultipleImports = TestCase
               , ispecQualification =
                 BothQualifiedAndUnqualified $ mkImportQualifier $ mkModuleName "Foo"
               , ispecImportList    = NoImportList
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -646,7 +629,6 @@ moduleWithImportsAfterDefinitions = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = NoImportList
-              , ispecImportedNames = ()
               }
           , neSingleton ImportSpec
               { ispecImportKey     = ImportKey
@@ -656,7 +638,6 @@ moduleWithImportsAfterDefinitions = TestCase
               , ispecQualification =
                 BothQualifiedAndUnqualified $ mkImportQualifier $ mkModuleName "Foo"
               , ispecImportList    = NoImportList
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -688,7 +669,6 @@ moduleWithImportOfPatternFuncTest = TestCase
                       ]
                   , ilImportType = Imported
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -732,7 +712,6 @@ moduleWithImportOfManyFuncsAndPatternFuncTest = TestCase
                       ]
                   , ilImportType = Imported
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -776,7 +755,6 @@ moduleWithoutCommasAndPatternFuncImportBeforeOperator = TestCase
                       ]
                   , ilImportType = Imported
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -820,7 +798,6 @@ moduleWithoutCommasAndPatternFuncImportBeforeConstructorWithChildren = TestCase
                       ]
                   , ilImportType = Imported
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -864,7 +841,6 @@ moduleWithoutCommasAndPatternFuncImportBeforeOperatorConstructorWithChildren = T
                       ]
                   , ilImportType = Imported
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -908,7 +884,6 @@ moduleWithoutCommasAndSeveralPatternImports = TestCase
                       ]
                   , ilImportType = Imported
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -968,7 +943,6 @@ moduleWithAmbigousImportList = TestCase
                       ]
                   , ilImportType = Imported
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -1034,7 +1008,6 @@ moduleWithImportListWithoutCommas = TestCase
                       ]
                   , ilImportType = Imported
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -1076,7 +1049,6 @@ moduleWithImportsThatHaveChildrenListWithoutCommas = TestCase
                       ]
                   , ilImportType = Imported
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -1126,7 +1098,6 @@ moduleWithUnbalancedParensInImportList = TestCase
                       ]
                   , ilImportType = Imported
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -1176,7 +1147,6 @@ moduleWithUnbalancedParensInImportChildrenList = TestCase
                       ]
                   , ilImportType = Imported
                   }
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -1202,7 +1172,6 @@ moduleWithSingleHSC2HSDirectiveInImportList = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = AssumedWildcardImportList
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -1231,7 +1200,6 @@ moduleWithSomeHSC2HSDirectivesInImportList1 = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = AssumedWildcardImportList
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -1260,7 +1228,6 @@ moduleWithSomeHSC2HSDirectivesInImportList2 = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = AssumedWildcardImportList
-              , ispecImportedNames = ()
               }
           ]
       }
@@ -1290,7 +1257,6 @@ moduleWithSomeHSC2HSDirectivesInImportList3 = TestCase
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = AssumedWildcardImportList
-              , ispecImportedNames = ()
               }
           ]
       }

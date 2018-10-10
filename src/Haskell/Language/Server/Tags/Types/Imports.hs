@@ -19,8 +19,6 @@ module Haskell.Language.Server.Tags.Types.Imports
   ( ImportKey(..)
   , ImportTarget(..)
   , ImportSpec(..)
-  , UnresolvedImportSpec
-  , ResolvedImportSpec
   , importBringsUnqualifiedNames
   , importBringsQualifiedNames
   , importBringsNamesQualifiedWith
@@ -81,44 +79,47 @@ instance Pretty ImportTarget where
   pretty = ppGeneric
 
 -- | Information about import statement
-data ImportSpec a = ImportSpec
+data ImportSpec = ImportSpec
   { ispecImportKey     :: !ImportKey
   , ispecQualification :: !ImportQualification
   , ispecImportList    :: !(ImportListSpec ImportList)
-  , ispecImportedNames :: !a
-  } deriving (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
+  } deriving (Eq, Ord, Show, Generic)
 
-instance NFData a => NFData (ImportSpec a)
+instance NFData ImportSpec
 
-type UnresolvedImportSpec = ImportSpec ()
-type ResolvedImportSpec   = ImportSpec SymbolMap
-
-instance Pretty a => Pretty (ImportSpec a) where
+instance Pretty ImportSpec where
   pretty = ppGeneric
 
-importBringsUnqualifiedNames :: ResolvedImportSpec -> Maybe SymbolMap
-importBringsUnqualifiedNames ImportSpec{ispecQualification, ispecImportedNames} =
+-- NB See [Record fields visibility] why this function must not be
+-- incorporated into main name resolution logic (i.e. the 'LoadModule' module).
+importBringsUnqualifiedNames :: SymbolMap -> ImportSpec -> Maybe SymbolMap
+importBringsUnqualifiedNames exportedNames ImportSpec{ispecQualification} =
   case ispecQualification of
     Qualified _                   ->
       case foldMap
         (\(p, children) ->
+          -- [Record fields visibility]
+          -- Functions associated with a type will likely be names of
+          -- fields, which do come unqualified. But actual functions don't (!).
+          -- That's why this logic is not incorporated into main name resolution,
+          -- but only in search.
           if resolvedSymbolType p == FastTags.Type
           then filter ((== FastTags.Function) . resolvedSymbolType) children
           else [])
-        (SM.childrenRelations ispecImportedNames) of
+        (SM.childrenRelations exportedNames) of
         [] -> Nothing
         xs -> Just $ SM.fromList xs
-    Unqualified                   -> Just ispecImportedNames
-    BothQualifiedAndUnqualified _ -> Just ispecImportedNames
+    Unqualified                   -> Just exportedNames
+    BothQualifiedAndUnqualified _ -> Just exportedNames
 
-importBringsQualifiedNames :: ImportSpec a -> Bool
+importBringsQualifiedNames :: ImportSpec -> Bool
 importBringsQualifiedNames ImportSpec{ispecQualification} =
   case ispecQualification of
     Qualified _                   -> True
     Unqualified                   -> False
     BothQualifiedAndUnqualified _ -> True
 
-importBringsNamesQualifiedWith :: ImportSpec a -> ImportQualifier -> Bool
+importBringsNamesQualifiedWith :: ImportSpec -> ImportQualifier -> Bool
 importBringsNamesQualifiedWith ImportSpec{ispecQualification} q =
   getQualifier ispecQualification == Just q
 
