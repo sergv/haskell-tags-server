@@ -86,7 +86,7 @@ preloadFiles
   -> TagsServerState
   -> m TagsServerState
 preloadFiles searchCfg@SearchCfg{scIgnoredGlobs} conf initState = do
-  ignoredGlobsRE <- fileGlobsToRegex (scIgnoredGlobs <> MonadFS.defaultInoredGlobs)
+  ignoredGlobsRE <- fileGlobsToRegex (scIgnoredGlobs <> MonadFS.defaultIgnoredGlobs)
   knownFiles     <- MonadFS.findRec searchCfg ignoredGlobsRE (loadMod conf)
   if tsconfEagerTagging conf
   then do

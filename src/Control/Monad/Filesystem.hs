@@ -20,7 +20,7 @@ module Control.Monad.Filesystem
   ( MonadFS(..)
   , SearchCfg(..)
   , versionControlDirs
-  , defaultInoredGlobs
+  , defaultIgnoredGlobs
   ) where
 
 import Prelude hiding (readFile)
@@ -124,7 +124,9 @@ versionControlDirs = S.fromList
   , ".svn"
   ]
 
-defaultInoredGlobs :: Set Text
-defaultInoredGlobs = S.fromList
+defaultIgnoredGlobs :: Set Text
+defaultIgnoredGlobs = S.fromList
   [ "*/.stack-work*/intero/*"
+  , "*/*stack-work*/intero/*"
+  , "*/flycheck_*"
   ]
