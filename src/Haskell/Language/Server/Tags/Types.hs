@@ -186,7 +186,8 @@ data TagsServerState = TagsServerState
     -- import cycles.
   , tssLoadsInProgress :: !(Map ImportKey (NonEmptyMap (FullPath 'File) UnresolvedModule))
   , tssUnloadedFiles   :: !(Map ImportKey (NonEmpty UnresolvedModule))
+  , tssKnownFiles      :: !(Map (FullPath 'File) ImportKey)
   } deriving (Eq, Ord, Show)
 
 emptyTagsServerState :: TagsServerState
-emptyTagsServerState = TagsServerState mempty mempty mempty
+emptyTagsServerState = TagsServerState mempty mempty mempty mempty

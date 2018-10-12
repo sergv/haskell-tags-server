@@ -17,6 +17,7 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
 
 module Haskell.Language.Server.Tags
   ( startTagsServer
@@ -41,7 +42,9 @@ import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map.Strict as M
 import Data.Semigroup.Foldable
 import qualified Data.Set as S
+import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc.Ext (Pretty(..), (##))
+import qualified System.FSNotify as FSNotify
 
 import qualified Data.Promise as Promise
 
@@ -70,34 +73,85 @@ data TagsServer = TagsServer
   , tsFinishState    :: MVar TagsServerState
     -- | Id of the requent serving thread.
   , tsThreadId       :: !ThreadId
+  , tsFileWatch      :: FSNotify.WatchManager
   }
 
 stopTagsServer :: MonadBase IO m => TagsServer -> m ()
-stopTagsServer = liftBase . killThread . tsThreadId
+stopTagsServer TagsServer{tsThreadId, tsFileWatch} = liftBase $ do
+  FSNotify.stopManager tsFileWatch
+  killThread tsThreadId
 
 -- | Block until tags server stops.
 waitForTagsServerFinish :: MonadBase IO m => TagsServer -> m TagsServerState
 waitForTagsServerFinish = liftBase . readMVar . tsFinishState
 
+searchCfgIgnoredRE
+  :: MonadError ErrorMessage m
+  => SearchCfg
+  -> m CompiledRegex
+searchCfgIgnoredRE SearchCfg{scIgnoredGlobs} =
+  fileGlobsToRegex (scIgnoredGlobs <> MonadFS.defaultIgnoredGlobs)
+
 preloadFiles
-  :: (WithCallStack, MonadError ErrorMessage m, MonadLog m, MonadFS m)
+  :: (WithCallStack,  MonadError ErrorMessage m, MonadLog m, MonadFS m)
   => SearchCfg
   -> TagsServerConf
   -> TagsServerState
   -> m TagsServerState
-preloadFiles searchCfg@SearchCfg{scIgnoredGlobs} conf initState = do
-  ignoredGlobsRE <- fileGlobsToRegex (scIgnoredGlobs <> MonadFS.defaultIgnoredGlobs)
+preloadFiles searchCfg conf initState = do
+  ignoredGlobsRE <- searchCfgIgnoredRE searchCfg
   knownFiles     <- MonadFS.findRec searchCfg ignoredGlobsRE (loadMod conf)
+  let initState' = initState
+        { tssKnownFiles =
+          M.fromList (concatMap (\(impKey, fs) -> map (,impKey) fs) $ M.toList $ toList . NEMap.keysNE <$> knownFiles) <>
+          tssKnownFiles initState
+        }
   if tsconfEagerTagging conf
   then do
     logInfo "[preloadFiles] collecting tags eagerly..."
-    initState' <- loadAllFilesIntoState (fold1 . NEMap.elemsNE <$> knownFiles) conf initState
+    initState'' <- loadAllFilesIntoState (fold1 . NEMap.elemsNE <$> knownFiles) conf initState'
     logInfo "[preloadFiles] collecting tags eagerly... OK"
-    pure initState'
-  else pure initState
+    pure initState''
+  else pure initState'
     { tssUnloadedFiles =
       M.unionWith (<>) (fold1 . NEMap.elemsNE <$> knownFiles) (tssUnloadedFiles initState)
     }
+
+watchDirs
+  :: (MonadError ErrorMessage m, MonadBase IO m)
+  => TagsServerConf
+  -> FSNotify.WatchManager
+  -> Chan SomeRequest
+  -> SearchCfg
+  -> m ()
+watchDirs conf manager reqChan searchCfg@SearchCfg{scShallowPaths, scRecursivePaths} = do
+  ignoredGlobsRE <- searchCfgIgnoredRE searchCfg
+  let shouldAct :: FSNotify.Event -> Bool
+      shouldAct event =
+        not (FSNotify.eventIsDirectory event) &&
+        case classifyPath conf path' of
+          Nothing -> False
+          Just{}  -> not (reMatches ignoredGlobsRE path)
+        where
+          path' = mkSinglePathFragment path
+          path = T.pack $ FSNotify.eventPath event
+      reportEvent' :: FilePath -> (FullPath 'File -> FSNotifyEvent) -> IO ()
+      reportEvent' path f = do
+        path' <- runExceptT $ mkFullPath path
+        case path' of
+          Left _       -> pure ()
+          Right path'' -> writeChan reqChan $ SomeRequest (FSNotifyReq $ f path'') ()
+      reportEvent :: FSNotify.Event -> IO ()
+      reportEvent = \case
+        FSNotify.Added    path _ _ -> reportEvent' path FSAdded
+        FSNotify.Modified path _ _ -> reportEvent' path FSModified
+        FSNotify.Removed  path _ _ -> reportEvent' path FSRemoved
+        FSNotify.Unknown{}         -> pure ()
+  liftBase $ do
+    for_ scShallowPaths $ \dir ->
+      FSNotify.watchDir manager (toFilePath dir) shouldAct reportEvent
+    for_ scRecursivePaths $ \dir ->
+      FSNotify.watchTree manager (toFilePath dir) shouldAct reportEvent
 
 -- | Start new tags server thread that will serve requests supplied via returned
 -- RequestHandler.
@@ -107,10 +161,12 @@ startTagsServer
   -> TagsServerConf
   -> m TagsServer
 startTagsServer searchCfg conf = do
-  initState <- preloadFiles searchCfg conf emptyTagsServerState
-  reqChan   <- liftBase newChan
-  lock      <- liftBase newEmptyMVar
-  tid       <- liftBaseDiscard forkIO $ handleRequests lock reqChan initState
+  tsFileWatch   <- liftBase FSNotify.startManager
+  initState     <- preloadFiles searchCfg conf emptyTagsServerState
+  reqChan       <- liftBase newChan
+  tsFinishState <- liftBase newEmptyMVar
+  tsThreadId    <- liftBaseDiscard forkIO $ handleRequests tsFinishState reqChan tsFileWatch initState
+  watchDirs conf tsFileWatch reqChan searchCfg
   let tsRequestHandler :: RequestHandler
       tsRequestHandler = \case
         req@QueryReq{} -> do
@@ -123,60 +179,92 @@ startTagsServer searchCfg conf = do
           pure respPromise
   pure TagsServer
     { tsRequestHandler
-    , tsFinishState = lock
-    , tsThreadId    = tid
+    , tsFinishState
+    , tsThreadId
+    , tsFileWatch
     }
   where
     handleRequests
       :: MVar TagsServerState
       -> Chan SomeRequest
+      -> FSNotify.WatchManager
       -> TagsServerState
       -> m ()
-    handleRequests lock reqChan = go
+    handleRequests doneLock reqChan manager = go
       where
-        go s = go =<< (handleReq reqChan s `onException` liftBase (putMVar lock s))
-    handleReq
-      :: Chan SomeRequest
-      -> TagsServerState
-      -> m TagsServerState
-    handleReq reqChan serverState = do
-      req <- liftBase $ readChan reqChan
-      case req of
-        SomeRequest FSNotifyReq{} () ->
-          undefined
-        SomeRequest (UserReq request) respPromise -> do
-          -- (request, responsePromise) <- liftBase $ readChan reqChan
-          logInfo $ "[startTagsServer.handleReq] request:" ## pretty request
-          case request of
-            QueryReq filename request' -> do
-              (response, serverState') <- runSearchT conf serverState $
-                case request' of
-                  FindSymbol scope symbol -> do
-                    symbols <- findSymbol id scope filename symbol
-                    pure $ case toList symbols of
-                      []   -> NotFound
-                      s:ss -> Found $ s :| ss
-                  FindSymbolByRegex scope regexp -> do
-                    symbols <- findSymbolByRegexp id scope filename regexp
-                    pure $ case toList symbols of
-                      []   -> NotFound
-                      s:ss -> Found $ s :| ss
-              logInfo $ "[startTagsServer.handleReq] response:" ## either pretty pretty response
-              Promise.putValue respPromise response
-              pure serverState'
-            DirReq (AddShallowRecursiveIgnored scShallowPaths scRecursivePaths scIgnoredGlobs) -> do
-              let searchCfg' = SearchCfg
-                    { scShallowPaths
-                    , scRecursivePaths
-                    , scIgnoredDirs = scIgnoredDirs searchCfg
-                    , scIgnoredGlobs
-                    }
-              serverState' <- preloadFiles searchCfg' conf serverState
-              Promise.putValue respPromise (Right ())
-              pure serverState'
+        go s = go =<< (handleReq s `onException` liftBase (putMVar doneLock s))
+        handleReq
+          :: TagsServerState
+          -> m TagsServerState
+        handleReq serverState = do
+          req <- liftBase $ readChan reqChan
+          case req of
+            SomeRequest (FSNotifyReq event) () -> do
+              logInfo $ "[startTagsServer.handleReq] file notification event:" ## pretty event
+              case event of
+                FSAdded path -> do
+                  mmods <- loadMod conf path
+                  pure $ case mmods of
+                    Nothing             -> serverState
+                    Just (impKey, mods) -> serverState
+                      { tssUnloadedFiles =
+                        M.insertWith (<>) impKey (fold1 $ NEMap.elemsNE mods) $ tssUnloadedFiles serverState
+                      , tssKnownFiles    =
+                        M.insert path impKey $ tssKnownFiles serverState
+                      }
+                FSRemoved path ->
+                  pure $ case M.updateLookupWithKey (\_ _ -> Nothing) path $ tssKnownFiles serverState of
+                    (Nothing,     _)              -> serverState
+                    (Just target, tssKnownFiles') -> serverState
+                      { tssLoadedModules =
+                        M.delete target $ tssLoadedModules serverState
+                      , tssUnloadedFiles =
+                        M.delete target $ tssUnloadedFiles serverState
+                      , tssKnownFiles    = tssKnownFiles'
+                      }
+                FSModified path ->
+                  pure $ case M.lookup path $ tssKnownFiles serverState of
+                    Nothing     -> serverState
+                    Just impKey -> serverState
+                      { tssLoadedModules =
+                        M.adjust (fmap (\m -> m { modIsDirty = True })) impKey $ tssLoadedModules serverState
+                      , tssUnloadedFiles =
+                        M.adjust (fmap (\m -> m { modIsDirty = True })) impKey $ tssUnloadedFiles serverState
+                      }
+            SomeRequest (UserReq request) respPromise -> do
+              -- (request, responsePromise) <- liftBase $ readChan reqChan
+              logInfo $ "[startTagsServer.handleReq] request:" ## pretty request
+              case request of
+                QueryReq filename request' -> do
+                  (response, serverState') <- runSearchT conf serverState $
+                    case request' of
+                      FindSymbol scope symbol -> do
+                        symbols <- findSymbol id scope filename symbol
+                        pure $ case toList symbols of
+                          []   -> NotFound
+                          s:ss -> Found $ s :| ss
+                      FindSymbolByRegex scope regexp -> do
+                        symbols <- findSymbolByRegexp id scope filename regexp
+                        pure $ case toList symbols of
+                          []   -> NotFound
+                          s:ss -> Found $ s :| ss
+                  logInfo $ "[startTagsServer.handleReq] response:" ## either pretty pretty response
+                  Promise.putValue respPromise response
+                  pure serverState'
+                DirReq (AddShallowRecursiveIgnored scShallowPaths scRecursivePaths scIgnoredGlobs) -> do
+                  let searchCfg' = SearchCfg
+                        { scShallowPaths
+                        , scRecursivePaths
+                        , scIgnoredDirs = scIgnoredDirs searchCfg
+                        , scIgnoredGlobs
+                        }
+                  serverState' <- preloadFiles searchCfg' conf serverState
+                  watchDirs conf manager reqChan searchCfg'
+                  Promise.putValue respPromise (Right ())
+                  pure serverState'
 
 -- todo: handle header files here
-classifyPath :: TagsServerConf -> FullPath 'File -> Maybe ImportTarget
+classifyPath :: TakeExtension a => TagsServerConf -> a -> Maybe ImportTarget
 classifyPath TagsServerConf{tsconfVanillaExtensions, tsconfHsBootExtensions} path
   | ext `S.member` tsconfVanillaExtensions = Just VanillaModule
   | ext `S.member` tsconfHsBootExtensions  = Just HsBootModule

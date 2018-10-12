@@ -35,6 +35,7 @@ module Data.Path
   , FullPath
   , unFullPath
   , fullPathAsUtf8
+  , toFilePath
   , MkFullPath(..)
   , MkSomeFullPath(..)
   , doesFileExist
@@ -340,5 +341,10 @@ dropExts =
 extSeparator :: Text
 extSeparator = T.singleton FilePath.extSeparator
 
+{-# INLINE fullPathAsUtf8 #-}
 fullPathAsUtf8 :: FullPath typ -> BS.ByteString
 fullPathAsUtf8 = TE.encodeUtf8 . unFullPath
+
+{-# INLINE toFilePath #-}
+toFilePath :: FullPath typ -> FilePath.FilePath
+toFilePath = T.unpack . unFullPath
