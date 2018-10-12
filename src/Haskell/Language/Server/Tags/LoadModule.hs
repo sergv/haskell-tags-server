@@ -295,20 +295,17 @@ resolveModule
   -> UnresolvedModule
   -> m ResolvedModule
 resolveModule checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
-  logDebug $ "[resolveModule] resolving names of module" <+> pretty (mhModName unresHeader)
-  (imports, symbols) <- resolveSymbols mod
-  logVerboseDebug $ ppDictHeader ("[resolveModule] Resolved items for module" <+> pretty (mhModName unresHeader))
+  logDebug $ "[resolveModule] resolving names of module" <+> pretty (mhModName header)
+  symbols <- resolveExportedNames mod
+  logVerboseDebug $ ppDictHeader ("[resolveModule] Resolved items for module" <+> pretty (mhModName header))
     [ -- "imports"                          :-> ppSubkeyMapWith pretty pretty ppNE imports
     -- ,
       "all symbols exported by a module" --> symbols
     ]
-  pure $ mod
-    { modHeader           = unresHeader { mhImports = imports }
-    , modAllExportedNames = symbols
-    }
+  pure $ mod { modAllExportedNames = symbols }
   where
-    unresHeader :: ModuleHeader
-    unresHeader = modHeader mod
+    header :: ModuleHeader
+    header = modHeader mod
     unresFile :: FullPath 'File
     unresFile = modFile mod
 
@@ -320,7 +317,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
            )
     resolveImports imports = do
       logDebug $
-        "[resolveModule.resolveImports] analysing imports of module" <+> pretty (mhModName unresHeader) <+>
+        "[resolveModule.resolveImports] analysing imports of module" <+> pretty (mhModName header) <+>
         "from" <+> pretty unresFile
       Lazy.runWriterT (SubkeyMap.traverseMaybeWithKey resolveImport imports)
       where
@@ -350,11 +347,11 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
                   -- This import was found to refer to modules within modules'.
                   let importedNames :: SymbolMap
                       !importedNames = foldMap modAllExportedNames modules'
-                  nameResolution <- asks tsconfNameResolution
+                  TagsServerConf{tsconfNameResolution} <- ask
                   let results :: NonEmpty (Either ErrorMessage (ImportSpec, SymbolMap))
                       results = runEval $ parTraversable rseq $ flip fmap importSpecs $
                         \spec@ImportSpec{ispecImportKey = ImportKey{ikModuleName = importedModName}} ->
-                          case visibleNamesFromImportSpec nameResolution importedModName importedNames spec of
+                          case visibleNamesFromImportSpec tsconfNameResolution importedModName importedNames spec of
                             Left err -> Left err
                             Right x  -> Right (spec, x)
                   results' <- for results $ \case
@@ -380,108 +377,131 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
               Just <$> quasiResolveImportSpecWithLoadsInProgress
                 (lift . checkIfModuleIsAlreadyBeingLoaded)
                 (lift . readAndLoad)
-                (mhModName unresHeader)
+                (mhModName header)
                 (modFile mod)
                 key
                 toResolve
                 importSpecs
 
-    resolveSymbols
+    resolveExportedNames
       :: WithCallStack
-      => UnresolvedModule -> m (SubkeyMap ImportKey (NonEmpty ImportSpec), SymbolMap)
-    resolveSymbols Module{modHeader = header@ModuleHeader{mhImports, mhModName}, modAllSymbols} = do
-      logDebug $ "[resolveModule.resolveSymbols] Resolving symbols of module" <+> pretty mhModName
-      (resolvedImports, namesAndQualifiersFromImports) <- resolveImports mhImports
-      logDebug $ "[resolveModule.resolveSymbols] analysing export list of module" <+> pretty mhModName
-      -- logVerboseDebug $ "[resolveModule.resolveSymbols] Resolved imports" ## ppSubkeyMapWith pretty pretty ppNE resolvedImports
+      => UnresolvedModule -> m SymbolMap
+    resolveExportedNames Module{modHeader = ModuleHeader{mhImports, mhModName}, modAllSymbols} = do
+      logDebug $ "[resolveModule.resolveExportedNames] Resolving symbols of module" <+> pretty mhModName
+      -- logVerboseDebug $ "[resolveModule.resolveExportedNames] Resolved imports" ## ppSubkeyMapWith pretty pretty ppNE resolvedImports
       case mhExports header of
-        NoExports                                                     ->
-          pure (fmap fst <$> resolvedImports, modAllSymbols)
-        EmptyExports                                                  ->
-          pure (fmap fst <$> resolvedImports, modAllSymbols)
-        SpecificExports ModuleExports{meExportedEntries, meReexports} -> do
-          -- logVerboseDebug $ "[resolveModule.resolveSymbols] reexports of module" <+> pretty mhModName <> ":" ## ppSet meReexports
-          nameResolution <- asks tsconfNameResolution
-          let (allSyms, missingImportErrors, unresolvedAndDefaulted) =
-                runEval $ resolveSpecificExports nameResolution
-          traverse_ CME.throwError missingImportErrors
-          unless (SM.null unresolvedAndDefaulted) $
-            logWarning $ "[resolveSymbols] unresolved exports (will consider them coming from the export list) for" <+> pretty mhModName <> ":" ## pretty unresolvedAndDefaulted
-          pure (fmap fst <$> resolvedImports, allSyms)
-          where
-            resolveSpecificExports :: NameResolutionStrictness -> Eval (SymbolMap, [ErrorMessage], SymbolMap)
-            resolveSpecificExports nameResolution = do
-              (namesInScopeByNamespace :: Map (Maybe ImportQualifier) SymbolMap) <- rpar
-                $ M.fromListWith (<>)
-                $ (Nothing, modAllSymbols)
-                : (Just $ mkImportQualifier mhModName, modAllSymbols)
-                : concatMap expandImportQualification namesAndQualifiersFromImports
-              let lt, gt :: Set ModuleName
-                  (lt, reexportsItself, gt) = S.splitMember mhModName meReexports
-              -- Names exported via module reexports.
-              (reexports :: SymbolMap) <- rpar
-                $ resolveReexports resolvedImports
-                $ Pair lt gt
-              -- Names exported from current module, grouped by export qualifier and
-              -- resolving to a location within the export list.
-              (exportedFromExportList' :: [Either ErrorMessage (MonoidalMap (Maybe ImportQualifier) (Map UnqualifiedSymbolName ResolvedSymbol))]) <-
-                parList (evalTraversable rseq) $ flip map (concatMap toList $ KM.elems meExportedEntries) $ \(entry :: EntryWithChildren PosAndType (SymbolName, PosAndType)) ->
-                  let (name, PosAndType posFile posLine typ) = entryName entry
-                      name' :: UnqualifiedSymbolName
-                      (qualifier, name') = splitQualifiedPart name
-                  in case M.lookup qualifier namesInScopeByNamespace of
-                    Nothing -> throwErrorWithCallStack $ ppDictHeader (PP.hsep
-                      [ "Internal error: export qualifier"
-                      , PP.dquotes $ pretty qualifier
-                      , "has no corresponding qualified imports"
-                      ])
-                      [ "import entry"                  --> entry
-                      , "namesInScopeByNamespace"       :-> ppMap namesInScopeByNamespace
-                      , "namesAndQualifiersFromImports" --> namesAndQualifiersFromImports
-                      ]
-                    Just sm -> do
-                      (presentChildren :: Set UnqualifiedSymbolName) <-
-                        childrenNamesFromEntry nameResolution mhModName sm $ name' <$ entry
-                      let childrenType :: FastTags.Type
-                          childrenType = case typ of
-                            FastTags.Type   -> FastTags.Constructor
-                            FastTags.Family -> FastTags.Type
-                            typ'            -> typ'
-                          names :: Map UnqualifiedSymbolName ResolvedSymbol
-                          names
-                            = M.insert name' (mkResolvedSymbolFromParts posFile posLine name' typ Nothing)
-                            $ M.fromSet (\childName -> mkResolvedSymbolFromParts posFile posLine childName childrenType (Just name')) presentChildren
-                      pure (MM.singleton qualifier names :: MonoidalMap (Maybe ImportQualifier) (Map UnqualifiedSymbolName ResolvedSymbol))
-              let (errors, xs) = partitionEithers exportedFromExportList'
-              (exportedFromExportList :: MonoidalMap (Maybe ImportQualifier) (Map UnqualifiedSymbolName ResolvedSymbol)) <-
-                foldPar xs
-              (presentExports :: SymbolMap) <- rpar
-                  $ fold
-                  $ M.intersectionWith SM.restrictKeys namesInScopeByNamespace
-                  $ fmap M.keysSet
-                  $ MM.unMonoidalMap exportedFromExportList
-              -- logVerboseDebug $ "[resolveSymbols] exportedFromExportList =" ## ppMonoidalMapWith pretty ppMap exportedFromExportList
-              (extra :: Map UnqualifiedSymbolName (Set UnqualifiedSymbolName)) <- rpar
-                $ inferExtraParents header
-              (allSymbols :: SymbolMap) <- foldPar
-                [ if reexportsItself then modAllSymbols else mempty
-                , reexports
-                , presentExports
-                ]
-              (allSymbols' :: SymbolMap) <- rpar $ SM.registerChildren extra allSymbols
-              -- logVerboseDebug $ "[resolveModule.resolveSymbols] inferred extra parents =" ##
-              --   ppMapWith pretty ppSet extra
+        NoExports
+          -> pure modAllSymbols
+        EmptyExports
+          -> pure modAllSymbols
+        SpecificExports ModuleExports{meExportedEntries, meReexports}
+          | S.null meReexports
+          , let exportedNames :: [EntryWithChildren PosAndType (SymbolName, PosAndType)]
+                exportedNames = foldMap toList $ KM.elems meExportedEntries
+          , let unqualifiedExportedNames :: [EntryWithChildren PosAndType UnqualifiedSymbolName]
+                unqualifiedExportedNames  = mapMaybe (traverse (mkUnqualifiedSymbolName . fst)) exportedNames
+                unqualifiedExportedNames' = S.fromList $ map entryName unqualifiedExportedNames
+          , S.size unqualifiedExportedNames' == KM.size meExportedEntries
+          , SM.isSubsetNames unqualifiedExportedNames' modAllSymbols
+          -> do
+            TagsServerConf{tsconfNameResolution} <- ask
+            let extra            = inferExtraParents header
+                modAllSymbols'   = SM.registerChildren extra modAllSymbols
+                children :: [Set UnqualifiedSymbolName]
+                (errs, children) =
+                  partitionEithers $
+                  map
+                    (childrenNamesFromEntry tsconfNameResolution mhModName modAllSymbols')
+                    unqualifiedExportedNames
+            traverse_ CME.throwError errs
+            pure
+              $ SM.restrictKeys modAllSymbols'
+              $ unqualifiedExportedNames' <> fold children
+          | otherwise
+          -> do
+            (resolvedImports, namesAndQualifiersFromImports) <- resolveImports mhImports
+            let resolveSpecificExports :: NameResolutionStrictness -> Eval (SymbolMap, [ErrorMessage], SymbolMap)
+                resolveSpecificExports nameResolution = do
+                  (extra :: Map UnqualifiedSymbolName (Set UnqualifiedSymbolName)) <- rpar
+                    $ inferExtraParents header
+                  (modAllSymbols' :: SymbolMap) <- rpar $ SM.registerChildren extra modAllSymbols
+                  (namesInScopeByNamespace :: Map (Maybe ImportQualifier) SymbolMap) <- rpar
+                    $ M.fromListWith (<>)
+                    $ (Nothing, modAllSymbols')
+                    : (Just $ mkImportQualifier mhModName, modAllSymbols')
+                    : concatMap expandImportQualification namesAndQualifiersFromImports
+                  let lt, gt :: Set ModuleName
+                      (lt, reexportsItself, gt) = S.splitMember mhModName meReexports
+                  -- Names exported via module reexports.
+                  (reexports :: SymbolMap) <- rpar
+                    $ resolveReexports resolvedImports
+                    $ Pair lt gt
+                  -- Names exported from current module, grouped by export qualifier and
+                  -- resolving to a location within the export list.
+                  (exportedFromExportList' :: [Either ErrorMessage (MonoidalMap (Maybe ImportQualifier) (Map UnqualifiedSymbolName ResolvedSymbol))]) <-
+                    parList (evalTraversable rseq) $ flip map (concatMap toList $ KM.elems meExportedEntries) $ \(entry :: EntryWithChildren PosAndType (SymbolName, PosAndType)) ->
+                      let (name, PosAndType posFile posLine typ) = entryName entry
+                          name' :: UnqualifiedSymbolName
+                          (qualifier, name') = splitQualifiedPart name
+                      in case M.lookup qualifier namesInScopeByNamespace of
+                        Nothing -> throwErrorWithCallStack $ ppDictHeader (PP.hsep
+                          [ "Internal error: export qualifier"
+                          , PP.dquotes $ pretty qualifier
+                          , "has no corresponding qualified imports"
+                          ])
+                          [ "import entry"                  --> entry
+                          , "namesInScopeByNamespace"       :-> ppMap namesInScopeByNamespace
+                          , "namesAndQualifiersFromImports" --> namesAndQualifiersFromImports
+                          ]
+                        Just sm -> do
+                          (extraChildrenExports :: Set UnqualifiedSymbolName) <-
+                            childrenNamesFromEntry nameResolution mhModName sm $ name' <$ entry
+                          let childrenType :: FastTags.Type
+                              childrenType = case typ of
+                                FastTags.Type   -> FastTags.Constructor
+                                FastTags.Family -> FastTags.Type
+                                typ'            -> typ'
+                              names :: Map UnqualifiedSymbolName ResolvedSymbol
+                              names
+                                = M.insert name' (mkResolvedSymbolFromParts posFile posLine name' typ Nothing)
+                                $ M.fromSet (\childName -> mkResolvedSymbolFromParts posFile posLine childName childrenType (Just name')) extraChildrenExports
+                          pure (MM.singleton qualifier names :: MonoidalMap (Maybe ImportQualifier) (Map UnqualifiedSymbolName ResolvedSymbol))
+                  let (errors, xs) = partitionEithers exportedFromExportList'
+                  (exportedFromExportList :: MonoidalMap (Maybe ImportQualifier) (Map UnqualifiedSymbolName ResolvedSymbol)) <-
+                    foldPar xs
+                  (presentExports :: SymbolMap) <- rpar
+                      $ fold
+                      $ M.intersectionWith SM.restrictKeys namesInScopeByNamespace
+                      $ fmap M.keysSet
+                      $ MM.unMonoidalMap exportedFromExportList
+                  -- logVerboseDebug $ "[resolveExportedNames] exportedFromExportList =" ## ppMonoidalMapWith pretty ppMap exportedFromExportList
+                  (allSymbols :: SymbolMap) <- rseq $ fold
+                    [ if reexportsItself then modAllSymbols' else mempty
+                    , reexports
+                    , presentExports
+                    ]
+                  -- logVerboseDebug $ "[resolveModule.resolveExportedNames] inferred extra parents =" ##
+                  --   ppMapWith pretty ppSet extra
 
-              -- Names from default namespace that are exported but not
-              -- imported/defined locally. We default them to tags that
-              -- come from the corresponding export list.
-              let unresolvedExports :: SymbolMap
-                  unresolvedExports =
-                    SM.withoutKeys
-                      (SM.fromList (foldMap M.elems exportedFromExportList))
-                      (SM.keysSet allSymbols')
-              allSymbols'' <- rseq $ allSymbols' <> unresolvedExports
-              pure (allSymbols'', errors, unresolvedExports)
+                  -- Names from default namespace that are exported but not
+                  -- imported/defined locally. We default them to tags that
+                  -- come from the corresponding export list.
+                  let unresolvedExports :: SymbolMap
+                      unresolvedExports =
+                        SM.withoutKeys
+                          (SM.fromList (foldMap M.elems exportedFromExportList))
+                          (SM.keysSet allSymbols)
+                  allSymbols' <- rseq $ allSymbols <> unresolvedExports
+                  pure (allSymbols', errors, unresolvedExports)
+            logDebug $ "[resolveModule.resolveExportedNames] analysing export list of module" <+> pretty mhModName
+            -- logVerboseDebug $ "[resolveModule.resolveExportedNames] reexports of module" <+> pretty mhModName <> ":" ## ppSet meReexports
+            nameResolution <- asks tsconfNameResolution
+            let (allSyms, missingImportErrors, unresolvedAndDefaulted) =
+                  runEval $ resolveSpecificExports nameResolution
+            traverse_ CME.throwError missingImportErrors
+            unless (SM.null unresolvedAndDefaulted) $
+              logWarning $ "[resolveExportedNames] unresolved exports (will consider them coming from the export list) for" <+> pretty mhModName <> ":" ## pretty unresolvedAndDefaulted
+            pure allSyms
 
 expandImportQualification
   :: forall a. (ImportQualification, ModuleName, a)
@@ -593,39 +613,44 @@ quasiResolveImportSpecWithLoadsInProgress
                   candidateReexports =
                     filter (canBringNamesIntoScope wantedNames') reexportedImports
 
-              (canLoad :: [ImportSpec], cannotLoad :: [ModuleName]) <-
+              (canLoad :: [ImportSpec], cannotLoad :: [UnresolvedModule]) <-
                 foldForA candidateReexports $ \imp@ImportSpec{ispecImportKey} -> do
                   isBeingLoaded <- checkIfModuleIsAlreadyBeingLoaded ispecImportKey
                   pure $ case isBeingLoaded of
-                    Nothing -> -- Not being loaded, may load
+                    -- Not being loaded, may load
+                    Nothing ->
                       ([imp], mempty)
-                    Just (inProgress, _finishedLoading) -> -- Already being loaded - too bad
+                    -- Already being loaded - too bad
+                    Just (inProgress, _finishedLoading) ->
                       -- TODO: use '_finishedLoading' as it may help to
                       -- resolve some names.
-                      (mempty, mhModName . modHeader <$> toList inProgress)
-              res <- resolveLoop readAndLoad wantedNames' canLoad
-              case res of
-                Nothing -> do
-                  logDebug $ ppDictHeader "Import cycle debug info"
-                    [ "canLoad"            --> canLoad
-                    , "cannotLoad"         --> cannotLoad
-                    , "meReexports"        :-> ppSet meReexports
-                    , "wantedNames'"       :-> ppKeyMapWith pretty pretty wantedNames'
-                    , "reexportedImports"  --> reexportedImports
-                    , "candidateReexports" --> candidateReexports
-                    ]
-                  throwErrorWithCallStack $ ppDictHeader
-                    (PP.hsep
-                      [ "Cannot resolve reexport import cycle: module"
-                      , PP.dquotes (pretty mainModName)
-                      , "imports names from"
-                      , pretty mainModImport
-                      , "that reexports names from modules that are already being loaded:"
-                      ])
-                    [ "Wanted names"   :-> ppKeyMapWith pretty pretty wantedNames'
-                    , "Unable to load" --> cannotLoad
-                    ]
-                Just syms -> pure syms
+                      (mempty, toList inProgress)
+              (wantedNames'', resolvedNames) <- resolveLoop readAndLoad wantedNames' canLoad
+
+              if not $ S.null wantedNames''
+              then do
+                logDebug $ ppDictHeader "Import cycle debug info"
+                  [ "mainModName"        --> mainModName
+                  , "importedModName"    --> importedModName
+                  , "canLoad"            --> canLoad
+                  , "cannotLoad"         --> (mhModName . modHeader <$> cannotLoad)
+                  , "meReexports"        :-> ppSet meReexports
+                  , "wantedNames'"       :-> ppKeyMapWith pretty pretty wantedNames'
+                  , "reexportedImports"  --> reexportedImports
+                  , "candidateReexports" --> candidateReexports
+                  ]
+                throwErrorWithCallStack $ ppDictHeader
+                  (PP.hsep
+                    [ "Cannot resolve reexport import cycle: module"
+                    , PP.dquotes (pretty mainModName)
+                    , "imports names from"
+                    , pretty mainModImport
+                    , "that reexports names from modules that are already being loaded:"
+                    ])
+                  [ "Wanted names"   :-> ppKeyMapWith pretty pretty wantedNames'
+                  , "Unable to load" --> (mhModName . modHeader <$> cannotLoad)
+                  ]
+                else pure resolvedNames
             | otherwise -> do
               nameResolution <- asks tsconfNameResolution
               case nameResolution of
@@ -656,17 +681,17 @@ resolveLoop
   => (ImportKey -> m (Maybe (NonEmpty ResolvedModule)))
   -> KeyMap Set (EntryWithChildren () UnqualifiedSymbolName)
   -> [ImportSpec]
-  -> m (Maybe SymbolMap)
+  -> m (Set UnqualifiedSymbolName, SymbolMap)
 resolveLoop readAndLoad wantedNames = go (KM.keysSet wantedNames) mempty
   where
     go
       :: Set UnqualifiedSymbolName
       -> SymbolMap
       -> [ImportSpec]
-      -> m (Maybe SymbolMap)
+      -> m (Set UnqualifiedSymbolName, SymbolMap)
     go wanted found = \case
-      _ | S.null wanted -> pure $ Just found
-      []                -> pure Nothing
+      _ | S.null wanted -> pure (wanted, found)
+      []                -> pure (wanted, found)
       ImportSpec{ispecImportKey} : specs -> do
         mod <- readAndLoad ispecImportKey
         case mod of
@@ -802,7 +827,7 @@ allNamesFromEntry nameResolution moduleName allImportedNames entry@(EntryWithChi
   S.insert sym <$>
   childrenNamesFromEntry nameResolution moduleName allImportedNames entry
 
--- | Get children names only referred to by @EntryWithChildren@ given
+-- | Get all children names referred to by the @EntryWithChildren@ given
 -- a @SymbolMap@ of names currently in scope.
 childrenNamesFromEntry
   :: WithCallStack
@@ -811,15 +836,17 @@ childrenNamesFromEntry
   -> SymbolMap
   -> EntryWithChildren ann UnqualifiedSymbolName
   -> Either ErrorMessage (Set UnqualifiedSymbolName)
-childrenNamesFromEntry nameResolution moduleName allImportedNames (EntryWithChildren sym visibility) =
-  case visibility of
+childrenNamesFromEntry nameResolution moduleName allImportedNames (EntryWithChildren sym childrenVisibility) =
+  case childrenVisibility of
     Nothing                                         -> pure mempty
     Just VisibleAllChildren                         -> childrenSymbols
     Just (VisibleSpecificChildren children)         -> pure $ M.keysSet children
     Just (VisibleAllChildrenPlusSome extraChildren) ->
       (M.keysSet extraChildren <>) <$> childrenSymbols
   where
-    childrenSymbols :: (WithCallStack, MonadError ErrorMessage m) => m (Set UnqualifiedSymbolName)
+    childrenSymbols
+      :: (WithCallStack, MonadError ErrorMessage m)
+      => m (Set UnqualifiedSymbolName)
     childrenSymbols =
       case (nameResolution, SM.lookupChildren sym allImportedNames) of
         (NameResolutionStrict, Nothing)       ->

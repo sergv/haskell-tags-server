@@ -34,6 +34,7 @@ module Data.KeyMap
   , keysSet
   , empty
   , null
+  , size
   , intersectionWith
   , differenceWith
   ) where
@@ -133,6 +134,10 @@ empty = coerce (M.empty :: Map (Key a) (f a))
 {-# INLINE null #-}
 null :: forall a f. KeyMap f a -> Bool
 null = coerce (M.null :: Map (Key a) (f a) -> Bool)
+
+{-# INLINE size #-}
+size :: forall a f. KeyMap f a -> Int
+size = coerce (M.size :: Map (Key a) (f a) -> Int)
 
 {-# INLINE intersectionWith #-}
 intersectionWith
