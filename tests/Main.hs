@@ -8,6 +8,7 @@
 
 module Main (main) where
 
+import System.IO
 import Test.Tasty
 
 import qualified Data.Map.NonEmpty.Tests as Data.Map.NonEmptyTests
@@ -19,6 +20,8 @@ import qualified ServerTests
 
 main :: IO ()
 main = do
+  hSetEncoding stdout utf8
+  hSetEncoding stderr utf8
   let tests = testGroup "Tests"
         [ Data.Map.NonEmptyTests.tests
         , ServerTests.tests

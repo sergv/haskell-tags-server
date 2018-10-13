@@ -26,7 +26,6 @@ module Data.Filesystem
 import Control.Concurrent.Async.Lifted
 import Control.Concurrent.STM
 import Control.Concurrent.STM.TMQueue
-import qualified Control.Exception as Exception
 import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.Trans.Control
@@ -45,7 +44,9 @@ import GHC.Conc (getNumCapabilities)
 import GHC.Stack.Ext (WithCallStack)
 import qualified System.FilePath as FilePath
 
-#ifndef WINDOWS
+#ifdef WINDOWS
+#else
+import qualified Control.Exception as Exception
 import System.Posix.Files as Posix
 #endif
 

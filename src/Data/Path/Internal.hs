@@ -30,6 +30,12 @@ import Data.String
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc.Ext
 
+#ifdef WINDOWS
+import Data.Coerce
+import Data.Function (on)
+import qualified Data.Text as T
+#endif
+
 -- | A type-level label to distinguish directories and files.
 data FileType = Dir | File
 
