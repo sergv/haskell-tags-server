@@ -63,7 +63,6 @@ module Data.Path
   , unBaseName
   ) where
 
-import Control.Exception
 import Control.Monad.Base
 import Control.Monad.Except.Ext
 import Control.Monad.Ext
@@ -77,7 +76,6 @@ import Data.Semigroup.Foldable.Class (foldMap1)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import qualified Data.Text.Prettyprint.Doc as PP
 import Data.Text.Prettyprint.Doc.Ext
 import Data.Time.Clock (UTCTime)
 import qualified System.Directory as Directory
@@ -87,6 +85,8 @@ import Data.Path.Internal
 
 #ifdef WINDOWS
 #else
+import Control.Exception
+import qualified Data.Text.Prettyprint.Doc as PP
 import System.Posix.Files as Posix
 #endif
 
