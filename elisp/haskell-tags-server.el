@@ -677,7 +677,7 @@ buffer if no such buffer exists."
      (select-mode-start-selection
       entries
       :buffer-name "Symbols"
-      :after-init #'ignore
+      :after-init #'select-mode-setup
       :on-selection
       (lambda (idx loc-entry _selection-type)
         (select-mode-exit)
@@ -695,11 +695,10 @@ buffer if no such buffer exists."
                                                    (haskell-tags-server--loc-entry--filename symbol-entry))
                                           (haskell-tags-server--loc-entry--line symbol-entry)
                                           (haskell-tags-server--loc-entry--type symbol-entry)))
-      :preamble-function
-      (lambda ()
-        (format "Results for %s %s\n"
-                (if use-regexp? "regexp" "identifier")
-                search-query))))
+      :preamble
+      (format "Results for %s '%s'\n\n"
+              (if use-regexp? "regexp" "identifier")
+              search-query)))
     (`not_found
      (message "No entries for %s %s"
               (if use-regexp? "regexp" "identifier")
