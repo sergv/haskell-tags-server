@@ -28,12 +28,10 @@ instance Exception ErrorMessage
 
 instance Pretty ErrorMessage where
   pretty ErrorMessage{errorMessageBody, errorMessageBacktrace} =
-    vacuous errorMessageBody ##
-      "Backtrace:" ##
-        ppCallStack errorMessageBacktrace
-
--- instance IsString ErrorMessage where
---   fromString msg = ErrorMessage
---     { errorMessageBody      = docFromString msg
---     , errorMessageBacktrace = callStack
---     }
+    case getCallStack errorMessageBacktrace of
+      []    -> errorMessageBody'
+      _ : _ ->
+        errorMessageBody' ##
+          "Backtrace:" ## ppCallStack errorMessageBacktrace
+    where
+      errorMessageBody' = vacuous errorMessageBody

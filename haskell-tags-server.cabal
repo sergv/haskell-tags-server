@@ -29,7 +29,7 @@ flag dev
     True
 
 library
-  if flag(assertions)
+  if flag(dev)
     cpp-options: -DDEVELOPMENT
   if os(Windows)
     build-depends: unix-compat

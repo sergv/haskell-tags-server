@@ -30,5 +30,3 @@ throwErrorWithCallStack msg = CME.throwError ErrorMessage
   { errorMessageBody      = msg
   , errorMessageBacktrace = callStack
   }
-
-
