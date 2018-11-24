@@ -5,6 +5,7 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE MagicHash           #-}
 {-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UnboxedTuples       #-}
@@ -60,6 +61,7 @@ import Control.Monad.Writer.Strict
 
 import Data.Char
 import Data.Int
+import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Void (Void, vacuous)
@@ -128,10 +130,7 @@ withAlexInput s f =
     -- as in the old C days...)
     s' = C8.cons '\n' $ C8.snoc (C8.snoc (stripBOM s) '\n') '\0'
     stripBOM :: C8.ByteString -> C8.ByteString
-    stripBOM xs = case C8.uncons xs of
-      Just ('\xFF', xs') -> C8.tail xs'
-      Just ('\xFE', xs') -> C8.tail xs'
-      _                  -> xs
+    stripBOM xs = fromMaybe xs $ C8.stripPrefix "\xEF\xBB\xBF" xs
 
 data LiterateLocation a = LiterateInside a | LiterateOutside | Vanilla
   deriving (Eq, Ord, Show, Functor)
