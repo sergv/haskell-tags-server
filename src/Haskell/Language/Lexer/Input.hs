@@ -72,10 +72,10 @@ mkAlexInput s = AlexInput
     stripBOM :: Text -> Text
     stripBOM xs =
       fromMaybe xs $
-      T.stripPrefix utf8BOM xs <|> T.stripPrefix utf8BOM' xs
-    -- utf8BOM = "\xEF\xBB\xBF"
-    utf8BOM = "\xFFEF"
-    utf8BOM' = "\xFEFF"
+      T.stripPrefix utf8BOM xs <|> T.stripPrefix utf16BOM xs <|> T.stripPrefix utf16BOM' xs
+    utf16BOM  = "\xFFEF"
+    utf16BOM' = "\xFEFF"
+    utf8BOM   = "\xEF\xBB\xBF"
 
 retrieveToken :: AlexInput -> Int -> Text
 retrieveToken input len = InputStack.take len $ aiInput input

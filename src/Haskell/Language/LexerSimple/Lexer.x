@@ -8,7 +8,8 @@
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-{-# OPTIONS_GHC -O2 #-}
+{-# OPTIONS_GHC -O2    #-}
+{-# OPTIONS_GHC -Wwarn #-}
 
 module Haskell.Language.LexerSimple.Lexer (tokenize) where
 

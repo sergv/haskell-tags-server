@@ -11,6 +11,8 @@
 -- monomorphism restriction breaks its inference.
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
+{-# OPTIONS_GHC -Wwarn #-}
+
 module Haskell.Language.Lexer.Lexer (tokenizeM) where
 
 import Control.Monad
