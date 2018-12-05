@@ -23,7 +23,7 @@ module Haskell.Language.Server.Tags.Types
   , Request(..)
   , UserRequest(..)
   , QueryRequest(..)
-  , DirRequest(..)
+  , Namespace(..)
   , FSNotifyEvent(..)
   , QueryResponse(..)
   , RequestHandler
@@ -78,8 +78,7 @@ instance Pretty (Request resp) where
 -- | Types of user requests that can be handled.
 data UserRequest (resp :: Type) where
     -- | Request to find a name in module identified by file path.
-  QueryReq :: !(FullPath 'File) -> !QueryRequest -> UserRequest QueryResponse
-  DirReq   :: !DirRequest       -> UserRequest ()
+  QueryReq :: !(FullPath 'File) -> !QueryRequest -> !Namespace -> UserRequest QueryResponse
 
 deriving instance Eq   (UserRequest resp)
 deriving instance Ord  (UserRequest resp)
@@ -87,24 +86,33 @@ deriving instance Show (UserRequest resp)
 
 instance Pretty (UserRequest resp) where
   pretty = \case
-    QueryReq file req -> ppDictHeader "QueryReq"
-      [ "file" --> file
-      , "req"  --> req
-      ]
-    DirReq req -> ppDictHeader "DirReq"
-      [ "req" --> req
+    QueryReq file req ns -> ppDictHeader "QueryReq"
+      [ "file"      --> file
+      , "req"       --> req
+      , "namespace" --> ns
       ]
 
--- | Query server for some information.
-data DirRequest =
-    AddShallowRecursiveIgnored
-      !(Set (FullPath 'Dir)) -- ^ Set of extra watched shallow directories. Subdirectories will not be watched.
-      !(Set (FullPath 'Dir)) -- ^ Set extra of watched recursive directories. -- The directory and all its subdirectories will be watched.
-      !(Set Text)
-  deriving (Eq, Ord, Show, Generic)
+-- | Set of directories
+data Namespace = Namespace
+  {
+    -- | Set of extra watched shallow directories. Subdirectories will not be watched.
+    nsShallowDirs   :: !(Set (FullPath 'Dir))
+    -- | Set extra of watched recursive directories.
+    -- The directory and all its subdirectories will be watched.
+  , nsRecursiveDirs :: !(Set (FullPath 'Dir))
+  , nsIgnoredGlobs  :: !(Set Text)
+  } deriving (Eq, Ord, Show, Generic)
 
-instance Pretty DirRequest where
+instance Pretty Namespace where
   pretty = ppGeneric
+
+instance Semigroup Namespace where
+  (<>) (Namespace a b c) (Namespace a' b' c') =
+    Namespace (a <> a') (b <> b') (c <> c')
+
+instance Monoid Namespace where
+  mempty = Namespace mempty mempty mempty
+  mappend = (<>)
 
 data NameResolutionScope =
     ScopeCurrentModule
@@ -187,7 +195,9 @@ data TagsServerState = TagsServerState
   , tssLoadsInProgress :: !(Map ImportKey (NonEmptyMap (FullPath 'File) UnresolvedModule))
   , tssUnloadedFiles   :: !(Map ImportKey (NonEmpty UnresolvedModule))
   , tssKnownFiles      :: !(Map (FullPath 'File) ImportKey)
+    -- Namespace currently loaded
+  , tssNamespace       :: !Namespace
   } deriving (Eq, Ord, Show)
 
 emptyTagsServerState :: TagsServerState
-emptyTagsServerState = TagsServerState mempty mempty mempty mempty
+emptyTagsServerState = TagsServerState mempty mempty mempty mempty mempty

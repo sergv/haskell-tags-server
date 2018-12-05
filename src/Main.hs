@@ -32,7 +32,7 @@ import Control.Monad.Logging
 import Control.Monad.Logging.Simple
 import Data.ErrorMessage
 import Data.Path (mkFullPath)
-import Haskell.Language.Server.BERT
+import Haskell.Language.Server.Sexp
 import Haskell.Language.Server.Tags
 import Haskell.Language.Server.Tags.Types (NameResolutionStrictness(..))
 
@@ -111,9 +111,8 @@ main = do
     case tagsServer of
       Left err         -> liftIO $ putDocLn $ pretty err
       Right tagsServer' -> do
-        bertServer <- runBertServer cfgPort $ tsRequestHandler tagsServer'
-        waitForBertServerStart bertServer
-        -- Wait for tag server to finish
+        sexpServer <- runSexpServer cfgPort $ tsRequestHandler tagsServer'
+        waitForSexpServerStart sexpServer
         void $ waitForTagsServerFinish tagsServer'
 
 ensureDirExists :: FilePath -> IO ()

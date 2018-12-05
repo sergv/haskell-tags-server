@@ -25,6 +25,7 @@ import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.Except.Ext
 import Control.Monad.Trans.Control
+
 import Data.Foldable (toList)
 import Data.Text.Prettyprint.Doc (Doc)
 import Data.Void (Void)
@@ -34,13 +35,13 @@ import Control.Monad.Filesystem (MonadFS, SearchCfg)
 import Control.Monad.Logging
 import Control.Monad.Logging.Simple
 import Data.ErrorMessage
-import Haskell.Language.Server.BERT
+import Haskell.Language.Server.Sexp
 import Haskell.Language.Server.Tags
 
 data LogCollectingServer = LogCollectingServer
   { lcsLogs       :: MVar [Doc Void]
   , lcsTagsServer :: TagsServer
-  , lcsBertServer :: BertServer
+  , lcsSexpServer :: SexpServer
   }
 
 mkLogCollectingServer
@@ -51,26 +52,26 @@ mkLogCollectingServer searchDirs conf port = do
   let addLogEntry x = modifyMVar_ logOutputVar (pure . (x :))
   tagsServer <- runSimpleLoggerT (Just (Custom (liftBase . addLogEntry))) VerboseDebug
     $ startTagsServer searchDirs conf
-  bertServer <- liftBase
+  sexpServer <- liftBase
     $ runSimpleLoggerT (Just (Custom addLogEntry)) VerboseDebug
-    $ runBertServer port $ tsRequestHandler tagsServer
+    $ runSexpServer port $ tsRequestHandler tagsServer
   pure LogCollectingServer
     { lcsLogs       = logOutputVar
     , lcsTagsServer = tagsServer
-    , lcsBertServer = bertServer
+    , lcsSexpServer = sexpServer
     }
 
 stopLogCollectingServer
   :: (WithCallStack, MonadBase IO m)
   => LogCollectingServer -> m ()
-stopLogCollectingServer LogCollectingServer{lcsTagsServer, lcsBertServer} = do
-  stopBertServer lcsBertServer
+stopLogCollectingServer LogCollectingServer{lcsTagsServer, lcsSexpServer} = do
+  stopSexpServer lcsSexpServer
   stopTagsServer lcsTagsServer
 
 -- | Block current thread until server will be started and will listen on
 -- its port.
 waitUntilStart :: MonadBase IO m => LogCollectingServer -> m ()
-waitUntilStart = waitForBertServerStart . lcsBertServer
+waitUntilStart = waitForSexpServerStart . lcsSexpServer
 
 getLogs :: LogCollectingServer -> IO [Doc Void]
 getLogs serv = reverse . toList <$> readMVar (lcsLogs serv)

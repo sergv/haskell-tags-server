@@ -98,23 +98,26 @@ preloadFiles
   -> TagsServerConf
   -> TagsServerState
   -> m TagsServerState
-preloadFiles searchCfg conf initState = do
+preloadFiles SearchCfg{scShallowPaths, scRecursivePaths, scIgnoredDirs, scIgnoredGlobs} _ s
+  | S.null scShallowPaths && S.null scRecursivePaths && S.null scIgnoredDirs && S.null scIgnoredGlobs
+  = pure s
+preloadFiles searchCfg conf s = do
   ignoredGlobsRE <- searchCfgIgnoredRE searchCfg
   knownFiles     <- MonadFS.findRec searchCfg ignoredGlobsRE (loadMod conf)
-  let initState' = initState
+  let s' = s
         { tssKnownFiles =
           M.fromList (concatMap (\(impKey, fs) -> map (,impKey) fs) $ M.toList $ toList . NEMap.keysNE <$> knownFiles) <>
-          tssKnownFiles initState
+          tssKnownFiles s
         }
   if tsconfEagerTagging conf
   then do
     logInfo "[preloadFiles] collecting tags eagerly..."
-    initState'' <- loadAllFilesIntoState (fold1 . NEMap.elemsNE <$> knownFiles) conf initState'
+    s'' <- loadAllFilesIntoState (fold1 . NEMap.elemsNE <$> knownFiles) conf s'
     logInfo "[preloadFiles] collecting tags eagerly... OK"
-    pure initState''
-  else pure initState'
+    pure s''
+  else pure s'
     { tssUnloadedFiles =
-      M.unionWith (<>) (fold1 . NEMap.elemsNE <$> knownFiles) (tssUnloadedFiles initState)
+      M.unionWith (<>) (fold1 . NEMap.elemsNE <$> knownFiles) (tssUnloadedFiles s)
     }
 
 watchDirs
@@ -170,10 +173,6 @@ startTagsServer searchCfg conf = do
   let tsRequestHandler :: RequestHandler
       tsRequestHandler = \case
         req@QueryReq{} -> do
-          respPromise <- Promise.newPromise
-          writeChan reqChan (SomeRequest (UserReq req) respPromise)
-          pure respPromise
-        req@DirReq{} -> do
           respPromise <- Promise.newPromise
           writeChan reqChan (SomeRequest (UserReq req) respPromise)
           pure respPromise
@@ -235,8 +234,18 @@ startTagsServer searchCfg conf = do
               -- (request, responsePromise) <- liftBase $ readChan reqChan
               logInfo $ "[startTagsServer.handleReq] request:" ## pretty request
               case request of
-                QueryReq filename request' -> do
-                  (response, serverState') <- runSearchT conf serverState $
+                QueryReq filename request' ns -> do
+                  let loadedNS   = tssNamespace serverState
+                      searchCfg' = SearchCfg
+                        { scShallowPaths   = nsShallowDirs   ns S.\\ nsShallowDirs loadedNS
+                        , scRecursivePaths = nsRecursiveDirs ns S.\\ nsRecursiveDirs loadedNS
+                        , scIgnoredDirs    = scIgnoredDirs searchCfg
+                        , scIgnoredGlobs   = nsIgnoredGlobs  ns S.\\ nsIgnoredGlobs loadedNS
+                        }
+                  serverState' <- preloadFiles searchCfg' conf serverState
+                  let serverState'' = serverState' { tssNamespace = tssNamespace serverState' <> ns }
+                  watchDirs conf manager reqChan searchCfg'
+                  (response, serverState''') <- runSearchT conf serverState'' $
                     case request' of
                       FindSymbol scope symbol -> do
                         symbols <- findSymbol id scope filename symbol
@@ -250,18 +259,7 @@ startTagsServer searchCfg conf = do
                           s:ss -> Found $ s :| ss
                   logInfo $ "[startTagsServer.handleReq] response:" ## either pretty pretty response
                   Promise.putValue respPromise response
-                  pure serverState'
-                DirReq (AddShallowRecursiveIgnored scShallowPaths scRecursivePaths scIgnoredGlobs) -> do
-                  let searchCfg' = SearchCfg
-                        { scShallowPaths
-                        , scRecursivePaths
-                        , scIgnoredDirs = scIgnoredDirs searchCfg
-                        , scIgnoredGlobs
-                        }
-                  serverState' <- preloadFiles searchCfg' conf serverState
-                  watchDirs conf manager reqChan searchCfg'
-                  Promise.putValue respPromise (Right ())
-                  pure serverState'
+                  pure serverState'''
 
 -- todo: handle header files here
 classifyPath :: TakeExtension a => TagsServerConf -> a -> Maybe ImportTarget

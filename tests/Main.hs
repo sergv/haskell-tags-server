@@ -8,6 +8,7 @@
 
 module Main (main) where
 
+import Network.Socket (withSocketsDo)
 import System.IO
 import Test.Tasty
 
@@ -19,7 +20,7 @@ import qualified Haskell.Language.Server.Tags.TypesTests as TypesTests
 import qualified ServerTests
 
 main :: IO ()
-main = do
+main = withSocketsDo $ do
   hSetEncoding stdout utf8
   hSetEncoding stderr utf8
   let tests = testGroup "Tests"
