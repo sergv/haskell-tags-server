@@ -41,7 +41,6 @@ library
     async,
     attoparsec >= 0.13.1.0,
     base >= 4,
-    bert >= 1.2.2.5,
     bimap,
     bytestring,
     containers,
@@ -69,8 +68,10 @@ library
     profunctors >= 5.2,
     regex-tdfa >= 1.2.2,
     regex-tdfa-text,
+    scientific,
     semigroupoids,
     semigroups,
+    sexp-grammar,
     streaming-commons,
     stm,
     stm-chans,
@@ -128,7 +129,7 @@ library
     Haskell.Language.Lexer.RulePredicate
     Haskell.Language.Lexer.State
 
-    Haskell.Language.Server.BERT
+    Haskell.Language.Server.Sexp
     Haskell.Language.Server.Tags
     Haskell.Language.Server.Tags.AnalyzeHeader
     Haskell.Language.Server.Tags.Types
@@ -168,7 +169,6 @@ executable haskell-tags-server
     src/Main.hs
   build-depends:
     base >=4,
-    bert,
     containers,
     directory,
     filepath,
@@ -213,14 +213,15 @@ test-suite test-haskell-tags-server
     Haskell.Language.Server.Tags.TypesTests
     PortPool
     ServerTests
+    ServerTests.Data
     ServerTests.LogCollectingServer
     TestUtils
   build-depends:
     QuickCheck,
     base,
-    bert,
     bytestring,
     containers,
+    deepseq,
     directory,
     dlist,
     exceptions,
@@ -233,7 +234,9 @@ test-suite test-haskell-tags-server
     raw-strings-qq,
     regex-tdfa,
     regex-tdfa-text,
+    scientific,
     semigroups,
+    sexp-grammar,
     stm,
     haskell-tags-server,
     tasty >= 0.7,
