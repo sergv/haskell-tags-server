@@ -98,8 +98,8 @@ preloadFiles
   -> TagsServerConf
   -> TagsServerState
   -> m TagsServerState
-preloadFiles SearchCfg{scShallowPaths, scRecursivePaths, scIgnoredDirs, scIgnoredGlobs} _ s
-  | S.null scShallowPaths && S.null scRecursivePaths && S.null scIgnoredDirs && S.null scIgnoredGlobs
+preloadFiles SearchCfg{scShallowPaths, scRecursivePaths} _ s
+  | S.null scShallowPaths && S.null scRecursivePaths
   = pure s
 preloadFiles searchCfg conf s = do
   ignoredGlobsRE <- searchCfgIgnoredRE searchCfg
