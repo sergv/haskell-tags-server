@@ -42,6 +42,7 @@ library
     attoparsec >= 0.13.1.0,
     base >= 4,
     bimap,
+    binary,
     bytestring,
     containers,
     deepseq,
@@ -81,7 +82,8 @@ library
     transformers-base,
     unordered-containers,
     unsafe,
-    utf8-string >= 0.3
+    utf8-string >= 0.3,
+    zlib
   exposed-modules:
     Control.Arrow.Ext
     Control.Monad.Ext
@@ -93,6 +95,7 @@ library
     Control.Monad.Par.Combinator.Ext
     Control.Parallel.Strategies.Ext
 
+    Data.Binary.Ext
     Data.CompiledRegex
     Data.Condition
     Data.ErrorMessage

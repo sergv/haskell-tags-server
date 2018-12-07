@@ -56,6 +56,7 @@ module Data.Path
   , AddExtension(..)
   , DropExtensions(..)
   , TakeFileName(..)
+  , TakeDirectory(..)
   , TakeExtension(..)
   , MakeRelative(..)
   -- * Base path
@@ -285,6 +286,15 @@ instance TakeFileName (FullPath 'File) 'File
 instance TakeFileName (FullPath 'Dir) 'Dir
 instance TakeFileName PathFragment 'File
 
+class TakeDirectory a where
+  takeDirectory :: a -> FullPath 'Dir
+  {-# INLINE takeDirectory #-}
+  default takeDirectory :: Coercible a Text => a -> FullPath 'Dir
+  takeDirectory = coerce getDirectory
+
+instance TakeDirectory (FullPath a)
+instance TakeDirectory PathFragment
+
 class TakeExtension a where
   takeExtension :: a -> Extension
   {-# INLINE takeExtension #-}
@@ -314,6 +324,12 @@ instance MakeRelative (FullPath 'Dir) (FullPath a) PathFragment
 {-# INLINE getFileName #-}
 getFileName :: Text -> Text
 getFileName = T.pack . FilePath.takeFileName . T.unpack
+
+{-# INLINE getDirectory #-}
+getDirectory :: Text -> Text
+getDirectory =
+  -- T.pack . FilePath.takeDirectory . T.unpack
+  T.dropEnd 1 . T.dropWhileEnd (not . FilePath.isPathSeparator)
 
 {-# INLINE getExtension #-}
 getExtension :: Text -> Text

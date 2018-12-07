@@ -31,19 +31,23 @@ module Haskell.Language.Server.Tags
   , emptyTagsServerState
   ) where
 
+import Codec.Compression.GZip
 import Control.Concurrent
 import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.Except.Ext
+import Control.Monad.State
 import Control.Monad.Trans.Control
-
+import Data.Binary
+import qualified Data.ByteString.Lazy as BSL
 import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map.Strict as M
 import Data.Semigroup.Foldable
 import qualified Data.Set as S
 import qualified Data.Text as T
-import Data.Text.Prettyprint.Doc.Ext (Pretty(..), (##))
+import Data.Text.Prettyprint.Doc.Ext (Pretty(..), (##), (<+>))
+import qualified System.Directory as Directory
 import qualified System.FSNotify as FSNotify
 
 import qualified Data.Promise as Promise
@@ -56,7 +60,7 @@ import Data.ErrorMessage
 import Data.Map.NonEmpty (NonEmptyMap)
 import qualified Data.Map.NonEmpty as NEMap
 import Data.Path
-import Data.Symbols (fileNameToModuleName)
+import Data.Symbols (fileNameToModuleName, resolvedSymbolFile)
 import Haskell.Language.Server.Tags.LoadFiles
 import Haskell.Language.Server.Tags.LoadModule
 import Haskell.Language.Server.Tags.Search
@@ -165,14 +169,29 @@ startTagsServer
   -> m TagsServer
 startTagsServer searchCfg conf = do
   tsFileWatch   <- liftBase FSNotify.startManager
-  initState     <- preloadFiles searchCfg conf emptyTagsServerState
+  initState     <- case tsconfSerialisedState conf of
+    Nothing   -> pure emptyTagsServerState
+    Just file -> do
+      exists <- liftBase $ Directory.doesFileExist file
+      if exists
+      then do
+        contents <- liftBase $ BSL.readFile file
+        case decodeOrFail $ decompress contents of
+          Left (_, _, msg) -> throwErrorWithCallStack $ "Failed to read server state from" <+> pretty file ## pretty msg
+          Right (_, _, x)  -> pure x
+      else pure emptyTagsServerState
+  initState'    <- preloadFiles searchCfg conf initState
   reqChan       <- liftBase newChan
   tsFinishState <- liftBase newEmptyMVar
-  tsThreadId    <- liftBaseDiscard forkIO $ handleRequests tsFinishState reqChan tsFileWatch initState
+  tsThreadId    <- liftBaseDiscard forkIO $ handleRequests tsFinishState reqChan tsFileWatch initState'
   watchDirs conf tsFileWatch reqChan searchCfg
   let tsRequestHandler :: RequestHandler
       tsRequestHandler = \case
         req@QueryReq{} -> do
+          respPromise <- Promise.newPromise
+          writeChan reqChan (SomeRequest (UserReq req) respPromise)
+          pure respPromise
+        req@FinishReq{} -> do
           respPromise <- Promise.newPromise
           writeChan reqChan (SomeRequest (UserReq req) respPromise)
           pure respPromise
@@ -191,75 +210,95 @@ startTagsServer searchCfg conf = do
       -> m ()
     handleRequests doneLock reqChan manager = go
       where
-        go s = go =<< (handleReq s `onException` liftBase (putMVar doneLock s))
-        handleReq
-          :: TagsServerState
-          -> m TagsServerState
-        handleReq serverState = do
+        go :: TagsServerState -> m ()
+        go s = do
           req <- liftBase $ readChan reqChan
-          case req of
-            SomeRequest (FSNotifyReq event) () -> do
-              logInfo $ "[startTagsServer.handleReq] file notification event:" ## pretty event
-              case event of
-                FSAdded path -> do
-                  mmods <- loadMod conf path
-                  pure $ case mmods of
-                    Nothing             -> serverState
-                    Just (impKey, mods) -> serverState
-                      { tssUnloadedFiles =
-                        M.insertWith (<>) impKey (fold1 $ NEMap.elemsNE mods) $ tssUnloadedFiles serverState
-                      , tssKnownFiles    =
-                        M.insert path impKey $ tssKnownFiles serverState
+          s'  <- handleReq req s `onException` serialiseState s
+          case s' of
+            Nothing  -> pure ()
+            Just s'' -> go s''
+        serialiseState :: TagsServerState -> m ()
+        serialiseState s = do
+          case tsconfSerialisedState conf of
+            Nothing   -> pure ()
+            Just dest -> do
+              logInfo $ "[startTagsServer.handleReq] storing state in" <+> pretty dest
+              liftBase $ BSL.writeFile dest $ compressWith params $ encode s
+              where
+                params = defaultCompressParams
+                  { compressLevel        = bestCompression
+                  }
+          liftBase $ putMVar doneLock s
+        handleReq
+          :: SomeRequest
+          -> TagsServerState
+          -> m (Maybe TagsServerState)
+        handleReq req serverState = case req of
+          SomeRequest (FSNotifyReq event) () -> do
+            logInfo $ "[startTagsServer.handleReq] file notification event:" ## pretty event
+            fmap Just $ case event of
+              FSAdded path -> do
+                mmods <- loadMod conf path
+                pure $ case mmods of
+                  Nothing             -> serverState
+                  Just (impKey, mods) -> serverState
+                    { tssUnloadedFiles =
+                      M.insertWith (<>) impKey (fold1 $ NEMap.elemsNE mods) $ tssUnloadedFiles serverState
+                    , tssKnownFiles    =
+                      M.insert path impKey $ tssKnownFiles serverState
+                    }
+              FSRemoved path ->
+                pure $ case M.updateLookupWithKey (\_ _ -> Nothing) path $ tssKnownFiles serverState of
+                  (Nothing,     _)              -> serverState
+                  (Just target, tssKnownFiles') -> serverState
+                    { tssLoadedModules =
+                      M.delete target $ tssLoadedModules serverState
+                    , tssUnloadedFiles =
+                      M.delete target $ tssUnloadedFiles serverState
+                    , tssKnownFiles    = tssKnownFiles'
+                    }
+              FSModified path ->
+                pure $ case M.lookup path $ tssKnownFiles serverState of
+                  Nothing     -> serverState
+                  Just impKey -> serverState
+                    { tssLoadedModules =
+                      M.adjust (fmap (\m -> m { modIsDirty = True })) impKey $ tssLoadedModules serverState
+                    , tssUnloadedFiles =
+                      M.adjust (fmap (\m -> m { modIsDirty = True })) impKey $ tssUnloadedFiles serverState
+                    }
+          SomeRequest (UserReq request) respPromise -> do
+            -- (request, responsePromise) <- liftBase $ readChan reqChan
+            logInfo $ "[startTagsServer.handleReq] request:" ## pretty request
+            case request of
+              FinishReq -> do
+                serialiseState serverState
+                Promise.putValue respPromise (Right ())
+                pure Nothing
+              QueryReq filename request' ns -> do
+                let loadedNS   = tssNamespace serverState
+                    searchCfg' = SearchCfg
+                      { scShallowPaths   = nsShallowDirs   ns S.\\ nsShallowDirs loadedNS
+                      , scRecursivePaths = nsRecursiveDirs ns S.\\ nsRecursiveDirs loadedNS
+                      , scIgnoredDirs    = scIgnoredDirs searchCfg
+                      , scIgnoredGlobs   = nsIgnoredGlobs  ns S.\\ nsIgnoredGlobs loadedNS
                       }
-                FSRemoved path ->
-                  pure $ case M.updateLookupWithKey (\_ _ -> Nothing) path $ tssKnownFiles serverState of
-                    (Nothing,     _)              -> serverState
-                    (Just target, tssKnownFiles') -> serverState
-                      { tssLoadedModules =
-                        M.delete target $ tssLoadedModules serverState
-                      , tssUnloadedFiles =
-                        M.delete target $ tssUnloadedFiles serverState
-                      , tssKnownFiles    = tssKnownFiles'
-                      }
-                FSModified path ->
-                  pure $ case M.lookup path $ tssKnownFiles serverState of
-                    Nothing     -> serverState
-                    Just impKey -> serverState
-                      { tssLoadedModules =
-                        M.adjust (fmap (\m -> m { modIsDirty = True })) impKey $ tssLoadedModules serverState
-                      , tssUnloadedFiles =
-                        M.adjust (fmap (\m -> m { modIsDirty = True })) impKey $ tssUnloadedFiles serverState
-                      }
-            SomeRequest (UserReq request) respPromise -> do
-              -- (request, responsePromise) <- liftBase $ readChan reqChan
-              logInfo $ "[startTagsServer.handleReq] request:" ## pretty request
-              case request of
-                QueryReq filename request' ns -> do
-                  let loadedNS   = tssNamespace serverState
-                      searchCfg' = SearchCfg
-                        { scShallowPaths   = nsShallowDirs   ns S.\\ nsShallowDirs loadedNS
-                        , scRecursivePaths = nsRecursiveDirs ns S.\\ nsRecursiveDirs loadedNS
-                        , scIgnoredDirs    = scIgnoredDirs searchCfg
-                        , scIgnoredGlobs   = nsIgnoredGlobs  ns S.\\ nsIgnoredGlobs loadedNS
-                        }
-                  serverState' <- preloadFiles searchCfg' conf serverState
-                  let serverState'' = serverState' { tssNamespace = tssNamespace serverState' <> ns }
-                  watchDirs conf manager reqChan searchCfg'
-                  (response, serverState''') <- runSearchT conf serverState'' $
-                    case request' of
-                      FindSymbol scope symbol -> do
-                        symbols <- findSymbol id scope filename symbol
-                        pure $ case toList symbols of
-                          []   -> NotFound
-                          s:ss -> Found $ s :| ss
-                      FindSymbolByRegex scope regexp -> do
-                        symbols <- findSymbolByRegexp id scope filename regexp
-                        pure $ case toList symbols of
-                          []   -> NotFound
-                          s:ss -> Found $ s :| ss
-                  logInfo $ "[startTagsServer.handleReq] response:" ## either pretty pretty response
-                  Promise.putValue respPromise response
-                  pure serverState'''
+                serverState' <- preloadFiles searchCfg' conf serverState
+                let serverState'' = serverState' { tssNamespace = tssNamespace serverState' <> ns }
+                watchDirs conf manager reqChan searchCfg'
+                (response, serverState''') <- runSearchT conf serverState'' $ do
+                  symbols <- case request' of
+                    FindSymbol scope symbol ->
+                      findSymbol id scope filename symbol
+                    FindSymbolByRegex scope regexp ->
+                      findSymbolByRegexp id scope filename regexp
+                  ns' <- gets tssNamespace
+                  logInfo $ "[startTagsServer.handleReq] effective namespace:" ## pretty ns'
+                  pure $ case filter (isPathWithinNamespace ns' . resolvedSymbolFile) $ toList symbols of
+                    []   -> NotFound
+                    s:ss -> Found $ s :| ss
+                logInfo $ "[startTagsServer.handleReq] response:" ## either pretty pretty response
+                Promise.putValue respPromise response
+                pure $ Just serverState'''
 
 -- todo: handle header files here
 classifyPath :: TakeExtension a => TagsServerConf -> a -> Maybe ImportTarget

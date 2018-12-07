@@ -140,13 +140,29 @@ runSexpServer port reqHandler = do
                 err' :: T.Text
                 err' = TL.toStrict $ displayDoc $ pretty err
             Right x  -> ParenList [Symbol "ok", x]
+        ParenList [Symbol func, Symbol "nil"] -> do
+          res <- runErrorExceptT $ go' func []
+          pure $ case res of
+            Left err -> ParenList [Symbol "error", String err']
+              where
+                err' :: T.Text
+                err' = TL.toStrict $ displayDoc $ pretty err
+            Right x  -> ParenList [Symbol "ok", x]
         invalid -> pure $ ParenList
           [ Symbol "error"
-          , String $ "Call argument must be of the form (function (arg0 arg1 ... argN)), but got: " <> T.pack (show invalid)
+          , String $ "Call argument must be of the form (function (arg0 arg1 ... argN)) or (function nil), but got: " <> T.pack (show invalid)
           ]
     go'
       :: WithCallStack
       => T.Text -> [Sexp] -> ErrorExceptT ErrorMessage m Sexp
+    go' "finish" args =
+      case args of
+        [] -> do
+          response <- liftBase $ Promise.getPromisedValue =<< reqHandler FinishReq
+          either throwError (pure . (\() -> Symbol "nil")) response
+        _ ->
+          throwErrorWithCallStack $
+            "Expected no arguments but got:" ## ppShow args
     go' "find" args =
       case args of
         [String filename, String symbol, scope, ns] -> do

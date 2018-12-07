@@ -46,6 +46,7 @@ data ProgramConfig = ProgramConfig
   , cfgEagerTagging      :: Bool
   , cfgNameResolution    :: NameResolutionStrictness
   , cfgDebugVerbosity    :: Severity
+  , cfgStateFile         :: Maybe FilePath
   } deriving (Eq, Ord, Show)
 
 optsParser :: Parser ProgramConfig
@@ -53,30 +54,35 @@ optsParser = ProgramConfig
   <$> many
         (strOption
            (long "dir" <>
-            help "add directory with haskell files to index" <>
-            metavar "DIR"))
+            metavar "DIR" <>
+            help "Add directory with haskell files to index"))
   <*> many
         (strOption
            (long "recursive" <>
-            help "recursively add directory tree with haskell files to index" <>
-            metavar "DIR"))
+            metavar "DIR" <>
+            help "Recursively add directory tree with haskell files to index"))
   <*> option (fmap fromIntegral auto)
         (short 'p' <>
          long "port" <>
-         help "port to listen to" <>
          value defaultPort <>
-         metavar "PORT")
+         metavar "PORT" <>
+         help "Port to listen to")
   <*> switch
         (long "eager-tagging" <>
-         help "whether to load all tags at application start")
+         help "Whether to load all tags at application start")
   <*> flag NameResolutionLax NameResolutionStrict
         (long "strict" <>
-         help "Resolve names strictly forbidding any situations like exported name not being defined in a module.")
+         help "Resolve names strictly forbidding any situations like exported name not being defined in a module")
   <*> option (eitherReader readSeverity)
         (long "verbosity" <>
          value Error <>
          showDefaultWith showSeverity <>
-         help ("Debug verbosity. Known values: " ++ L.intercalate ", " knownSeverities ++ "."))
+         help ("Debug verbosity. Known values: " ++ L.intercalate ", " knownSeverities))
+  <*> optional
+        (strOption
+          (long "serialised-state" <>
+           metavar "FILE" <>
+           help "Store state between runs in this file"))
 
 progInfo :: ParserInfo ProgramConfig
 progInfo = info
@@ -85,7 +91,7 @@ progInfo = info
 
 main :: IO ()
 main = do
-  ProgramConfig{cfgSourceDirectories, cfgDirTrees, cfgPort, cfgEagerTagging, cfgNameResolution, cfgDebugVerbosity} <- execParser progInfo
+  ProgramConfig{cfgSourceDirectories, cfgDirTrees, cfgPort, cfgEagerTagging, cfgNameResolution, cfgDebugVerbosity, cfgStateFile} <- execParser progInfo
   -- validate that specified directories actually exist
   for_ cfgSourceDirectories ensureDirExists
   for_ cfgDirTrees ensureDirExists
@@ -101,8 +107,9 @@ main = do
             , scIgnoredGlobs   = MonadFS.defaultIgnoredGlobs
             }
           conf = defaultTagsServerConf
-            { tsconfEagerTagging   = cfgEagerTagging
-            , tsconfNameResolution = cfgNameResolution
+            { tsconfEagerTagging    = cfgEagerTagging
+            , tsconfNameResolution  = cfgNameResolution
+            , tsconfSerialisedState = cfgStateFile
             }
       logDebug $ ppDictHeader "Staring server with search dirs"
         [ "Search conf" --> searchDirs
