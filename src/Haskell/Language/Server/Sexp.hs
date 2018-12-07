@@ -194,6 +194,7 @@ decodeNamespace = \case
     nsRecursiveDirs <- fmap S.fromList . traverse (mkFullPath <=< decodeString) =<< decodeList recursiveDirs
     nsIgnoredGlobs  <- fmap S.fromList . traverse decodeString                  =<< decodeList ignoredGlobs
     pure Namespace{..}
+  Symbol "nil" -> pure mempty
   invalid ->
     throwErrorWithCallStack $
       "Invalid namespace:" ## ppShow invalid
