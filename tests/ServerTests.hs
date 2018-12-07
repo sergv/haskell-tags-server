@@ -185,16 +185,21 @@ mkFindSymbolTest pool ServerTest{stTestName, stNameResolutionStrictness, stWorki
     result <- runErrorExceptT $ do
       (searchDirs, conf) <- mkTestsConfig stNameResolutionStrictness stWorkingDirectory
       withConnection pool searchDirs conf $ \conn -> do
-        let dir = case stWorkingDirectory of
+        let dir :: PathFragment
+            dir = case stWorkingDirectory of
               ShallowDir   x           -> testDataDir </> x
               RecursiveDir x           -> testDataDir </> x
               RecursiveWithIgnored x _ -> testDataDir </> x
+            dir' = unPathFragment dir
+            ns = case stWorkingDirectory of
+              ShallowDir   _            -> ParenList [ParenList [String dir'], ParenList [], ParenList []]
+              RecursiveDir _            -> ParenList [ParenList [], ParenList [String dir'], ParenList []]
+              RecursiveWithIgnored _ xs -> ParenList [ParenList [], ParenList [String dir'], ParenList (map String xs)]
             path = unPathFragment $ dir </> stFile
-            emptyNamespace = ParenList [ParenList [], ParenList [], ParenList []]
         r <- liftBase $ do
           let s = scSocket conn
           Socket.BSL.sendAll s $ Sexp.encode $
-            ParenList [Symbol "find", ParenList [String path, String stSymbol, Symbol "local", emptyNamespace]]
+            ParenList [Symbol "find", ParenList [String path, String stSymbol, Symbol "local", ns]]
           Socket.shutdown s Socket.ShutdownSend
           r' <- Sexp.decode <$> getSocketContents s
           evaluate $ rnf r'
