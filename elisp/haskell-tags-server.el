@@ -115,7 +115,6 @@ reply) that should process the reply when it arrives.")
           (haskell-tags-server--call func-name
                                      args
                                      (lambda (res)
-                                       (message "haskell-tags-server--blocking-call: callback called")
                                        (setf done t)
                                        (setcar result res)))))
     (while (and (not done)
@@ -333,8 +332,6 @@ uppercase or lowercase names)."
              (line-end-position)
              t)
         (goto-char (match-beginning 0))))
-    ;; remove annoying "Mark set" message
-    (message "")
 
     (push prev-loc haskell-tags-server--previous-homes)
     (setf haskell-tags-server--selected-loc
@@ -519,7 +516,7 @@ buffer if no such buffer exists."
               (if use-regexp? "regexp" "identifier")
               search-query))
     (`(error ,data)
-     (error "haskell-tags-server error: %s" ,data))
+     (error "haskell-tags-server error: %s" data))
     (unexpected
      (error "Unexpected reply from haskell-tags-server: %s" unexpected))))
 
