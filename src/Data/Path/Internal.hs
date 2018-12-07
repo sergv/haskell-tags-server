@@ -25,6 +25,7 @@ module Data.Path.Internal
   ) where
 
 import Control.DeepSeq
+import Data.Binary
 import Data.Hashable
 import Data.String
 import Data.Text (Text)
@@ -43,7 +44,7 @@ data FileType = Dir | File
 -- but must be created in derivatives of IO monad.
 -- Invariant: does not end with \/.
 newtype FullPath (typ :: FileType) = FullPath { unFullPath :: Text }
-  deriving (Show, Pretty, IsString, NFData, Hashable)
+  deriving (Show, Pretty, IsString, NFData, Hashable, Binary)
 
 #ifdef WINDOWS
 instance Eq (FullPath a) where
@@ -61,7 +62,7 @@ deriving instance Ord (FullPath a)
 -- | Path fragment, possibly with some directories but without etxension.
 -- Invariant: does not start with \/, does not end with \/.
 newtype PathFragment = PathFragment { unPathFragment :: Text }
-  deriving (Show, Pretty, IsString, NFData, Hashable)
+  deriving (Show, Pretty, IsString, NFData, Hashable, Binary)
 
 #ifdef WINDOWS
 instance Eq PathFragment where
@@ -78,7 +79,7 @@ deriving instance Ord PathFragment
 
 -- | E.g. “.hs”.
 newtype Extension = Extension { unExtension :: Text }
-  deriving (Show, IsString, NFData, Hashable)
+  deriving (Show, IsString, NFData, Hashable, Binary)
 
 #ifdef WINDOWS
 instance Eq Extension where
@@ -95,7 +96,7 @@ deriving instance Ord Extension
 
 -- | File basename without directory but with extension.
 newtype BaseName (typ :: FileType) = BaseName { unBaseName :: PathFragment }
-  deriving (Show, Pretty, IsString, NFData, Hashable)
+  deriving (Show, Pretty, IsString, NFData, Hashable, Binary)
 
 #ifdef WINDOWS
 instance Eq (BaseName typ) where

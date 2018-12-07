@@ -24,6 +24,7 @@ module Haskell.Language.Server.Tags.Types
   , UserRequest(..)
   , QueryRequest(..)
   , Namespace(..)
+  , isPathWithinNamespace
   , FSNotifyEvent(..)
   , QueryResponse(..)
   , RequestHandler
@@ -36,19 +37,21 @@ module Haskell.Language.Server.Tags.Types
   , emptyTagsServerState
   ) where
 
+import Data.Binary
 import Data.Kind
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
 import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc.Ext
 import GHC.Generics (Generic)
 
 import Data.CompiledRegex
 import Data.ErrorMessage
 import Data.Map.NonEmpty (NonEmptyMap)
-import Data.Path (FileType(..), FullPath, Extension)
+import Data.Path
 import Data.Promise (Promise)
 import Data.Symbols
 import Haskell.Language.Server.Tags.Types.Imports
@@ -58,7 +61,7 @@ data SomeRequest = forall resp. SomeRequest !(Request resp) !resp
 
 -- | Types of user requests that can be handled.
 data Request (resp :: Type) where
-    -- | Request to find a name in module identified by file path.
+  -- | Request to find a name in module identified by file path.
   UserReq     :: !(UserRequest resp) -> Request (Promise (Either ErrorMessage resp))
   FSNotifyReq :: !FSNotifyEvent      -> Request ()
 
@@ -78,7 +81,15 @@ instance Pretty (Request resp) where
 -- | Types of user requests that can be handled.
 data UserRequest (resp :: Type) where
     -- | Request to find a name in module identified by file path.
-  QueryReq :: !(FullPath 'File) -> !QueryRequest -> !Namespace -> UserRequest QueryResponse
+  QueryReq
+    :: !(FullPath 'File)
+    -> !QueryRequest
+    -> !Namespace
+    -> UserRequest QueryResponse
+  -- | Stop accepting new requests and exit. Possibly serialise current
+  -- state for quicker future loads.
+  FinishReq
+    :: UserRequest ()
 
 deriving instance Eq   (UserRequest resp)
 deriving instance Ord  (UserRequest resp)
@@ -91,17 +102,19 @@ instance Pretty (UserRequest resp) where
       , "req"       --> req
       , "namespace" --> ns
       ]
+    FinishReq -> "FinishReq"
 
 -- | Set of directories
 data Namespace = Namespace
-  {
-    -- | Set of extra watched shallow directories. Subdirectories will not be watched.
+  { -- | Set of extra watched shallow directories. Subdirectories will not be watched.
     nsShallowDirs   :: !(Set (FullPath 'Dir))
     -- | Set extra of watched recursive directories.
     -- The directory and all its subdirectories will be watched.
   , nsRecursiveDirs :: !(Set (FullPath 'Dir))
   , nsIgnoredGlobs  :: !(Set Text)
   } deriving (Eq, Ord, Show, Generic)
+
+instance Binary Namespace
 
 instance Pretty Namespace where
   pretty = ppGeneric
@@ -113,6 +126,16 @@ instance Semigroup Namespace where
 instance Monoid Namespace where
   mempty = Namespace mempty mempty mempty
   mappend = (<>)
+
+-- | Test whether a path lies within directories specified by a namespace.
+-- Ignored globs will not be tested - it's assumed that they were taken
+-- into account when paths were produced.
+isPathWithinNamespace :: Namespace -> FullPath a -> Bool
+isPathWithinNamespace Namespace{nsShallowDirs, nsRecursiveDirs} path =
+  S.member (takeDirectory path) nsShallowDirs ||
+  any ((`T.isPrefixOf` path') . unFullPath) nsRecursiveDirs
+  where
+    path' = unFullPath path
 
 data NameResolutionScope =
     ScopeCurrentModule
@@ -176,6 +199,7 @@ data TagsServerConf = TagsServerConf
     -- server starts.
   , tsconfEagerTagging      :: !Bool
   , tsconfNameResolution    :: !NameResolutionStrictness
+  , tsconfSerialisedState   :: !(Maybe FilePath)
   } deriving (Eq, Ord, Show)
 
 defaultTagsServerConf :: TagsServerConf
@@ -184,6 +208,7 @@ defaultTagsServerConf = TagsServerConf
   , tsconfHsBootExtensions  = S.fromList [".hs-boot", ".lhs-boot"]
   , tsconfEagerTagging      = False
   , tsconfNameResolution    = NameResolutionLax
+  , tsconfSerialisedState   = Nothing
   }
 
 -- | Server state that may change while a request is processed.
@@ -197,7 +222,9 @@ data TagsServerState = TagsServerState
   , tssKnownFiles      :: !(Map (FullPath 'File) ImportKey)
     -- Namespace currently loaded
   , tssNamespace       :: !Namespace
-  } deriving (Eq, Ord, Show)
+  } deriving (Eq, Ord, Show, Generic)
+
+instance Binary TagsServerState
 
 emptyTagsServerState :: TagsServerState
 emptyTagsServerState = TagsServerState mempty mempty mempty mempty mempty

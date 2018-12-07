@@ -9,6 +9,7 @@
 
 {-# LANGUAGE DeriveFoldable    #-}
 {-# LANGUAGE DeriveFunctor     #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DeriveTraversable #-}
 
 {-# OPTIONS_GHC -Wredundant-constraints          #-}
@@ -32,11 +33,13 @@ module Data.Map.NonEmpty
   , differenceWith
   ) where
 
+import Data.Binary
 import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import Data.Semigroup
+import GHC.Generics
 import Prelude hiding (lookup)
 
 -- | A map that always contains at least one key-value pair.
@@ -44,7 +47,9 @@ data NonEmptyMap k v =
   -- Invariant: map never contains root key stored in the constructor itself.
   -- @k@ is always the smallest key.
   NonEmptyMap !k !v !(Map k v)
-  deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
+  deriving (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
+
+instance (Binary k, Binary v) => Binary (NonEmptyMap k v)
 
 instance (Ord k, Semigroup v) => Semigroup (NonEmptyMap k v) where
   {-# INLINE (<>) #-}

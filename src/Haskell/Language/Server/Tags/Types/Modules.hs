@@ -37,6 +37,7 @@ import Control.DeepSeq
 import Control.Monad.Except.Ext
 import Control.Parallel.Strategies.Ext
 
+import Data.Binary.Ext
 import Data.Hashable
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
@@ -75,6 +76,7 @@ data Module a = Module
   , modIsDirty          :: !Bool
   } deriving (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
 
+instance Binary a => Binary (Module a)
 instance NFData a => NFData (Module a)
 
 type UnresolvedModule = Module ()
@@ -113,6 +115,7 @@ data ModuleHeader = ModuleHeader
   , mhImports          :: !(SubkeyMap ImportKey (NonEmpty ImportSpec))
   } deriving (Eq, Ord, Show, Generic)
 
+instance Binary ModuleHeader
 instance NFData ModuleHeader
 
 instance Pretty ModuleHeader where
@@ -164,6 +167,7 @@ data ModuleExportSpec a =
     SpecificExports !a
   deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
 
+instance Binary a => Binary (ModuleExportSpec a)
 instance NFData a => NFData (ModuleExportSpec a)
 
 instance Pretty a => Pretty (ModuleExportSpec a) where
@@ -190,6 +194,7 @@ data ModuleExports = ModuleExports
   , meHasWildcardExports :: !Bool
   } deriving (Eq, Ord, Show, Generic)
 
+instance Binary ModuleExports
 instance NFData ModuleExports
 
 instance Pretty ModuleExports where
@@ -218,6 +223,7 @@ data PosAndType = PosAndType
   , patType     :: !Type
   } deriving (Eq, Ord, Show, Generic)
 
+instance Binary   PosAndType
 instance Hashable PosAndType
 instance NFData   PosAndType
 

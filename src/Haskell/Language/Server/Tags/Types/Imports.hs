@@ -35,6 +35,7 @@ module Haskell.Language.Server.Tags.Types.Imports
 
 import Control.DeepSeq
 
+import Data.Binary
 import Data.Hashable
 import Data.Map.Strict (Map)
 import Data.Set (Set)
@@ -57,6 +58,7 @@ data ImportKey = ImportKey
   , ikModuleName   :: !ModuleName
   } deriving (Eq, Ord, Show, Generic)
 
+instance Binary   ImportKey
 instance Hashable ImportKey
 instance NFData   ImportKey
 
@@ -72,6 +74,7 @@ instance Pretty ImportKey where
 data ImportTarget = VanillaModule | HsBootModule
   deriving (Eq, Ord, Show, Enum, Bounded, Generic)
 
+instance Binary   ImportTarget
 instance Hashable ImportTarget
 instance NFData   ImportTarget
 
@@ -85,6 +88,7 @@ data ImportSpec = ImportSpec
   , ispecImportList    :: !(ImportListSpec ImportList)
   } deriving (Eq, Ord, Show, Generic)
 
+instance Binary ImportSpec
 instance NFData ImportSpec
 
 instance Pretty ImportSpec where
@@ -142,6 +146,7 @@ data ImportQualification =
   | BothQualifiedAndUnqualified !ImportQualifier
   deriving (Eq, Ord, Show, Generic)
 
+instance Binary   ImportQualification
 instance Hashable ImportQualification
 instance NFData   ImportQualification
 
@@ -169,6 +174,7 @@ data ImportType =
     Hidden
   deriving (Eq, Ord, Show, Generic)
 
+instance Binary   ImportType
 instance Hashable ImportType
 instance NFData   ImportType
 
@@ -183,6 +189,7 @@ data ImportListSpec a =
   | SpecificImports !a
   deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
 
+instance Binary a => Binary (ImportListSpec a)
 instance NFData a => NFData (ImportListSpec a)
 
 instance Pretty a => Pretty (ImportListSpec a) where
@@ -194,6 +201,7 @@ data ImportList = ImportList
   , ilImportType :: !ImportType
   } deriving (Eq, Ord, Show, Generic)
 
+instance Binary ImportList
 instance NFData ImportList
 
 instance Pretty ImportList where
@@ -205,6 +213,7 @@ data EntryWithChildren childAnn name = EntryWithChildren
   , entryChildrenVisibility :: !(Maybe (ChildrenVisibility childAnn))
   } deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
 
+instance (Binary a, Binary b) => Binary (EntryWithChildren a b)
 instance (NFData a, NFData b) => NFData (EntryWithChildren a b)
 
 instance (Pretty ann, Pretty name) => Pretty (EntryWithChildren ann name) where
@@ -235,6 +244,7 @@ data ChildrenVisibility ann =
   | VisibleAllChildrenPlusSome !(Map UnqualifiedSymbolName ann)
   deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
 
+instance Binary a => Binary (ChildrenVisibility a)
 instance NFData a => NFData (ChildrenVisibility a)
 
 instance Pretty a => Pretty (ChildrenVisibility a) where

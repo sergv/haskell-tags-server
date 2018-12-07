@@ -52,6 +52,7 @@ import Prelude hiding (lookup, null)
 import Control.Arrow
 import Control.DeepSeq
 
+import Data.Binary
 import Data.Foldable (foldl')
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
@@ -80,6 +81,7 @@ deriving instance (Eq   k,  Eq  (Subkey k), Eq   v) => Eq   (SubkeyMap k v)
 deriving instance (Ord  k, Ord  (Subkey k), Ord  v) => Ord  (SubkeyMap k v)
 deriving instance (Show k, Show (Subkey k), Show v) => Show (SubkeyMap k v)
 
+instance (Binary k, Binary (Subkey k), Binary v) => Binary (SubkeyMap k v)
 instance (NFData k, NFData (Subkey k), NFData v) => NFData (SubkeyMap k v)
 
 instance (HasSubkey k, Semigroup v) => Semigroup (SubkeyMap k v) where

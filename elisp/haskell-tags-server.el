@@ -27,6 +27,11 @@
   :group 'haskell-completions
   :type 'integerp)
 
+(defcustom haskell-tags-server-extra-args nil
+  "Extra arguments to supply to started haskell-tags-server process."
+  :group 'haskell-completions
+  :type 'integerp)
+
 (defconst haskell-tags-server--network-buffer-name " *haskell-tags-server-network*")
 (defconst haskell-tags-server--subprocess-buffer-name " *haskell-tags-server-subprocess*")
 
@@ -50,13 +55,15 @@
         (let ((server-proc (make-process
                             :name "haskell-tags-server"
                             :buffer haskell-tags-server--subprocess-buffer
-                            :command (list haskell-tags-server-executable
-                                           "--port"
-                                           (number-to-string haskell-tags-server-port)
-                                           "--verbosity"
-                                           "error"
-                                           ;; "--eager-tagging"
-                                           )
+                            :command (append
+                                      (list haskell-tags-server-executable
+                                            "--port"
+                                            (number-to-string haskell-tags-server-port)
+                                            "--verbosity"
+                                            "error"
+                                            ;; "--eager-tagging"
+                                            )
+                                      haskell-tags-server-extra-args)
                             :noquery t
                             :sentinel #'haskell-tags-server--subprocess-sentinel)))
           (let ((tries 50)
@@ -93,19 +100,6 @@
        :noquery t
        :sentinel #'haskell-tags-server--network-sentinel)
     (file-error nil)))
-
-(defvar haskell-tags-server--response-timer nil
-  "Variable that contains the next scheduled action that will handle the
-most recently arrived server response.")
-
-(defvar haskell-tags-server--pending-responses (make-queue)
-  "A queue of server responses that we have yet to process.")
-
-(defvar haskell-tags-server--last-call-id nil)
-
-(defvar haskell-tags-server--response-handlers (make-hash-table :test #'equal)
-  "Hash table from call ids to functions of one argument (the
-reply) that should process the reply when it arrives.")
 
 (defun haskell-tags-server--blocking-call (func-name args)
   (let* ((done nil)
@@ -168,8 +162,9 @@ reply) that should process the reply when it arrives.")
                                              buf))
                 (response (with-current-buffer buf
                             (buffer-substring-no-properties (point-min) (point-max)))))
-           (cl-assert (functionp handler))
-           (funcall handler response))
+           (when handler
+             (cl-assert (functionp handler))
+             (funcall handler response)))
        (progn
          (delete-process proc)
          (kill-buffer (process-buffer proc)))))
@@ -341,6 +336,20 @@ uppercase or lowercase names)."
                                                use-regexp?)
           haskell-tags-server--next-homes nil)))
 
+;;;###autoload
+(defun haskell-tags-server-finish ()
+  (interactive)
+  (haskell-tags-server--blocking-call 'finish nil)
+  (message "Successfully finished haskell tags server"))
+
+(defun haskell-tags-server-finish-started-subprocess ()
+  (when (and haskell-tags-server--subprocess-proc
+             (eq (process-status haskell-tags-server--subprocess-proc) 'run))
+    (haskell-tags-server-finish)))
+
+(add-hook 'kill-emacs-hook #'haskell-tags-server-finish-started-subprocess)
+
+;;;###autoload
 (defun haskell-tags-server-go-back ()
   (interactive)
   (if (null haskell-tags-server--previous-homes)
@@ -356,6 +365,7 @@ uppercase or lowercase names)."
         (setf haskell-tags-server--selected-loc prev-home)
         (haskell-tags-server--switch-to-home-entry prev-home)))))
 
+;;;###autoload
 (defun haskell-tags-server-goto-definition (is-local? use-regexp? namespace)
   "Go to the definition of a name at point."
   (let* ((buffer-name (buffer-name))
@@ -419,9 +429,7 @@ uppercase or lowercase names)."
             (setf haskell-tags-server--selected-loc
                   (pop haskell-tags-server--next-homes)))
         (let ((response
-               (haskell-tags-server--blocking-call
-                search-func
-                args)))
+               (haskell-tags-server--blocking-call search-func args)))
           (haskell-tags-server--handle-reply
            response
            current-home-entry
@@ -462,16 +470,16 @@ buffer if no such buffer exists."
              (funcall ,exec-func)))))))
 
 (defsubst haskell-tags-server--loc-entry--name (entry)
-  (elt entry 0))
+  (car entry))
 
 (defsubst haskell-tags-server--loc-entry--filename (entry)
-  (elt entry 1))
+  (cadr entry))
 
 (defsubst haskell-tags-server--loc-entry--line (entry)
-  (elt entry 2))
+  (caddr entry))
 
 (defsubst haskell-tags-server--loc-entry--type (entry)
-  (elt entry 3))
+  (cadddr entry))
 
 (defun haskell-tags-server--handle-reply (response prev-loc search-query use-regexp? show-file-name visit-file-name)
   (cl-assert (stringp response))
