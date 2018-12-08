@@ -777,6 +777,56 @@ moduleWithParensInImportList2 = TestCase
       }
   }
 
+moduleWithMultilinePreprocessor :: Test
+moduleWithMultilinePreprocessor = TestCase
+  { testName       = "Multiline preprocessor"
+  , input          =
+      "module Test where\n\
+      \import Foo\n\
+      \  ( foo\n\
+      \#ifdef FOO \\\n\
+      \  && !BAR\n\
+      \  , bar\n\
+      \#else\n\
+      \  , baz\n\
+      \#endif\n\
+      \  , quux\n\
+      \  )\n\
+      \import Bar\n\
+      \"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = NoExports
+      , mhImportQualifiers = mempty
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Foo"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = SpecificImports ImportList
+                  { ilEntries    = KM.fromList
+                      [ EntryWithChildren
+                          { entryName               = mkUnqualSymName name
+                          , entryChildrenVisibility = Nothing
+                          }
+                      | name <- ["foo", "bar", "baz", "quux"]
+                      ]
+                  , ilImportType = Imported
+                  }
+              }
+          , neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Bar"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = NoImportList
+              }
+          ]
+      }
+  }
 
 moduleWithImportOfPatternFuncTest :: Test
 moduleWithImportOfPatternFuncTest = TestCase
@@ -2391,6 +2441,7 @@ tests = testGroup "Header analysis tests"
     , doTest moduleWithImportsAfterDotOperatorDefinition
     , doTest moduleWithParensInImportList1
     , doTest moduleWithParensInImportList2
+    , doTest moduleWithMultilinePreprocessor
     , testGroup "pattern as a function name"
         [ doTest moduleWithImportOfPatternFuncTest
         , doTest moduleWithImportOfManyFuncsAndPatternFuncTest

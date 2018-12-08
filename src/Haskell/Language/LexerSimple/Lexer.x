@@ -123,13 +123,13 @@ $nl ;
 
 -- Analyse "#if 0" constructs used in e.g. GHC.Base
 <0> {
-"#" @cpp_opt_ws "if" @cpp_opt_ws "0" (@cpp_nonempty_ws .*)? { \_ _ -> startPreprocessorStripping }
+"#" @cpp_opt_ws "if" @cpp_opt_ws "0" ( @cpp_nonempty_ws .* )? { \_ _ -> startPreprocessorStripping }
 
 -- Strip preprocessor
 "#" @cpp_opt_ws "define" @define_body
   { kw (Newline 0) }
 
-"#" @cpp_opt_ws ( "if" | "ifdef" | "endif" | "elif" | "else" | "undef" | "line" | "error" | "include" ) .* ;
+"#" @cpp_opt_ws ( "if" | "ifdef" | "endif" | "elif" | "else" | "undef" | "line" | "error" | "include" ) .* ( [\\] @nl .* )* ;
 }
 
 <stripCpp> {
