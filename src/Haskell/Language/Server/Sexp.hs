@@ -19,7 +19,7 @@
 {-# LANGUAGE TypeFamilies        #-}
 
 module Haskell.Language.Server.Sexp
-  ( defaultPort
+  ( sexpDefaultPort
   , SexpServer
   , stopSexpServer
   , waitForSexpServerStart
@@ -48,7 +48,6 @@ import Data.Text.Prettyprint.Doc.Ext
 import qualified Network.Socket as Network
 
 import Language.Sexp as Sexp
-import Network.BSD (getProtocolNumber)
 import Network.Socket as Socket
 import qualified Network.Socket.ByteString.Lazy as Socket.BSL
 
@@ -62,8 +61,8 @@ import Data.Symbols
 import Haskell.Language.Lexer.FastTags (Type, Line(..))
 import Haskell.Language.Server.Tags.Types
 
-defaultPort :: Network.PortNumber
-defaultPort = 10000
+sexpDefaultPort :: Network.PortNumber
+sexpDefaultPort = 10000
 
 data SexpServer = SexpServer
   { ssThreadId    :: ThreadId
@@ -84,14 +83,17 @@ withSocketLocalhostAccept
   -> (Network.Socket -> IO ())
   -> IO ()
 withSocketLocalhostAccept port startedLock serveRequest = withSocketsDo $ do
-  protoNum  <- getProtocolNumber "tcp"
-  localhost <- inet_addr "127.0.0.1"
+  let hints = defaultHints
+        { addrFlags = [AI_PASSIVE]
+        , addrSocketType = Stream
+        }
+  localhost :_ <- getAddrInfo (Just hints) (Just "127.0.0.1") (Just (show port))
   Exception.bracket
-    (socket AF_INET Stream protoNum)
+    (socket (addrFamily localhost) (addrSocketType localhost) (addrProtocol localhost))
     Socket.close $
     \sock -> do
       setSocketOption sock ReuseAddr 1
-      bind sock $ SockAddrInet port localhost
+      bind sock $ addrAddress localhost
       listen sock maxListenQueue
       setCondition startedLock
       forever $ do

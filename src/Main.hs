@@ -64,7 +64,7 @@ optsParser = ProgramConfig
   <*> option (fmap fromIntegral auto)
         (short 'p' <>
          long "port" <>
-         value defaultPort <>
+         value sexpDefaultPort <>
          metavar "PORT" <>
          help "Port to listen to")
   <*> switch
