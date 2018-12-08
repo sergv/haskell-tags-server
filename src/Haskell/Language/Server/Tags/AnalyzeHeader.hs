@@ -219,77 +219,90 @@ analyzeImports filename imports qualifiers ts = do
         toks'          ->  case dropNLs toks' of
           []                                    -> pure (NoImportList, toks)
           PHiding : (dropNLs -> PLParen : rest) -> findImportListEntries Hidden mempty (dropNLs rest)
-          PHiding : (dropNLs -> PLParen : rest) -> findImportListEntries Hidden mempty (dropNLs rest)
           PLParen : rest                        -> findImportListEntries Imported mempty (dropNLs rest)
           _                                     -> pure (NoImportList, toks)
+    findImportListEntries
+      :: ImportType
+      -> KeyMap Set (EntryWithChildren () UnqualifiedSymbolName)
+      -> [Pos ServerToken]
+      -> m (ImportListSpec ImportList, [Pos ServerToken])
+    findImportListEntries importType acc toks' = do
+      -- logDebug $ "[findImportListEntries] toks =" <+> ppTokens toks
+      case dropNLs toks' of
+        []                                                                ->
+          pure (SpecificImports importList, [])
+        -- Reaching here means tricks with preprocessor which we cannot
+        -- reasonably handle. E.g.
+        --
+        -- > import Foo
+        -- > #ifdef FOO
+        -- >   ( foo
+        -- >   , bar
+        -- > #else
+        -- >   ( baz
+        -- >   , quux
+        -- > #endif
+        -- >   , fizz
+        -- >   )
+        rest@(PImport : _)                                                ->
+          pure (SpecificImports importList, rest)
+        PRParen : rest                                                    ->
+          pure (SpecificImports importList, rest)
+        -- Type import
+        PType : PName name : rest                                         ->
+          entryWithoutChildren name rest
+        PType : PLParen : PAnyName name : PRParen : rest                  ->
+          entryWithoutChildren name rest
+        -- Pattern import
+        PPattern : restWithName@(PName name : rest)
+          | isVanillaTypeName name
+          , not $ isChildrenList filename rest ->
+            entryWithoutChildren name rest
+          | otherwise                          ->
+            entryWithoutChildren "pattern" restWithName
+        PPattern : restWithName@(PLParen : PAnyName name : PRParen : rest)
+          | isOpTypeName name
+          , not $ isChildrenList filename rest ->
+            entryWithoutChildren name rest
+          | otherwise                          ->
+            entryWithoutChildren "pattern" restWithName
+        -- Vanilla function/operator/consturtor/type import
+        PLParen : PAnyName name : PRParen : rest                          ->
+          entryWithChildren "operator in import list" name rest
+        PLParen : PName name : PRParen : rest                             ->
+          entryWithChildren "operator in import list" name rest
+        PName name : rest                                                 ->
+          entryWithChildren "name in import list" name rest
+        PLParen : rest                                                    ->
+          findImportListEntries importType acc rest
+        Pos _ HSC2HS : rest                                               -> do
+          -- We cannot run hsc2hs here so we'll conservatively
+          -- assume that everything is imported from a module.
+          (_, remaining) <- findImportListEntries importType mempty $ dropCommas rest
+          pure (AssumedWildcardImportList, remaining)
+        rest                                                              ->
+          throwErrorWithCallStack $ "Unrecognised shape of import list:" ## ppTokens rest
       where
-        findImportListEntries
-          :: ImportType
-          -> KeyMap Set (EntryWithChildren () UnqualifiedSymbolName)
+        importList :: ImportList
+        importList = ImportList
+          { ilEntries    = acc
+          , ilImportType = importType
+          }
+        entryWithChildren
+          :: Doc Void
+          -> Text
           -> [Pos ServerToken]
           -> m (ImportListSpec ImportList, [Pos ServerToken])
-        findImportListEntries importType acc toks' = do
-          -- logDebug $ "[findImportListEntries] toks =" <+> ppTokens toks
-          case dropNLs toks' of
-            []                                                                ->
-              pure (SpecificImports importList, [])
-            PRParen : rest                                                    ->
-              pure (SpecificImports importList, rest)
-            -- Type import
-            PType : PName name : rest                                         ->
-              entryWithoutChildren name rest
-            PType : PLParen : PAnyName name : PRParen : rest ->
-              entryWithoutChildren name rest
-            -- Pattern import
-            PPattern : restWithName@(PName name : rest)
-              | isVanillaTypeName name
-              , not $ isChildrenList filename rest ->
-                entryWithoutChildren name rest
-              | otherwise                          ->
-                entryWithoutChildren "pattern" restWithName
-            PPattern : restWithName@(PLParen : PAnyName name : PRParen : rest)
-              | isOpTypeName name
-              , not $ isChildrenList filename rest ->
-                entryWithoutChildren name rest
-              | otherwise                          ->
-                entryWithoutChildren "pattern" restWithName
-            -- Vanilla function/operator/consturtor/type import
-            PLParen : PAnyName name : PRParen : rest         ->
-              entryWithChildren "operator in import list" name rest
-            PLParen : PName name : PRParen : rest                             ->
-              entryWithChildren "operator in import list" name rest
-            PName name : rest                                                 ->
-              entryWithChildren "name in import list" name rest
-            PLParen : rest                                                    ->
-              findImportListEntries importType acc rest
-            Pos _ HSC2HS : rest                                               -> do
-              -- We cannot run hsc2hs here so we'll conservatively
-              -- assume that everything is imported from a module.
-              (_, remaining) <- findImportListEntries importType mempty $ dropCommas rest
-              pure (AssumedWildcardImportList, remaining)
-            rest                                                              ->
-              throwErrorWithCallStack $ "Unrecognised shape of import list:" ## ppTokens rest
-          where
-            importList :: ImportList
-            importList = ImportList
-              { ilEntries    = acc
-              , ilImportType = importType
-              }
-            entryWithChildren
-              :: Doc Void
-              -> Text
-              -> [Pos ServerToken]
-              -> m (ImportListSpec ImportList, [Pos ServerToken])
-            entryWithChildren descr name rest = do
-              (children, rest') <- snd $ analyzeChildren descr filename $ dropNLs rest
-              name'             <- mkUnqualName name
-              let newEntry = EntryWithChildren name' $ (() <$) <$> children
-              findImportListEntries importType (KM.insert newEntry acc) $ dropCommas rest'
-            entryWithoutChildren :: Text -> [Pos ServerToken] -> m (ImportListSpec ImportList, [Pos ServerToken])
-            entryWithoutChildren name rest = do
-              name' <- mkUnqualName name
-              let newEntry = mkEntryWithoutChildren name'
-              findImportListEntries importType (KM.insert newEntry acc) $ dropCommas rest
+        entryWithChildren descr name rest = do
+          (children, rest') <- snd $ analyzeChildren descr filename $ dropNLs rest
+          name'             <- mkUnqualName name
+          let newEntry = EntryWithChildren name' $ (() <$) <$> children
+          findImportListEntries importType (KM.insert newEntry acc) $ dropCommas rest'
+        entryWithoutChildren :: Text -> [Pos ServerToken] -> m (ImportListSpec ImportList, [Pos ServerToken])
+        entryWithoutChildren name rest = do
+          name' <- mkUnqualName name
+          let newEntry = mkEntryWithoutChildren name'
+          findImportListEntries importType (KM.insert newEntry acc) $ dropCommas rest
         mkUnqualName :: Text -> m UnqualifiedSymbolName
         mkUnqualName name =
           case mkUnqualifiedSymbolName (mkSymbolName name) of

@@ -667,6 +667,117 @@ moduleWithImportsAfterDotOperatorDefinition =
     "Module imports after (.) operator definition"
     "(.)"
 
+-- No reasonable way to make work this work. Just check that we don't crash
+-- and attempt something remotely sensible.
+moduleWithParensInImportList1 :: Test
+moduleWithParensInImportList1 = TestCase
+  { testName       = "Import of \"pattern\" function 1"
+  , input          =
+      "module Test where\n\
+      \import Foo\n\
+      \#ifdef FOO\n\
+      \  ( foo\n\
+      \#else\n\
+      \  ( bar\n\
+      \#endif\n\
+      \  )\n\
+      \import Bar\n\
+      \"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = NoExports
+      , mhImportQualifiers = mempty
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Foo"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = SpecificImports ImportList
+                  { ilEntries    = KM.fromList
+                      [ EntryWithChildren
+                          { entryName               = mkUnqualSymName "foo"
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
+                              [ mkUnqualSymName "bar"
+                              ]
+                          }
+                      ]
+                  , ilImportType = Imported
+                  }
+              }
+          , neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Bar"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = NoImportList
+              }
+          ]
+      }
+  }
+
+-- No reasonable way to make work this work. Just check that we don't crash
+-- and attempt something remotely sensible.
+moduleWithParensInImportList2 :: Test
+moduleWithParensInImportList2 = TestCase
+  { testName       = "Import of \"pattern\" function 2"
+  , input          =
+      "module Test where\n\
+      \import Foo\n\
+      \#ifdef FOO\n\
+      \  ( foo\n\
+      \  , bar\n\
+      \#else\n\
+      \  ( baz\n\
+      \  , quux\n\
+      \#endif\n\
+      \  , fizz\n\
+      \  )\n\
+      \import Bar\n\
+      \"
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = NoExports
+      , mhImportQualifiers = mempty
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Foo"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = SpecificImports ImportList
+                  { ilEntries    = KM.fromList
+                      [ EntryWithChildren
+                          { entryName               = mkUnqualSymName "foo"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName "bar"
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
+                              [ mkUnqualSymName name
+                              | name <- ["baz", "quux", "fizz"]
+                              ]
+                          }
+                      ]
+                  , ilImportType = Imported
+                  }
+              }
+          , neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Bar"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = NoImportList
+              }
+          ]
+      }
+  }
+
+
 moduleWithImportOfPatternFuncTest :: Test
 moduleWithImportOfPatternFuncTest = TestCase
   { testName       = "Import of \"pattern\" function"
@@ -2278,6 +2389,8 @@ tests = testGroup "Header analysis tests"
     , doTest moduleWithImportsAfterOperatorDefinition
     , doTest moduleWithImportsAfterExclamationMarkOperatorDefinition
     , doTest moduleWithImportsAfterDotOperatorDefinition
+    , doTest moduleWithParensInImportList1
+    , doTest moduleWithParensInImportList2
     , testGroup "pattern as a function name"
         [ doTest moduleWithImportOfPatternFuncTest
         , doTest moduleWithImportOfManyFuncsAndPatternFuncTest
