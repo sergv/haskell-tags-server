@@ -603,15 +603,15 @@ moduleWithMultipleImports = TestCase
       }
   }
 
-moduleWithImportsAfterDefinitions :: Test
-moduleWithImportsAfterDefinitions = TestCase
-  { testName       = "Module multiple imports"
+mkModuleWithImportsAfterDefinitionTest :: String -> T.Text -> Test
+mkModuleWithImportsAfterDefinitionTest testName thing = TestCase
+  { testName
   , input          =
       "module Test where \n\
-      \import Mod1\n\
+      \import Quux.Mod1\n\
       \\n\
-      \foo :: a -> a\n\
-      \foo x = x\n\
+      \" <> thing <> " :: a -> a\n\
+      \" <> thing <> " x = x\n\
       \\n\
       \import Mod2 as Foo\n\
       \"
@@ -625,7 +625,7 @@ moduleWithImportsAfterDefinitions = TestCase
           [ neSingleton ImportSpec
               { ispecImportKey     = ImportKey
                   { ikImportTarget = VanillaModule
-                  , ikModuleName   = mkModuleName "Mod1"
+                  , ikModuleName   = mkModuleName "Quux.Mod1"
                   }
               , ispecQualification = Unqualified
               , ispecImportList    = NoImportList
@@ -642,6 +642,30 @@ moduleWithImportsAfterDefinitions = TestCase
           ]
       }
   }
+
+moduleWithImportsAfterFunctionDefinition :: Test
+moduleWithImportsAfterFunctionDefinition =
+  mkModuleWithImportsAfterDefinitionTest
+    "Module imports after function definition"
+    "foo"
+
+moduleWithImportsAfterOperatorDefinition :: Test
+moduleWithImportsAfterOperatorDefinition =
+  mkModuleWithImportsAfterDefinitionTest
+    "Module imports after operator definition"
+    "(+++)"
+
+moduleWithImportsAfterExclamationMarkOperatorDefinition :: Test
+moduleWithImportsAfterExclamationMarkOperatorDefinition =
+  mkModuleWithImportsAfterDefinitionTest
+    "Module imports after (!) operator definition"
+    "(!)"
+
+moduleWithImportsAfterDotOperatorDefinition :: Test
+moduleWithImportsAfterDotOperatorDefinition =
+  mkModuleWithImportsAfterDefinitionTest
+    "Module imports after (.) operator definition"
+    "(.)"
 
 moduleWithImportOfPatternFuncTest :: Test
 moduleWithImportOfPatternFuncTest = TestCase
@@ -2250,7 +2274,10 @@ tests = testGroup "Header analysis tests"
     , doTest moduleWithImportAndAliasAndHidingImportListTest
     , doTest moduleWithImportOfSpeciallyNamedOperatorsTest
     , doTest moduleWithMultipleImports
-    , doTest moduleWithImportsAfterDefinitions
+    , doTest moduleWithImportsAfterFunctionDefinition
+    , doTest moduleWithImportsAfterOperatorDefinition
+    , doTest moduleWithImportsAfterExclamationMarkOperatorDefinition
+    , doTest moduleWithImportsAfterDotOperatorDefinition
     , testGroup "pattern as a function name"
         [ doTest moduleWithImportOfPatternFuncTest
         , doTest moduleWithImportOfManyFuncsAndPatternFuncTest
@@ -2304,7 +2331,7 @@ tests = testGroup "Header analysis tests"
     ]
   ]
 
-doTest :: WithCallStack => Test -> TestTree
+doTest :: HasCallStack => Test -> TestTree
 doTest TestCase{testName, input, expectedResult} =
   testCase testName $ do
     (res, logs) <- runWriterT $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runErrorExceptT $ analyzeHeader filename tokens

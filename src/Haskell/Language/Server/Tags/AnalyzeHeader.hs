@@ -96,6 +96,8 @@ pattern PModule       :: Pos ServerToken
 pattern PModule       <- Pos _ KWModule
 pattern PName         :: Text -> Pos ServerToken
 pattern PName name    <- Pos _ (T name)
+pattern PNewline      :: Int -> Pos ServerToken
+pattern PNewline x    <- Pos _ (Newline x)
 pattern PPattern      :: Pos ServerToken
 pattern PPattern      <- Pos _ (T "pattern")
 pattern PQualified    :: Pos ServerToken
@@ -129,9 +131,10 @@ analyzeImports
        )
 analyzeImports filename imports qualifiers ts = do
   -- logDebug $ "[analyzeImports] ts =" <+> ppTokens ts
+  let d = dropNLs
   res <- runMaybeT $ do
     -- Drop initial "import" keyword and {-# SOURCE #-} pragma, if any
-    (ts2, importTarget) <- case dropWhile (\case { PImport -> False; PForeign -> False; _ -> True }) $ dropNLs ts of
+    (ts2, importTarget) <- case dropWhile (\case { PImport -> False; PForeign -> False; _ -> True }) $ d ts of
       PImport  : (d -> PSourcePragma : rest) -> pure (rest, HsBootModule)
       PImport  :                       rest  -> pure (rest, VanillaModule)
       _                                      -> mzero
@@ -146,14 +149,14 @@ analyzeImports filename imports qualifiers ts = do
           rest              -> (rest, False)
 
         (ts3, isQual)
-          = first (dropNLs >>> dropPackageImport)
+          = first (d >>> dropPackageImport)
           . extractQualified
-          . dropNLs
+          . d
           . dropSafeImport
-          . dropNLs
+          . d
           $ ts2
     -- Extract import name and renaming alias, if any
-    (ts4, name, qualName) <- case dropNLs ts3 of
+    (ts4, name, qualName) <- case d ts3 of
       PName name : (d -> PAs : (d -> PName qualName : rest)) -> pure (rest, name, Just qualName)
       PName name :                                    rest   -> pure (rest, name, Nothing)
       _                                                      -> mzero
@@ -168,7 +171,6 @@ analyzeImports filename imports qualifiers ts = do
     Nothing                                  -> pure (imports, qualifiers, ts)
     Just (name, qualType, importTarget, ts5) -> add name qualType importTarget ts5
   where
-    d      = dropNLs
     mkQual = mkImportQualifier . mkModuleName
     add
       :: Text
@@ -212,11 +214,14 @@ analyzeImports filename imports qualifiers ts = do
     analyzeImportList :: [Pos ServerToken] -> m (ImportListSpec ImportList, [Pos ServerToken])
     analyzeImportList toks = do
       -- logDebug $ "[analyzeImpotrList] toks =" <+> ppTokens toks
-      case dropNLs toks of
-        []                                    -> pure (NoImportList, toks)
-        PHiding : (dropNLs -> PLParen : rest) -> findImportListEntries Hidden mempty (dropNLs rest)
-        PLParen : rest                        -> findImportListEntries Imported mempty (dropNLs rest)
-        _                                     -> pure (NoImportList, toks)
+      case lastNL toks of
+        PNewline 0 : _ -> pure (NoImportList, toks)
+        toks'          ->  case dropNLs toks' of
+          []                                    -> pure (NoImportList, toks)
+          PHiding : (dropNLs -> PLParen : rest) -> findImportListEntries Hidden mempty (dropNLs rest)
+          PHiding : (dropNLs -> PLParen : rest) -> findImportListEntries Hidden mempty (dropNLs rest)
+          PLParen : rest                        -> findImportListEntries Imported mempty (dropNLs rest)
+          _                                     -> pure (NoImportList, toks)
       where
         findImportListEntries
           :: ImportType
@@ -569,10 +574,15 @@ instance Pretty Tokens where
 ppTokens :: [Pos ServerToken] -> Doc ann
 ppTokens = pretty . Tokens . take 16
 
+-- | Drop prefix of newlines except the last one.
+lastNL :: [Pos ServerToken] -> [Pos ServerToken]
+lastNL (PNewline _ : ts@(PNewline _ : _)) = lastNL ts
+lastNL ts                                 = ts
+
 -- | Drop prefix of newlines.
 dropNLs :: [Pos ServerToken] -> [Pos ServerToken]
-dropNLs (Pos _ (Newline _) : ts) = dropNLs ts
-dropNLs ts                       = ts
+dropNLs (PNewline _ : ts) = dropNLs ts
+dropNLs ts                = ts
 
 dropCommas :: [Pos ServerToken] -> [Pos ServerToken]
 dropCommas = go . dropNLs
