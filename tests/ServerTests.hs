@@ -190,11 +190,13 @@ mkFindSymbolTest pool ServerTest{stTestName, stNameResolutionStrictness, stWorki
               ShallowDir   x           -> testDataDir </> x
               RecursiveDir x           -> testDataDir </> x
               RecursiveWithIgnored x _ -> testDataDir </> x
-            dir' = unPathFragment dir
-            ns = case stWorkingDirectory of
-              ShallowDir   _            -> ParenList [ParenList [String dir'], ParenList [], ParenList []]
-              RecursiveDir _            -> ParenList [ParenList [], ParenList [String dir'], ParenList []]
-              RecursiveWithIgnored _ xs -> ParenList [ParenList [], ParenList [String dir'], ParenList (map String xs)]
+            ns =
+              case stWorkingDirectory of
+                ShallowDir   _            -> ParenList [ParenList [String dir'], ParenList [], ParenList []]
+                RecursiveDir _            -> ParenList [ParenList [], ParenList [String dir'], ParenList []]
+                RecursiveWithIgnored _ xs -> ParenList [ParenList [], ParenList [String dir'], ParenList (map String xs)]
+              where
+                dir' = unPathFragment dir
             path = unPathFragment $ dir </> stFile
         r <- liftBase $ do
           let s = scSocket conn
