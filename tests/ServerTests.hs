@@ -38,9 +38,8 @@ import Data.Text.Prettyprint.Doc.Ext
 import Data.Void (Void)
 import GHC.Stack
 import Language.Sexp as Sexp
-import Network.BSD (getProtocolNumber)
 import Network.Socket (PortNumber, Socket)
-import qualified Network.Socket as Socket
+import Network.Socket as Socket
 import qualified Network.Socket.ByteString.Lazy as Socket.BSL
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -89,7 +88,7 @@ mkTestsConfig tsconfNameResolution srcDir = do
 tests :: TestTree
 tests =
   withResource
-    (getNumCapabilities >>= \caps -> newPortPool (2 * caps) (defaultPort + 1))
+    (getNumCapabilities >>= \caps -> newPortPool (2 * caps) (sexpDefaultPort + 1))
     (const (pure ()))
     (\pool -> makeTestTree pool testData)
   where
@@ -157,10 +156,13 @@ withConnection pool searchDirs conf f =
 
 connectSocket :: String -> PortNumber -> IO Socket
 connectSocket addr port = do
-  protoNum  <- getProtocolNumber "tcp"
-  localhost <- Socket.inet_addr addr
-  s         <- Socket.socket Socket.AF_INET Socket.Stream protoNum
-  Socket.connect s $ Socket.SockAddrInet port localhost
+  let hints = defaultHints
+        { addrFlags = [AI_PASSIVE]
+        , addrSocketType = Stream
+        }
+  localhost :_ <- getAddrInfo (Just hints) (Just addr) (Just (show port))
+  s            <- socket (addrFamily localhost) (addrSocketType localhost) (addrProtocol localhost)
+  Socket.connect s $ addrAddress localhost
   pure s
 
 getSocketContents
