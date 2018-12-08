@@ -36,7 +36,6 @@ import Control.Concurrent
 import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.Except.Ext
-import Control.Monad.State
 import Control.Monad.Trans.Control
 import Data.Binary
 import qualified Data.ByteString.Lazy as BSL
@@ -291,9 +290,8 @@ startTagsServer searchCfg conf = do
                       findSymbol id scope filename symbol
                     FindSymbolByRegex scope regexp ->
                       findSymbolByRegexp id scope filename regexp
-                  ns' <- gets tssNamespace
-                  logInfo $ "[startTagsServer.handleReq] effective namespace:" ## pretty ns'
-                  pure $ case filter (isPathWithinNamespace ns' . resolvedSymbolFile) $ toList symbols of
+                  logInfo $ "[startTagsServer.handleReq] requested namespace:" ## pretty ns
+                  pure $ case filter (isPathWithinNamespace ns . resolvedSymbolFile) $ toList symbols of
                     []   -> NotFound
                     s:ss -> Found $ s :| ss
                 logInfo $ "[startTagsServer.handleReq] response:" ## either pretty pretty response
