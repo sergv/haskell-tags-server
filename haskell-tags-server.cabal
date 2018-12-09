@@ -31,7 +31,7 @@ flag dev
 library
   if flag(dev)
     cpp-options: -DDEVELOPMENT
-  if os(Windows)
+  if os(windows)
     build-depends: unix-compat
   else
     build-depends: unix >= 2.6, unix-compat
@@ -168,6 +168,8 @@ library
     alex >= 3.1.7
 
 executable haskell-tags-server
+  if !os(windows)
+    build-depends: unix >= 2.6
   main-is:
     src/Main.hs
   build-depends:
@@ -196,6 +198,8 @@ executable haskell-tags-server
     -fprof-auto
 
 test-suite test-haskell-tags-server
+  if !os(windows)
+    build-depends: unix >= 2.6
   default-language:
     Haskell2010
   type:
