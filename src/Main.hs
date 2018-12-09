@@ -6,6 +6,7 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -20,11 +21,15 @@ import Data.Foldable (for_)
 import qualified Data.List as L
 import qualified Data.Set as S
 import Data.Text.Prettyprint.Doc.Ext
-import Network.Socket (PortNumber)
+import Network.Socket (PortNumber, withSocketsDo)
 import Options.Applicative
 import System.Directory
 import System.Exit
 import System.IO
+
+#ifndef mingw32_HOST_OS
+import System.Posix (installHandler, sigPIPE, Handler(Ignore))
+#endif
 
 import Control.Monad.Filesystem (SearchCfg(..))
 import qualified Control.Monad.Filesystem as MonadFS
@@ -90,7 +95,12 @@ progInfo = info
   (fullDesc <> header "Server for navigating Haskell programs")
 
 main :: IO ()
-main = do
+main = withSocketsDo $ do
+
+#ifndef mingw32_HOST_OS
+  _ <- installHandler sigPIPE Ignore Nothing
+#endif
+
   ProgramConfig{cfgSourceDirectories, cfgDirTrees, cfgPort, cfgEagerTagging, cfgNameResolution, cfgDebugVerbosity, cfgStateFile} <- execParser progInfo
   -- validate that specified directories actually exist
   for_ cfgSourceDirectories ensureDirExists
