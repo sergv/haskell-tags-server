@@ -98,7 +98,7 @@ instance {-# OVERLAPS #-} (Monad m, MonadBaseControl IO m, MonadMask m) => Monad
   doesDirectoryExist   = Path.doesDirectoryExist
   listDirectory        = Path.listDirectory
   findRec SearchCfg{scShallowPaths, scRecursivePaths, scIgnoredDirs} ignoredGlobsRE =
-    findRecur scIgnoredDirs ignoredGlobsRE scShallowPaths scRecursivePaths
+    findRecurCollect scIgnoredDirs ignoredGlobsRE scShallowPaths scRecursivePaths
 
 instance MonadFS m => MonadFS (ReaderT r m) where
   {-# INLINE getModificationTime  #-}
