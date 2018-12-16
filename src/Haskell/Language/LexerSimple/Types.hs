@@ -181,9 +181,9 @@ data AlexState = AlexState
   , asContextStack :: [Context]
   } deriving (Show, Eq, Ord)
 
-{-# INLINE asDepthL #-}
-asDepthL :: Lens' AlexState Word
-asDepthL = lens asIntStore (\b s -> s { asIntStore = b })
+{-# INLINE asIntStoreL #-}
+asIntStoreL :: Lens' AlexState Word64
+asIntStoreL = lens asIntStore (\b s -> s { asIntStore = b })
 
 {-# INLINE maybeBoolToInt #-}
 maybeBoolToInt :: Maybe Bool -> Int
@@ -216,13 +216,13 @@ asPreprocessorDepthL :: Lens' AlexState Int16
 -- | Whether we're in bird-style or latex-style literate environment
 asLiterateLocL :: Lens' AlexState (LiterateLocation LiterateStyle)
 asHaveQQEndL   :: Lens' AlexState (Maybe Bool)
-asCodeL              = asDepthL . int16L' 0  0x000f
-asCommentDepthL      = asDepthL . int16L' 4  0x03ff
-asQuasiquoterDepthL  = asDepthL . int16L' 14 0x03ff
-asIndentationSizeL   = asDepthL . int16L  24
-asPreprocessorDepthL = asDepthL . int16L  40
-asLiterateLocL       = \f -> asDepthL (int16L' 56 0x0003 (fmap litLocToInt    . f . intToLitLoc))
-asHaveQQEndL         = \f -> asDepthL (int16L' 58 0x0003 (fmap maybeBoolToInt . f . intToMaybeBool))
+asCodeL              = asIntStoreL . int16L' 0  0x000f
+asCommentDepthL      = asIntStoreL . int16L' 4  0x03ff
+asQuasiquoterDepthL  = asIntStoreL . int16L' 14 0x03ff
+asIndentationSizeL   = asIntStoreL . int16L  24
+asPreprocessorDepthL = asIntStoreL . int16L  40
+asLiterateLocL       = \f -> asIntStoreL (int16L' 56 0x0003 (fmap litLocToInt    . f . intToLitLoc))
+asHaveQQEndL         = \f -> asIntStoreL (int16L' 58 0x0003 (fmap maybeBoolToInt . f . intToMaybeBool))
 
 mkAlexState :: LiterateLocation Void -> AlexCode -> AlexInput -> AlexState
 mkAlexState litLoc startCode input =
