@@ -19,7 +19,7 @@
 #endif
 
 module Data.Filesystem
-  ( findRecur
+  ( findRecurCollect
   , findRecursive
   ) where
 
@@ -139,7 +139,7 @@ findRecursive extraJobs dirPred filePred consumeOutput shallowDirs recursiveDirs
 #endif
 
 
-findRecur
+findRecurCollect
   :: forall k v m. (WithCallStack, Ord k, Semigroup v, MonadBaseControl IO m, MonadMask m)
   => Set (BaseName 'Dir)
   -> CompiledRegex
@@ -147,7 +147,7 @@ findRecur
   -> Set (FullPath 'Dir)
   -> (FullPath 'File -> m (Maybe (k, v)))
   -> m (Map k v)
-findRecur ignoredDirs ignoredGlobsRE shallowPaths recursivePaths f = do
+findRecurCollect ignoredDirs ignoredGlobsRE shallowPaths recursivePaths f = do
   n       <- liftBase getNumCapabilities
   results <- liftBase newTMQueueIO
   let collect :: (k, v) -> m ()
