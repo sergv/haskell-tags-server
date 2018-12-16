@@ -53,16 +53,18 @@ import System.Posix.Files as Posix
 import Data.Path.Internal
 import Data.CompiledRegex
 
+{-# INLINE findRecursive #-}
 findRecursive
   :: forall a m. (WithCallStack, MonadBaseControl IO m, MonadMask m)
-  => Int                             -- ^ Extra search threads to run in parallel.
-  -> (FullPath 'Dir -> Bool)         -- ^ Whether to visit directory.
-  -> (FullPath 'File -> m (Maybe a)) -- ^ What to do with a file.
+  => Int                             -- ^ Extra search threads to run in parallel
+  -> (FullPath 'Dir -> Bool)         -- ^ Whether to visit directory
+  -> (FullPath 'File -> m (Maybe a)) -- ^ What to do with a file
+  -> (FullPath 'Dir  -> m (Maybe a)) -- ^ What to do with a directory
   -> (a -> m ())                     -- ^ Consume output
-  -> Set (FullPath 'Dir)             -- ^ Dirs to search non-recursively.
-  -> Set (FullPath 'Dir)             -- ^ Dirs to search recursively.
+  -> Set (FullPath 'Dir)             -- ^ Dirs to search non-recursively
+  -> Set (FullPath 'Dir)             -- ^ Dirs to search recursively
   -> m ()
-findRecursive extraJobs dirPred filePred consumeOutput shallowDirs recursiveDirs = do
+findRecursive extraJobs dirVisitPred filePred dirPred consume shallowDirs recursiveDirs = do
   sem <- newNBSem extraJobs
   findRecursive' sem
   where
@@ -71,7 +73,7 @@ findRecursive extraJobs dirPred filePred consumeOutput shallowDirs recursiveDirs
       foldr
         (goDirRec (const False))
         (foldr
-          (goDirRec dirPred)
+          (goDirRec dirVisitPred)
           (pure ())
           recursiveDirs)
         shallowDirs
@@ -104,13 +106,14 @@ findRecursive extraJobs dirPred filePred consumeOutput shallowDirs recursiveDirs
                         let y' :: FilePath
                             y' = root FilePath.</> y
                         let doFile =
-                              (filePred y'' >>= traverse_ consumeOutput) *> go
+                              (filePred y'' >>= traverse_ consume) *> go
                               where
                                 y'' :: FullPath 'File
                                 y'' = FullPath $ T.pack y'
                             doDir =
                               if dirPred' y''
-                              then goDirAsyncOrSync y' go
+                              then
+                                (dirPred y'' >>= traverse_ consume) *> goDirAsyncOrSync y' go
                               else go
                               where
                                 y'' :: FullPath 'Dir
@@ -139,6 +142,7 @@ findRecursive extraJobs dirPred filePred consumeOutput shallowDirs recursiveDirs
 #endif
 
 
+{-# INLINABLE findRecurCollect #-}
 findRecurCollect
   :: forall k v m. (WithCallStack, Ord k, Semigroup v, MonadBaseControl IO m, MonadMask m)
   => Set (BaseName 'Dir)
@@ -158,12 +162,12 @@ findRecurCollect ignoredDirs ignoredGlobsRE shallowPaths recursivePaths f = do
         takeFileName path `S.notMember` ignoredDirs &&
         not (reMatches ignoredGlobsRE (unFullPath path))
 
-      consumeOutput :: Map k v -> IO (Map k v)
-      consumeOutput !xs = do
+      consume :: Map k v -> IO (Map k v)
+      consume !xs = do
         res <- atomically $ readTMQueue results
         case res of
           Nothing     -> pure xs
-          Just (k, v) -> consumeOutput $ M.insertWith (Semigroup.<>) k v xs
+          Just (k, v) -> consume $ M.insertWith (Semigroup.<>) k v xs
 
       f' :: FullPath 'File -> m (Maybe (k, v))
       f' path
@@ -176,6 +180,6 @@ findRecurCollect ignoredDirs ignoredGlobsRE shallowPaths recursivePaths f = do
       extraJobs = n - 1
 
       doFind =
-        findRecursive extraJobs shouldVisit f' collect shallowPaths recursivePaths
+        findRecursive extraJobs shouldVisit f' (const (pure Nothing)) collect shallowPaths recursivePaths
   withAsync (doFind `finally` liftBase (atomically (closeTMQueue results))) $ \searchAsync ->
-    liftBase (consumeOutput M.empty) <* (wait searchAsync :: m ())
+    liftBase (consume M.empty) <* (wait searchAsync :: m ())
