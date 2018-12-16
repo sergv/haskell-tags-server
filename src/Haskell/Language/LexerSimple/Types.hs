@@ -177,7 +177,7 @@ isLiterateLatexOrOutside = \case
 
 data AlexState = AlexState
   { asInput        :: {-# UNPACK #-} !AlexInput
-  , asIntStore     :: {-# UNPACK #-} !Word
+  , asIntStore     :: {-# UNPACK #-} !Word64
   , asContextStack :: [Context]
   } deriving (Show, Eq, Ord)
 
