@@ -32,6 +32,7 @@ import Control.Monad.Trans.Control
 
 import qualified Data.ByteString as BS
 import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as M
 import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
@@ -83,7 +84,7 @@ class Monad m => MonadFS m where
   listDirectory        :: FullPath 'Dir  -> m ([FullPath 'File], [FullPath 'Dir])
   findRec
     :: (Ord k, Semigroup v)
-    => SearchCfg -> CompiledRegex -> (FullPath 'File -> m (Maybe (k, v))) -> m (Map k v)
+    => SearchCfg -> CompiledRegex -> (FullPath 'File -> m (Maybe (k, v))) -> (FullPath 'Dir -> m (Maybe (k, v))) -> m (Map k v)
 
 instance {-# OVERLAPS #-} (Monad m, MonadBaseControl IO m, MonadMask m) => MonadFS m where
   {-# INLINE getModificationTime  #-}
@@ -98,7 +99,7 @@ instance {-# OVERLAPS #-} (Monad m, MonadBaseControl IO m, MonadMask m) => Monad
   doesDirectoryExist   = Path.doesDirectoryExist
   listDirectory        = Path.listDirectory
   findRec SearchCfg{scShallowPaths, scRecursivePaths, scIgnoredDirs} ignoredGlobsRE =
-    findRecurCollect scIgnoredDirs ignoredGlobsRE scShallowPaths scRecursivePaths
+    findRecurCollect scIgnoredDirs ignoredGlobsRE scShallowPaths scRecursivePaths M.empty
 
 instance MonadFS m => MonadFS (ReaderT r m) where
   {-# INLINE getModificationTime  #-}
@@ -112,9 +113,9 @@ instance MonadFS m => MonadFS (ReaderT r m) where
   doesFileExist        = lift . doesFileExist
   doesDirectoryExist   = lift . doesDirectoryExist
   listDirectory        = lift . listDirectory
-  findRec cfg re f     = do
+  findRec cfg re f g   = do
     env <- ask
-    lift $ findRec cfg re ((`runReaderT` env) . f)
+    lift $ findRec cfg re ((`runReaderT` env) . f) ((`runReaderT` env) . g)
 
 versionControlDirs :: Set (BaseName 'Dir)
 versionControlDirs = S.fromList
