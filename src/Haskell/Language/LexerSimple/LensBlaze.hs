@@ -6,8 +6,9 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE RankNTypes   #-}
+{-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Haskell.Language.LexerSimple.LensBlaze
   ( Lens
@@ -46,13 +47,13 @@ over :: Lens s t a b -> (a -> b) -> s -> t
 over l f = runIdentity . l (Identity . f)
 
 {-# INLINE int16L #-}
-int16L :: Int -> Lens' Word Int16
+int16L :: (Bits b, Integral b) => Int -> Lens' b Int16
 int16L n = int16L' n 0xffff
 
 {-# INLINE int16L' #-}
-int16L' :: Integral a => Int -> Word -> Lens' Word a
+int16L' :: forall a b. (Integral a, Bits b, Integral b) => Int -> b -> Lens' b a
 int16L' n !mask = \f x ->
-  (\x' -> (fromIntegral x' `unsafeShiftL` n) .|. (x .&. reverseMask)) <$> f (fromIntegral ((x `unsafeShiftR` n) .&. mask :: Word))
+  (\x' -> (fromIntegral x' `unsafeShiftL` n) .|. (x .&. reverseMask)) <$> f (fromIntegral ((x `unsafeShiftR` n) .&. mask :: b))
   where
-    reverseMask :: Word
+    reverseMask :: b
     !reverseMask = complement $ mask `unsafeShiftL` n
