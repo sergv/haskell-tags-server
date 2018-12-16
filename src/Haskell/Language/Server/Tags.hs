@@ -42,7 +42,9 @@ import qualified Data.ByteString.Lazy as BSL
 import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map.Strict as M
+import Data.Maybe
 import Data.Semigroup.Foldable
+import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc.Ext (Pretty(..), (##), (<+>))
@@ -56,6 +58,7 @@ import qualified Control.Monad.Filesystem as MonadFS
 import Control.Monad.Logging
 import Data.CompiledRegex
 import Data.ErrorMessage
+import Data.Filesystem
 import Data.Map.NonEmpty (NonEmptyMap)
 import qualified Data.Map.NonEmpty as NEMap
 import Data.Path
@@ -106,7 +109,7 @@ preloadFiles SearchCfg{scShallowPaths, scRecursivePaths} _ s
   = pure s
 preloadFiles searchCfg conf s = do
   ignoredGlobsRE <- searchCfgIgnoredRE searchCfg
-  knownFiles     <- MonadFS.findRec searchCfg ignoredGlobsRE (loadMod conf)
+  knownFiles     <- MonadFS.findRec searchCfg ignoredGlobsRE (loadMod conf) (const (pure Nothing))
   let s' = s
         { tssKnownFiles =
           M.fromList (concatMap (\(impKey, fs) -> map (,impKey) fs) $ M.toList $ toList . NEMap.keysNE <$> knownFiles) <>
@@ -130,14 +133,11 @@ watchDirs
   -> Chan SomeRequest
   -> SearchCfg
   -> m ()
-watchDirs conf manager reqChan searchCfg@SearchCfg{scShallowPaths, scRecursivePaths} = do
-  ignoredGlobsRE <- searchCfgIgnoredRE searchCfg
+watchDirs conf manager reqChan searchCfg@SearchCfg{scShallowPaths, scRecursivePaths, scIgnoredDirs} = do
   let shouldAct :: FSNotify.Event -> Bool
       shouldAct event =
         not (FSNotify.eventIsDirectory event) &&
-        case classifyPath conf path' of
-          Nothing -> False
-          Just{}  -> not (reMatches ignoredGlobsRE path)
+        isJust (classifyPath conf path')
         where
           path' = mkSinglePathFragment path
           path = T.pack $ FSNotify.eventPath event
@@ -153,11 +153,18 @@ watchDirs conf manager reqChan searchCfg@SearchCfg{scShallowPaths, scRecursivePa
         FSNotify.Modified path _ _ -> reportEvent' path FSModified
         FSNotify.Removed  path _ _ -> reportEvent' path FSRemoved
         FSNotify.Unknown{}         -> pure ()
+  ignoredGlobsRE <- searchCfgIgnoredRE searchCfg
   liftBase $ do
-    for_ scShallowPaths $ \dir ->
+    (dirsToWatch :: Set (FullPath 'Dir)) <- findRecurCollect
+      scIgnoredDirs          -- ignored dirs
+      ignoredGlobsRE
+      mempty                 -- shallow paths
+      scRecursivePaths       -- recursive  dirs
+      scShallowPaths         -- initial value
+      (const (pure Nothing)) -- consume file
+      (pure . Just)
+    for_ dirsToWatch $ \dir ->
       FSNotify.watchDir manager (toFilePath dir) shouldAct reportEvent
-    for_ scRecursivePaths $ \dir ->
-      FSNotify.watchTree manager (toFilePath dir) shouldAct reportEvent
 
 -- | Start new tags server thread that will serve requests supplied via returned
 -- RequestHandler.

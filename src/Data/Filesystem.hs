@@ -6,13 +6,15 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE BangPatterns        #-}
-{-# LANGUAGE CPP                 #-}
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE MultiWayIf          #-}
-{-# LANGUAGE Rank2Types          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns           #-}
+{-# LANGUAGE CPP                    #-}
+{-# LANGUAGE DataKinds              #-}
+{-# LANGUAGE FlexibleContexts       #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiWayIf             #-}
+{-# LANGUAGE Rank2Types             #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
 
 #ifdef mingw32_HOST_OS
 #define WINDOWS 1
@@ -53,11 +55,11 @@ import System.Posix.Files as Posix
 import Data.Path.Internal
 import Data.CompiledRegex
 
-{-# INLINE findRecursive #-}
+{-# INLINABLE findRecursive #-}
 findRecursive
   :: forall a m. (WithCallStack, MonadBaseControl IO m, MonadMask m)
   => Int                             -- ^ Extra search threads to run in parallel
-  -> (FullPath 'Dir -> Bool)         -- ^ Whether to visit directory
+  -> (FullPath 'Dir -> Bool)         -- ^ Whether to visit directory. Unvisited directories will not be collected
   -> (FullPath 'File -> m (Maybe a)) -- ^ What to do with a file
   -> (FullPath 'Dir  -> m (Maybe a)) -- ^ What to do with a directory
   -> (a -> m ())                     -- ^ Consume output
@@ -142,19 +144,32 @@ findRecursive extraJobs dirVisitPred filePred dirPred consume shallowDirs recurs
 #endif
 
 
+class IncrementalContainer big small | big -> small where
+  incrementalAdd :: small -> big -> big
+
+instance Ord a => IncrementalContainer (Set a) a where
+  {-# INLINE incrementalAdd #-}
+  incrementalAdd = S.insert
+
+instance (Ord k, Semigroup v) => IncrementalContainer (Map k v) (k, v) where
+  {-# INLINE incrementalAdd #-}
+  incrementalAdd = uncurry (M.insertWith (Semigroup.<>))
+
 {-# INLINABLE findRecurCollect #-}
 findRecurCollect
-  :: forall k v m. (WithCallStack, Ord k, Semigroup v, MonadBaseControl IO m, MonadMask m)
+  :: forall big small m. (WithCallStack, MonadBaseControl IO m, MonadMask m, IncrementalContainer big small)
   => Set (BaseName 'Dir)
   -> CompiledRegex
-  -> Set (FullPath 'Dir)
-  -> Set (FullPath 'Dir)
-  -> (FullPath 'File -> m (Maybe (k, v)))
-  -> m (Map k v)
-findRecurCollect ignoredDirs ignoredGlobsRE shallowPaths recursivePaths f = do
+  -> Set (FullPath 'Dir) -- Shallow paths
+  -> Set (FullPath 'Dir) -- Recursive paths
+  -> big                 -- ^ Initial value
+  -> (FullPath 'File -> m (Maybe small))
+  -> (FullPath 'Dir  -> m (Maybe small))
+  -> m big
+findRecurCollect ignoredDirs ignoredGlobsRE shallowPaths recursivePaths initialValue consumeFile consumeDir = do
   n       <- liftBase getNumCapabilities
   results <- liftBase newTMQueueIO
-  let collect :: (k, v) -> m ()
+  let collect :: small -> m ()
       collect = liftBase . atomically . writeTMQueue results
 
       shouldVisit :: FullPath 'Dir -> Bool
@@ -162,24 +177,24 @@ findRecurCollect ignoredDirs ignoredGlobsRE shallowPaths recursivePaths f = do
         takeFileName path `S.notMember` ignoredDirs &&
         not (reMatches ignoredGlobsRE (unFullPath path))
 
-      consume :: Map k v -> IO (Map k v)
+      consume :: big -> IO big
       consume !xs = do
         res <- atomically $ readTMQueue results
         case res of
-          Nothing     -> pure xs
-          Just (k, v) -> consume $ M.insertWith (Semigroup.<>) k v xs
+          Nothing   -> pure xs
+          Just res' -> consume $ incrementalAdd res' xs
 
-      f' :: FullPath 'File -> m (Maybe (k, v))
-      f' path
+      consumeFile' :: FullPath 'File -> m (Maybe small)
+      consumeFile' path
         | reMatches ignoredGlobsRE (unFullPath path)
         = pure Nothing
         | otherwise
-        = f path
+        = consumeFile path
 
       -- Reserve 1 capability for synchronous processing
       extraJobs = n - 1
 
       doFind =
-        findRecursive extraJobs shouldVisit f' (const (pure Nothing)) collect shallowPaths recursivePaths
+        findRecursive extraJobs shouldVisit consumeFile' consumeDir collect shallowPaths recursivePaths
   withAsync (doFind `finally` liftBase (atomically (closeTMQueue results))) $ \searchAsync ->
-    liftBase (consume M.empty) <* (wait searchAsync :: m ())
+    liftBase (consume initialValue) <* (wait searchAsync :: m ())
