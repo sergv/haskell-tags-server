@@ -42,7 +42,6 @@ library
     attoparsec >= 0.13.1.0,
     base >= 4,
     bimap,
-    binary,
     bytestring,
     conduit,
     conduit-extra,
@@ -78,6 +77,7 @@ library
     streaming-commons,
     stm,
     stm-chans,
+    store,
     text,
     time,
     transformers,
@@ -96,7 +96,6 @@ library
     Control.Monad.Par.Combinator.Ext
     Control.Parallel.Strategies.Ext
 
-    Data.Binary.Ext
     Data.CompiledRegex
     Data.Condition
     Data.ErrorMessage
