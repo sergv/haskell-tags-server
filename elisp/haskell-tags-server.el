@@ -22,7 +22,7 @@
   :group 'haskell-completions
   :type 'stringp)
 
-(defcustom haskell-tags-server-port 10000
+(defcustom haskell-tags-server-port 4872
   "Port to user for connecting to Haskell tags server."
   :group 'haskell-completions
   :type 'integerp)
