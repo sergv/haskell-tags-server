@@ -102,7 +102,7 @@ main = withSocketsDo $ do
 #endif
 
   ProgramConfig{cfgSourceDirectories, cfgDirTrees, cfgPort, cfgEagerTagging, cfgNameResolution, cfgDebugVerbosity, cfgStateFile} <- execParser progInfo
-  -- validate that specified directories actually exist
+  -- Validate that specified directories actually exist.
   for_ cfgSourceDirectories ensureDirExists
   for_ cfgDirTrees ensureDirExists
 

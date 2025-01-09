@@ -545,7 +545,6 @@ testBreakBlocks = testGroup "Break blocks"
       . stripServerTokens'
       . tokenize' filename mode
 
-
 testWhereBlock :: TestTree
 testWhereBlock = testGroup "whereBlock"
   [ "class A f where\n\

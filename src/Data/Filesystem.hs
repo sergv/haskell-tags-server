@@ -160,8 +160,8 @@ findRecurCollect
   :: forall big small m. (WithCallStack, MonadBaseControl IO m, MonadMask m, IncrementalContainer big small)
   => Set (BaseName 'Dir)
   -> CompiledRegex
-  -> Set (FullPath 'Dir) -- Shallow paths
-  -> Set (FullPath 'Dir) -- Recursive paths
+  -> Set (FullPath 'Dir) -- ^ Shallow paths
+  -> Set (FullPath 'Dir) -- ^ Recursive paths
   -> big                 -- ^ Initial value
   -> (FullPath 'File -> m (Maybe small))
   -> (FullPath 'Dir  -> m (Maybe small))

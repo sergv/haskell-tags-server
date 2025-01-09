@@ -47,6 +47,8 @@ module Haskell.Language.LexerSimple.Types
   , unsafeTextHead
   , utf8BS
 
+  , mkSrcPos
+
   , asCodeL
   , asCommentDepthL
   , asQuasiquoterDepthL
@@ -68,7 +70,7 @@ import Data.Void (Void, vacuous)
 import Data.Word (Word8)
 
 import Haskell.Language.Lexer.FastTags
-import Haskell.Language.Lexer.Types (LiterateStyle(..), Context(..), AlexCode(..))
+import Haskell.Language.Lexer.Types (LiterateStyle(..), AlexCode(..))
 import Haskell.Language.LexerSimple.LensBlaze
 
 import qualified Data.ByteString as BS
@@ -81,6 +83,10 @@ import GHC.IO (IO(..))
 import GHC.Ptr
 import GHC.Word
 
+import FastTags.Token
+import qualified FastTags.Util as Util
+
+
 {-# INLINE advanceLine #-}
 advanceLine :: Char# -> Line -> Line
 advanceLine '\n'# = increaseLine
@@ -92,30 +98,54 @@ countInputSpace AlexInput{aiInput} len =
   where
     inc acc ' '#  = acc + 1
     inc acc '\t'# = acc + 8
-    inc acc c#    = case fixChar c# of 1## -> acc + 1; _ -> acc
+    inc acc c#    = case fixChar c# of
+      1## -> acc + 1
+      _   -> acc
 
 data AlexInput = AlexInput
-  { aiInput  :: {-# UNPACK #-} !(Ptr Word8)
-  , aiLine   :: {-# UNPACK #-} !Line
+  { aiInput           :: {-# UNPACK #-} !(Ptr Word8)
+  -- , aiIntStore      :: {-# UNPACK #-} !Word64
+
+  , aiLine            :: {-# UNPACK #-} !Line
+  -- , aiTrackPrefixes   :: Bool
+  , aiAbsPos          :: {-# UNPACK #-} !Offset -- in number of characters
+  , aiLineLength      :: {-# UNPACK #-} !Int -- in bytes
   } deriving (Show, Eq, Ord)
 
 {-# INLINE aiLineL #-}
 aiLineL :: Lens' AlexInput Line
 aiLineL = lens aiLine (\b s -> s { aiLine = b })
 
+{-# INLINE aiTrackPrefixesL #-}
+aiTrackPrefixesL :: Lens' AlexInput Bool
+aiTrackPrefixesL = lens aiTrackPrefixes (\b s -> s { aiTrackPrefixes = b })
+
+{-# INLINE aiAbsPosL #-}
+aiAbsPosL :: Lens' AlexInput Offset
+aiAbsPosL = lens aiAbsPos (\b s -> s { aiAbsPos = b })
+
+{-# INLINE aiLineLengthL #-}
+aiLineLengthL :: Lens' AlexInput Int
+aiLineLengthL = lens aiLineLength (\b s -> s { aiLineLength = b })
+
+
+
 {-# INLINE byteStringPos #-}
 byteStringPos :: C8.ByteString -> Int
 byteStringPos (BSI.PS _payload offset _len) = offset
 
 {-# INLINE withAlexInput #-}
-withAlexInput :: C8.ByteString -> (AlexInput -> a) -> a
-withAlexInput s f =
+withAlexInput :: Bool -> C8.ByteString -> (AlexInput -> a) -> a
+withAlexInput aiTrackPrefixes s f =
   case s' of
     BSI.PS ptr offset _len ->
       inlinePerformIO $ withForeignPtr ptr $ \ptr' -> do
         let !input = set aiLineL initLine AlexInput
-              { aiInput  = ptr' `plusPtr` offset
-              , aiLine   = Line 0
+              { aiInput      = ptr' `plusPtr` offset
+              , aiLine       = Line 0
+              , aiTrackPrefixes
+              , aiAbsPos     = initAbsPos
+              , aiLineLength = 0
               }
             !res = f input
         touchForeignPtr ptr
@@ -125,12 +155,38 @@ withAlexInput s f =
     -- at the beginning to simplify processing. Thus, line numbers in the
     -- result are 1-based.
     initLine = Line 0
+    -- Same reasoning applies to the initial absolute position.
+    initAbsPos = Offset (-1)
 
     -- Add '\0' at the end so that we'll find the end of stream (just
     -- as in the old C days...)
     s' = C8.cons '\n' $ C8.snoc (C8.snoc (stripBOM s) '\n') '\0'
     stripBOM :: C8.ByteString -> C8.ByteString
     stripBOM xs = fromMaybe xs $ C8.stripPrefix "\xEF\xBB\xBF" xs
+
+
+mkSrcPos :: FilePath -> AlexInput -> SrcPos
+mkSrcPos filename (AlexInput {aiInput, aiLine, aiAbsPos, aiLineLength}) =
+    SrcPos { posFile   = filename
+           , posLine   = aiLine
+           , posOffset = aiAbsPos
+           , posPrefix = TE.decodeUtf8 $ bytesToUtf8BS aiLineLength $ minusPtr aiInput aiLineLength
+           , posSuffix = TE.decodeUtf8 $ regionToUtf8BS aiInput $ dropUntilNL aiInput
+           }
+
+
+data Context = CtxHaskell | CtxQuasiquoter
+    deriving (Show, Eq, Ord)
+
+-- | Abstract wrapper around alex automata states.
+newtype AlexCode = AlexCode { unAlexCode :: Int }
+  deriving (Eq, Ord, Show, Pretty, Enum, Num, Real, Integral)
+
+data LiterateStyle = Bird | Latex
+  deriving (Eq, Ord, Show, Enum, Bounded)
+
+
+
 
 data LiterateLocation a = LiterateInside a | LiterateOutside | Vanilla
   deriving (Eq, Ord, Show, Functor)
@@ -287,22 +343,22 @@ addIndentationSize x =
   modify (over asIndentationSizeL (+ x))
 
 data QQEndsState = QQEndsState
-  { qqessPresent  :: !Bool
+  { qqessPresent  :: !Int#
   , qqessPrevChar :: !Char#
   }
 
 calculateQuasiQuoteEnds :: Ptr Word8 -> Bool
 calculateQuasiQuoteEnds =
-  qqessPresent . utf8Foldl' combine (QQEndsState False '\n'#)
+  isTrue# . qqessPresent . utf8Foldl' combine (QQEndsState False '\n'#)
   where
     combine :: QQEndsState -> Char# -> QQEndsState
     combine QQEndsState{qqessPresent, qqessPrevChar} c# = QQEndsState
       { qqessPresent      =
-        qqessPresent ||
+        qqessPresent `orI#`
         case (# qqessPrevChar, c# #) of
-          (# '|'#, ']'# #) -> True
-          (# _,    '⟧'# #) -> True
-          _                -> False
+          (# '|'#, ']'# #) -> 1##
+          (# _,    '⟧'# #) -> 1##
+          _                -> 0##
       , qqessPrevChar = c#
       }
 
@@ -351,11 +407,16 @@ dropUntil2 w1 w2 input@AlexInput{aiInput} =
 alexGetByte :: AlexInput -> Maybe (Word8, AlexInput)
 alexGetByte input@AlexInput{aiInput} =
   case nextChar aiInput of
-    (C# '\0'#, _)  -> Nothing
-    (C# c#,    cs) -> Just (b, input')
+    (# '\0'#, _, _  #) -> Nothing
+    (# c#,    n, cs #) -> Just (b, input')
       where
         !b     = W8# (fixChar c#)
-        input' = over aiLineL (advanceLine c#) $ input { aiInput = cs }
+        input' = case c# of
+          '\n'# ->
+            over aiLineL (increaseLine) $
+            input { aiInput = cs, aiLineLength = 0, aiAbsPos = aiAbsPos input + 1 }
+          _     ->
+            input { aiInput = cs, aiLineLength = aiLineLength input + I# n, aiAbsPos = aiAbsPos input + 1 }
 
 -- Translate unicode character into special symbol we teached Alex to recognize.
 {-# INLINE fixChar #-}
@@ -416,13 +477,15 @@ unsafeTextHeadAscii (Ptr ptr#) = W8# (indexWord8OffAddr# ptr# 0#)
 
 {-# INLINE unsafeTextHead #-}
 unsafeTextHead :: Ptr Word8 -> Char
-unsafeTextHead = fst . nextChar
+unsafeTextHead x =
+  case nextChar x of
+    (# c#, _, _ #) -> C# c#
 
 {-# INLINE nextChar #-}
-nextChar :: Ptr Word8 -> (Char, Ptr Word8)
+nextChar :: Ptr Word8 -> (# Char#, Int#, Ptr Word8 #)
 nextChar (Ptr ptr#) =
   case utf8DecodeChar# ptr# of
-    (# c#, nBytes# #) -> (C# c#, Ptr (ptr# `plusAddr#` nBytes#))
+    (# c#, nBytes# #) -> (# c#, nBytes#, Ptr (ptr# `plusAddr#` nBytes#) #)
 
 {-# INLINE dropUntilNL# #-}
 dropUntilNL# :: Ptr Word8 -> Ptr Word8
@@ -490,6 +553,16 @@ utf8BS (I# n#) (Ptr start#) =
       case utf8SizeChar# ptr# of
         0#      -> m#
         nBytes# -> go (k# -# 1#) (ptr# `plusAddr#` nBytes#) (m# +# nBytes#)
+
+{-# INLINE bytesToUtf8BS #-}
+bytesToUtf8BS :: Int -> Ptr Word8 -> BS.ByteString
+bytesToUtf8BS (I# nbytes#) (Ptr start#) =
+  BSI.PS (inlinePerformIO (newForeignPtr_ (Ptr start#))) 0 (I# nbytes)
+
+{-# INLINE regionToUtf8BS #-}
+regionToUtf8BS :: Ptr Word8 -> Ptr Word8 -> BS.ByteString
+regionToUtf8BS (Ptr start#) (Ptr end#) =
+  BSI.PS (inlinePerformIO (newForeignPtr_ (Ptr start#))) 0 (I# (minusAddr# end# start#))
 
 {-# INLINE inlinePerformIO #-}
 inlinePerformIO :: IO a -> a

@@ -14,7 +14,11 @@
 module Haskell.Language.LexerSimple.Lexer (tokenize) where
 
 import Control.Monad
-import Control.Monad.Except.Ext
+#if MIN_VERSION_mtl(2,2,0)
+import Control.Monad.Except
+#else
+import Control.Monad.Error
+#endif
 import Control.Monad.Writer.Strict
 import Control.Monad.State.Strict
 
@@ -66,7 +70,7 @@ $unidigit  = \x05
 $digit     = [$ascdigit $unidigit]
 $unisuffix = \x06
 $ident_nonsym = [$ascident $uniident $unisuffix $digit] # [$symbol]
-$ident_syms   = [ \' \_ \# ]
+$ident_syms   = [\'\_\#]
 $ident     = [$ident_nonsym $ident_syms]
 
 -- Stands for "→", "∷", "⇒", "⦇", "⦈", "∀", "⟦", "⟧"
@@ -325,7 +329,7 @@ scanTokens filename = go
           -- Use input after reading token to get proper prefix that includes
           -- token we currently read.
           AlexState{asInput} <- get
-          let !tok = Pos (mkSrcPos filename $! view aiLineL asInput) nextTok
+          let !tok = Pos (mkSrcPos filename asInput) nextTok
           tell [tok]
           go
 
