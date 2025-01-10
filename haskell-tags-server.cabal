@@ -1,14 +1,13 @@
+cabal-version: 3.0
+
 name:
   haskell-tags-server
 version:
   0.1.0.0
 synopsis:
   Server that looks up haskell entities, similar to tags in editors but more precise
--- description:
 license:
-  BSD3
-license-file:
-  LICENSE
+  Apache-2.0
 author:
   Sergey Vinokurov
 maintainer:
@@ -17,8 +16,6 @@ category:
   Development
 build-type:
   Simple
-cabal-version:
-  >=1.16
 
 flag dev
   description:
@@ -36,55 +33,52 @@ library
   else
     build-depends: unix >= 2.6, unix-compat
   build-depends:
-    abstract-par,
-    array,
-    async,
-    attoparsec >= 0.13.1.0,
-    base >= 4,
-    bimap,
-    bytestring,
-    conduit,
-    conduit-extra,
-    containers,
-    deepseq,
-    directory,
-    dlist,
-    exceptions >= 0.8,
-    extra >= 1.4.2,
-    fast-tags >= 1.3,
-    filepath,
-    fsnotify,
-    hashable,
-    haskell-src-exts >= 1.16,
-    lifted-async,
-    microlens,
-    monad-control >= 1.0,
-    monad-par,
-    monad-par-extras,
-    mtl >= 2.2,
-    network >= 2.6,
-    parallel,
-    pointed,
-    prettyprinter,
-    prettyprinter-combinators,
-    profunctors >= 5.2,
-    regex-tdfa >= 1.2.2,
-    regex-tdfa-text,
-    scientific,
-    semigroupoids,
-    semigroups,
-    sexp-grammar,
-    streaming-commons,
-    stm,
-    stm-chans,
-    store,
-    text,
-    time,
-    transformers,
-    transformers-base,
-    unordered-containers,
-    unsafe,
-    utf8-string >= 0.3
+    , abstract-par
+    , array
+    , async
+    , attoparsec >= 0.13.1.0
+    , base >= 4
+    , bimap
+    , bytestring
+    , conduit
+    , conduit-extra
+    , containers
+    , deepseq
+    , directory
+    , dlist
+    , exceptions >= 0.8
+    , extra >= 1.4.2
+    , fast-tags >= 1.3
+    , filepath
+    , hashable
+    , haskell-src-exts >= 1.16
+    , lifted-async
+    , microlens
+    , monad-control >= 1.0
+    , monad-par
+    , monad-par-extras
+    , mtl >= 2.2
+    , network >= 2.6
+    , parallel
+    , pointed
+    , prettyprinter
+    , prettyprinter-combinators
+    , profunctors >= 5.2
+    , regex-tdfa >= 1.2.2
+    , scientific
+    , semigroupoids
+    , semigroups
+    , stm
+    , stm-chans
+    , store
+    , streaming-commons
+    , text
+    , time
+    , transformers
+    , transformers-base
+    , unordered-containers
+    , unsafe
+    , utf8-string >= 0.3
   exposed-modules:
     Control.Arrow.Ext
     Control.Monad.Ext
@@ -162,10 +156,8 @@ library
   if impl(ghc >= 8.0)
     ghc-options:
       -Wcompat
-  ghc-prof-options:
-    -fprof-auto
-  build-tools:
-    alex >= 3.1.7
+  build-tool-depends:
+    alex:alex >= 3.1.7
 
 executable haskell-tags-server
   if !os(windows)
@@ -173,15 +165,15 @@ executable haskell-tags-server
   main-is:
     src/Main.hs
   build-depends:
-    base >=4,
-    containers,
-    directory,
-    filepath,
-    mtl,
-    network,
-    optparse-applicative,
-    haskell-tags-server,
-    text
+    , base >=4
+    , containers
+    , directory
+    , filepath
+    , haskell-tags-server
+    , mtl
+    , network
+    , optparse-applicative
+    , text
   default-language:
     Haskell2010
   ghc-options:
@@ -194,8 +186,6 @@ executable haskell-tags-server
   if impl(ghc >= 8.0)
     ghc-options:
       -Wcompat
-  ghc-prof-options:
-    -fprof-auto
 
 test-suite test-haskell-tags-server
   if !os(windows)
@@ -224,35 +214,33 @@ test-suite test-haskell-tags-server
     ServerTests.LogCollectingServer
     TestUtils
   build-depends:
-    QuickCheck,
-    base,
-    bytestring,
-    containers,
-    deepseq,
-    directory,
-    dlist,
-    exceptions,
-    fast-tags,
-    filepath,
-    monad-control,
-    mtl,
-    network,
-    prettyprinter,
-    raw-strings-qq,
-    regex-tdfa,
-    regex-tdfa-text,
-    scientific,
-    semigroups,
-    sexp-grammar,
-    stm,
-    haskell-tags-server,
-    tasty >= 0.7,
-    tasty-hunit >= 0.4,
-    tasty-quickcheck,
-    template-haskell,
-    text,
-    transformers-base,
-    utf8-string
+    , QuickCheck
+    , base
+    , bytestring
+    , containers
+    , deepseq
+    , directory
+    , dlist
+    , exceptions
+    , fast-tags
+    , filepath
+    , haskell-tags-server
+    , monad-control
+    , mtl
+    , network
+    , prettyprinter
+    , raw-strings-qq
+    , regex-tdfa
+    , scientific
+    , semigroups
+    , stm
+    , tasty >= 0.7
+    , tasty-hunit >= 0.4
+    , tasty-quickcheck
+    , template-haskell
+    , text
+    , transformers-base
+    , utf8-string
   ghc-options:
     -Wall
     -fno-warn-type-defaults
@@ -263,5 +251,3 @@ test-suite test-haskell-tags-server
   if impl(ghc >= 8.0)
     ghc-options:
       -Wcompat
-  ghc-prof-options:
-    -fprof-auto
