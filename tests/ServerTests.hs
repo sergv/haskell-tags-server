@@ -33,14 +33,13 @@ import Control.Monad.Trans.Control
 import Data.Scientific
 import qualified Data.Set as S
 import Data.Text (Text)
-import qualified Data.Text.Prettyprint.Doc as PP
-import Data.Text.Prettyprint.Doc.Ext
 import Data.Void (Void)
 import GHC.Stack
 import Language.Sexp as Sexp
-import Network.Socket (PortNumber, Socket)
 import Network.Socket as Socket
 import qualified Network.Socket.ByteString.Lazy as Socket.BSL
+import qualified Prettyprinter as PP
+import Prettyprinter.Ext
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -63,8 +62,7 @@ testDataDir = "test-data"
 mkTestsConfig
   :: (MonadBase IO m, MonadError ErrorMessage m)
   => NameResolutionStrictness
-  -> WorkingDirectory
-  -> m (SearchCfg, TagsServerConf)
+  -> WorkingDirectory  -> m (SearchCfg, TagsServerConf)
 mkTestsConfig tsconfNameResolution srcDir = do
   searchDirs <- case srcDir of
     ShallowDir   dir -> do
@@ -122,7 +120,7 @@ data ServerConnection = ServerConnection
   }
 
 reportErr :: MonadBase IO m => Doc Void -> m a
-reportErr = liftBase . throwIO . ErrorCall . displayDocString
+reportErr = liftBase . throwIO . ErrorCall . renderString
 
 withConnection
   :: forall m a. (MonadMask m, MonadBaseControl IO m, MonadFS m)
@@ -239,7 +237,7 @@ mkFindSymbolTest pool ServerTest{stTestName, stNameResolutionStrictness, stWorki
       Left err -> assertFailure' $ "Failure:" ## pretty err
   where
     assertFailure' :: MonadBase IO m => Doc ann -> m a
-    assertFailure' = liftBase . assertFailure . displayDocString
+    assertFailure' = liftBase . assertFailure . renderString
 
 responseType :: Sexp -> Maybe Text
 responseType (ParenList (Symbol x : _)) = Just x

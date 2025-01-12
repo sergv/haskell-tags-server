@@ -45,6 +45,7 @@ import Control.Arrow
 import Control.DeepSeq
 
 import Data.Coerce
+import Data.Kind (Type)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import Data.Pointed
@@ -52,7 +53,7 @@ import Data.Set (Set)
 import Data.Store (Store)
 import GHC.Generics
 
-import Data.Text.Prettyprint.Doc.Combinators
+import Prettyprinter.Combinators
 
 -- | Map than maintains sets of values that all share some key.
 -- Every value must be a member of 'HasKey' typeclass.
@@ -84,7 +85,7 @@ instance Foldable f => Foldable (KeyMap f) where
   foldMap f = foldMap (foldMap f) . unKeyMap
 
 class Ord (Key a) => HasKey a where
-  type Key a :: *
+  type Key a :: Type
   getKey :: a -> Key a
 
 {-# INLINE insert #-}

@@ -29,19 +29,19 @@ module Control.Monad.Logging.Simple
   , runSimpleLoggerT
   ) where
 
+import Control.Monad
 import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.Except
+import Control.Monad.Filesystem as MonadFS
+import Control.Monad.Logging
 import Control.Monad.Reader
 import Control.Monad.Trans.Control
 import Data.Coerce
-import qualified Data.Text.Lazy.IO as TLIO
+import qualified Data.Text.IO as TIO
 import Data.Void (Void)
+import Prettyprinter.Ext
 import System.IO
-
-import Control.Monad.Filesystem as MonadFS
-import Control.Monad.Logging
-import Data.Text.Prettyprint.Doc.Ext
 
 data SimpleLoggerCfg m = SimpleLoggerCfg
   { logSink     :: Doc Void -> m ()
@@ -105,8 +105,8 @@ runSimpleLoggerT dest severity (SimpleLoggerT action) =
             Nothing    -> \_ -> pure ()
             Just dest' ->
               case dest' of
-                Stderr   -> \msg -> liftBase $ TLIO.hPutStrLn stderr (displayDoc msg) *> hFlush stderr
-                Stdout   -> \msg -> liftBase $ TLIO.hPutStrLn stdout (displayDoc msg) *> hFlush stdout
+                Stderr   -> \msg -> liftBase $ TIO.hPutStrLn stderr (render msg) *> hFlush stderr
+                Stdout   -> \msg -> liftBase $ TIO.hPutStrLn stdout (render msg) *> hFlush stdout
                 Custom f -> f
       , logSeverity = severity
       }

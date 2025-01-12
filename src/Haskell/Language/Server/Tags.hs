@@ -45,13 +45,10 @@ import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map.Strict as M
 import Data.Semigroup.Foldable
-import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Store as Store
-import qualified Data.Text as T
-import Data.Text.Prettyprint.Doc.Ext (Pretty(..), (##), (<+>))
+import Prettyprinter.Ext (Pretty(..), (##), (<+>))
 import qualified System.Directory as Directory
-import qualified System.FSNotify as FSNotify
 import System.IO
 
 import qualified Data.Promise as Promise
@@ -61,7 +58,6 @@ import qualified Control.Monad.Filesystem as MonadFS
 import Control.Monad.Logging
 import Data.CompiledRegex
 import Data.ErrorMessage
-import Data.Filesystem
 import Data.Map.NonEmpty (NonEmptyMap)
 import qualified Data.Map.NonEmpty as NEMap
 import Data.Path
@@ -82,12 +78,10 @@ data TagsServer = TagsServer
   , tsFinishState    :: MVar TagsServerState
     -- | Id of the requent serving thread.
   , tsThreadId       :: !ThreadId
-  , tsFileWatch      :: FSNotify.WatchManager
   }
 
 stopTagsServer :: MonadBase IO m => TagsServer -> m ()
-stopTagsServer TagsServer{tsThreadId, tsFileWatch} = liftBase $ do
-  FSNotify.stopManager tsFileWatch
+stopTagsServer TagsServer{tsThreadId} = liftBase $ do
   killThread tsThreadId
 
 -- | Block until tags server stops.
@@ -129,50 +123,6 @@ preloadFiles searchCfg conf s = do
       M.unionWith (<>) (fold1 . NEMap.elemsNE <$> knownFiles) (tssUnloadedFiles s)
     }
 
-watchDirs
-  :: (MonadError ErrorMessage m, MonadBase IO m)
-  => TagsServerConf
-  -> FSNotify.WatchManager
-  -> Chan SomeRequest
-  -> SearchCfg
-  -> m ()
-watchDirs conf manager reqChan searchCfg@SearchCfg{scShallowPaths, scRecursivePaths, scIgnoredDirs} = do
-  ignoredGlobsRE <- searchCfgIgnoredRE searchCfg
-  let shouldAct :: FSNotify.Event -> Bool
-      shouldAct event =
-        not (FSNotify.eventIsDirectory event) &&
-        case classifyPath conf path' of
-          Nothing -> False
-          -- Must check that path does not match ignored globs because they
-          -- may include filename patterns as well as directory patterns.
-          Just{}  -> not (reMatches ignoredGlobsRE path)
-        where
-          path' = mkSinglePathFragment path
-          path = T.pack $ FSNotify.eventPath event
-      reportEvent' :: FilePath -> (FullPath 'File -> FSNotifyEvent) -> IO ()
-      reportEvent' path f = do
-        path' <- runExceptT $ mkFullPath path
-        case path' of
-          Left _       -> pure ()
-          Right path'' -> writeChan reqChan $ SomeRequest (FSNotifyReq $ f path'') ()
-      reportEvent :: FSNotify.Event -> IO ()
-      reportEvent = \case
-        FSNotify.Added    path _ _ -> reportEvent' path FSAdded
-        FSNotify.Modified path _ _ -> reportEvent' path FSModified
-        FSNotify.Removed  path _ _ -> reportEvent' path FSRemoved
-        FSNotify.Unknown{}         -> pure ()
-  liftBase $ do
-    (dirsToWatch :: Set (FullPath 'Dir)) <- findRecurCollect
-      scIgnoredDirs          -- ignored dirs
-      ignoredGlobsRE
-      mempty                 -- shallow paths
-      scRecursivePaths       -- recursive  dirs
-      scShallowPaths         -- initial value
-      (const (pure Nothing)) -- consume file
-      (pure . Just)
-    for_ dirsToWatch $ \dir ->
-      FSNotify.watchDir manager (toFilePath dir) shouldAct reportEvent
-
 -- | Start new tags server thread that will serve requests supplied via returned
 -- RequestHandler.
 startTagsServer
@@ -181,7 +131,6 @@ startTagsServer
   -> TagsServerConf
   -> m TagsServer
 startTagsServer searchCfg conf = do
-  tsFileWatch   <- liftBase FSNotify.startManager
   initState     <- case tsconfSerialisedState conf of
     Nothing   -> pure emptyTagsServerState
     Just file -> do
@@ -198,8 +147,7 @@ startTagsServer searchCfg conf = do
   initState'    <- preloadFiles searchCfg conf initState
   reqChan       <- liftBase newChan
   tsFinishState <- liftBase newEmptyMVar
-  tsThreadId    <- liftBaseDiscard forkIO $ handleRequests tsFinishState reqChan tsFileWatch initState'
-  watchDirs conf tsFileWatch reqChan searchCfg
+  tsThreadId    <- liftBaseDiscard forkIO $ handleRequests tsFinishState reqChan initState'
   let tsRequestHandler :: RequestHandler
       tsRequestHandler = \case
         req@QueryReq{} -> do
@@ -214,16 +162,14 @@ startTagsServer searchCfg conf = do
     { tsRequestHandler
     , tsFinishState
     , tsThreadId
-    , tsFileWatch
     }
   where
     handleRequests
       :: MVar TagsServerState
       -> Chan SomeRequest
-      -> FSNotify.WatchManager
       -> TagsServerState
       -> m ()
-    handleRequests doneLock reqChan manager = go
+    handleRequests doneLock reqChan = go
       where
         go :: TagsServerState -> m ()
         go s = do
@@ -296,7 +242,6 @@ startTagsServer searchCfg conf = do
                       }
                 serverState' <- preloadFiles searchCfg' conf serverState
                 let serverState'' = serverState' { tssNamespace = tssNamespace serverState' <> ns }
-                watchDirs conf manager reqChan searchCfg'
                 (response, serverState''') <- runSearchT conf serverState'' $ do
                   symbols <- case request' of
                     FindSymbol scope symbol ->

@@ -8,31 +8,24 @@
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-{-# OPTIONS_GHC -O2    #-}
-{-# OPTIONS_GHC -Wwarn #-}
-
 module Haskell.Language.LexerSimple.Lexer (tokenize) where
 
 import Control.Monad
-#if MIN_VERSION_mtl(2,2,0)
-import Control.Monad.Except
-#else
-import Control.Monad.Error
-#endif
 import Control.Monad.Writer.Strict
 import Control.Monad.State.Strict
 
 import qualified Data.ByteString as BS
 import Data.Char (chr)
-import qualified Data.Text.Prettyprint.Doc as PP
-import Data.Text.Prettyprint.Doc.Ext (Pretty(..), Doc, (<+>), (##))
-import qualified Data.Text.Prettyprint.Doc.Ext as PP
 import Data.Void (Void, absurd)
 import Data.Word
+import GHC.Stack.Ext (WithCallStack)
+import qualified Prettyprinter as PP
+import Prettyprinter.Ext (Pretty(..), Doc, (<+>), (##))
+import qualified Prettyprinter.Ext as PP
 
 import Data.IgnoreEqOrdHashNFData
 import Haskell.Language.Lexer.FastTags
-import Haskell.Language.Lexer.Types (LiterateStyle(..), Context(..), mkSrcPos, AlexCode(..))
+import Haskell.Language.Lexer.Types (LiterateStyle(..), AlexCode(..), mkSrcPos)
 import Haskell.Language.LexerSimple.LensBlaze
 import Haskell.Language.LexerSimple.Types
 
@@ -309,17 +302,17 @@ isLiterateLatexOrOutside' litLoc _inputBefore _len _inputAfter =
 
 tokenize
   :: WithCallStack
-  => FilePath -> LiterateLocation Void -> BS.ByteString -> [Pos ServerToken]
-tokenize filename litLoc input =
-  runAlexM litLoc startCode' input $ scanTokens filename
+  => LiterateLocation Void -> BS.ByteString -> [Pos ServerToken]
+tokenize litLoc input =
+  runAlexM litLoc startCode' input scanTokens
   where
     startCode' = case litLoc of
       Vanilla          -> startCode
       LiterateOutside  -> literateCode
       LiterateInside x -> absurd x
 
-scanTokens :: WithCallStack => FilePath -> AlexM ()
-scanTokens filename = go
+scanTokens :: WithCallStack => AlexM ()
+scanTokens = go
   where
     go = do
       nextTok <- continueScanning
@@ -329,7 +322,7 @@ scanTokens filename = go
           -- Use input after reading token to get proper prefix that includes
           -- token we currently read.
           AlexState{asInput} <- get
-          let !tok = Pos (mkSrcPos filename asInput) nextTok
+          let !tok = Pos (mkSrcPos (aiLine asInput)) nextTok
           tell [tok]
           go
 
@@ -503,7 +496,7 @@ reservedSymbol = \case
   '⦈' -> pure RBanana
   '⟦' -> startUnconditionalQuasiQuoter
   '⟧' -> endQuasiquoter
-  c   -> error $ PP.displayDocString $ "Unexpected reserved symbol:" <+> pretty c
+  c   -> error $ PP.renderString $ "Unexpected reserved symbol:" <+> pretty c
 
 reservedSymbolQQ :: WithCallStack => Char -> AlexM ServerToken
 reservedSymbolQQ = \case

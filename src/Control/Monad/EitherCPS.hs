@@ -22,11 +22,7 @@ module Control.Monad.EitherCPS
   ) where
 
 import Control.Applicative
-#if MIN_VERSION_mtl(2, 2, 0)
 import Control.Monad.Except
-#else
-import Control.Monad.Error
-#endif
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.String

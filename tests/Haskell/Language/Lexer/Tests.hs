@@ -12,11 +12,12 @@
 
 module Haskell.Language.Lexer.Tests (tests) where
 
+import Data.List (sort)
+import qualified Data.Text as T
 import Test.Tasty
 import Test.Tasty.HUnit (testCase)
 
-import Data.List (sort)
-import qualified Data.Text as T
+import qualified FastTags.Tag as FastTags
 
 import Haskell.Language.Lexer (LiterateLocation(..))
 
@@ -82,7 +83,7 @@ testTokenizeCpp = testGroup "Tokenize with preprocessor"
   ]
   where
     (==>) = makeAssertion f
-    f = map valOf . tokenize' filename Vanilla
+    f = map valOf . tokenize' Vanilla
 
 _testTokenizeCppDefines :: TestTree
 _testTokenizeCppDefines = testGroup "#define"
@@ -93,7 +94,7 @@ _testTokenizeCppDefines = testGroup "#define"
   ]
   where
     (==>) = makeAssertion f
-    f = map valOf . tokenize' filename Vanilla
+    f = map valOf . tokenize' Vanilla
 
     constants :: TestTree
     constants = testGroup "Constants"
@@ -715,7 +716,7 @@ _testTokenizeCppConditionals = testGroup "Conditionals"
   ]
   where
     (==>) = makeAssertion f
-    f = map valOf . tokenize' filename Vanilla
+    f = map valOf . tokenize' Vanilla
 
 _testTokenizeCppDefinesWithinConditionals :: TestTree
 _testTokenizeCppDefinesWithinConditionals =
@@ -781,53 +782,53 @@ _testTokenizeCppDefinesWithinConditionals =
     ]
   where
     (==>) = makeAssertion f
-    f = map valOf . tokenize' filename Vanilla
+    f = map valOf . tokenize' Vanilla
 
 testFullPipeline :: TestTree
 testFullPipeline = testGroup "Full processing pipeline"
   [ ["data X", "module X"]
     ==>
-    [ Pos (SrcPos "fn0" (Line 1) 0 mempty mempty) (TagVal "X" Type Nothing)
-    , Pos (SrcPos "fn1" (Line 1) 0 mempty mempty) (TagVal "X" Module Nothing)
+    [ Pos (SrcPos (Line 1) 0 mempty mempty) (TagVal "X" Type Nothing)
+    , Pos (SrcPos (Line 1) 0 mempty mempty) (TagVal "X" Module Nothing)
     ]
   -- Type goes ahead of Module.
   , [ "module X\n\
        \data X"
     ]
     ==>
-    [ Pos (SrcPos "fn0" (Line 1) 0 mempty mempty) (TagVal "X" Module Nothing)
-    , Pos (SrcPos "fn0" (Line 2) 0 mempty mempty) (TagVal "X" Type Nothing)
+    [ Pos (SrcPos (Line 1) 0 mempty mempty) (TagVal "X" Module Nothing)
+    , Pos (SrcPos (Line 2) 0 mempty mempty) (TagVal "X" Type Nothing)
     ]
   , [ "module Z\n\
       \data X = Y\n"
     ]
     ==>
-    [ Pos (SrcPos "fn0" (Line 1) 0 mempty mempty) (TagVal "Z" Module Nothing)
-    , Pos (SrcPos "fn0" (Line 2) 0 mempty mempty) (TagVal "X" Type Nothing)
-    , Pos (SrcPos "fn0" (Line 2) 0 mempty mempty) (TagVal "Y" Constructor (Just "X"))
+    [ Pos (SrcPos (Line 1) 0 mempty mempty) (TagVal "Z" Module Nothing)
+    , Pos (SrcPos (Line 2) 0 mempty mempty) (TagVal "X" Type Nothing)
+    , Pos (SrcPos (Line 2) 0 mempty mempty) (TagVal "Y" Constructor (Just (FastTags.ParentTag "X" Type)))
     ]
   , [ "module Z\n\
       \data X a =\n\
       \  Y a\n"
     ]
     ==>
-    [ Pos (SrcPos "fn0" (Line 1) 0 mempty mempty) (TagVal "Z" Module Nothing)
-    , Pos (SrcPos "fn0" (Line 2) 0 mempty mempty) (TagVal "X" Type Nothing)
-    , Pos (SrcPos "fn0" (Line 3) 0 mempty mempty) (TagVal "Y" Constructor (Just "X"))
+    [ Pos (SrcPos (Line 1) 0 mempty mempty) (TagVal "Z" Module Nothing)
+    , Pos (SrcPos (Line 2) 0 mempty mempty) (TagVal "X" Type Nothing)
+    , Pos (SrcPos (Line 3) 0 mempty mempty) (TagVal "Y" Constructor (Just (FastTags.ParentTag "X" Type)))
     ]
   , [ "newtype A f a b = A\n\
       \  { unA :: f (a -> b) }"
     ]
     ==>
-    [ Pos (SrcPos "fn0" (Line 1) 0 mempty mempty) (TagVal "A" Type Nothing)
-    , Pos (SrcPos "fn0" (Line 1) 0 mempty mempty) (TagVal "A" Constructor (Just "A"))
-    , Pos (SrcPos "fn0" (Line 2) 0 mempty mempty) (TagVal "unA" Function (Just "A"))
+    [ Pos (SrcPos (Line 1) 0 mempty mempty) (TagVal "A" Type Nothing)
+    , Pos (SrcPos (Line 1) 0 mempty mempty) (TagVal "A" Constructor (Just (FastTags.ParentTag "A" Type)))
+    , Pos (SrcPos (Line 2) 0 mempty mempty) (TagVal "unA" Function (Just (FastTags.ParentTag "A" Type)))
     ]
   ]
   where
     (==>) = makeTest f'
     f' = sort
-       . concatMap (\(i, t) -> fst $ processTokens $ tokenize' ("fn" ++ show i) Vanilla t)
+       . concatMap (\(i, t) -> fst $ processTokens ("fn" ++ show i ++ ".hs") $ tokenize' Vanilla t)
        . zip [0..]
 
 textShowSource :: T.Text

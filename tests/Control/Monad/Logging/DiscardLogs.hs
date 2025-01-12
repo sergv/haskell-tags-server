@@ -23,6 +23,7 @@ module Control.Monad.Logging.DiscardLogs
 import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.Except
+import Control.Monad.Trans.Class (MonadTrans(..))
 import Control.Monad.Trans.Control
 
 import Control.Monad.Logging

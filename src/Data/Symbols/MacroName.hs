@@ -16,7 +16,7 @@ module Data.Symbols.MacroName
   ) where
 
 import Data.Text (Text)
-import Data.Text.Prettyprint.Doc.Ext
+import Prettyprinter.Ext
 
 newtype MacroName = MacroName { unMacroName :: Text }
   deriving (Eq, Ord, Pretty, Show)

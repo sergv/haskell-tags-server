@@ -15,11 +15,16 @@ module GHC.Stack.Ext
   , module GHC.Stack
   ) where
 
-import Data.Kind
+#ifndef DEVELOPMENT
+import Data.Kind (Constraint)
+#endif
+
 import GHC.Stack
 
 #ifdef DEVELOPMENT
 type WithCallStack = HasCallStack
-#else
+#endif
+
+#ifndef DEVELOPMENT
 type WithCallStack = (() :: Constraint)
 #endif

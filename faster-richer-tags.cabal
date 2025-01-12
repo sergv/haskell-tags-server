@@ -1,9 +1,9 @@
 cabal-version: 3.0
 
 name:
-  haskell-tags-server
+  faster-richer-tags
 version:
-  0.1.0.0
+  0.1
 synopsis:
   Server that looks up haskell entities, similar to tags in editors but more precise
 license:
@@ -68,6 +68,7 @@ library
     , scientific
     , semigroupoids
     , semigroups
+    , sexp-grammar
     , stm
     , stm-chans
     , store
@@ -105,7 +106,6 @@ library
     Data.SymbolMap
     Data.Symbols
     Data.Symbols.MacroName
-    Data.Text.Prettyprint.Doc.Ext
 
     GHC.Stack.Ext
 
@@ -132,6 +132,8 @@ library
     Haskell.Language.Server.Tags.Types
     Haskell.Language.Server.Tags.Types.Imports
     Haskell.Language.Server.Tags.Types.Modules
+
+    Prettyprinter.Ext
   other-modules:
     Control.Monad.EitherCPS
 
@@ -169,7 +171,7 @@ executable haskell-tags-server
     , containers
     , directory
     , filepath
-    , haskell-tags-server
+    , faster-richer-tags
     , mtl
     , network
     , optparse-applicative
@@ -223,8 +225,8 @@ test-suite test-haskell-tags-server
     , dlist
     , exceptions
     , fast-tags
+    , faster-richer-tags
     , filepath
-    , haskell-tags-server
     , monad-control
     , mtl
     , network
@@ -233,12 +235,14 @@ test-suite test-haskell-tags-server
     , regex-tdfa
     , scientific
     , semigroups
+    , sexp-grammar
     , stm
     , tasty >= 0.7
     , tasty-hunit >= 0.4
     , tasty-quickcheck
     , template-haskell
     , text
+    , transformers
     , transformers-base
     , utf8-string
   ghc-options:

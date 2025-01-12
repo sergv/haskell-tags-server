@@ -13,11 +13,9 @@
 module Data.ErrorMessage (ErrorMessage(..)) where
 
 import Control.Exception
-
--- import Data.String
-import Data.Text.Prettyprint.Doc.Ext
 import Data.Void (Void, vacuous)
 import GHC.Stack.Ext
+import Prettyprinter.Ext
 
 data ErrorMessage = ErrorMessage
   { errorMessageBody      :: Doc Void

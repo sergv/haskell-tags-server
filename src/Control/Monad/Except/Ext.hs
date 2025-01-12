@@ -15,11 +15,11 @@ module Control.Monad.Except.Ext
   , module Control.Monad.Except
   ) where
 
-import Control.Monad.Except hiding (throwError)
 import qualified Control.Monad.Except as CME
-import Data.Text.Prettyprint.Doc.Ext
-import GHC.Stack.Ext (WithCallStack, callStack)
+import Control.Monad.Except hiding (throwError)
 import Data.Void (Void)
+import GHC.Stack.Ext (WithCallStack, callStack)
+import Prettyprinter.Ext
 
 import Data.ErrorMessage
 

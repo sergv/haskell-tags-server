@@ -43,10 +43,9 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import Data.Set (Set)
 import Data.Store (Store)
-import Data.Text.Prettyprint.Doc.Ext
 import Data.Time.Clock (UTCTime(..))
 import Data.Traversable (for)
-import GHC.Generics (Generic)
+import Prettyprinter.Ext
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS

@@ -21,15 +21,14 @@ module Haskell.Language.Lexer.Types
   , LiterateStyle(..)
   ) where
 
-import Data.Text.Prettyprint.Doc.Ext (Pretty(..))
+import Prettyprinter.Ext (Pretty(..))
 
 import Haskell.Language.Lexer.FastTags (Line, Offset(..), SrcPos(..))
 
 {-# INLINE mkSrcPos #-}
-mkSrcPos :: FilePath -> Line -> SrcPos
-mkSrcPos filename line = SrcPos
-  { posFile   = filename
-  , posLine   = line
+mkSrcPos :: Line -> SrcPos
+mkSrcPos line = SrcPos
+  { posLine   = line
   , posPrefix = mempty
   , posOffset = Offset 0
   , posSuffix = mempty

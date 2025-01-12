@@ -6,6 +6,7 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE DoAndIfThenElse     #-}
 {-# LANGUAGE FlexibleContexts    #-}
@@ -28,6 +29,7 @@ module Haskell.Language.Server.Tags.LoadModule
 import Prelude hiding (mod)
 
 import Control.Arrow (first)
+import Control.Monad
 import qualified Control.Monad.Except as CME
 import Control.Monad.Except.Ext
 import Control.Monad.Reader
@@ -50,11 +52,11 @@ import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
-import qualified Data.Text.Prettyprint.Doc as PP
-import Data.Text.Prettyprint.Doc.Ext
 import Data.Time.Clock (UTCTime)
 import Data.Traversable (for)
 import Data.Void (Void)
+import qualified Prettyprinter as PP
+import Prettyprinter.Ext
 
 import Haskell.Language.Lexer (tokenize)
 import Haskell.Language.Lexer.FastTags (Pos, ServerToken, processTokens)
@@ -264,7 +266,7 @@ makeModule suggestedModuleName modifTime filename tokens = do
   let syms           :: [ResolvedSymbol]
       errors         :: [Doc Void]
       (syms, errors) = first (fmap (mkResolvedSymbol filename) . FastTags.removeDuplicatePatterns)
-                     $ processTokens tokens'
+                     $ processTokens (T.unpack $ unFullPath filename) tokens'
       allSymbols     :: SymbolMap
       allSymbols     = SM.fromList syms
   unless (null errors) $
@@ -479,10 +481,15 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
                                 FastTags.Type   -> FastTags.Constructor
                                 FastTags.Family -> FastTags.Type
                                 typ'            -> typ'
+                              parent :: FastTags.ParentTag
+                              parent = FastTags.ParentTag
+                                { FastTags.ptName = getSymbolName $ getUnqualifiedSymbolName name'
+                                , FastTags.ptType = typ
+                                }
                               names :: Map UnqualifiedSymbolName ResolvedSymbol
                               names
                                 = M.insert name' (mkResolvedSymbolFromParts posFile posLine name' typ Nothing)
-                                $ M.fromSet (\childName -> mkResolvedSymbolFromParts posFile posLine childName childrenType (Just name')) extraChildrenExports
+                                $ M.fromSet (\childName -> mkResolvedSymbolFromParts posFile posLine childName childrenType (Just parent)) extraChildrenExports
                           pure (MM.singleton qualifier names :: MonoidalMap (Maybe ImportQualifier) (Map UnqualifiedSymbolName ResolvedSymbol))
                   let (errors, xs) = partitionEithers exportedFromExportList'
                   (exportedFromExportList :: MonoidalMap (Maybe ImportQualifier) (Map UnqualifiedSymbolName ResolvedSymbol)) <-

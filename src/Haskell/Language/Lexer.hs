@@ -34,7 +34,7 @@ tokenize :: WithCallStack => FilePath -> BS.ByteString -> [Pos ServerToken]
   --   mode
   --     | takeExtension filename == ".lhs" = Literate
   --     | otherwise                        = Vanilla
-tokenize filename = SimpleLexer.tokenize filename mode
+tokenize filename = SimpleLexer.tokenize mode
   where
     mode :: LiterateLocation a
     mode

@@ -48,10 +48,9 @@ import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Store (Store)
-import GHC.Generics (Generic)
+import Prettyprinter.Ext
 
 import Data.Symbols
-import Data.Text.Prettyprint.Doc.Ext
 
 data SymbolMap = SymbolMap
   { -- | Map from children entities to parents containing them. E.g.

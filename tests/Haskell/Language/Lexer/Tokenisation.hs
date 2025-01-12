@@ -10,9 +10,12 @@
 
 module Haskell.Language.Lexer.Tokenisation (tests) where
 
+import FastTags.Tag (ProcessMode(ProcessVanilla))
+import qualified FastTags.Tag as FastTags
 import Test.Tasty
 
-import Data.List (sort)
+import qualified Data.List as L
+import Data.Maybe (mapMaybe)
 import qualified Data.Text as T
 import Data.Void (Void)
 
@@ -150,9 +153,9 @@ testTokenise = testGroup "Tokenise"
   where
     (==>) = makeTest f
     f :: T.Text -> [ServerToken]
-    f = tail -- strip uninteresting initial newline
+    f = L.drop 1 -- strip uninteresting initial newline
       . map valOf
-      . tokenize' filename Vanilla
+      . tokenize' Vanilla
 
     tokeniseSplices = testGroup "Splices"
       [ "$(foo)"                                  ==>
@@ -349,7 +352,7 @@ testTokeniseWithNewlines = testGroup "Tokenise with newlines"
     (|=>) = makeTest (f LiterateOutside)
     f mode =
         map valOf
-      . tokenize' filename mode
+      . tokenize' mode
 
 
 testStripComments :: TestTree
@@ -406,7 +409,7 @@ testStripComments = testGroup "Strip comments"
   ]
   where
     (==>) = makeTest f
-    f = map valOf . tokenize' filename Vanilla
+    f = map valOf . tokenize' Vanilla
 
 
 testBreakBlocks :: TestTree
@@ -539,11 +542,12 @@ testBreakBlocks = testGroup "Break blocks"
     (|=>) = makeTest (f LiterateOutside)
     f :: LiterateLocation Void -> T.Text -> [[ServerToken]]
     f mode =
-        map (map (embedServerToken . valOf) . unstrippedTokensOf)
-      . breakBlocks
+        map (mapMaybe (embedServerToken . valOf) . unstrippedTokensOf)
+      . breakBlocks ProcessVanilla
+      . id
       . UnstrippedTokens
       . stripServerTokens'
-      . tokenize' filename mode
+      . tokenize' mode
 
 testWhereBlock :: TestTree
 testWhereBlock = testGroup "whereBlock"
@@ -573,11 +577,11 @@ testWhereBlock = testGroup "whereBlock"
   ]
   where
     (==>) = makeTest f
-    f = map (map (embedServerToken . valOf) . unstrippedTokensOf)
+    f = map (mapMaybe (embedServerToken . valOf) . unstrippedTokensOf)
       . whereBlock
       . UnstrippedTokens
       . stripServerTokens'
-      . tokenize' filename Vanilla
+      . tokenize' Vanilla
 
 
 testProcess :: TestTree
@@ -597,17 +601,17 @@ testProcess = testGroup "Process"
 testPrefixes :: TestTree
 testPrefixes = testGroup "Prefix tracking"
   [ "module Bar.Foo where\n" ==>
-      [Pos (SrcPos fn 1 0 "" "") (TagVal "Foo" Module Nothing)]
+      [Pos (SrcPos 1 0 "" "") (TagVal "Foo" Module Nothing)]
   , "newtype Foo a b =\n\
     \\tBar x y z\n" ==>
-    [ Pos (SrcPos fn 1 0 "" "") (TagVal "Foo" Type Nothing)
-    , Pos (SrcPos fn 2 0 "" "") (TagVal "Bar" Constructor (Just "Foo"))
+    [ Pos (SrcPos 1 0 "" "") (TagVal "Foo" Type Nothing)
+    , Pos (SrcPos 2 0 "" "") (TagVal "Bar" Constructor (Just (FastTags.ParentTag "Foo" Type)))
     ]
   , "data Foo a b =\n\
     \\tBar x y z\n"
     ==>
-    [ Pos (SrcPos fn 1 0 "" "") (TagVal "Foo" Type Nothing)
-    , Pos (SrcPos fn 2 0 "" "") (TagVal "Bar" Constructor (Just "Foo"))
+    [ Pos (SrcPos 1 0 "" "") (TagVal "Foo" Type Nothing)
+    , Pos (SrcPos 2 0 "" "") (TagVal "Bar" Constructor (Just (FastTags.ParentTag "Foo" Type)))
     ]
   , "f :: A -> B\n\
     \g :: C -> D\n\
@@ -615,44 +619,44 @@ testPrefixes = testGroup "Prefix tracking"
     \\tf :: A\n\
     \\t}\n"
     ==>
-    [ Pos (SrcPos fn 1 0 "" "") (TagVal "f" Function Nothing)
-    , Pos (SrcPos fn 2 0 "" "") (TagVal "g" Function Nothing)
-    , Pos (SrcPos fn 3 0 "" "") (TagVal "C" Constructor (Just "D"))
-    , Pos (SrcPos fn 3 0 "" "") (TagVal "D" Type Nothing)
-    , Pos (SrcPos fn 4 0 "" "") (TagVal "f" Function (Just "D"))
+    [ Pos (SrcPos 1 0 "" "") (TagVal "f" Function Nothing)
+    , Pos (SrcPos 2 0 "" "") (TagVal "g" Function Nothing)
+    , Pos (SrcPos 3 0 "" "") (TagVal "C" Constructor (Just (FastTags.ParentTag "D" Type)))
+    , Pos (SrcPos 3 0 "" "") (TagVal "D" Type Nothing)
+    , Pos (SrcPos 4 0 "" "") (TagVal "f" Function (Just (FastTags.ParentTag "D" Type)))
     ]
   , "instance Foo Bar where\n\
     \  newtype FooFam Bar = BarList [Int]"
     ==>
-    [ Pos (SrcPos fn 2 0 "" "") (TagVal "BarList" Constructor (Just "FooFam"))
+    [ Pos (SrcPos 2 0 "" "") (TagVal "BarList" Constructor (Just (FastTags.ParentTag "FooFam" Family)))
     ]
   , "instance Foo Bar where\n\
     \  newtype FooFam Bar = BarList { getBarList :: [Int] }"
     ==>
-    [ Pos (SrcPos fn 2 0 "" "") (TagVal "BarList" Constructor (Just "FooFam"))
-    , Pos (SrcPos fn 2 0 "" "") (TagVal "getBarList" Function (Just "FooFam"))
+    [ Pos (SrcPos 2 0 "" "") (TagVal "BarList" Constructor (Just (FastTags.ParentTag "FooFam" Family)))
+    , Pos (SrcPos 2 0 "" "") (TagVal "getBarList" Function (Just (FastTags.ParentTag "FooFam" Family)))
     ]
   , "instance Foo Bar where\n\
     \  data (Ord a) => FooFam Bar a = BarList { getBarList :: [a] }\n\
     \                               | BarMap { getBarMap :: Map a Int }"
     ==>
-    [ Pos (SrcPos fn 2 0 "" "")  (TagVal "BarList" Constructor (Just "FooFam"))
-    , Pos (SrcPos fn 2 0 "" "")  (TagVal "getBarList" Function (Just "FooFam"))
-    , Pos (SrcPos fn 3 0 "" "") (TagVal "BarMap" Constructor (Just "FooFam"))
-    , Pos (SrcPos fn 3 0 "" "") (TagVal "getBarMap" Function (Just "FooFam"))
+    [ Pos (SrcPos 2 0 "" "")  (TagVal "BarList" Constructor (Just (FastTags.ParentTag "FooFam" Family)))
+    , Pos (SrcPos 2 0 "" "")  (TagVal "getBarList" Function (Just (FastTags.ParentTag "FooFam" Family)))
+    , Pos (SrcPos 3 0 "" "") (TagVal "BarMap" Constructor (Just (FastTags.ParentTag "FooFam" Family)))
+    , Pos (SrcPos 3 0 "" "") (TagVal "getBarMap" Function (Just (FastTags.ParentTag "FooFam" Family)))
     ]
   , "newtype instance FooFam Bar = BarList { getBarList :: [Int] }"
     ==>
-    [ Pos (SrcPos fn 1 0 "" "") (TagVal "BarList" Constructor (Just "FooFam"))
-    , Pos (SrcPos fn 1 0 "" "") (TagVal "getBarList" Function (Just "FooFam"))
+    [ Pos (SrcPos 1 0 "" "") (TagVal "BarList" Constructor (Just (FastTags.ParentTag "FooFam" Family)))
+    , Pos (SrcPos 1 0 "" "") (TagVal "getBarList" Function (Just (FastTags.ParentTag "FooFam" Family)))
     ]
   , "data instance (Ord a) => FooFam Bar a = BarList { getBarList :: [a] }\n\
     \                                      | BarMap { getBarMap :: Map a Int }"
     ==>
-    [ Pos (SrcPos fn 1 0 "" "")  (TagVal "BarList" Constructor (Just "FooFam"))
-    , Pos (SrcPos fn 1 0 "" "")  (TagVal "getBarList" Function (Just "FooFam"))
-    , Pos (SrcPos fn 2 0 "" "") (TagVal "BarMap" Constructor (Just "FooFam"))
-    , Pos (SrcPos fn 2 0 "" "") (TagVal "getBarMap" Function (Just "FooFam"))
+    [ Pos (SrcPos 1 0 "" "")  (TagVal "BarList" Constructor (Just (FastTags.ParentTag "FooFam" Family)))
+    , Pos (SrcPos 1 0 "" "")  (TagVal "getBarList" Function (Just (FastTags.ParentTag "FooFam" Family)))
+    , Pos (SrcPos 2 0 "" "") (TagVal "BarMap" Constructor (Just (FastTags.ParentTag "FooFam" Family)))
+    , Pos (SrcPos 2 0 "" "") (TagVal "getBarMap" Function (Just (FastTags.ParentTag "FooFam" Family)))
     ]
   ]
 
@@ -1495,7 +1499,7 @@ testLiterate = testGroup "Literate"
   ]
   where
     (==>) = makeTest f
-    f = sort . map untag . fst . processTokens . tokenize' "fn.lhs" LiterateOutside
+    f = L.sort . map untag . fst . processTokens "fn.lhs" . tokenize' LiterateOutside
 
 testPatterns :: TestTree
 testPatterns = testGroup "Patterns"

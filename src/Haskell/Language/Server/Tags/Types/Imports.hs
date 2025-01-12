@@ -39,8 +39,7 @@ import Data.Hashable
 import Data.Map.Strict (Map)
 import Data.Set (Set)
 import Data.Store (Store)
-import Data.Text.Prettyprint.Doc.Ext
-import GHC.Generics (Generic)
+import Prettyprinter.Ext
 
 import Data.KeyMap (KeyMap, HasKey(..))
 import Data.SubkeyMap (HasSubkey(..))

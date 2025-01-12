@@ -9,12 +9,16 @@
 
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DerivingVia                #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TypeFamilies               #-}
+
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- {-# OPTIONS_GHC -Wredundant-constraints          #-}
 {-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
@@ -62,9 +66,9 @@ import Data.Maybe
 import Data.Store (Store)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Prettyprint.Doc.Ext
-import GHC.Generics (Generic)
+import Prettyprinter.Ext
 
+import FastTags.Tag (ParentTag, ParentTag(ptName))
 import Haskell.Language.Lexer.FastTags (Pos(..), TagVal(..), Type(..), SrcPos(..), Line(..))
 
 import Data.ErrorMessage
@@ -92,15 +96,12 @@ fileNameToModuleName
   :: (WithCallStack, MonadError ErrorMessage m)
   => FullPath 'File -> m ModuleName
 fileNameToModuleName fname =
-  case unPathFragment (unBaseName (dropExtensions fname')) : map (unPathFragment . unBaseName) (reverse dirs) of
-    []       ->
-      throwErrorWithCallStack "Cannot convert empty file name to module name"
-    xs@(_:_) ->
-      pure $
-      mkModuleName $
+  pure $
+    mkModuleName $
       T.intercalate "." $
-      reverse $
-      L.takeWhile canBeModuleName xs
+        reverse $
+          L.takeWhile canBeModuleName $
+            unPathFragment (unBaseName (dropExtensions fname')) : map (unPathFragment . unBaseName) (reverse dirs)
   where
     (dirs, fname') = splitDirectories fname
     canBeModuleName :: T.Text -> Bool
@@ -178,17 +179,23 @@ data ResolvedSymbol = ResolvedSymbol
   , rsLine   :: {-# UNPACK #-} !Line
   , rsName   :: {-# UNPACK #-} !UnqualifiedSymbolName -- !Text
   , rsType   :: !Type
-  , rsParent :: !(Maybe Text)
+  , rsParent :: !(Maybe ParentTag)
   } deriving (Eq, Ord, Show, Generic)
 
 instance Hashable ResolvedSymbol
 instance NFData   ResolvedSymbol
 instance Store    ResolvedSymbol
 
+instance Store    ParentTag
+
+deriving via PPGeneric ParentTag instance Pretty ParentTag
+
 instance HasKey ResolvedSymbol where
   type Key ResolvedSymbol = UnqualifiedSymbolName
   {-# INLINE getKey #-}
   getKey = resolvedSymbolName
+
+
 
 instance Pretty ResolvedSymbol where
   pretty = ppGeneric
@@ -209,17 +216,17 @@ mkResolvedSymbol rsFile (Pos SrcPos{posLine} TagVal{tvName, tvType, tvParent}) =
 mkResolvedSymbolFromParts
   :: FullPath 'File
   -> Line
-  -> UnqualifiedSymbolName       -- ^ Symbol name
-  -> Type                        -- ^ Type of entity symbol will refer to
-  -> Maybe UnqualifiedSymbolName -- ^ Optional parent
+  -> UnqualifiedSymbolName -- ^ Symbol name
+  -> Type                  -- ^ Type of entity symbol will refer to
+  -> Maybe ParentTag       -- ^ Optional parent
   -> ResolvedSymbol
-mkResolvedSymbolFromParts rsFile rsLine rsName rsType parent =
+mkResolvedSymbolFromParts rsFile rsLine rsName rsType rsParent =
   ResolvedSymbol
     { rsFile
     , rsLine
     , rsName
     , rsType
-    , rsParent = unqualSymNameText <$> parent
+    , rsParent
     }
 
 {-# INLINE resolvedSymbolName #-}
@@ -232,7 +239,7 @@ resolvedSymbolType = rsType
 
 {-# INLINE resolvedSymbolParent #-}
 resolvedSymbolParent :: ResolvedSymbol -> Maybe UnqualifiedSymbolName
-resolvedSymbolParent = coerce rsParent
+resolvedSymbolParent = coerce . fmap ptName . rsParent
 
 {-# INLINE resolvedSymbolPosition #-}
 resolvedSymbolPosition :: ResolvedSymbol -> (FullPath 'File, Line)

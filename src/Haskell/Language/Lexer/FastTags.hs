@@ -42,22 +42,23 @@ import qualified Data.Map.Strict as M
 import Data.Maybe
 import Data.Store (Store)
 import Data.Text (Text)
-import Data.Text.Prettyprint.Doc.Ext
 import Data.Void (Void)
-import GHC.Generics (Generic)
+import Prettyprinter.Ext
+import System.FilePath (takeExtension)
 
 import qualified FastTags.Tag as FastTags
 import qualified FastTags.Token as FastTags
 import FastTags.Tag
   ( Pos(..)
   , TagVal(..)
+  , ParentTag(..)
   , Type(..)
   , breakBlocks
   , whereBlock
   , UnstrippedTokens(..)
   , unstrippedTokensOf
   )
-import FastTags.Token (Line(..), Offset(..), SrcPos(..), increaseLine, posFile, posLine, unLine)
+import FastTags.Token (Line(..), Offset(..), SrcPos(..), increaseLine, posLine, unLine)
 
 data PragmaType = SourcePragma
   deriving (Show, Eq, Ord, Generic)
@@ -69,8 +70,8 @@ instance Pretty PragmaType where
   pretty = ppGeneric
 
 
-data ServerToken =
-    Pragma !PragmaType
+data ServerToken
+  = Pragma !PragmaType
   | HSC2HS  -- Any HSC2HS directive
   | LBanana -- Arrows: (|
   | RBanana -- Arrows: |)
@@ -140,11 +141,7 @@ instance NFData ServerToken where
 instance Pretty ServerToken where
   pretty = ppGeneric
 
-
-
-deriving instance Generic FastTags.TokenVal
 instance Hashable FastTags.TokenVal
-instance NFData   FastTags.TokenVal
 
 instance Pretty FastTags.TokenVal where
   pretty = ppGeneric
@@ -155,7 +152,7 @@ deriving instance Pretty   Line
 deriving instance Store    Line
 
 instance Pretty SrcPos where
-  pretty SrcPos{posFile, posLine} = pretty posFile <> ":" <> pretty (unLine posLine)
+  pretty SrcPos{posLine} = pretty (unLine posLine)
 
 deriving instance Generic Type
 instance Hashable Type
@@ -166,6 +163,9 @@ instance Pretty Type where
 
 deriving instance Generic FastTags.TagVal
 instance Hashable FastTags.TagVal
+
+deriving instance Generic FastTags.ParentTag
+instance Hashable FastTags.ParentTag
 
 tokToName :: ServerToken -> Maybe Text
 tokToName ExclamationMark = Just "!"
@@ -188,8 +188,8 @@ stripServerTokens = second catMaybes . partitionEithers . map f
     f (Pos p t) = case t of
       Pragma _         -> Right Nothing
       HSC2HS           -> Right Nothing
-      LBanana          -> Right Nothing
-      RBanana          -> Right Nothing
+      LBanana          -> Left $ Pos p FastTags.LBanana
+      RBanana          -> Left $ Pos p FastTags.RBanana
       Error msg        -> Right $ Just $ unIgnoreEqOrdHashNFData msg
       KWCase           -> Left $ Pos p FastTags.KWCase
       KWClass          -> Left $ Pos p FastTags.KWClass
@@ -243,66 +243,84 @@ stripServerTokens = second catMaybes . partitionEithers . map f
       LambdaBackslash  -> Left $ Pos p FastTags.LambdaBackslash
       EOF              -> Left $ Pos p FastTags.EOF
 
-embedServerToken :: FastTags.TokenVal -> ServerToken
+embedServerToken :: FastTags.TokenVal -> Maybe ServerToken
 embedServerToken = \case
-  FastTags.KWCase           -> KWCase
-  FastTags.KWClass          -> KWClass
-  FastTags.KWData           -> KWData
-  FastTags.KWDefault        -> KWDefault
-  FastTags.KWDeriving       -> KWDeriving
-  FastTags.KWDo             -> KWDo
-  FastTags.KWElse           -> KWElse
-  FastTags.KWFamily         -> KWFamily
-  FastTags.KWForeign        -> KWForeign
-  FastTags.KWIf             -> KWIf
-  FastTags.KWImport         -> KWImport
-  FastTags.KWIn             -> KWIn
-  FastTags.KWInfix          -> KWInfix
-  FastTags.KWInfixl         -> KWInfixl
-  FastTags.KWInfixr         -> KWInfixr
-  FastTags.KWInstance       -> KWInstance
-  FastTags.KWLet            -> KWLet
-  FastTags.KWModule         -> KWModule
-  FastTags.KWNewtype        -> KWNewtype
-  FastTags.KWOf             -> KWOf
-  FastTags.KWThen           -> KWThen
-  FastTags.KWType           -> KWType
-  FastTags.KWWhere          -> KWWhere
-  FastTags.Arrow            -> Arrow
-  FastTags.At               -> At
-  FastTags.Backtick         -> Backtick
-  FastTags.Comma            -> Comma
-  FastTags.Dot              -> Dot
-  FastTags.DoubleColon      -> DoubleColon
-  FastTags.Equals           -> Equals
-  FastTags.ExclamationMark  -> ExclamationMark
-  FastTags.Implies          -> Implies
-  FastTags.LBrace           -> LBrace
-  FastTags.LBracket         -> LBracket
-  FastTags.LParen           -> LParen
-  FastTags.Pipe             -> Pipe
-  FastTags.RBrace           -> RBrace
-  FastTags.RBracket         -> RBracket
-  FastTags.RParen           -> RParen
-  FastTags.Tilde            -> Tilde
-  FastTags.Semicolon        -> Semicolon
-  FastTags.T x              -> T x
-  FastTags.Newline n        -> Newline n
-  FastTags.String           -> String
-  FastTags.Character        -> Character
-  FastTags.Number           -> Number
-  FastTags.QuasiquoterStart -> QuasiquoterStart
-  FastTags.QuasiquoterEnd   -> QuasiquoterEnd
-  FastTags.SpliceStart      -> SpliceStart
-  FastTags.LambdaBackslash  -> LambdaBackslash
-  FastTags.EOF              -> EOF
+  FastTags.KWCase             -> Just KWCase
+  FastTags.KWClass            -> Just KWClass
+  FastTags.KWData             -> Just KWData
+  FastTags.KWDefault          -> Just KWDefault
+  FastTags.KWDeriving         -> Just KWDeriving
+  FastTags.KWDo               -> Just KWDo
+  FastTags.KWElse             -> Just KWElse
+  FastTags.KWFamily           -> Just KWFamily
+  FastTags.KWForeign          -> Just KWForeign
+  FastTags.KWIf               -> Just KWIf
+  FastTags.KWImport           -> Just KWImport
+  FastTags.KWIn               -> Just KWIn
+  FastTags.KWInfix            -> Just KWInfix
+  FastTags.KWInfixl           -> Just KWInfixl
+  FastTags.KWInfixr           -> Just KWInfixr
+  FastTags.KWInstance         -> Just KWInstance
+  FastTags.KWLet              -> Just KWLet
+  FastTags.KWModule           -> Just KWModule
+  FastTags.KWNewtype          -> Just KWNewtype
+  FastTags.KWOf               -> Just KWOf
+  FastTags.KWThen             -> Just KWThen
+  FastTags.KWType             -> Just KWType
+  FastTags.KWWhere            -> Just KWWhere
+  FastTags.Arrow              -> Just Arrow
+  FastTags.At                 -> Just At
+  FastTags.Backtick           -> Just Backtick
+  FastTags.Comma              -> Just Comma
+  FastTags.Dot                -> Just Dot
+  FastTags.DoubleColon        -> Just DoubleColon
+  FastTags.Equals             -> Just Equals
+  FastTags.ExclamationMark    -> Just ExclamationMark
+  FastTags.Implies            -> Just Implies
+  FastTags.LBrace             -> Just LBrace
+  FastTags.LBracket           -> Just LBracket
+  FastTags.LParen             -> Just LParen
+  FastTags.Pipe               -> Just Pipe
+  FastTags.RBrace             -> Just RBrace
+  FastTags.RBracket           -> Just RBracket
+  FastTags.RParen             -> Just RParen
+  FastTags.Tilde              -> Just Tilde
+  FastTags.Semicolon          -> Just Semicolon
+  FastTags.T x                -> Just $ T x
+  FastTags.Newline n          -> Just $ Newline n
+  FastTags.String             -> Just String
+  FastTags.Character          -> Just Character
+  FastTags.Number             -> Just Number
+  FastTags.QuasiquoterStart   -> Just QuasiquoterStart
+  FastTags.QuasiquoterEnd     -> Just QuasiquoterEnd
+  FastTags.SpliceStart        -> Just SpliceStart
+  FastTags.LambdaBackslash    -> Just LambdaBackslash
+  FastTags.EOF                -> Just EOF
 
-processTokens :: [Pos ServerToken] -> ([Pos FastTags.TagVal], [Doc Void])
-processTokens toks
+  FastTags.ToplevelSplice     -> Nothing
+  FastTags.CppDefine _        -> Nothing
+  FastTags.HSCEnum            -> Just HSC2HS
+  FastTags.HSCDirective       -> Just HSC2HS
+
+  FastTags.HSCDirectiveBraced -> Just HSC2HS
+  FastTags.LBanana            -> Just LBanana
+  FastTags.RBanana            -> Just RBanana
+  FastTags.Error msg          -> Just $ Error $ IgnoreEqOrdHashNFData $ pretty msg
+
+  FastTags.DQuote             -> Nothing
+
+processTokens :: FilePath -> [Pos ServerToken] -> ([Pos FastTags.TagVal], [Doc Void])
+processTokens filename toks
   = second ((errs ++) . map docFromString)
-  $ FastTags.processTokens toks'
+  $ FastTags.processTokens mode toks'
   where
     (toks', errs) = stripServerTokens toks
+    mode :: FastTags.ProcessMode
+    mode
+      | takeExtension filename `elem` [".x", ".lx", ".y", ".ly"]
+      = FastTags.ProcessAlexHappy
+      | otherwise
+      = FastTags.ProcessVanilla
 
 -- | Keep only one Pattern tag for each unique name.
 removeDuplicatePatterns :: [Pos FastTags.TagVal] -> [Pos FastTags.TagVal]

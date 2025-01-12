@@ -64,6 +64,7 @@ module Data.Path
   , unBaseName
   ) where
 
+import Control.Monad
 import Control.Monad.Base
 import Control.Monad.Except.Ext
 import Control.Monad.Ext
@@ -71,23 +72,24 @@ import Control.Monad.Ext
 import qualified Data.ByteString as BS
 import Data.Coerce
 import Data.ErrorMessage
+import Data.Foldable1 (foldMap1)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup as Semigroup
-import Data.Semigroup.Foldable.Class (foldMap1)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import Data.Text.Prettyprint.Doc.Ext
 import Data.Time.Clock (UTCTime)
+import Prettyprinter.Ext
 import qualified System.Directory as Directory
 import qualified System.FilePath as FilePath
 
 import Data.Path.Internal
 
 #ifdef WINDOWS
-#else
+#endif
+#ifndef WINDOWS
 import Control.Exception
-import qualified Data.Text.Prettyprint.Doc as PP
+import qualified Prettyprinter as PP
 import System.Posix.Files as Posix
 #endif
 
@@ -115,7 +117,8 @@ instance (MonadBase IO m, MonadError ErrorMessage m) => MkSomeFullPath FilePath.
       then pure $! Right $! FullPath $ T.pack path'
       else throwErrorWithCallStack $
         "Path does not refer to either a file or a directory:" <+> pretty path'
-#else
+#endif
+#ifndef WINDOWS
   mkSomeFullPath
     :: FilePath.FilePath
     -> m (Either (FullPath 'File) (FullPath 'Dir))

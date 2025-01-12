@@ -29,8 +29,8 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import qualified Data.Semigroup as Semigroup
-import qualified Data.Text.Prettyprint.Doc as PP
-import Data.Text.Prettyprint.Doc.Ext
+import qualified Prettyprinter as PP
+import Prettyprinter.Ext
 
 import Control.Monad.Logging
 import Data.ErrorMessage

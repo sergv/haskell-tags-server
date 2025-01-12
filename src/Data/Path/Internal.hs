@@ -29,7 +29,7 @@ import Data.Hashable
 import Data.Store (Store)
 import Data.String
 import Data.Text (Text)
-import Data.Text.Prettyprint.Doc.Ext
+import Prettyprinter.Ext
 
 #ifdef WINDOWS
 import Data.Coerce

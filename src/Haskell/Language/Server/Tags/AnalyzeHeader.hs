@@ -23,6 +23,7 @@ module Haskell.Language.Server.Tags.AnalyzeHeader
 
 import Control.Arrow (first, second)
 import Control.Category ((>>>))
+import Control.Monad (mzero)
 import Control.Monad.Except.Ext
 import Control.Monad.Trans.Maybe
 
@@ -37,13 +38,13 @@ import qualified Data.Set as S
 import qualified Data.Strict.Pair as Strict
 import Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.Prettyprint.Doc as PP
-import Data.Text.Prettyprint.Doc.Combinators
-import Data.Text.Prettyprint.Doc.Ext
 import Data.Void (Void)
+import qualified Prettyprinter as PP
+import Prettyprinter.Combinators
+import Prettyprinter.Ext
 
 import Haskell.Language.Lexer.FastTags
-  (stripNewlines, tokToName, Pos(..), Line, SrcPos(..), Type, posFile, posLine, unLine, PragmaType(..), ServerToken(..), Type(..))
+  (stripNewlines, tokToName, Pos(..), Line, SrcPos(..), Type, posLine, unLine, PragmaType(..), ServerToken(..), Type(..))
 import qualified Haskell.Language.Lexer.FastTags as FastTags
 
 import Control.Monad.Logging
@@ -573,11 +574,9 @@ isNonOperatorName =
 newtype Tokens = Tokens [Pos ServerToken]
 
 instance Pretty Tokens where
-  pretty (Tokens [])       = "[]"
-  pretty (Tokens ts@(t : _)) =
+  pretty (Tokens ts) =
     ppDictHeader "Tokens"
-      [ "file"   :-> pretty $ posFile $ posOf t
-      , "tokens" :-> ppListWith ppTokenVal ts
+      [ "tokens" :-> ppListWith ppTokenVal ts
       ]
     where
       ppTokenVal :: Pos ServerToken -> Doc ann

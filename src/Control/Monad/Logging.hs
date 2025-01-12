@@ -36,8 +36,8 @@ import Data.Bimap (Bimap)
 import qualified Data.Bimap as BM
 import qualified Data.List as L
 import Data.String
-import Data.Text.Prettyprint.Doc (Doc)
 import Data.Void (Void)
+import Prettyprinter (Doc)
 
 data Severity = VerboseDebug | Debug | Info | Warning | Error
   deriving (Eq, Ord, Show)

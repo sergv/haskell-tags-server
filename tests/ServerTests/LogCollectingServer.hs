@@ -27,9 +27,9 @@ import Control.Monad.Except.Ext
 import Control.Monad.Trans.Control
 
 import Data.Foldable (toList)
-import Data.Text.Prettyprint.Doc (Doc)
 import Data.Void (Void)
 import Network.Socket (PortNumber)
+import Prettyprinter (Doc)
 
 import Control.Monad.Filesystem (MonadFS, SearchCfg)
 import Control.Monad.Logging

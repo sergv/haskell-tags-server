@@ -45,8 +45,7 @@ import qualified Data.Set as S
 import Data.Store (Store)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Prettyprint.Doc.Ext
-import GHC.Generics (Generic)
+import Prettyprinter.Ext
 
 import Data.CompiledRegex
 import Data.ErrorMessage

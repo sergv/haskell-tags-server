@@ -29,8 +29,8 @@ import Data.Foldable
 import Data.Function (on)
 import Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.Prettyprint.Doc as PP
-import Data.Text.Prettyprint.Doc.Ext
+import qualified Prettyprinter as PP
+import Prettyprinter.Ext
 import Text.Regex.TDFA
 import qualified Text.Regex.TDFA.Text as TDFA
 

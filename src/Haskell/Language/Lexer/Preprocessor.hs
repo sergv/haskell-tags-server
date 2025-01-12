@@ -30,13 +30,13 @@ module Haskell.Language.Lexer.Preprocessor
 import Control.Monad.Except.Ext
 import Data.Attoparsec.Text
 import Data.Char (isAlpha, isDigit)
+import Data.Functor (void)
 import Data.Maybe
-import Data.Semigroup ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Prettyprint.Doc.Ext (Pretty(..))
-import qualified Data.Text.Prettyprint.Doc as PP
-import qualified Data.Text.Prettyprint.Doc.Ext as PP
+import qualified Prettyprinter as PP
+import Prettyprinter.Ext (Pretty(..))
+import qualified Prettyprinter.Ext as PP
 
 import Data.ErrorMessage
 import Data.KeyMap (HasKey)
@@ -132,7 +132,7 @@ pDirectiveStart :: Text -> Parser ()
 pDirectiveStart directive = do
   _ <- char '#'    <?> "hash"
   skipMany pCppWS  <?> "optional whitespace after hash"
-  void (string directive) <?> T.unpack directive
+  void (string directive <?> T.unpack directive)
 
 pDefine :: Parser PreprocessorMacro
 pDefine = do

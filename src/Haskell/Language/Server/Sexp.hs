@@ -17,6 +17,7 @@
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE TypeOperators       #-}
 
 module Haskell.Language.Server.Sexp
   ( sexpDefaultPort
@@ -29,6 +30,7 @@ module Haskell.Language.Server.Sexp
 import Control.Concurrent
 import Control.DeepSeq
 import qualified Control.Exception as Exception
+import Control.Monad
 import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.ErrorExcept
@@ -44,8 +46,8 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding.Error as TE
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
-import Data.Text.Prettyprint.Doc.Ext
 import qualified Network.Socket as Network
+import Prettyprinter.Ext
 
 import Language.Sexp as Sexp
 import Network.Socket as Socket
@@ -140,7 +142,7 @@ runSexpServer port reqHandler = do
             Left err -> ParenList [Symbol "error", String err']
               where
                 err' :: T.Text
-                err' = TL.toStrict $ displayDoc $ pretty err
+                err' = render $ pretty err
             Right x  -> ParenList [Symbol "ok", x]
         ParenList [Symbol func, Symbol "nil"] -> do
           res <- runErrorExceptT $ go' func []
@@ -148,7 +150,7 @@ runSexpServer port reqHandler = do
             Left err -> ParenList [Symbol "error", String err']
               where
                 err' :: T.Text
-                err' = TL.toStrict $ displayDoc $ pretty err
+                err' = render $ pretty err
             Right x  -> ParenList [Symbol "ok", x]
         invalid -> pure $ ParenList
           [ Symbol "error"

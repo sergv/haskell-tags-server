@@ -35,9 +35,9 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe
 import Data.Set (Set)
 import qualified Data.Set as S
-import qualified Data.Text.Prettyprint.Doc as PP
-import Data.Text.Prettyprint.Doc.Ext
 import Data.Traversable
+import qualified Prettyprinter as PP
+import Prettyprinter.Ext
 
 import Control.Monad.Filesystem (MonadFS)
 import qualified Control.Monad.Filesystem as MonadFS

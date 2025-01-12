@@ -46,6 +46,7 @@ module Haskell.Language.Lexer.State
   , alexSetToplevelCode
   ) where
 
+import Control.Monad (unless)
 import Control.Monad.Except.Ext
 import Control.Monad.State
 import Data.List.NonEmpty (NonEmpty)
@@ -54,9 +55,8 @@ import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
-import Data.Text.Prettyprint.Doc.Ext (Pretty(..), ppDictHeader, MapEntry(..))
-import GHC.Stack.Ext (WithCallStack)
 import Lens.Micro
+import Prettyprinter.Ext (Pretty(..), ppDictHeader, MapEntry(..))
 
 import Data.ErrorMessage
 import Data.KeyMap (KeyMap)

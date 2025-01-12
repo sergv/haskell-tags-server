@@ -15,14 +15,14 @@ module Main (main) where
 import Control.Applicative
 import Control.Monad
 import Control.Monad.ErrorExcept
-import Control.Monad.Except
+import Control.Monad.IO.Class (liftIO)
 
 import Data.Foldable (for_)
 import qualified Data.List as L
 import qualified Data.Set as S
-import Data.Text.Prettyprint.Doc.Ext
 import Network.Socket (PortNumber, withSocketsDo)
 import Options.Applicative
+import Prettyprinter.Ext
 import System.Directory
 import System.Exit
 import System.IO

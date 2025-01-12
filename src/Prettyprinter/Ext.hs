@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------------
 -- |
--- Module      :  Data.Text.Prettyprint.Doc.Ext
+-- Module      :  Prettyprinter.Ext
 -- Copyright   :  (c) Sergey Vinokurov 2016
 -- License     :  BSD3-style (see LICENSE)
 -- Maintainer  :  serg.foo@gmail.com
@@ -19,7 +19,7 @@
 {-# OPTIONS_GHC -Wredundant-constraints          #-}
 {-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
 
-module Data.Text.Prettyprint.Doc.Ext
+module Prettyprinter.Ext
   ( Pretty(..)
   , (<+>)
   , show'
@@ -30,9 +30,9 @@ module Data.Text.Prettyprint.Doc.Ext
   , ppMonoidalMapWith
   , docFromByteString
 
-  , module Data.Text.Prettyprint.Doc.Combinators
-  , module Data.Text.Prettyprint.Doc.Generics
-  , module Data.Text.Prettyprint.Doc.Show
+  , module Prettyprinter.Combinators
+  , module Prettyprinter.Generics
+  , module Prettyprinter.Show
   ) where
 
 import qualified Data.ByteString.Lazy.UTF8 as UTF8
@@ -41,11 +41,11 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding.Error as TEE
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
-import Data.Text.Prettyprint.Doc (Pretty(..), Doc, (<+>))
-import qualified Data.Text.Prettyprint.Doc as PP
-import Data.Text.Prettyprint.Doc.Combinators
-import Data.Text.Prettyprint.Doc.Generics
-import Data.Text.Prettyprint.Doc.Show
+import Prettyprinter ((<+>))
+import qualified Prettyprinter as PP
+import Prettyprinter.Combinators
+import Prettyprinter.Generics
+import Prettyprinter.Show
 
 import Data.KeyMap (KeyMap)
 import qualified Data.KeyMap as KM

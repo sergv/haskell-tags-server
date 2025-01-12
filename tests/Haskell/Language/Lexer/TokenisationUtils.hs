@@ -26,9 +26,9 @@ import Control.Arrow ((***))
 import Data.List (sort)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import qualified Data.Text.Prettyprint.Doc.Ext as PP
 import Data.Void (Void)
 import GHC.Stack.Ext (WithCallStack)
+import qualified Prettyprinter.Ext as PP
 
 import Haskell.Language.Lexer (LiterateLocation(..))
 import qualified Haskell.Language.LexerSimple.Lexer as Lexer
@@ -59,7 +59,7 @@ testFullTagsWithoutPrefixes
   :: WithCallStack
   => FilePath -> LiterateLocation Void -> T.Text -> [Pos TagVal] -> TestTree
 testFullTagsWithoutPrefixes fn mode = \source tags ->
-  makeTest ((sort *** map PP.displayDocString) . processTokens . tokenize' fn mode) source (tags, warnings)
+  makeTest ((sort *** map PP.renderString) . processTokens fn . tokenize' mode) source (tags, warnings)
   where
     warnings :: [String]
     warnings = []
@@ -75,26 +75,26 @@ testTagNames fn mode source tags =
 
     process :: T.Text -> ([String], [String])
     process =
-      (sort . map untag *** map PP.displayDocString) . processTokens . tokenize' fn mode
+      (sort . map untag *** map PP.renderString) . processTokens fn . tokenize' mode
 
 untag :: Pos TagVal -> String
 untag (Pos _ (TagVal name _ _)) = T.unpack name
 
 tokenize'
   :: WithCallStack
-  => FilePath -> LiterateLocation Void -> T.Text -> [Pos ServerToken]
-tokenize' fn mode =
-    -- either (error . PP.displayDocString . PP.pretty) id
+  => LiterateLocation Void -> T.Text -> [Pos ServerToken]
+tokenize' mode =
+    -- either (error . PP.renderString . PP.pretty) id
   -- . runIdentity
   -- . Lexer.tokenizeM fn mode
   -- .
-  Lexer.tokenize fn mode . TE.encodeUtf8
+  Lexer.tokenize mode . TE.encodeUtf8
 
 stripServerTokens' :: [Pos ServerToken] -> [Pos TokenVal]
 stripServerTokens' ts =
   case stripServerTokens ts of
     (ts', [])       -> ts'
-    (_,   es@(_:_)) -> error $ PP.displayDocString $
+    (_,   es@(_:_)) -> error $ PP.renderString $
       PP.ppFoldableHeaderWith id "Errors while stripping server tokens:" es
 
 -- tokenize''

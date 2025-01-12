@@ -17,8 +17,8 @@
 module Haskell.Language.Server.Tags.AnalyzeHeaderTests (tests) where
 
 import Control.Arrow
+import Control.Monad (unless)
 import Control.Monad.ErrorExcept
-import Control.Monad.Except.Ext
 import Control.Monad.Writer
 
 import qualified Data.List.NonEmpty as NE
@@ -26,8 +26,8 @@ import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import qualified Data.Text.Prettyprint.Doc as PP
-import Data.Text.Prettyprint.Doc.Ext
+import qualified Prettyprinter as PP
+import Prettyprinter.Ext
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -2501,8 +2501,8 @@ doTest TestCase{testName, input, expectedResult} =
     (res, logs) <- runWriterT $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runErrorExceptT $ analyzeHeader filename tokens
     let logsDoc = "Logs, size " <> pretty (length logs) <> ":" ## PP.indent 2 (PP.vcat logs)
     case res of
-      Left msg               -> assertFailure $ displayDocString $ pretty msg ## logsDoc
-      Right (Nothing, _)     -> assertFailure $ displayDocString $
+      Left msg               -> assertFailure $ renderString $ pretty msg ## logsDoc
+      Right (Nothing, _)     -> assertFailure $ renderString $
         "No header detected, but was expecting header" ## pretty expectedResult ## logsDoc
       Right (Just header, _) -> do
         let msg = ppDictHeader "Headers are different" $
@@ -2533,7 +2533,7 @@ doTest TestCase{testName, input, expectedResult} =
               , different
               ]
         unless (header == expectedResult) $
-          assertFailure $ displayDocString $ msg ## logsDoc
+          assertFailure $ renderString $ msg ## logsDoc
   where
     tokens :: [Pos ServerToken]
     tokens = tokenize (T.unpack (unFullPath filename)) $ TE.encodeUtf8 input

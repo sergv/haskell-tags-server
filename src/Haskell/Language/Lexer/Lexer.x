@@ -27,10 +27,9 @@ import Data.Semigroup as Semigroup
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Prettyprint.Doc as PP
-import Data.Text.Prettyprint.Doc (Doc, Pretty(..), (<+>))
-import Data.Text.Prettyprint.Doc.Ext
 import Data.Void (Void)
+import qualified Prettyprinter as PP
+import Prettyprinter.Ext
 
 import Data.ErrorMessage
 import qualified Data.KeyMap as KM
@@ -450,9 +449,8 @@ scanTokens = do
 
 alexMonadScan :: (WithCallStack, Monad m) => AlexT m (NonEmpty (Pos ServerToken))
 alexMonadScan = do
-  filename <- asks aeFilename
-  line     <- gets (aiLine . asInput)
-  fmap (Pos (mkSrcPos filename line)) <$> continueScanning
+  line <- gets (aiLine . asInput)
+  fmap (Pos (mkSrcPos line)) <$> continueScanning
 
 continueScanning :: forall m. (WithCallStack, Monad m) => AlexT m (NonEmpty ServerToken)
 continueScanning = do

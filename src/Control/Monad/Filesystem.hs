@@ -38,9 +38,8 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Prettyprint.Doc.Ext
 import Data.Time.Clock (UTCTime)
-import GHC.Generics (Generic)
+import Prettyprinter.Ext
 
 import Data.CompiledRegex
 import Data.Filesystem

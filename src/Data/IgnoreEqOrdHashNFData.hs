@@ -18,7 +18,7 @@ import Control.DeepSeq
 
 import Data.Coerce
 import Data.Hashable
-import Data.Text.Prettyprint.Doc.Ext
+import Prettyprinter.Ext
 
 newtype IgnoreEqOrdHashNFData a =
   IgnoreEqOrdHashNFData { unIgnoreEqOrdHashNFData :: a }

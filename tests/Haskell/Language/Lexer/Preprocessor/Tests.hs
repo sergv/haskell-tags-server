@@ -16,7 +16,7 @@ import Test.Tasty.HUnit (testCase)
 
 import Control.Arrow (left)
 import Data.Text (Text)
-import qualified Data.Text.Prettyprint.Doc.Ext as PP
+import qualified Prettyprinter.Ext as PP
 
 import Data.ErrorMessage
 import Data.Symbols.MacroName (mkMacroName)
@@ -118,7 +118,7 @@ defineTests = testGroup "#define"
   ]
   where
     (==>) = makeAssertion' parsePreprocessorDefine
-    (!=>) = makeAssertion (left (PP.displayDocString . errorMessageBody) . parsePreprocessorDefine)
+    (!=>) = makeAssertion (left (PP.renderString . errorMessageBody) . parsePreprocessorDefine)
 
 
 undefTests :: TestTree
