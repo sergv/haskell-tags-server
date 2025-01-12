@@ -165,9 +165,9 @@ executable haskell-tags-server
   if !os(windows)
     build-depends: unix >= 2.6
   main-is:
-    src/Main.hs
+    exe/HaskellTagsServerMain.hs
   build-depends:
-    , base >=4
+    , base
     , containers
     , directory
     , filepath
@@ -185,6 +185,7 @@ executable haskell-tags-server
     -rtsopts
     -threaded
     "-with-rtsopts=-N"
+    -main-is HaskellTagsServerMain
   if impl(ghc >= 8.0)
     ghc-options:
       -Wcompat

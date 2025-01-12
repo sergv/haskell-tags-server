@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------------
 -- |
--- Module      :  Main
+-- Module      :  HaskellTagsServer
 -- Copyright   :  (c) Sergey Vinokurov 2015
 -- License     :  BSD3-style (see LICENSE)
 -- Maintainer  :  serg.foo@gmail.com
@@ -10,7 +10,7 @@
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Main (main) where
+module HaskellTagsServerMain (main) where
 
 import Control.Applicative
 import Control.Monad
