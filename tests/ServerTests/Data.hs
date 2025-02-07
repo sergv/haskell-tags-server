@@ -33,7 +33,7 @@ s str = fromMaybe err . mkUnqualifiedSymbolName . mkSymbolName $ str
   where
     err = error $ "Invalid unqualified symbol: " ++ T.unpack str
 
-known :: Text -> PathFragment -> Integer -> SymbolType -> ServerResponse
+known :: Text -> PathFragment -> Int -> SymbolType -> ServerResponse
 known sym file line typ = Known (s sym) file line typ
 
 
@@ -41,8 +41,8 @@ type SymbolType = Text
 
 -- | Type that encodes all possible BERT responses.
 data ServerResponse =
-    Known UnqualifiedSymbolName PathFragment Integer SymbolType
-  | Ambiguous [(UnqualifiedSymbolName, PathFragment, Integer, SymbolType)]
+    Known UnqualifiedSymbolName PathFragment Int SymbolType
+  | Ambiguous [(UnqualifiedSymbolName, PathFragment, Int, SymbolType)]
   | NotFound
   deriving (Eq, Ord, Show)
 

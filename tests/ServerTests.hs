@@ -106,11 +106,11 @@ responseToSexp resp =
     NotFound ->
       Symbol "not-found"
   where
-    mkSymbol :: (UnqualifiedSymbolName, PathFragment, Integer, SymbolType) -> Sexp
+    mkSymbol :: (UnqualifiedSymbolName, PathFragment, Int, SymbolType) -> Sexp
     mkSymbol (symName, filename, line, typ) = ParenList
       [ String $ unqualSymNameText symName
       , String $ unPathFragment filename
-      , Number $ scientific line 0
+      , Number $ scientific (fromIntegral line) 0
       , Symbol typ
       ]
 
