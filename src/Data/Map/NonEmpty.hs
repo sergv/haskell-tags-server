@@ -25,6 +25,7 @@ module Data.Map.NonEmpty
   , delete
   , fromNonEmpty
   , toNonEmpty
+  , toMap
   , keysNE
   , elemsNE
   , union
@@ -33,14 +34,15 @@ module Data.Map.NonEmpty
   , differenceWith
   ) where
 
+import Prelude hiding (lookup)
+
 import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import Data.Semigroup
 import Data.Store (Store)
 import GHC.Generics
-import Prelude hiding (lookup)
+import Prettyprinter.Combinators
 
 -- | A map that always contains at least one key-value pair.
 data NonEmptyMap k v =
@@ -50,6 +52,9 @@ data NonEmptyMap k v =
   deriving (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
 
 instance (Store k, Store v, Ord k) => Store (NonEmptyMap k v)
+
+instance (Ord k, Pretty k, Pretty v) => Pretty (NonEmptyMap k v) where
+  pretty = ppMap . toMap
 
 instance (Ord k, Semigroup v) => Semigroup (NonEmptyMap k v) where
   {-# INLINE (<>) #-}
@@ -105,6 +110,10 @@ fromNonEmpty kvs =
 {-# INLINE toNonEmpty #-}
 toNonEmpty :: NonEmptyMap k v -> NonEmpty (k, v)
 toNonEmpty (NonEmptyMap k v m) = (k, v) :| M.toList m
+
+{-# INLINE toMap #-}
+toMap :: Ord k => NonEmptyMap k v -> Map k v
+toMap (NonEmptyMap k v m) = M.insert k v m
 
 {-# INLINE keysNE #-}
 keysNE :: NonEmptyMap k v -> NonEmpty k
