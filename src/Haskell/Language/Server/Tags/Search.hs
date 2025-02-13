@@ -67,9 +67,10 @@ findSymbol liftN scope filename sym = do
   logVerboseDebug $
     "[findSymbol] searching for" <+> pretty sym <+> "within" <+> pretty filename
   currMod <- do
-    modifTime <- MonadFS.getModificationTime filename
-    name      <- fileNameToModuleName filename
-    resolveModule checkLoadingModules (loadModule liftN) =<<
+    modifTime      <- MonadFS.getModificationTime filename
+    name           <- fileNameToModuleName filename
+    nameResolution <- asks tsconfNameResolution
+    resolveModule nameResolution checkLoadingModules (loadModule liftN) =<<
       readFileAndLoad (Just name) modifTime filename
   case scope of
     ScopeCurrentModule -> findInModule liftN sym currMod
@@ -89,11 +90,12 @@ findSymbolByRegexp
 findSymbolByRegexp liftN scope filename re = do
   logVerboseDebug $
     "[findSymbolByRegexp] searching for" <+> pretty re <+> "within" <+> pretty filename
-  modifTime <- MonadFS.getModificationTime filename
-  name      <- fileNameToModuleName filename
-  currMod   <-
-    resolveModule checkLoadingModules (loadModule liftN) =<<
-    readFileAndLoad (Just name) modifTime filename
+  modifTime      <- MonadFS.getModificationTime filename
+  name           <- fileNameToModuleName filename
+  nameResolution <- asks tsconfNameResolution
+  currMod        <-
+    resolveModule nameResolution checkLoadingModules (loadModule liftN) =<<
+      readFileAndLoad (Just name) modifTime filename
   (mods :: NonEmpty SymbolMap) <-
     case scope of
       ScopeCurrentModule -> do

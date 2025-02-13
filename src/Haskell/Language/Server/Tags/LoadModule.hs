@@ -207,7 +207,8 @@ registerAndResolve liftN key unresolvedMod@Module{modFile} = do
     { tssLoadsInProgress =
       M.insertWith NEMap.union key (NEMap.singleton modFile unresolvedMod) $ tssLoadsInProgress s
     }
-  resolved <- resolveModule checkLoadingModules (loadModule liftN) unresolvedMod
+  nameResoultion <- asks tsconfNameResolution
+  resolved <- resolveModule nameResoultion checkLoadingModules (loadModule liftN) unresolvedMod
   modify $ \s -> s
     { tssLoadsInProgress = M.update f key $ tssLoadsInProgress s }
   pure resolved
@@ -309,12 +310,13 @@ makeModule suggestedModuleName modifTime filename tokens = do
       }
 
 resolveModule
-  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadReader TagsServerConf m, MonadLog m)
-  => (ImportKey -> m (Maybe (NonEmpty UnresolvedModule, [ResolvedModule])))
+  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadLog m)
+  => NameResolutionStrictness
+  -> (ImportKey -> m (Maybe (NonEmpty UnresolvedModule, [ResolvedModule])))
   -> (ImportKey -> m (Maybe (NonEmpty ResolvedModule)))
   -> UnresolvedModule
   -> m ResolvedModule
-resolveModule checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
+resolveModule nameResolution checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
   logDebug $ "[resolveModule] resolving names of module" <+> pretty (mhModName header)
   symbols <- resolveExportedNames mod
   logVerboseDebug $ ppDictHeader ("[resolveModule] Resolved items for module" <+> pretty (mhModName header))
@@ -367,11 +369,10 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
                   -- This import was found to refer to modules within modules'.
                   let importedNames :: SymbolMap
                       !importedNames = foldMap modAllExportedNames modules'
-                  TagsServerConf{tsconfNameResolution} <- ask
                   let results :: NonEmpty (Either ErrorMessage (ImportSpec, SymbolMap))
                       results = runEval $ parTraversable rseq $ flip fmap importSpecs $
                         \spec@ImportSpec{ispecImportKey = ImportKey{ikModuleName = importedModName}} ->
-                          case visibleNamesFromImportSpec tsconfNameResolution importedModName importedNames spec of
+                          case visibleNamesFromImportSpec nameResolution importedModName importedNames spec of
                             Left err -> Left err
                             Right x  -> Right (spec, x)
                   results' <- for results $ \case
@@ -395,6 +396,7 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
                 (mhModName (modHeader mod)) <+> "from" <+> pretty (modFile mod) <> ". Initiating cycle resolution procedures for modules" ##
                 pretty (map modFile toResolve)
               Just <$> quasiResolveImportSpecWithLoadsInProgress
+                nameResolution
                 (lift . checkIfModuleIsAlreadyBeingLoaded)
                 (lift . readAndLoad)
                 (mhModName header)
@@ -424,14 +426,13 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
           , S.size unqualifiedExportedNames' == KM.size meExportedEntries
           , SM.isSubsetNames unqualifiedExportedNames' modAllSymbols
           -> do
-            TagsServerConf{tsconfNameResolution} <- ask
             let extra            = inferExtraParents header
                 modAllSymbols'   = SM.registerChildren extra modAllSymbols
                 children :: [Set UnqualifiedSymbolName]
                 (errs, children) =
                   partitionEithers $
                   map
-                    (childrenNamesFromEntry tsconfNameResolution mhModName modAllSymbols')
+                    (childrenNamesFromEntry nameResolution mhModName modAllSymbols')
                     unqualifiedExportedNames
             traverse_ CME.throwError errs
             pure
@@ -520,7 +521,6 @@ resolveModule checkIfModuleIsAlreadyBeingLoaded readAndLoad mod = do
                   pure (allSymbols', errors, unresolvedExports)
             logDebug $ "[resolveModule.resolveExportedNames] analysing export list of module" <+> pretty mhModName
             -- logVerboseDebug $ "[resolveModule.resolveExportedNames] reexports of module" <+> pretty mhModName <> ":" ## ppSet meReexports
-            nameResolution <- asks tsconfNameResolution
             let (allSyms, missingImportErrors, unresolvedAndDefaulted) =
                   runEval $ resolveSpecificExports nameResolution
             traverse_ CME.throwError missingImportErrors
@@ -565,8 +565,9 @@ resolveReexports resolvedImports modNames =
 -- defined locally in the module.
 quasiResolveImportSpecWithLoadsInProgress
   :: forall m f t. (WithCallStack, Traversable t, Foldable f)
-  => (MonadWriter [(ImportQualification, ModuleName, SymbolMap)] m, MonadError ErrorMessage m, MonadReader TagsServerConf m, MonadLog m)
-  => (ImportKey -> m (Maybe (NonEmpty UnresolvedModule, [ResolvedModule])))
+  => (MonadWriter [(ImportQualification, ModuleName, SymbolMap)] m, MonadError ErrorMessage m, MonadLog m)
+  => NameResolutionStrictness
+  -> (ImportKey -> m (Maybe (NonEmpty UnresolvedModule, [ResolvedModule])))
   -> (ImportKey -> m (Maybe (NonEmpty ResolvedModule)))
   -> ModuleName                -- ^ Module we're currently analysing.
   -> FullPath 'File
@@ -575,6 +576,7 @@ quasiResolveImportSpecWithLoadsInProgress
   -> t ImportSpec              -- ^ Import specs to resolve
   -> m (t (ImportSpec, SymbolMap))
 quasiResolveImportSpecWithLoadsInProgress
+  nameResolution
   checkIfModuleIsAlreadyBeingLoaded
   readAndLoad
   mainModName
@@ -677,7 +679,6 @@ quasiResolveImportSpecWithLoadsInProgress
                   ]
                 else pure resolvedNames
             | otherwise -> do
-              nameResolution <- asks tsconfNameResolution
               case nameResolution of
                 NameResolutionStrict -> throwErrorWithCallStack errMsg
                 NameResolutionLax    -> pure mempty

@@ -21,7 +21,6 @@ module Haskell.Language.Server.Tags.LoadFiles
 
 import Control.Arrow ((&&&))
 import Control.Monad.Except.Ext
-import Control.Monad.Reader
 import Control.Monad.State.Strict
 
 import Data.Foldable
@@ -53,69 +52,73 @@ loadAllFilesIntoState
   -> TagsServerConf
   -> TagsServerState
   -> m TagsServerState
-loadAllFilesIntoState unresolvedModules conf@TagsServerConf{tsconfNameResolution} initState = do
-  let checkLoadingModules
-        :: forall n. MonadState TagsServerState n
-        => ImportKey
-        -> n (Maybe (NonEmpty UnresolvedModule, [ResolvedModule]))
-      checkLoadingModules key = do
-        TagsServerState{tssLoadsInProgress, tssLoadedModules} <- get
-        pure $ case M.lookup key tssLoadsInProgress of
-          Just modules -> Just (NEMap.elemsNE modules, loadedMods)
-            where
-              loadedMods :: [ResolvedModule]
-              loadedMods = foldMap toList $ M.lookup key tssLoadedModules
-          Nothing      -> Nothing
-
-      doResolve
-        :: forall n. (WithCallStack, MonadState TagsServerState n, MonadError ErrorMessage n, MonadLog n)
-        => ImportKey
-        -> n (Maybe (NonEmpty ResolvedModule))
-      doResolve key = do
-        resolveState <- get
-        case M.lookup key $ tssLoadedModules resolveState of
-          Just resolved -> pure $ Just resolved
-          Nothing       -> do
-            logInfo $ "[loadAllFilesIntoState.doResolve] Resolving" <+> PP.dquotes (pretty (ikModuleName key))
-            let currentlyLoading = tssLoadsInProgress resolveState
-            if key `M.member` currentlyLoading
-            then
-              throwErrorWithCallStack $ PP.hsep
-                [ "[loadAllFilesIntoState.doResolve] found import loop: module"
-                , PP.dquotes (pretty key)
-                , "was required while being loaded"
-                ]
-            else
-              case M.lookup key unresolvedModules of
-                Nothing         -> do
-                  let msg = PP.hsep
-                        [ "[loadAllFilesIntoState.doResolve] imported module"
-                        , PP.dquotes (pretty key)
-                        , "not found"
-                        ]
-                  case tsconfNameResolution of
-                    NameResolutionLax -> do
-                      logWarning msg
-                      pure Nothing
-                    NameResolutionStrict -> throwErrorWithCallStack msg
-                Just unresolved -> do
-                  let unresolvedMap :: NonEmptyMap (FullPath 'File) UnresolvedModule
-                      unresolvedMap = NEMap.fromNonEmpty $ (modFile &&& id) <$> unresolved
-                  logDebug $ "[loadAllFilesIntoState.doResolve] currently loading:" ## ppMapWith pretty (ppNE . NEMap.keysNE) currentlyLoading
-                  modify $ \s ->
-                    s { tssLoadsInProgress = M.insertWith NEMap.union key unresolvedMap $ tssLoadsInProgress s }
-                  -- logDebug $ "[loadAllFilesIntoState.doResolve] files:" ## ppNE (modFile <$> unresolved)
-                  resolved <- flip runReaderT conf $
-                    traverse (resolveModule checkLoadingModules doResolve) unresolved
-                  modify $ \s -> s
-                    { tssLoadsInProgress =
-                        M.update (`NEMap.difference` unresolvedMap) key $ tssLoadsInProgress s
-                    , tssLoadedModules   =
-                        M.insertWith (Semigroup.<>) key resolved $ tssLoadedModules s
-                    }
-                  logInfo $ "[loadAllFilesIntoState.doResolve] Resolved" <+> PP.dquotes (pretty (ikModuleName key))
-                  pure $ Just resolved
-
+loadAllFilesIntoState unresolvedModules TagsServerConf{tsconfNameResolution} initState = do
   flip execStateT initState $
     flip M.traverseMaybeWithKey unresolvedModules $ \importKey _ ->
-      doResolve importKey
+      doResolve unresolvedModules tsconfNameResolution importKey
+
+doResolve
+  :: forall n. (WithCallStack, MonadState TagsServerState n, MonadError ErrorMessage n, MonadLog n)
+  => Map ImportKey (NonEmpty UnresolvedModule)
+  -> NameResolutionStrictness
+  -> ImportKey
+  -> n (Maybe (NonEmpty ResolvedModule))
+doResolve unresolvedModules nameResolution = go
+  where
+    go :: ImportKey -> n (Maybe (NonEmpty ResolvedModule))
+    go key = do
+      resolveState <- get
+      case M.lookup key $ tssLoadedModules resolveState of
+        Just resolved -> pure $ Just resolved
+        Nothing       -> do
+          logInfo $ "[loadAllFilesIntoState.doResolve] Resolving" <+> PP.dquotes (pretty (ikModuleName key))
+          let currentlyLoading = tssLoadsInProgress resolveState
+          if key `M.member` currentlyLoading
+          then
+            throwErrorWithCallStack $ PP.hsep
+              [ "[loadAllFilesIntoState.doResolve] found import loop: module"
+              , PP.dquotes (pretty key)
+              , "was required while being loaded"
+              ]
+          else
+            case M.lookup key unresolvedModules of
+              Nothing         -> do
+                let msg = PP.hsep
+                      [ "[loadAllFilesIntoState.doResolve] imported module"
+                      , PP.dquotes (pretty key)
+                      , "not found"
+                      ]
+                case nameResolution of
+                  NameResolutionLax -> do
+                    logWarning msg
+                    pure Nothing
+                  NameResolutionStrict -> throwErrorWithCallStack msg
+              Just unresolved -> do
+                let unresolvedMap :: NonEmptyMap (FullPath 'File) UnresolvedModule
+                    unresolvedMap = NEMap.fromNonEmpty $ (modFile &&& id) <$> unresolved
+                logDebug $ "[loadAllFilesIntoState.doResolve] currently loading:" ## ppMapWith pretty (ppNE . NEMap.keysNE) currentlyLoading
+                modify $ \s ->
+                  s { tssLoadsInProgress = M.insertWith NEMap.union key unresolvedMap $ tssLoadsInProgress s }
+                -- logDebug $ "[loadAllFilesIntoState.doResolve] files:" ## ppNE (modFile <$> unresolved)
+                resolved <- traverse (resolveModule nameResolution checkLoadingModules go) unresolved
+                modify $ \s -> s
+                  { tssLoadsInProgress =
+                      M.update (`NEMap.difference` unresolvedMap) key $ tssLoadsInProgress s
+                  , tssLoadedModules   =
+                      M.insertWith (Semigroup.<>) key resolved $ tssLoadedModules s
+                  }
+                logInfo $ "[loadAllFilesIntoState.doResolve] Resolved" <+> PP.dquotes (pretty (ikModuleName key))
+                pure $ Just resolved
+
+    checkLoadingModules
+      :: forall n. MonadState TagsServerState n
+      => ImportKey
+      -> n (Maybe (NonEmpty UnresolvedModule, [ResolvedModule]))
+    checkLoadingModules key = do
+      TagsServerState{tssLoadsInProgress, tssLoadedModules} <- get
+      pure $ case M.lookup key tssLoadsInProgress of
+        Just modules -> Just (NEMap.elemsNE modules, loadedMods)
+          where
+            loadedMods :: [ResolvedModule]
+            loadedMods = foldMap toList $ M.lookup key tssLoadedModules
+        Nothing      -> Nothing
