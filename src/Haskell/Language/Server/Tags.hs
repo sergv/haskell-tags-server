@@ -29,6 +29,8 @@ module Haskell.Language.Server.Tags
   , defaultTagsServerConf
   , TagsServerState(..)
   , emptyTagsServerState
+
+  , loadMod
   ) where
 
 import Control.Concurrent

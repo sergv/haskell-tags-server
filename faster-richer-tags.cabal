@@ -32,6 +32,10 @@ library
     build-depends: unix-compat
   else
     build-depends: unix >= 2.6, unix-compat
+
+  mixins:
+    fast-tags hiding ( System.OsPath.Ext )
+
   build-depends:
     , abstract-par
     , array
@@ -46,6 +50,7 @@ library
     , deepseq
     , directory
     , dlist
+    , emacs-native
     , exceptions >= 0.8
     , extra >= 1.4.2
     , fast-tags >= 1.3

@@ -45,6 +45,7 @@ newtype ErrorExceptT e m a = ErrorExceptT { unErrorExceptT :: m a }
     , MonadMask
     , MonadThrow
     , MonadLog
+    , MonadIO
     )
 
 deriving instance (MonadBaseControl IO m, MonadMask m) => MonadFS (ErrorExceptT e m)

@@ -62,6 +62,9 @@ module Data.Path
   -- * Base path
   , BaseName
   , unBaseName
+
+  , toOsPath
+  , fromFileOsPath
   ) where
 
 import Control.Monad
@@ -81,7 +84,10 @@ import qualified Data.Text.Encoding as TE
 import Data.Time.Clock (UTCTime)
 import Prettyprinter.Ext
 import qualified System.Directory as Directory
+import qualified System.Directory.OsPath
 import qualified System.FilePath as FilePath
+import System.OsPath.Ext (pathToText, pathFromText)
+import System.OsPath.Types (OsPath)
 
 import Data.Path.Internal
 
@@ -367,3 +373,10 @@ fullPathAsUtf8 = TE.encodeUtf8 . unFullPath
 {-# INLINE toFilePath #-}
 toFilePath :: FullPath typ -> FilePath.FilePath
 toFilePath = T.unpack . unFullPath
+
+{-# INLINE toOsPath #-}
+toOsPath :: FullPath typ -> OsPath
+toOsPath = pathFromText . unFullPath
+
+fromFileOsPath :: OsPath -> IO (FullPath 'File)
+fromFileOsPath = fmap (FullPath . pathToText) . System.Directory.OsPath.makeAbsolute
