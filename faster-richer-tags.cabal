@@ -25,6 +25,41 @@ flag dev
   manual:
     True
 
+common ghc-options
+  default-language:
+    GHC2021
+
+  default-extensions:
+    LambdaCase
+
+  ghc-options:
+    -Weverything
+    -Wno-all-missed-specialisations
+    -Wno-implicit-prelude
+    -Wno-missed-specialisations
+    -Wno-missing-import-lists
+    -Wno-missing-local-signatures
+    -Wno-safe
+    -Wno-unsafe
+
+  if impl(ghc >= 8.8)
+    ghc-options:
+      -Wno-missing-deriving-strategies
+
+  if impl(ghc >= 8.10)
+    ghc-options:
+      -Wno-missing-safe-haskell-mode
+      -- -Wno-prepositive-qualified-module
+
+  if impl(ghc >= 9.2)
+    ghc-options:
+      -Wno-missing-kind-signatures
+
+  if impl(ghc >= 9.8)
+    ghc-options:
+      -Wno-missing-role-annotations
+      -Wno-missing-poly-kind-signatures
+
 library
   if flag(dev)
     cpp-options: -DDEVELOPMENT
@@ -165,6 +200,32 @@ library
       -Wcompat
   build-tool-depends:
     alex:alex >= 3.1.7
+
+executable faster-richer-tags
+  import: ghc-options
+  main-is:
+    exe/FasterRicherTagsMain.hs
+  hs-source-dirs:
+    .
+    exe
+  build-depends:
+    , base >= 4.16
+    , directory
+    , directory-ospath-streaming
+    , emacs-native
+    , file-io
+    , filepath >= 1.4.100
+    , mtl
+    , optparse-applicative
+    , prettyprinter
+    , prettyprinter-combinators
+    , text
+    , faster-richer-tags
+  ghc-options:
+    -rtsopts
+    -- -threaded
+    -- "-with-rtsopts=-N -A32M"
+    -main-is FasterRicherTagsMain
 
 executable haskell-tags-server
   if !os(windows)
