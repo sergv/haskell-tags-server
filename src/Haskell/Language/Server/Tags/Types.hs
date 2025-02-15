@@ -35,6 +35,8 @@ module Haskell.Language.Server.Tags.Types
   , defaultTagsServerConf
   , TagsServerState(..)
   , emptyTagsServerState
+  , LoadState(..)
+  , emptyLoadState
   ) where
 
 import Data.Kind
@@ -210,14 +212,23 @@ defaultTagsServerConf = TagsServerConf
   , tsconfSerialisedState   = Nothing
   }
 
--- | Server state that may change while a request is processed.
-data TagsServerState = TagsServerState
+data LoadState = LoadState
   { -- | Single module name can refer to multiple modules.
-    tssLoadedModules   :: !(Map ImportKey (NonEmpty ResolvedModule))
+    lsLoadedModules   :: !(Map ImportKey (NonEmpty ResolvedModule))
     -- | Set of modules we started loading. Mainly used for detecting
     -- import cycles.
-  , tssLoadsInProgress :: !(Map ImportKey (NonEmptyMap (FullPath 'File) UnresolvedModule))
-  , tssUnloadedFiles   :: !(Map ImportKey (NonEmpty UnresolvedModule))
+  , lsLoadsInProgress :: !(Map ImportKey (NonEmptyMap (FullPath 'File) UnresolvedModule))
+  , lsUnloadedFiles   :: !(Map ImportKey (NonEmpty UnresolvedModule))
+  } deriving (Eq, Ord, Show, Generic)
+
+instance Store LoadState
+
+emptyLoadState :: LoadState
+emptyLoadState = LoadState mempty mempty mempty
+
+-- | Server state that may change while a request is processed.
+data TagsServerState = TagsServerState
+  { tssLoadState       :: !LoadState
   , tssKnownFiles      :: !(Map (FullPath 'File) ImportKey)
     -- Namespace currently loaded
   , tssNamespace       :: !Namespace
@@ -226,4 +237,4 @@ data TagsServerState = TagsServerState
 instance Store TagsServerState
 
 emptyTagsServerState :: TagsServerState
-emptyTagsServerState = TagsServerState mempty mempty mempty mempty mempty
+emptyTagsServerState = TagsServerState emptyLoadState mempty mempty

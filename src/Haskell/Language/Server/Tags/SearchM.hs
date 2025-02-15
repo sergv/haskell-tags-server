@@ -33,12 +33,12 @@ import Data.ErrorMessage
 import Haskell.Language.Server.Tags.Types
 
 -- | Monad for carrying out symbol search operations.
-newtype SearchT m a = SearchM (ErrorExceptT ErrorMessage (StateT TagsServerState (ReaderT TagsServerConf m)) a)
+newtype SearchT m a = SearchM (ErrorExceptT ErrorMessage (StateT LoadState (ReaderT TagsServerConf m)) a)
   deriving
     ( Functor
     , Applicative
     , Monad
-    , MonadState TagsServerState
+    , MonadState LoadState
     , MonadReader TagsServerConf
     , MonadLog
     , MonadBase b
@@ -50,9 +50,9 @@ deriving instance (MonadBaseControl IO m, MonadMask m) => MonadFS (SearchT m)
 runSearchT
   :: MonadCatch m
   => TagsServerConf
-  -> TagsServerState
+  -> LoadState
   -> SearchT m a
-  -> m (Either ErrorMessage a, TagsServerState)
+  -> m (Either ErrorMessage a, LoadState)
 runSearchT conf serverState (SearchM action)
   = flip runReaderT conf
   $ flip runStateT serverState

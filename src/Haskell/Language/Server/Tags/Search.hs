@@ -56,52 +56,47 @@ import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
 
 findSymbol
-  :: (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m, MonadBase IO m)
-  => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
-  => (forall a. n a -> m a)
-  -> NameResolutionScope
+  :: (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m, MonadBase IO m)
+  => NameResolutionScope
   -> FullPath 'File
   -> SymbolName             -- ^ Symbol to find. Can be either qualified, unqualified, ascii name/utf name/operator.
   -> m (Set ResolvedSymbol) -- ^ Found tags, may be empty when nothing was found.
-findSymbol liftN scope filename sym = do
+findSymbol scope filename sym = do
   logVerboseDebug $
     "[findSymbol] searching for" <+> pretty sym <+> "within" <+> pretty filename
   currMod <- do
     modifTime      <- MonadFS.getModificationTime filename
     name           <- fileNameToModuleName filename
     nameResolution <- asks tsconfNameResolution
-    resolveModule nameResolution checkLoadingModules (loadModule liftN) =<<
+    resolveModule nameResolution checkLoadingModules loadModule =<<
       readFileAndLoad (Just name) modifTime filename
   case scope of
-    ScopeCurrentModule -> findInModule liftN sym currMod
+    ScopeCurrentModule -> findInModule sym currMod
     ScopeAllModules    ->
       foldMapPar (foldMap (S.fromList . toList) . SM.lookup sym') <$> gets (scopeFromAllModules currMod)
       where
         (_, sym') = splitQualifiedPart sym
 
 findSymbolByRegexp
-  :: (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
-  => (forall a. n a -> m a)
-  -> NameResolutionScope
+  :: (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  => NameResolutionScope
   -> FullPath 'File
   -> CompiledRegex          -- ^ Regexp to look for.
   -> m (Set ResolvedSymbol) -- ^ Found tags, may be empty when nothing was found.
-findSymbolByRegexp liftN scope filename re = do
+findSymbolByRegexp scope filename re = do
   logVerboseDebug $
     "[findSymbolByRegexp] searching for" <+> pretty re <+> "within" <+> pretty filename
   modifTime      <- MonadFS.getModificationTime filename
   name           <- fileNameToModuleName filename
   nameResolution <- asks tsconfNameResolution
   currMod        <-
-    resolveModule nameResolution checkLoadingModules (loadModule liftN) =<<
+    resolveModule nameResolution checkLoadingModules loadModule =<<
       readFileAndLoad (Just name) modifTime filename
   (mods :: NonEmpty SymbolMap) <-
     case scope of
       ScopeCurrentModule -> do
         importNames <-
           visibleNamesFromImports
-            liftN
             AllNames
             (mhModName (modHeader currMod))
             (SubkeyMap.toList (mhImports (modHeader currMod)))
@@ -112,9 +107,9 @@ findSymbolByRegexp liftN scope filename re = do
       (S.fromList . filter (reMatches re . unqualSymNameText . resolvedSymbolName) . SM.toList)
       mods
 
-scopeFromAllModules :: Module a -> TagsServerState -> NonEmpty SymbolMap
-scopeFromAllModules currMod TagsServerState{tssLoadedModules, tssUnloadedFiles} =
-  modAllSymbols currMod :| go tssLoadedModules <> go tssUnloadedFiles
+scopeFromAllModules :: Module a -> LoadState -> NonEmpty SymbolMap
+scopeFromAllModules currMod LoadState{lsLoadedModules, lsUnloadedFiles} =
+  modAllSymbols currMod :| go lsLoadedModules <> go lsUnloadedFiles
   where
     currFile = modFile currMod
     go :: (Foldable f, Foldable g) => f (g (Module a)) -> [SymbolMap]
@@ -130,13 +125,11 @@ foldMapPar f xs = runEval $
 
 -- | Try to find out what @sym@ refers to in the context of module @mod@.
 findInModule
-  :: forall m n. (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
-  => (forall a. n a -> m a)
-  -> SymbolName
+  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  => SymbolName
   -> ResolvedModule
   -> m (Set ResolvedSymbol)
-findInModule liftN sym mod = do
+findInModule sym mod = do
   logVerboseDebug $
     "[findSymbol] qualifier for" <+> pretty sym <> ":" <+> pretty qualifier
   case qualifier of
@@ -145,7 +138,6 @@ findInModule liftN sym mod = do
       let localSyms :: Set ResolvedSymbol
           localSyms = S.fromList $ lookUpInSymbolMap sym' $ modAllSymbols mod
       importedSyms <- lookUpInImportedModules
-        liftN
         OnlyUnqualifiedNames
         currModName
         sym'
@@ -153,7 +145,7 @@ findInModule liftN sym mod = do
       pure $ localSyms <> importedSyms
 
       -- (relevantImports :: [SymbolMap]) <-
-      --   visibleNamesFromImports liftN currModName (SubkeyMap.toList (mhImports header))
+      --   visibleNamesFromImports currModName (SubkeyMap.toList (mhImports header))
       -- logVerboseDebug $
       --   "[findInModule] relevant imports:" ## pretty relevantImports
       -- pure $ localSyms <> foldMapPar (S.fromList . lookUpInSymbolMap sym') relevantImports
@@ -169,7 +161,7 @@ findInModule liftN sym mod = do
         Just specs -> do
           logVerboseDebug $
             "[lookUpInImportedModules] resolved qualifier" <+> pretty qualifier' <+> "to modules:" ## pretty specs
-          lookUpInImportedModules liftN AllNames currModName sym' (toList specs)
+          lookUpInImportedModules AllNames currModName sym' (toList specs)
   where
     qualifier :: Maybe ImportQualifier
     sym'      :: UnqualifiedSymbolName
@@ -182,17 +174,15 @@ data AllowedNames = OnlyUnqualifiedNames | AllNames
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 visibleNamesFromImports
-  :: forall m n. (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
-  => (forall a. n a -> m a)
-  -> AllowedNames
+  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  => AllowedNames
   -> ModuleName
   -> [(ImportKey, NonEmpty ImportSpec)] -- ^ Imports of a module
   -> m [SymbolMap]
-visibleNamesFromImports liftN namesToConsider currMod imports = do
+visibleNamesFromImports namesToConsider currMod imports = do
   TagsServerConf{tsconfNameResolution} <- ask
   foldForA imports $ \(impKey, impSpecs) -> do
-    mods <- loadModule' liftN impKey
+    mods <- loadModule' impKey
     let combinedNames = foldMap modAllExportedNames mods
         impSpecs'     = case namesToConsider of
           AllNames             -> (, combinedNames) <$> toList impSpecs
@@ -204,21 +194,19 @@ visibleNamesFromImports liftN namesToConsider currMod imports = do
         Right x  -> pure x
 
 lookUpInImportedModules
-  :: forall m n. (WithCallStack, MonadError ErrorMessage m, MonadState TagsServerState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => (MonadFS n, MonadError ErrorMessage n, MonadLog n)
-  => (forall a. n a -> m a)
-  -> AllowedNames
+  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  => AllowedNames
   -> ModuleName
   -> UnqualifiedSymbolName
   -> [(ImportKey, NonEmpty ImportSpec)]
   -> m (Set ResolvedSymbol)
-lookUpInImportedModules liftN names currModName name imports = do
+lookUpInImportedModules names currModName name imports = do
   logDebug $ ppFoldableHeader
     ("[lookUpInImportedModules] searching for name" <+> pretty name <+> "in modules")
     (second (fmap (ikModuleName . ispecImportKey)) <$> imports)
   foldMapPar (S.fromList . lookUpInSymbolMap name) <$>
-    visibleNamesFromImports liftN names currModName imports
-    -- traverse (loadModule' liftN . ispecImportKey) specs
+    visibleNamesFromImports names currModName imports
+    -- traverse (loadModule' . ispecImportKey) specs
 
 lookUpInSymbolMap :: UnqualifiedSymbolName -> SymbolMap -> [ResolvedSymbol]
 lookUpInSymbolMap sym sm =
