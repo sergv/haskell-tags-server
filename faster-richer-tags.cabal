@@ -169,6 +169,7 @@ library
     Haskell.Language.Server.Sexp
     Haskell.Language.Server.Tags
     Haskell.Language.Server.Tags.AnalyzeHeader
+    Haskell.Language.Server.Tags.LoadFiles
     Haskell.Language.Server.Tags.Types
     Haskell.Language.Server.Tags.Types.Imports
     Haskell.Language.Server.Tags.Types.Modules
@@ -183,7 +184,6 @@ library
     Data.Strict.Pair
 
     Haskell.Language.Server.Tags.LoadModule
-    Haskell.Language.Server.Tags.LoadFiles
     Haskell.Language.Server.Tags.Search
     Haskell.Language.Server.Tags.SearchM
   hs-source-dirs:
@@ -210,6 +210,7 @@ executable faster-richer-tags
     exe
   build-depends:
     , base >= 4.16
+    , containers
     , directory
     , directory-ospath-streaming
     , emacs-native

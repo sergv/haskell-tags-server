@@ -139,16 +139,21 @@ analyzeImports filename imports qualifiers ts = do
       PImport  : (d -> PSourcePragma : rest) -> pure (rest, HsBootModule)
       PImport  :                       rest  -> pure (rest, VanillaModule)
       _                                      -> mzero
-    let dropSafeImport = \case
+    let dropSafeImport :: [Pos ServerToken] -> [Pos ServerToken]
+        dropSafeImport = \case
           PName "safe" : rest -> rest
           rest                -> rest
+        dropPackageImport :: [Pos ServerToken] -> [Pos ServerToken]
         dropPackageImport = \case
           PString : rest      -> rest
           rest                -> rest
+        extractQualified :: [Pos ServerToken] -> ([Pos ServerToken], Bool)
         extractQualified = \case
           PQualified : rest -> (rest, True)
           rest              -> (rest, False)
 
+        ts3    :: [Pos ServerToken]
+        isQual :: Bool
         (ts3, isQual)
           = first (d >>> dropPackageImport)
           . extractQualified
@@ -157,12 +162,13 @@ analyzeImports filename imports qualifiers ts = do
           . d
           $ ts2
     -- Extract import name and renaming alias, if any
-    (ts4, name, qualName) <- case d ts3 of
-      PName name : (d -> PAs : (d -> PName qualName : rest)) -> pure (rest, name, Just qualName)
-      PName name :                                    rest   -> pure (rest, name, Nothing)
-      _                                                      -> mzero
+    (ts4, name, qualName, isQualPost) <- case d ts3 of
+      PName name : (d -> PQualified : (d -> PAs : (d -> PName qualName : rest))) -> pure (rest, name, Just qualName, True)
+      PName name : (d -> PAs : (d -> PName qualName : rest))                     -> pure (rest, name, Just qualName, False)
+      PName name :                                    rest                       -> pure (rest, name, Nothing, False)
+      _                                                                          -> mzero
     -- Make sence of the data collected before
-    let qualType = case (isQual, qualName) of
+    let qualType = case (isQual || isQualPost, qualName) of
           (True,  Nothing)        -> Qualified $ mkQual name
           (True,  Just qualName') -> Qualified $ mkQual qualName'
           (False, Nothing)        -> Unqualified

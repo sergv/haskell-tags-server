@@ -47,25 +47,23 @@ import Haskell.Language.Server.Tags.Types.Modules
 --
 -- Most of the speed comes from not touching the file system.
 loadAllFilesIntoState
-  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadLog m)
+  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadLog m, MonadState LoadState m)
   => Map ImportKey (NonEmpty UnresolvedModule)
   -> TagsServerConf
-  -> LoadState
-  -> m LoadState
-loadAllFilesIntoState unresolvedModules TagsServerConf{tsconfNameResolution} initState = do
-  flip execStateT initState $
-    flip M.traverseMaybeWithKey unresolvedModules $ \importKey _ ->
-      doResolve unresolvedModules tsconfNameResolution importKey
+  -> m (Map ImportKey (NonEmpty ResolvedModule))
+loadAllFilesIntoState unresolvedModules TagsServerConf{tsconfNameResolution} =
+  flip M.traverseMaybeWithKey unresolvedModules $ \importKey _ ->
+    doResolve unresolvedModules tsconfNameResolution importKey
 
 doResolve
-  :: forall n. (WithCallStack, MonadState LoadState n, MonadError ErrorMessage n, MonadLog n)
+  :: forall m. (WithCallStack, MonadState LoadState m, MonadError ErrorMessage m, MonadLog m)
   => Map ImportKey (NonEmpty UnresolvedModule)
   -> NameResolutionStrictness
   -> ImportKey
-  -> n (Maybe (NonEmpty ResolvedModule))
-doResolve unresolvedModules nameResolution = go
+  -> m (Maybe (NonEmpty ResolvedModule))
+doResolve allKnownModules nameResolution = go
   where
-    go :: ImportKey -> n (Maybe (NonEmpty ResolvedModule))
+    go :: ImportKey -> m (Maybe (NonEmpty ResolvedModule))
     go key = do
       resolveState <- get
       case M.lookup key $ lsLoadedModules resolveState of
@@ -81,7 +79,7 @@ doResolve unresolvedModules nameResolution = go
               , "was required while being loaded"
               ]
           else
-            case M.lookup key unresolvedModules of
+            case M.lookup key allKnownModules of
               Nothing         -> do
                 let msg = PP.hsep
                       [ "[loadAllFilesIntoState.doResolve] imported module"
@@ -111,9 +109,9 @@ doResolve unresolvedModules nameResolution = go
                 pure $ Just resolved
 
     checkLoadingModules
-      :: forall n. MonadState LoadState n
+      :: forall m. MonadState LoadState m
       => ImportKey
-      -> n (Maybe (NonEmpty UnresolvedModule, [ResolvedModule]))
+      -> m (Maybe (NonEmpty UnresolvedModule, [ResolvedModule]))
     checkLoadingModules key = do
       LoadState{lsLoadsInProgress, lsLoadedModules} <- get
       pure $ case M.lookup key lsLoadsInProgress of

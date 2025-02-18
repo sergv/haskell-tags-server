@@ -8,6 +8,7 @@
 
 {-# LANGUAGE DataKinds          #-}
 {-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE DerivingVia        #-}
 {-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE LambdaCase         #-}
@@ -219,7 +220,9 @@ data LoadState = LoadState
     -- import cycles.
   , lsLoadsInProgress :: !(Map ImportKey (NonEmptyMap (FullPath 'File) UnresolvedModule))
   , lsUnloadedFiles   :: !(Map ImportKey (NonEmpty UnresolvedModule))
-  } deriving (Eq, Ord, Show, Generic)
+  }
+  deriving (Eq, Ord, Show, Generic)
+  deriving Pretty via PPGeneric LoadState
 
 instance Store LoadState
 
