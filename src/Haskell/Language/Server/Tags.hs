@@ -37,7 +37,9 @@ import Control.Concurrent
 import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.Except.Ext
+import Control.Monad.State
 import Control.Monad.Trans.Control
+import Data.Bifunctor (second)
 import qualified Data.ByteString.Lazy as BSL
 import Data.Conduit ((.|))
 import qualified Data.Conduit as C
@@ -46,7 +48,6 @@ import qualified Data.Conduit.Zlib as Zlib
 import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map.Strict as M
-import Data.Semigroup.Foldable
 import qualified Data.Set as S
 import qualified Data.Store as Store
 import Prettyprinter.Ext (Pretty(..), (##), (<+>))
@@ -60,8 +61,6 @@ import qualified Control.Monad.Filesystem as MonadFS
 import Control.Monad.Logging
 import Data.CompiledRegex
 import Data.ErrorMessage
-import Data.Map.NonEmpty (NonEmptyMap)
-import qualified Data.Map.NonEmpty as NEMap
 import Data.Path
 import Data.Symbols (fileNameToModuleName, resolvedSymbolFile)
 import Haskell.Language.Server.Tags.LoadFiles
@@ -108,16 +107,16 @@ preloadFiles SearchCfg{scShallowPaths, scRecursivePaths} _ s
   = pure s
 preloadFiles searchCfg conf s = do
   ignoredGlobsRE <- searchCfgIgnoredRE searchCfg
-  knownFiles     <- MonadFS.findRec searchCfg ignoredGlobsRE (loadMod conf) (const (pure Nothing))
+  knownFiles     <- MonadFS.findRec searchCfg ignoredGlobsRE (\path -> fmap (second ((:| []) . (path, ))) <$> loadMod conf path) (const (pure Nothing))
   let s' = s
         { tssKnownFiles =
-            M.fromList (concatMap (\(impKey, fs) -> map (,impKey) fs) $ M.toList $ toList . NEMap.keysNE <$> knownFiles) <>
+            M.fromList (concatMap (\(impKey, fs) -> map (,impKey) fs) $ M.toList $ toList . fmap fst <$> knownFiles) <>
               tssKnownFiles s
         }
   if tsconfEagerTagging conf
   then do
     logInfo "[preloadFiles] collecting tags eagerly..."
-    ls <- loadAllFilesIntoState (fold1 . NEMap.elemsNE <$> knownFiles) conf $ tssLoadState s'
+    ls <- execStateT (loadAllFilesIntoState (fmap snd <$> knownFiles) conf) $ tssLoadState s'
     logInfo "[preloadFiles] collecting tags eagerly... OK"
     pure s' { tssLoadState = ls }
   else do
@@ -125,7 +124,7 @@ preloadFiles searchCfg conf s = do
     pure s'
       { tssLoadState = ls
           { lsUnloadedFiles =
-              M.unionWith (<>) (fold1 . NEMap.elemsNE <$> knownFiles) (lsUnloadedFiles ls)
+              M.unionWith (<>) (fmap snd <$> knownFiles) (lsUnloadedFiles ls)
           }
       }
 
@@ -204,13 +203,13 @@ startTagsServer searchCfg conf = do
               FSAdded path -> do
                 mmods <- loadMod conf path
                 pure $ case mmods of
-                  Nothing             -> serverState
-                  Just (impKey, mods) -> serverState
+                  Nothing            -> serverState
+                  Just (impKey, mod) -> serverState
                     { tssLoadState =
                         let s = tssLoadState serverState
                         in s
                           { lsUnloadedFiles =
-                              M.insertWith (<>) impKey (fold1 $ NEMap.elemsNE mods) $ lsUnloadedFiles s
+                              M.insertWith (<>) impKey (mod :| []) $ lsUnloadedFiles s
                           }
                     , tssKnownFiles    =
                         M.insert path impKey $ tssKnownFiles serverState
@@ -286,7 +285,7 @@ loadMod
   :: (MonadFS m, MonadError ErrorMessage m, MonadLog m)
   => TagsServerConf
   -> FullPath 'File
-  -> m (Maybe (ImportKey, NonEmptyMap (FullPath 'File) (NonEmpty UnresolvedModule)))
+  -> m (Maybe (ImportKey, UnresolvedModule))
 loadMod conf filename =
   case classifyPath conf filename of
     Nothing         -> pure Nothing
@@ -295,5 +294,5 @@ loadMod conf filename =
       suggestedName <- fileNameToModuleName filename
       unresolvedMod@Module{modHeader = ModuleHeader{mhModName}} <-
         readFileAndLoad (Just suggestedName) modTime filename
-      unresolvedMod `seq` pure (Just (ImportKey importType mhModName, NEMap.singleton filename (unresolvedMod :| [])))
+      unresolvedMod `seq` pure (Just (ImportKey importType mhModName, unresolvedMod))
 

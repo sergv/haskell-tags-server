@@ -170,12 +170,12 @@ findInModule sym mod = do
     header :: ModuleHeader
     header = modHeader mod
 
-data AllowedNames = OnlyUnqualifiedNames | AllNames
+data AllowedNamesKind = OnlyUnqualifiedNames | AllNames
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 visibleNamesFromImports
   :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => AllowedNames
+  => AllowedNamesKind
   -> ModuleName
   -> [(ImportKey, NonEmpty ImportSpec)] -- ^ Imports of a module
   -> m [SymbolMap]
@@ -195,7 +195,7 @@ visibleNamesFromImports namesToConsider currMod imports = do
 
 lookUpInImportedModules
   :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => AllowedNames
+  => AllowedNamesKind
   -> ModuleName
   -> UnqualifiedSymbolName
   -> [(ImportKey, NonEmpty ImportSpec)]
