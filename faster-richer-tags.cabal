@@ -207,17 +207,21 @@ executable faster-richer-tags
   import: ghc-options
   main-is:
     exe/FasterRicherTagsMain.hs
+  other-modules:
+    FasterRicherTags.CompactFormat
   hs-source-dirs:
     .
     exe
   build-depends:
     , base >= 4.16
+    , bytestring
     , containers
     , directory
     , directory-ospath-streaming
     , emacs-native
     , file-io
     , filepath >= 1.4.100
+    , ghc-prim
     , mtl
     , optparse-applicative
     , prettyprinter
