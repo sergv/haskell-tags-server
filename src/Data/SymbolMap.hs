@@ -106,7 +106,7 @@ insert sym m = SymbolMap
   where
     name :: UnqualifiedSymbolName
     name = resolvedSymbolName sym
-    (parentMap, childrenMap) = case resolvedSymbolParent sym of
+    (parentMap, childrenMap) = case resolvedSymbolParentName sym of
       Nothing -> (smParentMap m, smChildrenMap m)
       Just p  ->
         ( M.alter (addToSet p)    name $ smParentMap m
@@ -176,7 +176,7 @@ fromList syms = SymbolMap
   where
     symbolsWithParents :: [(UnqualifiedSymbolName, UnqualifiedSymbolName)]
     symbolsWithParents =
-      mapMaybe (\sym -> (resolvedSymbolName sym,) <$> resolvedSymbolParent sym) syms
+      mapMaybe (\sym -> (resolvedSymbolName sym,) <$> resolvedSymbolParentName sym) syms
 
 {-# INLINE toList #-}
 toList :: SymbolMap -> [ResolvedSymbol]

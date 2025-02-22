@@ -147,6 +147,8 @@ library
     Data.Symbols
     Data.Symbols.MacroName
 
+    FasterRicherTags.Types
+
     GHC.Stack.Ext
 
     Haskell.Language.LexerSimple.LensBlaze
