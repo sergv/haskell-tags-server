@@ -30,6 +30,7 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Data.Maybe (catMaybes)
 import Data.Ord (comparing)
+import Data.SymbolMap qualified as SM
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
@@ -44,18 +45,22 @@ import System.Directory.OsPath
 import System.Directory.OsPath.Types
 import System.Exit
 import System.File.OsPath
+import System.IO (stderr, stdout)
 import System.OsPath
 import System.OsPath.Ext
 
 import Control.Monad.Logging.Simple
 import Data.Filesystem.Find
 import Data.Ignores
-import Data.Path qualified
+import Data.Path qualified as Path
+import Data.Symbols
 import Haskell.Language.Server.Tags
 import Haskell.Language.Server.Tags.LoadFiles
 import Haskell.Language.Server.Tags.Types
-import Haskell.Language.Server.Tags.Types.Imports (ImportKey)
-import Haskell.Language.Server.Tags.Types.Modules (UnresolvedModule)
+import Haskell.Language.Server.Tags.Types.Imports
+import Haskell.Language.Server.Tags.Types.Modules
+
+import FasterRicherTags.CompactFormat
 
 data Config = Config
   {
@@ -109,7 +114,7 @@ main = do
 
   let conf = defaultTagsServerConf
 
-  putDocLn $ "files count" <+> pretty (length files)
+  hPutDocLn stderr $ "files count" <+> pretty (length files)
 
   -- (res, logs) <-
   --   runWriterT $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $
@@ -117,14 +122,14 @@ main = do
     runSimpleLoggerT (Nothing @(Destination IO)) Debug $
       runErrorExceptT $ do
         mods <- fmap catMaybes $ for files $ \path -> do
-          path'  <- liftIO $ Data.Path.fromFileOsPath path
-          isFile <- liftIO $ doesFileExist $ Data.Path.toOsPath path'
+          path'  <- liftIO $ Path.fromFileOsPath path
+          isFile <- liftIO $ doesFileExist $ Path.toOsPath path'
           unless isFile $
             liftIO $ die $ "Input path does not point to file: " ++ show path'
           loadMod conf path'
 
         let mods' :: [(ImportKey, UnresolvedModule)]
-            mods' = L.sortBy (comparing fst) mods
+            mods' = L.sortBy (comparing fst) $ filter (not . T.null . getModuleName . ikModuleName . fst) mods
             unresolvedMods :: Map ImportKey (NonEmpty UnresolvedModule)
             unresolvedMods =
               M.fromListWith (<>) (map (second (:| [])) mods')
@@ -133,13 +138,13 @@ main = do
               , lsLoadsInProgress = mempty
               , lsUnloadedFiles   = mempty
               }
-        -- putDocLn $ "Import keys:" ## pretty mods'
+        -- hPutDocLn stderr $ "Import keys:" ## pretty mods'
 
         -- TODO: T.null . getModuleName . ikModuleName
 
-        liftIO $ putDocLn $ "unresolved modules count =" <+> pretty (length mods')
-        liftIO $ putDocLn $ "unique unresolved modules count =" <+> pretty (M.size unresolvedMods)
-        liftIO $ putDocLn $ "non-unique unresolved modules:" ## pretty (filter ((> 1) . length . snd) (M.toList unresolvedMods))
+        -- liftIO $ hPutDocLn stderr $ "unresolved modules count =" <+> pretty (length mods')
+        -- liftIO $ hPutDocLn stderr $ "unique unresolved modules count =" <+> pretty (M.size unresolvedMods)
+        -- liftIO $ hPutDocLn stderr $ "non-unique unresolved modules:" ## pretty (filter ((> 1) . length . snd) (M.toList unresolvedMods))
 
         (resolvedMods, ls') <-
           (`runStateT` ls) $
@@ -149,24 +154,37 @@ main = do
 
   -- putStrLn $ "logs = " ++ show logs
 
-  (resolvedMods, ls, unresolvedMods) <- case res of
+  (resolvedMods, _ls, _unresolvedMods) <- case res of
     Left err -> die $ renderString $ "Error during load:" ## pretty err
     Right x  -> pure x
 
-  putDocLn $ "Loaded (resolved) modules count =" <+> pretty (M.size resolvedMods)
+  -- hPutDocLn stderr $ "Loaded (resolved) modules count =" <+> pretty (M.size resolvedMods)
+  --
+  -- hPutDocLn stderr $ "Loaded (resolved) modules count from state =" <+> pretty (M.size (lsLoadedModules ls))
+  --
+  -- hPutDocLn stderr $ "Not loaded:" ## pretty (M.keys (M.difference unresolvedMods resolvedMods))
 
-  putDocLn $ "Loaded (resolved) modules count from state =" <+> pretty (M.size (lsLoadedModules ls))
+  -- hPutDocLn stderr $ "Loaded modules:" ## pretty (M.keys (lsLoadedModules ls))
+  -- hPutDocLn stderr $ "Loaded modules:" ## ppMap (length <$> lsLoadedModules ls)
 
-  putDocLn $ "Not loaded:" ## pretty (M.keys (M.difference unresolvedMods resolvedMods))
+  -- hPutDocLn stderr $ "Loads in progress:" ## ppMap (lsLoadsInProgress ls)
+  -- hPutDocLn stderr $ "Unloaded modules:" ## ppMap (lsUnloadedFiles ls)
 
-  -- putDocLn $ "Loaded modules:" ## pretty (M.keys (lsLoadedModules ls))
-  -- putDocLn $ "Loaded modules:" ## ppMap (length <$> lsLoadedModules ls)
+  -- die $ renderString $ "Resolved module keys:" ## pretty (M.keys resolvedMods)
+  --
+  -- putDocLn $ "Resolved modules:" ## ppMap resolvedMods
 
-  -- putDocLn $ "Loads in progress:" ## ppMap (lsLoadsInProgress ls)
-  -- putDocLn $ "Unloaded modules:" ## ppMap (lsUnloadedFiles ls)
+  writeTo stdout $ (`M.foldMapWithKey` resolvedMods) $ \importKey (resolvedMod :: NonEmpty ResolvedModule) ->
+    case ikImportTarget importKey of
+      VanillaModule ->
+        map
+          (\m -> (Path.unFullPath (modFile m), SM.toList (modAllSymbols m)))
+          (toList resolvedMod)
+      HsBootModule  -> mempty
 
+  -- writeTo stdout $ (`foldMap` resolvedModules) $ \
 
-  -- putDocLn $ "res = " ## pretty ls
+  -- hPutDocLn stderr $ "res = " ## pretty ls
 
   -- contents <- map (BSS.toShort . BSL.toStrict) . BSL.split sep <$> BSL.getContents
 
