@@ -227,6 +227,6 @@ lookUpInSymbolMap sym sm =
         syms' = toList syms
         isRedundantConstructor :: ResolvedSymbol -> Bool
         isRedundantConstructor x =
-          case (resolvedSymbolType x, resolvedSymbolParent x) of
+          case (resolvedSymbolType x, resolvedSymbolParentName x) of
             (FastTags.Constructor, Just p) -> p == resolvedSymbolName x
             _                              -> False

@@ -46,8 +46,10 @@ module Data.Symbols
   , mkResolvedSymbolFromParts
   , resolvedSymbolName
   , resolvedSymbolType
+  , resolvedSymbolParentName
   , resolvedSymbolParent
   , resolvedSymbolPosition
+  , resolvedSymbolLine
   , resolvedSymbolFile
   ) where
 
@@ -68,12 +70,13 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Prettyprinter.Ext
 
-import FastTags.Tag (ParentTag, ParentTag(ptName))
-import Haskell.Language.Lexer.FastTags (Pos(..), TagVal(..), Type(..), SrcPos(..), Line(..))
+import Haskell.Language.Lexer.FastTags (Pos(..), TagVal(..), SrcPos(..))
 
 import Data.ErrorMessage
 import Data.KeyMap (HasKey(..))
 import Data.Path
+
+import FasterRicherTags.Types
 
 -- | e.g. Foo, Foo.Bar. Assume that this is not an import qualifier.
 -- Import qualifiers should be labeled as 'ImportQualifer'.
@@ -237,13 +240,21 @@ resolvedSymbolName = rsName
 resolvedSymbolType :: ResolvedSymbol -> Type
 resolvedSymbolType = rsType
 
+{-# INLINE resolvedSymbolParentName #-}
+resolvedSymbolParentName :: ResolvedSymbol -> Maybe UnqualifiedSymbolName
+resolvedSymbolParentName = coerce . fmap ptName . rsParent
+
 {-# INLINE resolvedSymbolParent #-}
-resolvedSymbolParent :: ResolvedSymbol -> Maybe UnqualifiedSymbolName
-resolvedSymbolParent = coerce . fmap ptName . rsParent
+resolvedSymbolParent :: ResolvedSymbol -> Maybe ParentTag
+resolvedSymbolParent = rsParent
 
 {-# INLINE resolvedSymbolPosition #-}
 resolvedSymbolPosition :: ResolvedSymbol -> (FullPath 'File, Line)
 resolvedSymbolPosition = rsFile &&& rsLine
+
+{-# INLINE resolvedSymbolLine #-}
+resolvedSymbolLine :: ResolvedSymbol -> Line
+resolvedSymbolLine = rsLine
 
 {-# INLINE resolvedSymbolFile #-}
 resolvedSymbolFile :: ResolvedSymbol -> FullPath 'File
