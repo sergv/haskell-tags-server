@@ -12,9 +12,18 @@ module FasterRicherTags.CompactFormat
 
 -- import Control.Monad.IO.Class (MonadIO(..))
 -- import Data.ByteString.Char8 (ByteString)
-import Data.ByteString.Char8 qualified as C8
 -- import Data.ByteString.Internal qualified as BSI
+-- import Foreign.ForeignPtr (touchForeignPtr)
+-- import Foreign.ForeignPtr.Unsafe (unsafeForeignPtrToPtr)
+-- import Foreign.Storable
+-- import System.OsPath
+-- import System.OsPath.Ext
+
+import Data.Bifunctor (second)
+import Data.ByteString.Char8 qualified as C8
 import Data.Foldable (for_)
+import Data.List qualified as L
+import Data.Ord (comparing)
 import Data.Text (Text)
 import Data.Text.IO qualified as T
 import Data.Text.Internal qualified as TI
@@ -22,14 +31,8 @@ import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder qualified as TLB
 import Data.Text.Lazy.Builder.Int qualified as TLBI
 import Data.Text.Unsafe qualified as TU
--- import Foreign.ForeignPtr (touchForeignPtr)
--- import Foreign.ForeignPtr.Unsafe (unsafeForeignPtrToPtr)
--- import Foreign.Storable
 import GHC.Magic (inline)
 import System.IO (Handle, hPutChar)
-
--- import System.OsPath
--- import System.OsPath.Ext
 
 import Data.Symbols
 
@@ -38,7 +41,7 @@ import FasterRicherTags.Types
 writeTo :: Handle -> [(Text, [ResolvedSymbol])] -> IO ()
 writeTo dest xs = do
   list $
-    for_ xs $ \(fn, tags) -> list $ do
+    for_ (map (second (L.sortBy (comparing (\x -> (resolvedSymbolName x, resolvedSymbolType x, resolvedSymbolLine x))))) $ L.sortBy (comparing fst) xs) $ \(fn, tags) -> list $ do
       txt fn
       for_ tags $ \sym ->
         list $ do
