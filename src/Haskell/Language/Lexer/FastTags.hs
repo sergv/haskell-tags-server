@@ -26,6 +26,10 @@ module Haskell.Language.Lexer.FastTags
   , stripServerTokens
   , embedServerToken
   , removeDuplicatePatterns
+
+  , forallServerToken
+  , patternServerToken
+
   , FastTags.TokenVal
   , module FastTags.Token
   , module FastTags.Tag
@@ -71,13 +75,7 @@ instance Pretty PragmaType where
 
 
 data ServerToken
-  = Pragma !PragmaType
-  | HSC2HS  -- Any HSC2HS directive
-  | LBanana -- Arrows: (|
-  | RBanana -- Arrows: |)
-  | Error (IgnoreEqOrdHashNFData (Doc Void))
-
-  | KWCase
+  = KWCase
   | KWClass
   | KWData
   | KWDefault
@@ -130,7 +128,21 @@ data ServerToken
   | QuasiquoterStart
   | QuasiquoterEnd
   | SpliceStart -- \$(
+  | ToplevelSplice -- e.g. \$foo
   | LambdaBackslash -- \
+
+  | CppDefine {-# UNPACK #-} !Text
+  | HSCEnum      -- #{enum...}
+  | HSCDirective -- e.g. #define foo bar...
+  | HSCDirectiveBraced
+    -- ^ e.g. #{define foo...\nbar}, #{\ndefine foo...\nbar}, ends with RBrace
+  | LBanana -- Arrows: (|
+  | RBanana -- Arrows: |)
+  | Error (IgnoreEqOrdHashNFData (Doc Void))
+  | DQuote -- '"' when not part of string in Alex or Happy
+
+  | Pragma !PragmaType -- Actual new addition compared to fast-tags
+
   | EOF
   deriving (Eq, Ord, Show, Generic)
 
@@ -186,62 +198,70 @@ stripServerTokens = second catMaybes . partitionEithers . map f
   where
     f :: Pos ServerToken -> Either (Pos FastTags.TokenVal) (Maybe (Doc Void))
     f (Pos p t) = case t of
-      Pragma _         -> Right Nothing
-      HSC2HS           -> Right Nothing
-      LBanana          -> Left $ Pos p FastTags.LBanana
-      RBanana          -> Left $ Pos p FastTags.RBanana
-      Error msg        -> Right $ Just $ unIgnoreEqOrdHashNFData msg
-      KWCase           -> Left $ Pos p FastTags.KWCase
-      KWClass          -> Left $ Pos p FastTags.KWClass
-      KWData           -> Left $ Pos p FastTags.KWData
-      KWDefault        -> Left $ Pos p FastTags.KWDefault
-      KWDeriving       -> Left $ Pos p FastTags.KWDeriving
-      KWDo             -> Left $ Pos p FastTags.KWDo
-      KWElse           -> Left $ Pos p FastTags.KWElse
-      KWFamily         -> Left $ Pos p FastTags.KWFamily
-      KWForeign        -> Left $ Pos p FastTags.KWForeign
-      KWIf             -> Left $ Pos p FastTags.KWIf
-      KWImport         -> Left $ Pos p FastTags.KWImport
-      KWIn             -> Left $ Pos p FastTags.KWIn
-      KWInfix          -> Left $ Pos p FastTags.KWInfix
-      KWInfixl         -> Left $ Pos p FastTags.KWInfixl
-      KWInfixr         -> Left $ Pos p FastTags.KWInfixr
-      KWInstance       -> Left $ Pos p FastTags.KWInstance
-      KWLet            -> Left $ Pos p FastTags.KWLet
-      KWModule         -> Left $ Pos p FastTags.KWModule
-      KWNewtype        -> Left $ Pos p FastTags.KWNewtype
-      KWOf             -> Left $ Pos p FastTags.KWOf
-      KWThen           -> Left $ Pos p FastTags.KWThen
-      KWType           -> Left $ Pos p FastTags.KWType
-      KWWhere          -> Left $ Pos p FastTags.KWWhere
-      Arrow            -> Left $ Pos p FastTags.Arrow
-      At               -> Left $ Pos p FastTags.At
-      Backtick         -> Left $ Pos p FastTags.Backtick
-      Comma            -> Left $ Pos p FastTags.Comma
-      Dot              -> Left $ Pos p FastTags.Dot
-      DoubleColon      -> Left $ Pos p FastTags.DoubleColon
-      Equals           -> Left $ Pos p FastTags.Equals
-      ExclamationMark  -> Left $ Pos p FastTags.ExclamationMark
-      Implies          -> Left $ Pos p FastTags.Implies
-      LBrace           -> Left $ Pos p FastTags.LBrace
-      LBracket         -> Left $ Pos p FastTags.LBracket
-      LParen           -> Left $ Pos p FastTags.LParen
-      Pipe             -> Left $ Pos p FastTags.Pipe
-      RBrace           -> Left $ Pos p FastTags.RBrace
-      RBracket         -> Left $ Pos p FastTags.RBracket
-      RParen           -> Left $ Pos p FastTags.RParen
-      Tilde            -> Left $ Pos p FastTags.Tilde
-      Semicolon        -> Left $ Pos p FastTags.Semicolon
-      T x              -> Left $ Pos p $ FastTags.T x
-      Newline n        -> Left $ Pos p $ FastTags.Newline n
-      String           -> Left $ Pos p FastTags.String
-      Character        -> Left $ Pos p FastTags.Character
-      Number           -> Left $ Pos p FastTags.Number
-      QuasiquoterStart -> Left $ Pos p FastTags.QuasiquoterStart
-      QuasiquoterEnd   -> Left $ Pos p FastTags.QuasiquoterEnd
-      SpliceStart      -> Left $ Pos p FastTags.SpliceStart
-      LambdaBackslash  -> Left $ Pos p FastTags.LambdaBackslash
-      EOF              -> Left $ Pos p FastTags.EOF
+      KWCase             -> Left $ Pos p FastTags.KWCase
+      KWClass            -> Left $ Pos p FastTags.KWClass
+      KWData             -> Left $ Pos p FastTags.KWData
+      KWDefault          -> Left $ Pos p FastTags.KWDefault
+      KWDeriving         -> Left $ Pos p FastTags.KWDeriving
+      KWDo               -> Left $ Pos p FastTags.KWDo
+      KWElse             -> Left $ Pos p FastTags.KWElse
+      KWFamily           -> Left $ Pos p FastTags.KWFamily
+      KWForeign          -> Left $ Pos p FastTags.KWForeign
+      KWIf               -> Left $ Pos p FastTags.KWIf
+      KWImport           -> Left $ Pos p FastTags.KWImport
+      KWIn               -> Left $ Pos p FastTags.KWIn
+      KWInfix            -> Left $ Pos p FastTags.KWInfix
+      KWInfixl           -> Left $ Pos p FastTags.KWInfixl
+      KWInfixr           -> Left $ Pos p FastTags.KWInfixr
+      KWInstance         -> Left $ Pos p FastTags.KWInstance
+      KWLet              -> Left $ Pos p FastTags.KWLet
+      KWModule           -> Left $ Pos p FastTags.KWModule
+      KWNewtype          -> Left $ Pos p FastTags.KWNewtype
+      KWOf               -> Left $ Pos p FastTags.KWOf
+      KWThen             -> Left $ Pos p FastTags.KWThen
+      KWType             -> Left $ Pos p FastTags.KWType
+      KWWhere            -> Left $ Pos p FastTags.KWWhere
+      Arrow              -> Left $ Pos p FastTags.Arrow
+      At                 -> Left $ Pos p FastTags.At
+      Backtick           -> Left $ Pos p FastTags.Backtick
+      Comma              -> Left $ Pos p FastTags.Comma
+      Dot                -> Left $ Pos p FastTags.Dot
+      DoubleColon        -> Left $ Pos p FastTags.DoubleColon
+      Equals             -> Left $ Pos p FastTags.Equals
+      ExclamationMark    -> Left $ Pos p FastTags.ExclamationMark
+      Implies            -> Left $ Pos p FastTags.Implies
+      LBrace             -> Left $ Pos p FastTags.LBrace
+      LBracket           -> Left $ Pos p FastTags.LBracket
+      LParen             -> Left $ Pos p FastTags.LParen
+      Pipe               -> Left $ Pos p FastTags.Pipe
+      RBrace             -> Left $ Pos p FastTags.RBrace
+      RBracket           -> Left $ Pos p FastTags.RBracket
+      RParen             -> Left $ Pos p FastTags.RParen
+      Tilde              -> Left $ Pos p FastTags.Tilde
+      Semicolon          -> Left $ Pos p FastTags.Semicolon
+      T x                -> Left $ Pos p $ FastTags.T x
+      Newline n          -> Left $ Pos p $ FastTags.Newline n
+      String             -> Left $ Pos p FastTags.String
+      Character          -> Left $ Pos p FastTags.Character
+      Number             -> Left $ Pos p FastTags.Number
+      QuasiquoterStart   -> Left $ Pos p FastTags.QuasiquoterStart
+      QuasiquoterEnd     -> Left $ Pos p FastTags.QuasiquoterEnd
+      SpliceStart        -> Left $ Pos p FastTags.SpliceStart
+      ToplevelSplice     -> Left $ Pos p FastTags.ToplevelSplice
+      LambdaBackslash    -> Left $ Pos p FastTags.LambdaBackslash
+
+      CppDefine x        -> Left $ Pos p $ FastTags.CppDefine x
+      HSCEnum            -> Left $ Pos p $ FastTags.HSCEnum
+      HSCDirective       -> Left $ Pos p $ FastTags.HSCDirective
+      HSCDirectiveBraced -> Left $ Pos p $ FastTags.HSCDirectiveBraced
+      LBanana            -> Left $ Pos p FastTags.LBanana
+      RBanana            -> Left $ Pos p FastTags.RBanana
+      Error msg          -> Right $ Just $ unIgnoreEqOrdHashNFData msg
+      DQuote             -> Left $ Pos p FastTags.DQuote
+
+      Pragma _           -> Right Nothing
+
+      EOF                -> Left $ Pos p FastTags.EOF
 
 embedServerToken :: FastTags.TokenVal -> Maybe ServerToken
 embedServerToken = \case
@@ -297,17 +317,17 @@ embedServerToken = \case
   FastTags.LambdaBackslash    -> Just LambdaBackslash
   FastTags.EOF                -> Just EOF
 
-  FastTags.ToplevelSplice     -> Nothing
-  FastTags.CppDefine _        -> Nothing
-  FastTags.HSCEnum            -> Just HSC2HS
-  FastTags.HSCDirective       -> Just HSC2HS
+  FastTags.ToplevelSplice     -> Just ToplevelSplice
+  FastTags.CppDefine x        -> Just $ CppDefine x
+  FastTags.HSCEnum            -> Just HSCEnum
+  FastTags.HSCDirective       -> Just HSCDirective
 
-  FastTags.HSCDirectiveBraced -> Just HSC2HS
+  FastTags.HSCDirectiveBraced -> Just HSCDirectiveBraced
   FastTags.LBanana            -> Just LBanana
   FastTags.RBanana            -> Just RBanana
   FastTags.Error msg          -> Just $ Error $ IgnoreEqOrdHashNFData $ pretty msg
 
-  FastTags.DQuote             -> Nothing
+  FastTags.DQuote             -> Just DQuote
 
 processTokens :: FilePath -> [Pos ServerToken] -> ([Pos FastTags.TagVal], [Doc Void])
 processTokens filename toks
@@ -339,3 +359,10 @@ minPos :: SrcPos -> SrcPos -> SrcPos
 minPos p1@SrcPos{posLine = l1} p2@SrcPos{posLine = l2}
   | l1 < l2   = p1
   | otherwise = p2
+
+forallServerToken :: ServerToken
+forallServerToken = T "forall"
+
+patternServerToken :: ServerToken
+patternServerToken = T "pattern"
+
