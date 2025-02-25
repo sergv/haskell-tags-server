@@ -206,7 +206,7 @@ data TagsServerConf = TagsServerConf
 
 defaultTagsServerConf :: TagsServerConf
 defaultTagsServerConf = TagsServerConf
-  { tsconfVanillaExtensions = S.fromList [".hs", ".lhs", ".hsc", ".chs"]
+  { tsconfVanillaExtensions = S.fromList [".hs", ".lhs", ".hsc", ".chs", ".x", ".y", ".lx", ".ly"]
   , tsconfHsBootExtensions  = S.fromList [".hs-boot", ".lhs-boot"]
   , tsconfEagerTagging      = False
   , tsconfNameResolution    = NameResolutionLax
