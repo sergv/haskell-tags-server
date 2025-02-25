@@ -6,10 +6,6 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE BangPatterns        #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-
 module Haskell.Language.LexerSimple.LensBlaze
   ( Lens
   , Lens'

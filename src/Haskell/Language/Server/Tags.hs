@@ -8,16 +8,11 @@
 -- The actual server that handles tags
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE DoAndIfThenElse     #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE GADTs               #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Haskell.Language.Server.Tags
   ( startTagsServer
@@ -33,6 +28,8 @@ module Haskell.Language.Server.Tags
   , loadMod
   ) where
 
+import Prelude hiding (mod)
+
 import Control.Concurrent
 import Control.Monad.Base
 import Control.Monad.Catch
@@ -40,24 +37,24 @@ import Control.Monad.Except.Ext
 import Control.Monad.State
 import Control.Monad.Trans.Control
 import Data.Bifunctor (second)
-import qualified Data.ByteString.Lazy as BSL
+import Data.ByteString.Lazy qualified as BSL
 import Data.Conduit ((.|))
-import qualified Data.Conduit as C
-import qualified Data.Conduit.Binary as C
-import qualified Data.Conduit.Zlib as Zlib
+import Data.Conduit qualified as C
+import Data.Conduit.Binary qualified as C
+import Data.Conduit.Zlib qualified as Zlib
 import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.Map.Strict as M
-import qualified Data.Set as S
-import qualified Data.Store as Store
+import Data.Map.Strict qualified as M
+import Data.Set qualified as S
+import Data.Store qualified as Store
 import Prettyprinter.Ext (Pretty(..), (##), (<+>))
-import qualified System.Directory as Directory
+import System.Directory qualified as Directory
 import System.IO
 
-import qualified Data.Promise as Promise
+import Data.Promise qualified as Promise
 
 import Control.Monad.Filesystem (MonadFS(..), SearchCfg(..))
-import qualified Control.Monad.Filesystem as MonadFS
+import Control.Monad.Filesystem qualified as MonadFS
 import Control.Monad.Logging
 import Data.CompiledRegex
 import Data.ErrorMessage

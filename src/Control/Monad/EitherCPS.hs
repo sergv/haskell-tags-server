@@ -8,13 +8,9 @@
 -- A continuation-based error monad.
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE CPP                   #-}
-{-# LANGUAGE DeriveFunctor         #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE CPP                  #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Control.Monad.EitherCPS
   ( EitherCPST

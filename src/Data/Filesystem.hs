@@ -6,15 +6,10 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE BangPatterns           #-}
 {-# LANGUAGE CPP                    #-}
 {-# LANGUAGE DataKinds              #-}
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiWayIf             #-}
-{-# LANGUAGE Rank2Types             #-}
-{-# LANGUAGE ScopedTypeVariables    #-}
 
 #ifdef mingw32_HOST_OS
 #define WINDOWS 1
@@ -34,21 +29,22 @@ import Control.Monad.Trans.Control
 
 import Data.Foldable.Ext
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as M
+import Data.Map.Strict qualified as M
 import Data.NBSem
 import Data.Path
 import Data.Semigroup as Semigroup
 import Data.Set (Set)
-import qualified Data.Set as S
-import qualified Data.Streaming.Filesystem as Streaming
-import qualified Data.Text as T
+import Data.Set qualified as S
+import Data.Streaming.Filesystem qualified as Streaming
+import Data.Text qualified as T
 import GHC.Conc (getNumCapabilities)
 import GHC.Stack.Ext (WithCallStack)
-import qualified System.FilePath as FilePath
+import System.FilePath qualified as FilePath
 
 #ifdef WINDOWS
-#else
-import qualified Control.Exception as Exception
+#endif
+#ifndef WINDOWS
+import Control.Exception qualified as Exception
 import System.Posix.Files as Posix
 #endif
 

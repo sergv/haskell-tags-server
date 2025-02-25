@@ -20,7 +20,7 @@ module TestUtils
 
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe
-import qualified Data.Text as T
+import Data.Text qualified as T
 import Prettyprinter.Ext
 import Test.Tasty (TestTree)
 import Test.Tasty.HUnit (Assertion, testCase, assertBool, assertFailure)

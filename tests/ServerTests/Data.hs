@@ -6,9 +6,6 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE DeriveFoldable    #-}
-{-# LANGUAGE DeriveFunctor     #-}
-{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module ServerTests.Data
@@ -22,7 +19,7 @@ module ServerTests.Data
 
 import Data.Maybe
 import Data.Text (Text)
-import qualified Data.Text as T
+import Data.Text qualified as T
 
 import Data.Path
 import Data.Symbols

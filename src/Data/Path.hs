@@ -10,21 +10,12 @@
 {-# LANGUAGE CPP                    #-}
 {-# LANGUAGE DataKinds              #-}
 {-# LANGUAGE DefaultSignatures      #-}
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE InstanceSigs           #-}
 {-# LANGUAGE MonoLocalBinds         #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE MultiWayIf             #-}
 {-# LANGUAGE NamedFieldPuns         #-}
 {-# LANGUAGE OverloadedStrings      #-}
-{-# LANGUAGE ScopedTypeVariables    #-}
-{-# LANGUAGE TypeSynonymInstances   #-}
 {-# LANGUAGE UndecidableInstances   #-}
-
-{-# OPTIONS_GHC -Wredundant-constraints          #-}
-{-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
 
 #ifdef mingw32_HOST_OS
 #define WINDOWS 1
@@ -72,20 +63,20 @@ import Control.Monad.Base
 import Control.Monad.Except.Ext
 import Control.Monad.Ext
 
-import qualified Data.ByteString as BS
+import Data.ByteString qualified as BS
 import Data.Coerce
 import Data.ErrorMessage
 import Data.Foldable1 (foldMap1)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup as Semigroup
 import Data.Text (Text)
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as TE
+import Data.Text qualified as T
+import Data.Text.Encoding qualified as TE
 import Data.Time.Clock (UTCTime)
 import Prettyprinter.Ext
-import qualified System.Directory as Directory
-import qualified System.Directory.OsPath
-import qualified System.FilePath as FilePath
+import System.Directory qualified as Directory
+import System.Directory.OsPath qualified
+import System.FilePath qualified as FilePath
 import System.OsPath.Ext (pathToText, pathFromText)
 import System.OsPath.Types (OsPath)
 
@@ -95,7 +86,7 @@ import Data.Path.Internal
 #endif
 #ifndef WINDOWS
 import Control.Exception
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 import System.Posix.Files as Posix
 #endif
 

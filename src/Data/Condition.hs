@@ -7,11 +7,6 @@
 -- Created     :  Monday, 12 September 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts #-}
-
-{-# OPTIONS_GHC -Wredundant-constraints          #-}
-{-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
-
 module Data.Condition
   ( Condition
   , newUnsetCondition

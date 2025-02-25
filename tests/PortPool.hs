@@ -7,8 +7,6 @@
 -- Created     :  Wednesday, 21 September 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts #-}
-
 module PortPool
   ( PortPool
   , newPortPool

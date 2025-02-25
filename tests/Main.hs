@@ -18,12 +18,12 @@ import Test.Tasty
 import System.Posix (installHandler, sigPIPE, Handler(Ignore))
 #endif
 
-import qualified Data.Map.NonEmpty.Tests as Data.Map.NonEmptyTests
-import qualified Haskell.Language.Lexer.Tests as LexerTests
-import qualified Haskell.Language.Lexer.Preprocessor.Tests as PreprocessorTests
-import qualified Haskell.Language.Server.Tags.AnalyzeHeaderTests as AnalyzeHeaderTests
-import qualified Haskell.Language.Server.Tags.TypesTests as TypesTests
-import qualified ServerTests
+import Data.Map.NonEmpty.Tests qualified as Data.Map.NonEmptyTests
+import Haskell.Language.Lexer.Tests qualified as LexerTests
+import Haskell.Language.Lexer.Preprocessor.Tests qualified as PreprocessorTests
+import Haskell.Language.Server.Tags.AnalyzeHeaderTests qualified as AnalyzeHeaderTests
+import Haskell.Language.Server.Tags.TypesTests qualified as TypesTests
+import ServerTests qualified
 
 main :: IO ()
 main = withSocketsDo $ do

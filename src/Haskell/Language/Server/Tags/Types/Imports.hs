@@ -6,11 +6,6 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE DeriveFoldable    #-}
-{-# LANGUAGE DeriveFunctor     #-}
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
@@ -44,9 +39,9 @@ import Prettyprinter.Ext
 import Data.KeyMap (KeyMap, HasKey(..))
 import Data.SubkeyMap (HasSubkey(..))
 import Data.SymbolMap (SymbolMap)
-import qualified Data.SymbolMap as SM
+import Data.SymbolMap qualified as SM
 import Data.Symbols
-import qualified Haskell.Language.Lexer.FastTags as FastTags
+import Haskell.Language.Lexer.FastTags qualified as FastTags
 
 -- | Handle for when particular module enters another module's scope.
 data ImportKey = ImportKey

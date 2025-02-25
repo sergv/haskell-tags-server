@@ -6,11 +6,7 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE ScopedTypeVariables #-}
-
 {-# OPTIONS_GHC -Wno-orphans #-}
-
-{-# OPTIONS_GHC -w #-}
 
 module Data.Map.NonEmpty.Tests (tests) where
 
@@ -21,12 +17,12 @@ import Test.Tasty.QuickCheck as QC
 
 import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as NE
+import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as M
+import Data.Map.Strict qualified as M
 
 import Data.Map.NonEmpty (NonEmptyMap)
-import qualified Data.Map.NonEmpty as NEMap
+import Data.Map.NonEmpty qualified as NEMap
 
 tests :: TestTree
 tests = testGroup "Data.Map.NonEmpty"

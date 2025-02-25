@@ -18,8 +18,8 @@ import Control.Monad.ErrorExcept
 import Control.Monad.IO.Class (liftIO)
 
 import Data.Foldable (for_)
-import qualified Data.List as L
-import qualified Data.Set as S
+import Data.List qualified as L
+import Data.Set qualified as S
 import Network.Socket (PortNumber, withSocketsDo)
 import Options.Applicative
 import Prettyprinter.Ext
@@ -32,7 +32,7 @@ import System.Posix (installHandler, sigPIPE, Handler(Ignore))
 #endif
 
 import Control.Monad.Filesystem (SearchCfg(..))
-import qualified Control.Monad.Filesystem as MonadFS
+import Control.Monad.Filesystem qualified as MonadFS
 import Control.Monad.Logging
 import Control.Monad.Logging.Simple
 import Data.ErrorMessage
@@ -66,7 +66,7 @@ optsParser = ProgramConfig
            (long "recursive" <>
             metavar "DIR" <>
             help "Recursively add directory tree with haskell files to index"))
-  <*> option (fmap fromIntegral auto)
+  <*> option (fmap (fromIntegral @Int) auto)
         (short 'p' <>
          long "port" <>
          value sexpDefaultPort <>

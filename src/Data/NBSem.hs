@@ -6,9 +6,6 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE BangPatterns     #-}
-{-# LANGUAGE FlexibleContexts #-}
-
 module Data.NBSem
   ( NBSem
   , newNBSem

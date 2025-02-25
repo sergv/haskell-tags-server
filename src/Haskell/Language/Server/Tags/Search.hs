@@ -6,13 +6,9 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Haskell.Language.Server.Tags.Search
   ( findSymbol
@@ -30,26 +26,26 @@ import Control.Monad.State
 import Control.Parallel.Strategies.Ext
 
 import Data.Foldable.Ext
-import qualified Data.List as L
+import Data.List qualified as L
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe
 import Data.Set (Set)
-import qualified Data.Set as S
+import Data.Set qualified as S
 import Data.Traversable
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 import Prettyprinter.Ext
 
 import Control.Monad.Filesystem (MonadFS)
-import qualified Control.Monad.Filesystem as MonadFS
+import Control.Monad.Filesystem qualified as MonadFS
 import Control.Monad.Logging
 import Data.CompiledRegex
 import Data.ErrorMessage
 import Data.Path
-import qualified Data.SubkeyMap as SubkeyMap
+import Data.SubkeyMap qualified as SubkeyMap
 import Data.SymbolMap (SymbolMap)
-import qualified Data.SymbolMap as SM
+import Data.SymbolMap qualified as SM
 import Data.Symbols
-import qualified Haskell.Language.Lexer.FastTags as FastTags
+import Haskell.Language.Lexer.FastTags qualified as FastTags
 import Haskell.Language.Server.Tags.LoadModule
 import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports

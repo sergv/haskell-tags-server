@@ -7,17 +7,9 @@
 -- Created     :  Tuesday, 30 August 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeSynonymInstances  #-}
 
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-
-{-# OPTIONS_GHC -Wredundant-constraints          #-}
-{-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Prettyprinter.Ext
   ( Pretty(..)
@@ -35,26 +27,26 @@ module Prettyprinter.Ext
   , module Prettyprinter.Show
   ) where
 
-import qualified Data.ByteString.Lazy.UTF8 as UTF8
+import Data.ByteString.Lazy.UTF8 qualified as UTF8
 import Data.Foldable (toList)
-import qualified Data.Text as T
-import qualified Data.Text.Encoding.Error as TEE
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Encoding as TLE
+import Data.Text qualified as T
+import Data.Text.Encoding.Error qualified as TEE
+import Data.Text.Lazy qualified as TL
+import Data.Text.Lazy.Encoding qualified as TLE
 import Prettyprinter ((<+>))
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 import Prettyprinter.Combinators
 import Prettyprinter.Generics
 import Prettyprinter.Show
 
 import Data.KeyMap (KeyMap)
-import qualified Data.KeyMap as KM
+import Data.KeyMap qualified as KM
 import Data.Map.NonEmpty (NonEmptyMap)
-import qualified Data.Map.NonEmpty as NEMap
+import Data.Map.NonEmpty qualified as NEMap
 import Data.MonoidalMap (MonoidalMap)
-import qualified Data.MonoidalMap as MM
+import Data.MonoidalMap qualified as MM
 import Data.SubkeyMap (SubkeyMap)
-import qualified Data.SubkeyMap as SubkeyMap
+import Data.SubkeyMap qualified as SubkeyMap
 
 docFromByteString :: UTF8.ByteString -> Doc ann
 docFromByteString = PP.pretty . TLE.decodeUtf8With TEE.lenientDecode

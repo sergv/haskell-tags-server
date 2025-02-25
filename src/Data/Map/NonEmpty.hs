@@ -7,14 +7,6 @@
 -- Created     :  Monday, 24 October 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE DeriveFoldable    #-}
-{-# LANGUAGE DeriveFunctor     #-}
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE DeriveTraversable #-}
-
-{-# OPTIONS_GHC -Wredundant-constraints          #-}
-{-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
-
 module Data.Map.NonEmpty
   ( NonEmptyMap
   , singleton
@@ -39,7 +31,7 @@ import Prelude hiding (lookup)
 import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as M
+import Data.Map.Strict qualified as M
 import Data.Store (Store)
 import GHC.Generics
 import Prettyprinter.Combinators

@@ -7,15 +7,13 @@
 -- Created     :   4 June 2017
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts #-}
-
 module Control.Monad.Except.Ext
   ( throwErrorWithCallStack
   , WithCallStack
   , module Control.Monad.Except
   ) where
 
-import qualified Control.Monad.Except as CME
+import Control.Monad.Except qualified as CME
 import Control.Monad.Except hiding (throwError)
 import Data.Void (Void)
 import GHC.Stack.Ext (WithCallStack, callStack)

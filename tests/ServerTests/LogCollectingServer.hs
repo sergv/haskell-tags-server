@@ -8,9 +8,8 @@
 -- its logs in an IORef instead of writing them to stderr.
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NamedFieldPuns   #-}
-{-# LANGUAGE TypeFamilies     #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE TypeFamilies   #-}
 
 module ServerTests.LogCollectingServer
   ( LogCollectingServer

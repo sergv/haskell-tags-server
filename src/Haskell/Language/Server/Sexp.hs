@@ -8,16 +8,13 @@
 -- Sexp frontend for tag server.
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE ApplicativeDo       #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies        #-}
-{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE ApplicativeDo     #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE TypeOperators     #-}
 
 module Haskell.Language.Server.Sexp
   ( sexpDefaultPort
@@ -29,7 +26,7 @@ module Haskell.Language.Server.Sexp
 
 import Control.Concurrent
 import Control.DeepSeq
-import qualified Control.Exception as Exception
+import Control.Exception qualified as Exception
 import Control.Monad
 import Control.Monad.Base
 import Control.Monad.Catch
@@ -41,24 +38,24 @@ import Control.Monad.Trans.Control
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Scientific as Scientific
-import qualified Data.Set as S
-import qualified Data.Text as T
-import qualified Data.Text.Encoding.Error as TE
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Encoding as TLE
-import qualified Network.Socket as Network
+import Data.Set qualified as S
+import Data.Text qualified as T
+import Data.Text.Encoding.Error qualified as TE
+import Data.Text.Lazy qualified as TL
+import Data.Text.Lazy.Encoding qualified as TLE
+import Network.Socket qualified as Network
 import Prettyprinter.Ext
 
 import Language.Sexp as Sexp
 import Network.Socket as Socket
-import qualified Network.Socket.ByteString.Lazy as Socket.BSL
+import Network.Socket.ByteString.Lazy qualified as Socket.BSL
 
 import Control.Monad.Logging
 import Data.CompiledRegex
 import Data.Condition
 import Data.ErrorMessage
 import Data.Path
-import qualified Data.Promise as Promise
+import Data.Promise qualified as Promise
 import Data.Symbols
 import Haskell.Language.Lexer.FastTags (Type, Line(..))
 import Haskell.Language.Server.Tags.Types

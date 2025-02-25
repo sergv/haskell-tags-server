@@ -7,8 +7,6 @@
 -- Created     :  Sunday, 14 August 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts #-}
-
 module Data.Promise
   ( Promise
   , newPromise

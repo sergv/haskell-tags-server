@@ -7,21 +7,14 @@
 -- Created     :  Tuesday, 27 September 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DerivingVia                #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE NamedFieldPuns             #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE StandaloneDeriving         #-}
-{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE DerivingVia       #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
-
--- {-# OPTIONS_GHC -Wredundant-constraints          #-}
-{-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
 
 module Data.Symbols
   ( ModuleName
@@ -59,15 +52,15 @@ import Control.DeepSeq
 import Control.Monad.Except.Ext
 
 import Data.Attoparsec.Text
-import qualified Data.Attoparsec.Text as Attoparsec
+import Data.Attoparsec.Text qualified as Attoparsec
 import Data.Char (isUpper, isAlphaNum)
 import Data.Coerce
 import Data.Hashable
-import qualified Data.List as L
+import Data.List qualified as L
 import Data.Maybe
 import Data.Store (Store)
 import Data.Text (Text)
-import qualified Data.Text as T
+import Data.Text qualified as T
 import Prettyprinter.Ext
 
 import Haskell.Language.Lexer.FastTags (Pos(..), TagVal(..), SrcPos(..))

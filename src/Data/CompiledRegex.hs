@@ -7,11 +7,9 @@
 -- Created     :  Tuesday, 16 August 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE CPP                 #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Data.CompiledRegex
   ( CompiledRegex
@@ -28,11 +26,11 @@ import Control.Monad.Except.Ext
 import Data.Foldable
 import Data.Function (on)
 import Data.Text (Text)
-import qualified Data.Text as T
-import qualified Prettyprinter as PP
+import Data.Text qualified as T
+import Prettyprinter qualified as PP
 import Prettyprinter.Ext
 import Text.Regex.TDFA
-import qualified Text.Regex.TDFA.Text as TDFA
+import Text.Regex.TDFA.Text qualified as TDFA
 
 import Data.ErrorMessage
 

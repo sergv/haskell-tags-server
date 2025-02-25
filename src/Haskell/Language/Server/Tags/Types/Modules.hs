@@ -7,12 +7,6 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE DeriveFoldable    #-}
-{-# LANGUAGE DeriveFunctor     #-}
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
@@ -40,7 +34,7 @@ import Control.Parallel.Strategies.Ext
 import Data.Hashable
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as M
+import Data.Map.Strict qualified as M
 import Data.Set (Set)
 import Data.Store (Store)
 import Data.Time.Clock (UTCTime(..))
@@ -48,12 +42,12 @@ import Data.Traversable (for)
 import Prettyprinter.Ext
 
 import Control.Monad.Filesystem (MonadFS)
-import qualified Control.Monad.Filesystem as MonadFS
+import Control.Monad.Filesystem qualified as MonadFS
 import Data.ErrorMessage
 import Data.KeyMap (KeyMap, HasKey(..))
 import Data.Path (FullPath, FileType(..))
 import Data.SubkeyMap (SubkeyMap)
-import qualified Data.SubkeyMap as SubkeyMap
+import Data.SubkeyMap qualified as SubkeyMap
 import Data.SymbolMap (SymbolMap)
 import Data.Symbols
 import Haskell.Language.Lexer.FastTags (Type, Line)

@@ -6,15 +6,10 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE BangPatterns        #-}
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE DoAndIfThenElse     #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Haskell.Language.Server.Tags.LoadModule
   ( loadModule
@@ -30,53 +25,53 @@ import Prelude hiding (mod)
 
 import Control.Arrow (first)
 import Control.Monad
-import qualified Control.Monad.Except as CME
+import Control.Monad.Except qualified as CME
 import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer (MonadWriter(..))
-import qualified Control.Monad.Writer as Lazy
-import qualified Control.Monad.Writer.Strict as Strict
+import Control.Monad.Writer qualified as Lazy
+import Control.Monad.Writer.Strict qualified as Strict
 import Control.Parallel.Strategies.Ext
 
-import qualified Data.ByteString as BS
+import Data.ByteString qualified as BS
 import Data.Either
 import Data.Foldable.Ext
 import Data.Functor.Product (Product(..))
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as M
+import Data.Map.Strict qualified as M
 import Data.Maybe hiding (Maybe(Just))
-import qualified Data.Monoid as Monoid
+import Data.Monoid qualified as Monoid
 import Data.Semigroup as Semigroup
 import Data.Set (Set)
-import qualified Data.Set as S
-import qualified Data.Text as T
+import Data.Set qualified as S
+import Data.Text qualified as T
 import Data.Time.Clock (UTCTime)
 import Data.Traversable (for)
 import Data.Void (Void)
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 import Prettyprinter.Ext
 
 import Haskell.Language.Lexer (tokenize)
 import Haskell.Language.Lexer.FastTags (Pos, ServerToken, processTokens)
-import qualified Haskell.Language.Lexer.FastTags as FastTags
+import Haskell.Language.Lexer.FastTags qualified as FastTags
 
 import Control.Monad.Filesystem (MonadFS)
-import qualified Control.Monad.Filesystem as MonadFS
+import Control.Monad.Filesystem qualified as MonadFS
 import Control.Monad.Logging
 import Data.ErrorMessage
 import Data.KeyMap (KeyMap)
-import qualified Data.KeyMap as KM
+import Data.KeyMap qualified as KM
 import Data.Map.NonEmpty (NonEmptyMap)
-import qualified Data.Map.NonEmpty as NEMap
+import Data.Map.NonEmpty qualified as NEMap
 import Data.MonoidalMap (MonoidalMap)
-import qualified Data.MonoidalMap as MM
+import Data.MonoidalMap qualified as MM
 import Data.Path
 import Data.SubkeyMap (SubkeyMap)
-import qualified Data.SubkeyMap as SubkeyMap
+import Data.SubkeyMap qualified as SubkeyMap
 import Data.SymbolMap (SymbolMap)
-import qualified Data.SymbolMap as SM
+import Data.SymbolMap qualified as SM
 import Data.Symbols
 import Haskell.Language.Server.Tags.AnalyzeHeader
 import Haskell.Language.Server.Tags.Types
@@ -434,7 +429,7 @@ resolveModule nameResolution checkIfModuleIsAlreadyBeingLoaded readAndLoad mod =
           -> do
             (resolvedImports, namesAndQualifiersFromImports) <- resolveImports mhImports
             let resolveSpecificExports :: NameResolutionStrictness -> Eval (SymbolMap, [ErrorMessage], SymbolMap)
-                resolveSpecificExports nameResolution = do
+                resolveSpecificExports nameResolution' = do
                   (extra :: Map UnqualifiedSymbolName (Set UnqualifiedSymbolName)) <- rpar
                     $ inferExtraParents header
                   (modAllSymbols' :: SymbolMap) <- rpar $ SM.registerChildren extra modAllSymbols
@@ -468,7 +463,7 @@ resolveModule nameResolution checkIfModuleIsAlreadyBeingLoaded readAndLoad mod =
                           ]
                         Just sm -> do
                           (extraChildrenExports :: Set UnqualifiedSymbolName) <-
-                            childrenNamesFromEntry nameResolution mhModName sm $ name' <$ entry
+                            childrenNamesFromEntry nameResolution' mhModName sm $ name' <$ entry
                           let childrenType :: FastTags.Type
                               childrenType = case typ of
                                 FastTags.Type   -> FastTags.Constructor

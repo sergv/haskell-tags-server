@@ -1,12 +1,14 @@
 {
-{-# LANGUAGE BangPatterns        #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE MultiWayIf          #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
+
+-- Very important to have this one as it enables GHC to infer proper type of
+-- Alex 3.2.1 actions.
+--
+-- The basic type is (Monad m => AlexInput -> Int -> AlexT m TokenVal), but
+-- monomorphism restriction breaks its inference.
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 module Haskell.Language.LexerSimple.Lexer (tokenize) where
 
@@ -14,14 +16,14 @@ import Control.Monad
 import Control.Monad.Writer.Strict
 import Control.Monad.State.Strict
 
-import qualified Data.ByteString as BS
+import Data.ByteString qualified as BS
 import Data.Void (Void, absurd)
 import Data.Word
 import Foreign.Ptr (plusPtr)
 import GHC.Stack.Ext (WithCallStack)
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 import Prettyprinter.Ext (Pretty(..), Doc, (<+>), (##))
-import qualified Prettyprinter.Ext as PP
+import Prettyprinter.Ext qualified as PP
 
 import Data.IgnoreEqOrdHashNFData
 import Haskell.Language.Lexer.FastTags
@@ -381,16 +383,16 @@ continueScanning = do
       where
         go' input =
           case alexScanUser litLoc input (unAlexCode code) :: AlexReturn (AlexAction AlexM) of
-            AlexEOF                              ->
+            AlexEOF                           ->
               pure EOF
-            AlexError input@AlexInput{aiPtr} -> do
-              code <- gets (view asCodeL)
-              pure $ Error $ IgnoreEqOrdHashNFData $ "Lexical error while in state" <+> pretty code
+            AlexError input'@AlexInput{aiPtr} -> do
+              code' <- gets (view asCodeL)
+              pure $ Error $ IgnoreEqOrdHashNFData $ "Lexical error while in state" <+> pretty code'
                 <+> "at line" <+>
-                pretty (unLine (view aiLineL input)) <> ":" ## PP.squotes (PP.ppByteString (utf8BS 40 aiPtr))
-            AlexSkip input' _                    ->
+                pretty (unLine (view aiLineL input')) <> ":" ## PP.squotes (PP.ppByteString (utf8BS 40 aiPtr))
+            AlexSkip input' _                 ->
               go' input'
-            AlexToken input' tokLen action       ->
+            AlexToken input' tokLen action    ->
               alexSetInput input' *> action input tokLen
 
 dropUntilNL' :: AlexM ServerToken
@@ -431,13 +433,13 @@ endIndentationCounting !n = do
 
 startIndentComment :: WithCallStack => AlexM ServerToken
 startIndentComment = do
-  void $ modifyCommentDepth (+1)
+  void $ modifyCommentDepth (+ 1)
   alexSetNextCode indentCommentCode
   continueScanning
 
 startPreprocessorStripping :: WithCallStack => AlexM ServerToken
 startPreprocessorStripping = do
-  void $ modifyPreprocessorDepth (+1)
+  void $ modifyPreprocessorDepth (+ 1)
   alexSetNextCode stripCppCode
   continueScanning
 
@@ -450,7 +452,7 @@ endPreprocessorStripping = do
 
 startComment :: WithCallStack => AlexM ServerToken
 startComment = do
-  void $ modifyCommentDepth (+1)
+  void $ modifyCommentDepth (+ 1)
   alexSetNextCode commentCode
   continueScanning
 
