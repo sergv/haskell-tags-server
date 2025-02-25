@@ -279,7 +279,7 @@ classifyPath TagsServerConf{tsconfVanillaExtensions, tsconfHsBootExtensions} pat
   | ext `S.member` tsconfHsBootExtensions  = Just HsBootModule
   | otherwise                              = Nothing
   where
-    ext  = takeExtension path
+    ext = takeExtension path
 
 loadMod
   :: (MonadFS m, MonadError ErrorMessage m, MonadLog m)
