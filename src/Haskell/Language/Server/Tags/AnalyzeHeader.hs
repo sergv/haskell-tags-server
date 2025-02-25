@@ -12,6 +12,7 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE OrPatterns          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -282,7 +283,7 @@ analyzeImports filename imports qualifiers ts = do
           entryWithChildren "name in import list" name rest
         PLParen : rest                                                    ->
           findImportListEntries importType acc rest
-        Pos _ HSC2HS : rest                                               -> do
+        Pos _ (HSCDirective; HSCDirectiveBraced) : rest                   -> do
           -- We cannot run hsc2hs here so we'll conservatively
           -- assume that everything is imported from a module.
           (_, remaining) <- findImportListEntries importType mempty $ dropCommas rest

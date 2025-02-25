@@ -15,9 +15,9 @@ import Control.Monad.Writer.Strict
 import Control.Monad.State.Strict
 
 import qualified Data.ByteString as BS
-import Data.Char (chr)
 import Data.Void (Void, absurd)
 import Data.Word
+import Foreign.Ptr (plusPtr)
 import GHC.Stack.Ext (WithCallStack)
 import qualified Prettyprinter as PP
 import Prettyprinter.Ext (Pretty(..), Doc, (<+>), (##))
@@ -69,8 +69,10 @@ $ident     = [$ident_nonsym $ident_syms]
 -- Stands for "→", "∷", "⇒", "⦇", "⦈", "∀", "⟦", "⟧"
 $reserved_symbol = \x07
 
--- $reserved_op = [→ ∷ ⇒ ∀]
+-- Random characters for which there's no category.
+$other = \x08
 
+-- Some rules assume that there's an optional \r before \n so don't change this definition.
 @nl = ( [\r]? $nl )
 
 @qualificationPrefix = ( $large $ident* $dot )*
@@ -96,68 +98,100 @@ $hexdigit   = [0-9a-fA-F]
 @cpp_ws          = ( $ascspace | [\\] @nl )
 @cpp_opt_ws      = @cpp_ws*
 @cpp_nonempty_ws = ( $ascspace @cpp_ws* | @cpp_ws* $ascspace )
+@cpp_dir_start   = "#"+ @cpp_opt_ws
+@define_name     = [$ascident $ascdigit _ ']+
 @define_body     = ( [^ \\ $nl]+ | [\\] ( @nl | . ) )+ @nl
 
+-- Except "define"
+@cppdirective = ( "if" | "ifdef" | "ifndef" | "endif" | "elif" | "else" | "undef" | "line" | "error" | "warning" | "include" )
+
+-- Except cpp directives, "let", and "enum".
+@hscdirective = ( "def" | "const" | "const_str" | "type" | "peek" | "poke" | "ptr" | "offset" | "size" | "alignment" )
+
+-- Except "enum"
+@all_cpp_and_hsc_directives = ( "define" | "let" | @cppdirective | @hscdirective )
+
 :-
+
+-- Literate Haskell support. 'literate' code handles all text except actual
+-- Haskell program text. It aims to strip all non-Haskell text.
+<literate> {
+@nl ">" $ws*
+  { \input len -> (Newline $! countInputSpace input len) <$ startLiterateBird }
+@nl "\begin{code}" @nl $space*
+  { \input len -> (Newline $! countInputSpace input len) <$ startLiterateLatex }
+@nl ;
+.
+  { \_ _ -> dropUntilNL' }
+}
+
+-- Drop shebang
+<0, literate> $nl "#!" .* ;
 
 -- Can skip whitespace everywhere since it does not affect meaning in any
 -- state.
 <0, comment, qq, literate> $ws+ ;
 
--- Literate Haskell support. 'literate' code handles all text except actual
--- Haskell program text. It aims to strip all non-Haskell text.
-<literate> {
-$nl ">" $ws*
-  -- / { isLiterateEnabled' }
-  { \_ len -> (Newline $! len - 2)  <$ startLiterateBird }
-$nl "\begin{code}" @nl $space*
-  -- / { isLiterateEnabled' }
-  { \input len -> (Newline $! countInputSpace input len) <$ startLiterateLatex }
-$nl ;
-.
-  { \_ _ -> dropUntilNL' }
-}
+<0> {
 
 -- Analyse "#if 0" constructs used in e.g. GHC.Base
-<0> {
-"#" @cpp_opt_ws "if" @cpp_opt_ws "0" ( @cpp_nonempty_ws .* )? { \_ _ -> startPreprocessorStripping }
+^ @cpp_dir_start "if" @cpp_opt_ws "0" ( @cpp_nonempty_ws .* )?
+  { \_ _ -> startPreprocessorStripping }
 
--- Strip preprocessor
-"#" @cpp_opt_ws "define" @define_body
-  { kw (Newline 0) }
+-- Named defines, implicitly drops: '( @cpp_ws+ | "(" ) @define_body'
+^ @cpp_dir_start ("define" | "let") @cpp_ws+ @define_name
+  { \input len -> do
+    modify $ \s -> s { asInput = dropUntilUnescapedNL $ asInput s }
+    pure $! CppDefine $! extractDefineOrLetName input len
+  }
 
-"#" @cpp_opt_ws ( "if" | "ifdef" | "endif" | "elif" | "else" | "undef" | "line" | "error" | "include" ) .* ( [\\] @nl .* )* ;
+^ @cpp_dir_start @cppdirective .* ( [\\] @nl .* )* ;
+
+^ @cpp_dir_start ("{" (@cpp_ws | @nl)*)? "enum"
+  { \_ _ -> pure HSCEnum }
+^ @cpp_dir_start @all_cpp_and_hsc_directives
+  { \_ _ -> pure HSCDirective }
+^ @cpp_dir_start "{" (@cpp_ws | @nl)* @all_cpp_and_hsc_directives
+  { \_ _ -> pure HSCDirectiveBraced }
+
+-- Drop everything else that starts with #, e.g.
+-- '# 17 "/usr/include/stdc-predef.h" 3 4'
+-- #{get_area "Queue.T"}
+
+^ "#" $ascspace* "{"? @define_name+
+  { \_ _ -> dropUntilNL' }
+
 }
 
 <stripCpp> {
-"#" @cpp_opt_ws ( "ifdef" | "if" ) .*  { \_ _ -> startPreprocessorStripping }
-"#" @cpp_opt_ws "endif" .*             { \_ _ -> endPreprocessorStripping   }
-"#" @cpp_opt_ws ( "elif" | "else" | "define" | "undef" | "line" | "error" | "include" )
+@cpp_dir_start @cpp_opt_ws ( "ifdef" | "if" ) .*
+  { \_ _ -> startPreprocessorStripping }
+@cpp_dir_start @cpp_opt_ws ("else" | "elif" | "endif") .*
+  { \_ _ -> endPreprocessorStripping }
+@cpp_dir_start @cpp_opt_ws ( "define" | "undef" | "line" | "error" | "warning" | "include"  | "let" )
   { \_ _ -> dropUntilNL' }
 $nl ;
 .
-  { \_ _ -> dropUntil' 35 -- '#'
+  { \_ _ -> dropUntilNLOr' 35 -- '#'
   }
 }
 
+-- Newlines and comments.
 <0> {
 
-$nl ">" $space*
+@nl ">" $space*
   / { isLiterateEnabled' }
-  { \_ len -> pure $! Newline $! len - 2 }
-$nl [^>]
-  / { isLiterateBirdOrOutside' }
-  { \_ _   -> endLiterate }
-$nl "\end{code}"
-  / { isLiterateLatexOrOutside' }
-  { \_ _   -> endLiterate }
-
+  { \input len -> pure $! Newline $! countInputSpace input len }
+@nl
+  / { shouldEndLiterateBird }
+  { \_ _   -> Newline 0 <$ endLiterate }
+@nl "\end{code}"
+  / { shouldEndLiterateLatex }
+  { \_ _   -> endLiterate' }
 
 [\\]? @nl $space* "{-"  { \input len -> startIndentationCounting (countInputSpace input len) }
-[\\]? [\r] $nl $space*  { \input len -> pure $! Newline $! (len - 2) - (case chr (fromIntegral (unsafeTextHeadAscii (aiInput input))) of { '\\' -> 1; _ -> 0 }) }
-[\\]? $nl $space*       { \input len -> pure $! Newline $! (len - 1) - (case chr (fromIntegral (unsafeTextHeadAscii (aiInput input))) of { '\\' -> 1; _ -> 0 }) }
-[\-][\-]+ ~[$symbol $nl]
-  { \_ _ -> dropUntilNL' }
+[\\]? @nl $space*       { \input len -> pure $! Newline $! len - countBackslashCR input - 1 }
+[\-][\-]+ ~[$symbol $nl] { \_ _ -> dropUntilNL' }
 [\-][\-]+ / @nl         ;
 
 }
@@ -172,46 +206,53 @@ $nl "\end{code}"
 <comment> "-}"          { \_ _ -> endComment startCode }
 -- 45  - '-'
 -- 123 - '{'
-<comment> $nl ;
-<comment> .             { \_ _ -> dropUntil2' 45 123 }
+<comment> @nl ;
+<comment> ($other | .)  { \_ _ -> dropUntilNLOrEither' 45 123 }
 <0> "-}"                { \_ _ -> errorAtLine "Unmatched -}" }
 
 <indentComment>
   "{-"                  { \_ _ -> startIndentComment }
 <indentComment> "-}"    { \_ _ -> endComment indentCountCode }
-<indentComment> (. | $nl) ;
+<indentComment> (. | @nl) ;
 
 <indentCount> {
 $space* "{-"            { \input len -> addIndentationSize (fromIntegral (countInputSpace input len)) *> startIndentComment }
 $space*                 { \_ len -> endIndentationCounting len }
 }
 
+<0> {
 -- Strings
-<0> [\"]                { \_ _ -> startString }
-<string> ( [\\] @nl $ws* [\\] )? [\"]
-                        { \_ _ -> endString startCode }
-<string> [\\] @nl ( $ws* [\\] )? ;
-<string> ( $ws | [^ \" \\ $nl] )+ ;
-<string> ( . | $nl | [\\] . )     ;
+[\"] ( [^\" \\ \r \n] | [\\] . | [\\] @nl ( $ws* [\\] )? )* [\"]
+                        { \_ _ -> pure String }
 
--- Characters
-<0> [\'] ( [^\'\\] | @charescape ) [\'] { kw Character }
+[\"]                    { \_ _ -> pure DQuote }
+
+-- Characters.
+[\'] ( [^ \' \\ \n \r] | @charescape ) [\']
+                        { kw Character }
+}
 
 -- Template Haskell quasiquoters
 
-<0> "[" [\$\(]* @qualificationPrefix $ident* [\)]*  "|"
-                        { \input len -> startQuasiquoter input len }
-<qq> "$("               { \_ _ -> startSplice CtxQuasiquoter }
-<qq> ("|]" | "⟧")       { \_ _ -> endQuasiquoter }
-<qq> $reserved_symbol   { \input _len -> reservedSymbolQQ (unsafeTextHead (aiInput input)) }
-<qq> (. | $nl)          ;
+<0> {
+"[|"                    { \_ _ -> startUnconditionalQuasiQuoter }
+"[" [\$\(]* @qualificationPrefix $ident+ [\)]*  "|"
+                        { \input _ -> startQuasiquoter input }
+"$("                    { \_ _ -> startSplice CtxHaskell }
+^ "$" [\']* @qualificationPrefix $ident+
+                        { \_ _ -> pure ToplevelSplice }
 
-<0> "$("                { \_ _ -> startSplice CtxHaskell }
+}
+
+<qq> {
+"$("                    { \_ _ -> startSplice CtxQuasiquoter }
+"|]"                    { \_ _ -> endQuasiquoter }
+$reserved_symbol        { \input _len -> reservedSymbolQQ (unsafeTextHead (aiPtr input)) }
+(. | @nl)               ;
+}
 
 -- Vanilla tokens
 <0> {
-
-"#{" [^\}]+ "}"         { \_ _ -> pure HSC2HS }
 
 "case"                  { kw KWCase }
 "class"                 { kw KWClass }
@@ -221,7 +262,7 @@ $space*                 { \_ len -> endIndentationCounting len }
 "do"                    { kw KWDo }
 "else"                  { kw KWElse }
 "family"                { kw KWFamily }
-"forall"                { \_ _ -> pure $! T "forall" }
+"forall"                { \_ _ -> pure forallServerToken }
 "foreign"               { kw KWForeign }
 "if"                    { kw KWIf }
 "import"                { kw KWImport }
@@ -234,7 +275,7 @@ $space*                 { \_ len -> endIndentationCounting len }
 "module"                { kw KWModule }
 "newtype"               { kw KWNewtype }
 "of"                    { kw KWOf }
-"pattern"               { \_ _ -> pure $! T "pattern" }
+"pattern"               { \_ _ -> pure patternServerToken }
 "then"                  { kw KWThen }
 "type"                  { kw KWType }
 "where"                 { kw KWWhere }
@@ -264,16 +305,17 @@ $space*                 { \_ len -> endIndentationCounting len }
 @number                 { kw Number }
 
 [\']* @qualificationPrefix ($ident | $large)+
-                        { \input len -> pure $! T $! retrieveToken input len }
+                        { \input len -> pure $! T $! takeText input len }
 @qualificationPrefix $symbol+
-                        { \input len -> pure $! T $! retrieveToken input len }
+                        { \input len -> pure $! T $! takeText input len }
 
-$reserved_symbol        { \input _len -> reservedSymbol (unsafeTextHead (aiInput input)) }
+$reserved_symbol        { \input _len -> reservedSymbol (unsafeTextHead (aiPtr input)) }
 
 @lbanana / ~[$symbol]   { \_ _ -> pure LBanana }
 @rbanana                { \_ _ -> pure RBanana }
 
 }
+
 
 {
 
@@ -290,14 +332,17 @@ isLiterateEnabled'
 isLiterateEnabled' litLoc _inputBefore _len _inputAfter =
   isLiterateEnabled litLoc
 
-isLiterateBirdOrOutside'
+shouldEndLiterateBird
   :: AlexPred (LiterateLocation LiterateStyle)
-isLiterateBirdOrOutside' litLoc _inputBefore _len _inputAfter =
-  isLiterateBirdOrOutside litLoc
+shouldEndLiterateBird litLoc inputBefore _len _inputAfter =
+  case unsafeTextHeadAscii $ (`plusPtr` 1) $ aiPtr inputBefore of
+    -- 62 = '>'
+    62 -> False
+    _  -> isLiterateBirdOrOutside litLoc
 
-isLiterateLatexOrOutside'
+shouldEndLiterateLatex
   :: AlexPred (LiterateLocation LiterateStyle)
-isLiterateLatexOrOutside' litLoc _inputBefore _len _inputAfter =
+shouldEndLiterateLatex litLoc _inputBefore _len _inputAfter =
   isLiterateLatexOrOutside litLoc
 
 tokenize
@@ -338,11 +383,11 @@ continueScanning = do
           case alexScanUser litLoc input (unAlexCode code) :: AlexReturn (AlexAction AlexM) of
             AlexEOF                              ->
               pure EOF
-            AlexError input@AlexInput{aiInput} -> do
+            AlexError input@AlexInput{aiPtr} -> do
               code <- gets (view asCodeL)
               pure $ Error $ IgnoreEqOrdHashNFData $ "Lexical error while in state" <+> pretty code
                 <+> "at line" <+>
-                pretty (unLine (view aiLineL input)) <> ":" ## PP.squotes (PP.ppByteString (utf8BS 40 aiInput))
+                pretty (unLine (view aiLineL input)) <> ":" ## PP.squotes (PP.ppByteString (utf8BS 40 aiPtr))
             AlexSkip input' _                    ->
               go' input'
             AlexToken input' tokLen action       ->
@@ -352,6 +397,16 @@ dropUntilNL' :: AlexM ServerToken
 dropUntilNL' = do
   modify $ \s -> s { asInput = dropUntilNL $ asInput s }
   continueScanning
+
+dropUntilNLOr' :: Word8 -> AlexM ServerToken
+dropUntilNLOr' w = do
+  modify $ \s -> s { asInput = dropUntilNLOr w $ asInput s }
+  continueScanning
+
+dropUntilNLOrEither' :: Word8 -> Word8 -> AlexM ServerToken
+dropUntilNLOrEither' w1 w2 = do
+    modify $ \s -> s { asInput = dropUntilNLOrEither w1 w2 $ asInput s }
+    continueScanning
 
 dropUntil' :: Word8 -> AlexM ServerToken
 dropUntil' w = do
@@ -406,29 +461,23 @@ endComment nextCode = do
     alexSetNextCode nextCode
   continueScanning
 
-startString :: WithCallStack => AlexM ServerToken
-startString =
-  alexSetNextCode stringCode *> continueScanning
-
 endString :: AlexCode -> AlexM ServerToken
 endString nextCode =
   String <$ alexSetNextCode nextCode
 
-startQuasiquoter :: AlexInput -> Int -> AlexM ServerToken
-startQuasiquoter _ n
-  | n == 2 = startUnconditionalQuasiQuoter
-startQuasiquoter AlexInput{aiInput} _ = do
+startQuasiquoter :: AlexInput -> AlexM ServerToken
+startQuasiquoter AlexInput{aiPtr} = do
   !haveEnd     <- gets (view asHaveQQEndL)
   isEndPresent <- case haveEnd of
     Nothing    -> do
-      let haveEnd' = calculateQuasiQuoteEnds aiInput
+      let haveEnd' = checkQuasiQuoteEndPresent aiPtr
       modify $ set asHaveQQEndL (Just haveEnd')
       pure haveEnd'
     Just ends' -> pure ends'
   case isEndPresent of
     -- No chance of quasi-quote closing till the end of current file.
     -- Assume that file ought to be well-formed and treat currently
-    -- matched input
+    -- matched input (and throw away the pipe character).
     False -> pure LBracket
     True  -> startUnconditionalQuasiQuoter
 
@@ -480,11 +529,13 @@ startLiterateLatex = do
   alexSetNextCode startCode
   alexEnterLiterateLatexEnv
 
-endLiterate :: AlexM ServerToken
+endLiterate :: AlexM ()
 endLiterate = do
   alexSetNextCode literateCode
   alexExitLiterateEnv
-  continueScanning
+
+endLiterate' :: AlexM ServerToken
+endLiterate' = endLiterate *> continueScanning
 
 reservedSymbol :: WithCallStack => Char -> AlexM ServerToken
 reservedSymbol = \case
@@ -507,16 +558,14 @@ reservedSymbolQQ = \case
 
 {-# INLINE startCode         #-}
 {-# INLINE qqCode            #-}
-{-# INLINE stringCode        #-}
 {-# INLINE commentCode       #-}
 {-# INLINE indentCommentCode #-}
 {-# INLINE indentCountCode   #-}
 {-# INLINE literateCode      #-}
 {-# INLINE stripCppCode      #-}
-startCode, qqCode, stringCode, commentCode, indentCommentCode, indentCountCode, literateCode, stripCppCode :: AlexCode
+startCode, qqCode, commentCode, indentCommentCode, indentCountCode, literateCode, stripCppCode :: AlexCode
 startCode         = AlexCode 0
 qqCode            = AlexCode qq
-stringCode        = AlexCode string
 commentCode       = AlexCode comment
 indentCommentCode = AlexCode indentComment
 indentCountCode   = AlexCode indentCount
