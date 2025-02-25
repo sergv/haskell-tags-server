@@ -7,10 +7,7 @@
 -- Created     :  Wednesday, 24 August 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Control.Monad.Logging
   ( MonadLog(..)
@@ -28,13 +25,13 @@ module Control.Monad.Logging
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
-import qualified Control.Monad.State.Strict as SS
+import Control.Monad.State.Strict qualified as SS
 import Control.Monad.Writer as Lazy
 import Control.Monad.Writer.Strict as Strict
 
 import Data.Bimap (Bimap)
-import qualified Data.Bimap as BM
-import qualified Data.List as L
+import Data.Bimap qualified as BM
+import Data.List qualified as L
 import Data.String
 import Data.Void (Void)
 import Prettyprinter (Doc)

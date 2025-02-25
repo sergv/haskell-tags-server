@@ -13,7 +13,7 @@ module Haskell.Language.Server.Tags.TypesTests (tests) where
 
 import Control.Arrow (second)
 import Data.Text (Text)
-import qualified Data.Text as T
+import Data.Text qualified as T
 import Test.Tasty
 import Test.Tasty.HUnit
 

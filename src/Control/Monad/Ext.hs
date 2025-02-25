@@ -7,8 +7,6 @@
 -- Created     :  Wednesday, 12 October 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE ScopedTypeVariables #-}
-
 module Control.Monad.Ext
   ( partitionM
   , partitionIO
@@ -16,7 +14,7 @@ module Control.Monad.Ext
 
 import Data.Foldable
 import Data.DList (DList)
-import qualified Data.DList as DL
+import Data.DList qualified as DL
 
 import System.Unsafe (interleaveIO)
 

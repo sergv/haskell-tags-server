@@ -20,21 +20,21 @@ module Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions
 import Control.Arrow ((&&&))
 
 import Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as NE
-import qualified Data.Map.Strict as M
-import qualified Data.Set as S
-import qualified Data.Text as T
+import Data.List.NonEmpty qualified as NE
+import Data.Map.Strict qualified as M
+import Data.Set qualified as S
+import Data.Text qualified as T
 
 import Data.Symbols
 import Haskell.Language.Lexer.FastTags (Type(..), Line(..))
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
 
-import qualified Data.KeyMap as KM
+import Data.KeyMap qualified as KM
 import Data.Path
-import qualified Data.SubkeyMap as SubkeyMap
+import Data.SubkeyMap qualified as SubkeyMap
 import TestUtils
-import qualified Text.RawString.QQ as QQ
+import Text.RawString.QQ qualified as QQ
 
 type Test = TestCase T.Text ModuleHeader
 

@@ -7,7 +7,6 @@
 -- Created     :   2 June 2017
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE BangPatterns      #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -19,13 +18,13 @@ module Haskell.Language.Lexer.InputStack
   , lookupMacroArg
   ) where
 
+import Prelude hiding (take)
+
 import Control.Arrow (second)
 import Data.Map (Map)
-import qualified Data.Map as M
+import Data.Map qualified as M
 import Data.Text (Text)
-import qualified Data.Text as T
-
-import Prelude hiding (take)
+import Data.Text qualified as T
 
 import Data.Symbols.MacroName (MacroName)
 

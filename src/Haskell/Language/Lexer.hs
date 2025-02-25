@@ -15,7 +15,7 @@ module Haskell.Language.Lexer
   ) where
 
 -- import Data.Functor.Identity
-import qualified Data.ByteString as BS
+import Data.ByteString qualified as BS
 import GHC.Stack.Ext (WithCallStack)
 import System.FilePath
 
@@ -24,7 +24,7 @@ import System.FilePath
 -- import Haskell.Language.Lexer.Types (LiterateMode(..))
 
 import Haskell.Language.Lexer.FastTags
-import qualified Haskell.Language.LexerSimple.Lexer as SimpleLexer
+import Haskell.Language.LexerSimple.Lexer qualified as SimpleLexer
 import Haskell.Language.LexerSimple.Types (LiterateLocation(..))
 
 tokenize :: WithCallStack => FilePath -> BS.ByteString -> [Pos ServerToken]

@@ -7,18 +7,10 @@
 -- Created     :  Tuesday, 30 August 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE DeriveFunctor              #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
+-- {-# LANGUAGE InstanceSigs #-}
+
 {-# LANGUAGE GADTs                      #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE InstanceSigs               #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
-{-# LANGUAGE RankNTypes                 #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
 
@@ -38,7 +30,7 @@ import Control.Monad.Logging
 import Control.Monad.Reader
 import Control.Monad.Trans.Control
 import Data.Coerce
-import qualified Data.Text.IO as TIO
+import Data.Text.IO qualified as TIO
 import Data.Void (Void)
 import Prettyprinter.Ext
 import System.IO

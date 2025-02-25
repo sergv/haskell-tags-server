@@ -7,14 +7,9 @@
 -- Created     :  Tuesday, 27 September 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections     #-}
-
-{-# OPTIONS_GHC -Wredundant-constraints          #-}
-{-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
 
 module Data.SymbolMap
   ( SymbolMap
@@ -38,15 +33,15 @@ import Prelude hiding (lookup, null)
 import Control.Arrow ((&&&), second)
 import Control.DeepSeq
 
-import qualified Data.Foldable
+import Data.Foldable qualified
 import Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as NE
+import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as M
+import Data.Map.Strict qualified as M
 import Data.Maybe
 import Data.Semigroup as Semigroup
 import Data.Set (Set)
-import qualified Data.Set as S
+import Data.Set qualified as S
 import Data.Store (Store)
 import Prettyprinter.Ext
 

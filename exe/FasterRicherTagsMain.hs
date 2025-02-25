@@ -5,7 +5,6 @@
 -- Maintainer: serg.foo@gmail.com
 
 {-# LANGUAGE ApplicativeDo     #-}
-{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}

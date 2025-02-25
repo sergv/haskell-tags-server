@@ -6,19 +6,17 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE MonoLocalBinds      #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE MonoLocalBinds    #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module ServerTests (tests) where
 
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as BSL
+import Data.ByteString qualified as BS
+import Data.ByteString.Lazy qualified as BSL
 import Data.ByteString.Lazy.Internal (ByteString(..), defaultChunkSize)
-import qualified Network.Socket.ByteString as Socket.BS
+import Network.Socket.ByteString qualified as Socket.BS
 
 import Control.Concurrent
 import Control.DeepSeq
@@ -31,14 +29,14 @@ import Control.Monad.Except
 import Control.Monad.Trans.Control
 
 import Data.Scientific
-import qualified Data.Set as S
+import Data.Set qualified as S
 import Data.Text (Text)
 import Data.Void (Void)
 import GHC.Stack
 import Language.Sexp as Sexp
 import Network.Socket as Socket
-import qualified Network.Socket.ByteString.Lazy as Socket.BSL
-import qualified Prettyprinter as PP
+import Network.Socket.ByteString.Lazy qualified as Socket.BSL
+import Prettyprinter qualified as PP
 import Prettyprinter.Ext
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -170,7 +168,7 @@ getSocketContents
 getSocketContents sock = loop
   where
     loop = do
-      s <- Socket.BS.recv sock (fromIntegral defaultChunkSize)
+      s <- Socket.BS.recv sock defaultChunkSize
       if BS.null s
         then pure Empty -- <* Socket.shutdown sock Socket.ShutdownReceive
         else Chunk s <$> loop

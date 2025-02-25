@@ -6,10 +6,6 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE InstanceSigs               #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-
 module Data.IgnoreEqOrdHashNFData
   ( IgnoreEqOrdHashNFData(..)
   ) where

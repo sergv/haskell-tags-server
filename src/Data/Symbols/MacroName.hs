@@ -7,8 +7,6 @@
 -- Created     :   5 June 2017
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-
 module Data.Symbols.MacroName
   ( MacroName
   , mkMacroName

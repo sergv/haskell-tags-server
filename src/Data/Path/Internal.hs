@@ -6,11 +6,8 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE KindSignatures             #-}
-{-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE CPP       #-}
+{-# LANGUAGE DataKinds #-}
 
 #ifdef mingw32_HOST_OS
 #define WINDOWS 1
@@ -34,7 +31,7 @@ import Prettyprinter.Ext
 #ifdef WINDOWS
 import Data.Coerce
 import Data.Function (on)
-import qualified Data.Text as T
+import Data.Text qualified as T
 #endif
 
 -- | A type-level label to distinguish directories and files.

@@ -7,11 +7,7 @@
 -- Created     :  Thursday,  3 November 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE NamedFieldPuns             #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 module Haskell.Language.Lexer.Types
   ( mkSrcPos

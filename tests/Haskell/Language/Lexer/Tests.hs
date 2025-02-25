@@ -13,18 +13,18 @@
 module Haskell.Language.Lexer.Tests (tests) where
 
 import Data.List (sort)
-import qualified Data.Text as T
+import Data.Text qualified as T
 import Test.Tasty
 import Test.Tasty.HUnit (testCase)
 
-import qualified FastTags.Tag as FastTags
+import FastTags.Tag qualified as FastTags
 
 import Haskell.Language.Lexer (LiterateLocation(..))
 
-import qualified Haskell.Language.Lexer.Tokenisation as Tokenisation
+import Haskell.Language.Lexer.Tokenisation qualified as Tokenisation
 import Haskell.Language.Lexer.TokenisationUtils
 import TestUtils (makeAssertion, makeTest)
-import qualified Text.RawString.QQ as QQ
+import Text.RawString.QQ qualified as QQ
 
 tests :: TestTree
 tests = testGroup "Lexer tests"
@@ -83,7 +83,7 @@ testTokenizeCpp = testGroup "Tokenize with preprocessor"
   ]
   where
     (==>) = makeAssertion f
-    f = map valOf . tokenize' Vanilla
+    f = map valOf . tokenize' LitVanilla
 
 _testTokenizeCppDefines :: TestTree
 _testTokenizeCppDefines = testGroup "#define"
@@ -94,7 +94,7 @@ _testTokenizeCppDefines = testGroup "#define"
   ]
   where
     (==>) = makeAssertion f
-    f = map valOf . tokenize' Vanilla
+    f = map valOf . tokenize' LitVanilla
 
     constants :: TestTree
     constants = testGroup "Constants"
@@ -716,7 +716,7 @@ _testTokenizeCppConditionals = testGroup "Conditionals"
   ]
   where
     (==>) = makeAssertion f
-    f = map valOf . tokenize' Vanilla
+    f = map valOf . tokenize' LitVanilla
 
 _testTokenizeCppDefinesWithinConditionals :: TestTree
 _testTokenizeCppDefinesWithinConditionals =
@@ -782,7 +782,7 @@ _testTokenizeCppDefinesWithinConditionals =
     ]
   where
     (==>) = makeAssertion f
-    f = map valOf . tokenize' Vanilla
+    f = map valOf . tokenize' LitVanilla
 
 testFullPipeline :: TestTree
 testFullPipeline = testGroup "Full processing pipeline"
@@ -828,8 +828,8 @@ testFullPipeline = testGroup "Full processing pipeline"
   where
     (==>) = makeTest f'
     f' = sort
-       . concatMap (\(i, t) -> fst $ processTokens ("fn" ++ show i ++ ".hs") $ tokenize' Vanilla t)
-       . zip [0..]
+       . concatMap (\(i, t) -> fst $ processTokens ("fn" ++ show i ++ ".hs") $ tokenize' LitVanilla t)
+       . zip [(0 :: Int)..]
 
 textShowSource :: T.Text
 textShowSource =

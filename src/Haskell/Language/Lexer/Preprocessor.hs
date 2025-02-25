@@ -8,7 +8,6 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE ApplicativeDo     #-}
-{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -33,14 +32,14 @@ import Data.Char (isAlpha, isDigit)
 import Data.Functor (void)
 import Data.Maybe
 import Data.Text (Text)
-import qualified Data.Text as T
-import qualified Prettyprinter as PP
+import Data.Text qualified as T
+import Prettyprinter qualified as PP
 import Prettyprinter.Ext (Pretty(..))
-import qualified Prettyprinter.Ext as PP
+import Prettyprinter.Ext qualified as PP
 
 import Data.ErrorMessage
 import Data.KeyMap (HasKey)
-import qualified Data.KeyMap as KM
+import Data.KeyMap qualified as KM
 import Data.Symbols.MacroName
 
 data ConstantMacroDef = ConstantMacroDef
@@ -175,10 +174,10 @@ pCppIdentifier =
 -- Characters that can occur at first position of Cpp identifier.
 isLeadingCPPIdentifierChar :: Char -> Bool
 isLeadingCPPIdentifierChar c = case c of
-  '_'  -> True
-  '\'' -> True
-  '`'  -> True
-  c    -> isAlpha c
+  '_'   -> True
+  '\''  -> True
+  '`'   -> True
+  other -> isAlpha other
 
 isCPPIdentifierChar :: Char -> Bool
 isCPPIdentifierChar c = isLeadingCPPIdentifierChar c || isDigit c

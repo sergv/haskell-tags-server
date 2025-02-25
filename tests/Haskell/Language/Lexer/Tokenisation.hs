@@ -11,12 +11,12 @@
 module Haskell.Language.Lexer.Tokenisation (tests) where
 
 import FastTags.Tag (ProcessMode(ProcessVanilla))
-import qualified FastTags.Tag as FastTags
+import FastTags.Tag qualified as FastTags
 import Test.Tasty
 
-import qualified Data.List as L
+import Data.List qualified as L
 import Data.Maybe (mapMaybe)
-import qualified Data.Text as T
+import Data.Text qualified as T
 import Data.Void (Void)
 
 import Haskell.Language.Lexer (LiterateLocation(..))

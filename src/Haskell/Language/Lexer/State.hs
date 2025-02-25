@@ -7,7 +7,6 @@
 -- Created     :  20 June 2017
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -50,20 +49,20 @@ import Control.Monad (unless)
 import Control.Monad.Except.Ext
 import Control.Monad.State
 import Data.List.NonEmpty (NonEmpty)
-import qualified Data.Map as M
+import Data.Map qualified as M
 import Data.Semigroup as Semigroup
 import Data.Set (Set)
-import qualified Data.Set as S
-import qualified Data.Text as T
+import Data.Set qualified as S
+import Data.Text qualified as T
 import Lens.Micro
 import Prettyprinter.Ext (Pretty(..), ppDictHeader, MapEntry(..))
 
 import Data.ErrorMessage
 import Data.KeyMap (KeyMap)
-import qualified Data.KeyMap as KM
+import Data.KeyMap qualified as KM
 import Data.Symbols.MacroName (MacroName)
 import Haskell.Language.Lexer.Input (AlexInput, aiInputL)
-import qualified Haskell.Language.Lexer.InputStack as InputStack
+import Haskell.Language.Lexer.InputStack qualified as InputStack
 import Haskell.Language.Lexer.Preprocessor
 import Haskell.Language.Lexer.Types
 

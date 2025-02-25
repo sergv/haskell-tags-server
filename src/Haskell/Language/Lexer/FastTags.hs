@@ -7,13 +7,9 @@
 -- Created     :  20 June 2017
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE BangPatterns               #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE NamedFieldPuns             #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -42,7 +38,7 @@ import Data.Either
 import Data.Hashable
 import Data.IgnoreEqOrdHashNFData
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as M
+import Data.Map.Strict qualified as M
 import Data.Maybe
 import Data.Store (Store)
 import Data.Text (Text)
@@ -50,8 +46,8 @@ import Data.Void (Void)
 import Prettyprinter.Ext
 import System.FilePath (takeExtension)
 
-import qualified FastTags.Tag as FastTags
-import qualified FastTags.Token as FastTags
+import FastTags.Tag qualified as FastTags
+import FastTags.Token qualified as FastTags
 import FastTags.Tag
   ( Pos(..)
   , TagVal(..)
@@ -349,7 +345,7 @@ removeDuplicatePatterns = go mempty
     go :: Map Text SrcPos -> [Pos FastTags.TagVal] -> [Pos FastTags.TagVal]
     go !acc []     =
       map (\(name, pos) -> Pos pos (TagVal name Pattern Nothing)) $ M.toList acc
-    go !acc (t:ts) =
+    go  acc (t:ts) =
       case t of
         Pos pos TagVal{tvName, tvType = Pattern, tvParent = Nothing} ->
           go (M.insertWith minPos tvName pos acc) ts

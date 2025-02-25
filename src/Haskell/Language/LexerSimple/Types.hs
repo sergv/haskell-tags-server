@@ -1,15 +1,8 @@
-{-# LANGUAGE BangPatterns        #-}
-{-# LANGUAGE ConstraintKinds     #-}
-{-# LANGUAGE DeriveFunctor       #-}
-{-# LANGUAGE ExtendedLiterals    #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE MagicHash           #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE UnboxedTuples       #-}
+{-# LANGUAGE ExtendedLiterals  #-}
+{-# LANGUAGE MagicHash         #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE UnboxedTuples     #-}
 
 {-# OPTIONS_GHC -O2 #-}
 
@@ -68,14 +61,14 @@ module Haskell.Language.LexerSimple.Types
 import Control.Monad.State.Strict
 import Control.Monad.Writer.Strict
 
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as C8
-import qualified Data.ByteString.Internal as BSI
+import Data.ByteString qualified as BS
+import Data.ByteString.Char8 qualified as C8
+import Data.ByteString.Internal qualified as BSI
 import Data.Char
 import Data.Int
 import Data.Maybe
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as TE
+import Data.Text qualified as T
+import Data.Text.Encoding qualified as TE
 import Foreign.ForeignPtr
 import GHC.Base
 import GHC.Ptr
@@ -286,8 +279,8 @@ addIndentationSize x =
   modify (over asIndentationSizeL (+ x))
 
 data QQEndsState = QQEndsState
-  { qqessPresent  :: !Int#
-  , qqessPrevChar :: !Char#
+  { qqessPresent  :: Int#
+  , qqessPrevChar :: Char#
   }
 
 checkQuasiQuoteEndPresent :: Ptr Word8 -> Bool
@@ -629,7 +622,7 @@ utf8DecodeChar# :: Addr# -> (# Char#, Int# #)
 utf8DecodeChar# a# =
   case indexWord8OffAddr# a# 0# of
     0#Word8 -> (# '\0'#, 0# #)
-    !x#     ->
+    x#      ->
       let !ch0 = word2Int# (word8ToWord# x#) in
       case () of
         () | isTrue# (ch0 <=# 0x7F#) -> (# chr# ch0, 1# #)
@@ -680,7 +673,7 @@ utf8SizeChar# :: Addr# -> Int#
 utf8SizeChar# a# =
   case indexWord8OffAddr# a# 0# of
     0#Word8 -> 0#
-    !x#     ->
+    x#      ->
       let !ch0 = word2Int# (word8ToWord# x#) in
       case () of
         _ | isTrue# (ch0 <=# 0x7F#) -> 1#

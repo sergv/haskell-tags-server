@@ -7,12 +7,10 @@
 -- Created     :  Friday, 23 September 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE GADTs               #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Haskell.Language.Server.Tags.AnalyzeHeaderTests (tests) where
 
@@ -21,12 +19,12 @@ import Control.Monad (unless)
 import Control.Monad.ErrorExcept
 import Control.Monad.Writer
 
-import qualified Data.List.NonEmpty as NE
-import qualified Data.Map.Strict as M
-import qualified Data.Set as S
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as TE
-import qualified Prettyprinter as PP
+import Data.List.NonEmpty qualified as NE
+import Data.Map.Strict qualified as M
+import Data.Set qualified as S
+import Data.Text qualified as T
+import Data.Text.Encoding qualified as TE
+import Prettyprinter qualified as PP
 import Prettyprinter.Ext
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -35,9 +33,9 @@ import Haskell.Language.Lexer (tokenize)
 import Haskell.Language.Lexer.FastTags (Pos, ServerToken, Line(..), Type(..))
 
 import Control.Monad.Logging.Simple
-import qualified Data.KeyMap as KM
+import Data.KeyMap qualified as KM
 import Data.Path
-import qualified Data.SubkeyMap as SubkeyMap
+import Data.SubkeyMap qualified as SubkeyMap
 import Data.Symbols
 import Haskell.Language.Server.Tags.AnalyzeHeader
 import Haskell.Language.Server.Tags.Types.Imports

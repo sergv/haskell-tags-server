@@ -7,16 +7,12 @@
 -- Created     :  Thursday, 22 September 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE BangPatterns        #-}
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE OrPatterns          #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE PatternSynonyms     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OrPatterns        #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms   #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 module Haskell.Language.Server.Tags.AnalyzeHeader
   ( analyzeHeader
@@ -32,29 +28,29 @@ import Data.Char
 import Data.Foldable.Ext (toList, foldFor)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as M
+import Data.Map.Strict qualified as M
 import Data.Semigroup
 import Data.Set (Set)
-import qualified Data.Set as S
-import qualified Data.Strict.Pair as Strict
+import Data.Set qualified as S
+import Data.Strict.Pair qualified as Strict
 import Data.Text (Text)
-import qualified Data.Text as T
+import Data.Text qualified as T
 import Data.Void (Void)
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 import Prettyprinter.Combinators
 import Prettyprinter.Ext
 
 import Haskell.Language.Lexer.FastTags
   (stripNewlines, tokToName, Pos(..), Line, SrcPos(..), Type, posLine, unLine, PragmaType(..), ServerToken(..), Type(..))
-import qualified Haskell.Language.Lexer.FastTags as FastTags
+import Haskell.Language.Lexer.FastTags qualified as FastTags
 
 import Control.Monad.Logging
 import Data.ErrorMessage
 import Data.KeyMap (KeyMap)
-import qualified Data.KeyMap as KM
+import Data.KeyMap qualified as KM
 import Data.Path
 import Data.SubkeyMap (SubkeyMap)
-import qualified Data.SubkeyMap as SubkeyMap
+import Data.SubkeyMap qualified as SubkeyMap
 import Data.Symbols
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
@@ -408,7 +404,9 @@ analyzeExports filename importQualifiers ts = do
           -> m ModuleExports
         entryWithChildren listType name !line typIfNoChildren rest = do
           -- logDebug $ "[analyzeExports.entryWithChildren] rest =" <+> ppTokens rest
-          let (presence, getChildren) = analyzeChildren listType filename rest
+          let presence    :: ChildrenPresence
+              getChildren :: m (Maybe (ChildrenVisibility PosAndType), [Pos ServerToken])
+              (presence, getChildren) = analyzeChildren listType filename rest
           (children, rest') <- getChildren
           entryType <-
             case ( presence

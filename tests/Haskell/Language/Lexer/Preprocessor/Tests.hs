@@ -16,7 +16,7 @@ import Test.Tasty.HUnit (testCase)
 
 import Control.Arrow (left)
 import Data.Text (Text)
-import qualified Prettyprinter.Ext as PP
+import Prettyprinter.Ext qualified as PP
 
 import Data.ErrorMessage
 import Data.Symbols.MacroName (mkMacroName)

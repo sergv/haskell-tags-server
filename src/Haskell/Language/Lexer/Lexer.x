@@ -1,8 +1,6 @@
 {
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 -- Very important to have this one as it enables GHC to infer proper type of
 -- Alex 3.2.1 actions.
@@ -20,24 +18,24 @@ import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as NE
+import Data.List.NonEmpty qualified as NE
 import Data.Maybe (mapMaybe)
 import Data.Profunctor (lmap)
 import Data.Semigroup as Semigroup
 import Data.Text (Text)
-import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
+import Data.Text qualified as T
+import Data.Text.Lazy qualified as TL
 import Data.Void (Void)
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 import Prettyprinter.Ext
 
 import Data.ErrorMessage
-import qualified Data.KeyMap as KM
+import Data.KeyMap qualified as KM
 import Data.Symbols.MacroName (mkMacroName)
 import Haskell.Language.Lexer.Env
 import Haskell.Language.Lexer.FastTags (PragmaType(..), ServerToken(..), Pos(..), unLine, valOf)
 import Haskell.Language.Lexer.Input (AlexInput, aiInput, aiLine, alexInputPrevChar, alexGetByte, retrieveToken)
-import qualified Haskell.Language.Lexer.InputStack as InputStack
+import Haskell.Language.Lexer.InputStack qualified as InputStack
 import Haskell.Language.Lexer.Monad
 import Haskell.Language.Lexer.Preprocessor
 import Haskell.Language.Lexer.RulePredicate
@@ -454,11 +452,11 @@ alexMonadScan = do
 
 continueScanning :: forall m. (WithCallStack, Monad m) => AlexT m (NonEmpty ServerToken)
 continueScanning = do
-  env   <- ask
-  state <- get
-  let predEnv = PredEnv env state
-  let scanResult :: AlexReturn (AlexAction (AlexT m))
-      scanResult = alexScanUser predEnv (asInput state) (unAlexCode (asCode state))
+  env <- ask
+  s   <- get
+  let predEnv = PredEnv env s
+      scanResult :: AlexReturn (AlexAction (AlexT m))
+      scanResult = alexScanUser predEnv (asInput s) (unAlexCode (asCode s))
   toks <- case scanResult of
     AlexEOF                       ->
       pure $ one EOF
@@ -473,12 +471,12 @@ continueScanning = do
       continueScanning
     AlexToken input tokLen action -> do
       alexSetInput input
-      action (asInput state) tokLen
+      action (asInput s) tokLen
   pure toks
 
 startRecursiveComment :: Monad m => AlexT m (NonEmpty ServerToken)
 startRecursiveComment = do
-  void $ modifyCommentDepth (+1)
+  void $ modifyCommentDepth (+ 1)
   alexSetCode commentCode
   continueScanning
 

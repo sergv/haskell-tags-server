@@ -7,16 +7,8 @@
 -- Created     :  Monday, 19 September 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE DeriveGeneric        #-}
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE ScopedTypeVariables  #-}
-{-# LANGUAGE StandaloneDeriving   #-}
-{-# LANGUAGE TypeApplications     #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
-
-{-# OPTIONS_GHC -Wredundant-constraints          #-}
-{-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
 
 module Data.KeyMap
   ( KeyMap
@@ -47,7 +39,7 @@ import Control.DeepSeq
 import Data.Coerce
 import Data.Kind (Type)
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as M
+import Data.Map.Strict qualified as M
 import Data.Pointed
 import Data.Set (Set)
 import Data.Store (Store)

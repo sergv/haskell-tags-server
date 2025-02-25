@@ -7,10 +7,6 @@
 -- Created     :  19 June 2017
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE DeriveFunctor         #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-
 module Haskell.Language.Lexer.RulePredicate
   ( RulePredM
   , runRulePredM
@@ -26,15 +22,14 @@ module Haskell.Language.Lexer.RulePredicate
   ) where
 
 import Control.Monad.Reader
--- import Data.HasLens
 import Data.Profunctor
 import Data.Text (Text)
 
-import qualified Data.KeyMap as KM
+import Data.KeyMap qualified as KM
 import Data.Symbols.MacroName (MacroName)
 import Haskell.Language.Lexer.Env
 import Haskell.Language.Lexer.Input
-import qualified Haskell.Language.Lexer.InputStack as InputStack
+import Haskell.Language.Lexer.InputStack qualified as InputStack
 import Haskell.Language.Lexer.Preprocessor (isConstant, isFunction)
 import Haskell.Language.Lexer.State
 import Haskell.Language.Lexer.Types

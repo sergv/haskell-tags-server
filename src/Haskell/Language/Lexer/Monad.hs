@@ -7,9 +7,6 @@
 -- Created     :  21 June 2017
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE DeriveFunctor              #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-
 module Haskell.Language.Lexer.Monad
   ( -- * Alex monad
     AlexT

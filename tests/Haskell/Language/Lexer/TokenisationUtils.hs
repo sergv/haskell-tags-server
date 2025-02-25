@@ -6,7 +6,6 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Haskell.Language.Lexer.TokenisationUtils
@@ -24,14 +23,14 @@ import Test.Tasty
 import Control.Arrow ((***))
 
 import Data.List (sort)
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as TE
+import Data.Text qualified as T
+import Data.Text.Encoding qualified as TE
 import Data.Void (Void)
 import GHC.Stack.Ext (WithCallStack)
-import qualified Prettyprinter.Ext as PP
+import Prettyprinter.Ext qualified as PP
 
 import Haskell.Language.Lexer (LiterateLocation(..))
-import qualified Haskell.Language.LexerSimple.Lexer as Lexer
+import Haskell.Language.LexerSimple.Lexer qualified as Lexer
 import TestUtils (makeTest)
 
 import Haskell.Language.Lexer.FastTags

@@ -7,13 +7,9 @@
 -- Created     :  Wednesday, 12 October 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE DoAndIfThenElse     #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Haskell.Language.Server.Tags.LoadFiles
   ( loadAllFilesIntoState
@@ -26,15 +22,15 @@ import Control.Monad.State.Strict
 import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as M
-import qualified Data.Semigroup as Semigroup
-import qualified Prettyprinter as PP
+import Data.Map.Strict qualified as M
+import Data.Semigroup qualified as Semigroup
+import Prettyprinter qualified as PP
 import Prettyprinter.Ext
 
 import Control.Monad.Logging
 import Data.ErrorMessage
 import Data.Map.NonEmpty (NonEmptyMap)
-import qualified Data.Map.NonEmpty as NEMap
+import Data.Map.NonEmpty qualified as NEMap
 import Data.Path
 import Haskell.Language.Server.Tags.LoadModule (resolveModule)
 import Haskell.Language.Server.Tags.Types
@@ -109,8 +105,7 @@ doResolve allKnownModules nameResolution = go
                 pure $ Just resolved
 
     checkLoadingModules
-      :: forall m. MonadState LoadState m
-      => ImportKey
+      :: ImportKey
       -> m (Maybe (NonEmpty UnresolvedModule, [ResolvedModule]))
     checkLoadingModules key = do
       LoadState{lsLoadsInProgress, lsLoadedModules} <- get

@@ -8,7 +8,6 @@
 
 {-# LANGUAGE CPP             #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE KindSignatures  #-}
 
 module GHC.Stack.Ext
   ( WithCallStack

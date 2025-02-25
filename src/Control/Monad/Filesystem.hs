@@ -8,12 +8,8 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE DataKinds            #-}
-{-# LANGUAGE DeriveGeneric        #-}
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE NamedFieldPuns       #-}
 {-# LANGUAGE OverloadedStrings    #-}
-{-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Control.Monad.Filesystem
@@ -30,21 +26,21 @@ import Control.Monad.Catch
 import Control.Monad.Reader
 import Control.Monad.Trans.Control
 
-import qualified Data.ByteString as BS
+import Data.ByteString qualified as BS
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as M
+import Data.Map.Strict qualified as M
 import Data.Semigroup as Semigroup
 import Data.Set (Set)
-import qualified Data.Set as S
+import Data.Set qualified as S
 import Data.Text (Text)
-import qualified Data.Text as T
+import Data.Text qualified as T
 import Data.Time.Clock (UTCTime)
 import Prettyprinter.Ext
 
 import Data.CompiledRegex
 import Data.Filesystem
 import Data.Path (FullPath, FileType(..), BaseName)
-import qualified Data.Path as Path
+import Data.Path qualified as Path
 
 -- | Directories to search in.
 data SearchCfg = SearchCfg

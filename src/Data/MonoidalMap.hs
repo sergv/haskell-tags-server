@@ -7,14 +7,6 @@
 -- Created     :  Wednesday, 28 September 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE DeriveFoldable      #-}
-{-# LANGUAGE DeriveFunctor       #-}
-{-# LANGUAGE DeriveTraversable   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-
-{-# OPTIONS_GHC -Wredundant-constraints          #-}
-{-# OPTIONS_GHC -Wsimplifiable-class-constraints #-}
-
 module Data.MonoidalMap
   ( MonoidalMap
   , singleton
@@ -27,7 +19,7 @@ import Prelude hiding (lookup)
 
 import Data.Coerce
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as M
+import Data.Map.Strict qualified as M
 
 newtype MonoidalMap k v = MonoidalMap { unMonoidalMap :: Map k v }
   deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
