@@ -127,7 +127,7 @@ data LitMode a = LitInside a | LitOutside | LitVanilla
   deriving (Eq, Ord, Show, Functor)
 
 {-# INLINE litLocToInt #-}
-litLocToInt :: LitMode LiterateStyle -> Int
+litLocToInt :: LitMode LitStyle -> Int
 litLocToInt = \case
   LitVanilla      -> 0
   LitOutside      -> 1
@@ -135,7 +135,7 @@ litLocToInt = \case
   LitInside Latex -> 3
 
 {-# INLINE intToLitLoc #-}
-intToLitLoc :: Int -> LitMode LiterateStyle
+intToLitLoc :: Int -> LitMode LitStyle
 intToLitLoc = \case
   0 -> LitVanilla
   1 -> LitOutside
@@ -151,7 +151,7 @@ isLiterateEnabled = \case
   LitVanilla  -> False
 
 {-# INLINE isLiterateBirdOrOutside #-}
-isLiterateBirdOrOutside :: LitMode LiterateStyle -> Bool
+isLiterateBirdOrOutside :: LitMode LitStyle -> Bool
 isLiterateBirdOrOutside = \case
   LitInside Bird  -> True
   LitInside Latex -> False
@@ -159,7 +159,7 @@ isLiterateBirdOrOutside = \case
   LitVanilla      -> False
 
 {-# INLINE isLiterateLatexOrOutside #-}
-isLiterateLatexOrOutside :: LitMode LiterateStyle -> Bool
+isLiterateLatexOrOutside :: LitMode LitStyle -> Bool
 isLiterateLatexOrOutside = \case
   LitInside Bird  -> False
   LitInside Latex -> True
@@ -205,7 +205,7 @@ asCommentDepthL, asQuasiquoterDepthL, asIndentationSizeL :: Lens' AlexState Int1
 -- | How many directives deep are we.
 asPreprocessorDepthL :: Lens' AlexState Int16
 -- | Whether we're in bird-style or latex-style literate environment
-asLiterateLocL :: Lens' AlexState (LitMode LiterateStyle)
+asLiterateLocL :: Lens' AlexState (LitMode LitStyle)
 asHaveQQEndL   :: Lens' AlexState (Maybe Bool)
 asCodeL              = asIntStoreL . intL   0  0x000f
 asCommentDepthL      = asIntStoreL . intL   4  0x03ff

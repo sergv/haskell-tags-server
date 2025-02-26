@@ -76,7 +76,7 @@ data AlexState = AlexState
   , asCommentDepth        :: {-# UNPACK #-} !Int
   , asQuasiquoterDepth    :: {-# UNPACK #-} !Int
   -- | Whether we're in bird-style or latex-style literate environment
-  , asLiterateStyle       :: !(Maybe LiterateStyle)
+  , asLiterateStyle       :: !(Maybe LitStyle)
   , asContextStack        :: [Context]
   , asDefines             :: !(KeyMap NonEmpty PreprocessorMacro)
   , asUndefinedMacro      :: !(Set MacroName)

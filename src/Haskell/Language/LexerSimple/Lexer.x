@@ -334,7 +334,7 @@ isLiterateEnabled' litLoc _inputBefore _len _inputAfter =
   isLiterateEnabled litLoc
 
 shouldEndLiterateBird
-  :: AlexPred (LitMode LiterateStyle)
+  :: AlexPred (LitMode LitStyle)
 shouldEndLiterateBird litLoc inputBefore _len _inputAfter =
   case unsafeTextHeadAscii $ (`plusPtr` 1) $ aiPtr inputBefore of
     -- 62 = '>'
@@ -342,7 +342,7 @@ shouldEndLiterateBird litLoc inputBefore _len _inputAfter =
     _  -> isLiterateBirdOrOutside litLoc
 
 shouldEndLiterateLatex
-  :: AlexPred (LitMode LiterateStyle)
+  :: AlexPred (LitMode LitStyle)
 shouldEndLiterateLatex litLoc _inputBefore _len _inputAfter =
   isLiterateLatexOrOutside litLoc
 
@@ -377,7 +377,7 @@ continueScanning = do
   s@AlexState{asInput} <- get
   go (view asCodeL s) (view asLiterateLocL s) asInput
   where
-    go :: AlexCode -> LitMode LiterateStyle -> AlexInput -> AlexM ServerToken
+    go :: AlexCode -> LitMode LitStyle -> AlexInput -> AlexM ServerToken
     go code !litLoc = go'
       where
         go' input =

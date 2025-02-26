@@ -19,7 +19,7 @@ module Haskell.Language.Lexer.Types
   , Context(..)
   , LiterateMode(..)
   , AlexCode(..)
-  , LiterateStyle(..)
+  , LitStyle(..)
 
   , PragmaType(..)
   , ServerToken(..)
@@ -88,7 +88,7 @@ data Context
 newtype AlexCode = AlexCode { unAlexCode :: Int }
   deriving (Eq, Ord, Show, Pretty, Enum, Num, Real, Integral)
 
-data LiterateStyle = Bird | Latex
+data LitStyle = Bird | Latex
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 data PragmaType = SourcePragma
