@@ -17,7 +17,6 @@ import Test.Tasty.QuickCheck as QC
 
 import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 

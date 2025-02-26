@@ -11,10 +11,6 @@ module Haskell.Language.LexerSimple.Types
   , aiLineL
   , byteStringPos
   , Context(..)
-  , LitMode(..)
-  , isLiterateEnabled
-  , isLiterateBirdOrOutside
-  , isLiterateLatexOrOutside
   , AlexState(..)
   , mkAlexState
   , alexEnterBirdLiterateEnv
@@ -74,7 +70,7 @@ import GHC.Base
 import GHC.Ptr
 import GHC.Word
 
-import Haskell.Language.Lexer.Types hiding (LiterateMode(..))
+import Haskell.Language.Lexer.Types
 import Haskell.Language.LexerSimple.LensBlaze
 
 data AlexInput = AlexInput
@@ -123,9 +119,6 @@ withAlexInput s f =
     stripBOM :: C8.ByteString -> C8.ByteString
     stripBOM xs = fromMaybe xs $ C8.stripPrefix "\xEF\xBB\xBF" xs
 
-data LitMode a = LitInside a | LitOutside | LitVanilla
-  deriving (Eq, Ord, Show, Functor)
-
 {-# INLINE litLocToInt #-}
 litLocToInt :: LitMode LitStyle -> Int
 litLocToInt = \case
@@ -142,29 +135,6 @@ intToLitLoc = \case
   2 -> LitInside Bird
   3 -> LitInside Latex
   x -> error $ "Invalid literate location representation: " ++ show x
-
-{-# INLINE isLiterateEnabled #-}
-isLiterateEnabled :: LitMode a -> Bool
-isLiterateEnabled = \case
-  LitInside _ -> True
-  LitOutside  -> True
-  LitVanilla  -> False
-
-{-# INLINE isLiterateBirdOrOutside #-}
-isLiterateBirdOrOutside :: LitMode LitStyle -> Bool
-isLiterateBirdOrOutside = \case
-  LitInside Bird  -> True
-  LitInside Latex -> False
-  LitOutside      -> True
-  LitVanilla      -> False
-
-{-# INLINE isLiterateLatexOrOutside #-}
-isLiterateLatexOrOutside :: LitMode LitStyle -> Bool
-isLiterateLatexOrOutside = \case
-  LitInside Bird  -> False
-  LitInside Latex -> True
-  LitOutside      -> True
-  LitVanilla      -> False
 
 data AlexState = AlexState
   { asInput        :: {-# UNPACK #-} !AlexInput

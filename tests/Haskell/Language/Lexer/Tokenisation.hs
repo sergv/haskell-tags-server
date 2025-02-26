@@ -155,7 +155,7 @@ testTokenise = testGroup "Tokenise"
     f :: T.Text -> [ServerToken]
     f = L.drop 1 -- strip uninteresting initial newline
       . map valOf
-      . tokenize' Vanilla
+      . tokenize' LitVanilla
 
     tokeniseSplices = testGroup "Splices"
       [ "$(foo)"                                  ==>
@@ -348,7 +348,7 @@ testTokeniseWithNewlines = testGroup "Tokenise with newlines"
     ]
   ]
   where
-    (==>) = makeTest (f Vanilla)
+    (==>) = makeTest (f LitVanilla)
     (|=>) = makeTest (f LitOutside)
     f mode =
         map valOf
@@ -409,7 +409,7 @@ testStripComments = testGroup "Strip comments"
   ]
   where
     (==>) = makeTest f
-    f = map valOf . tokenize' Vanilla
+    f = map valOf . tokenize' LitVanilla
 
 
 testBreakBlocks :: TestTree
@@ -538,7 +538,7 @@ testBreakBlocks = testGroup "Break blocks"
    ]
   ]
   where
-    (==>) = makeTest (f Vanilla)
+    (==>) = makeTest (f LitVanilla)
     (|=>) = makeTest (f LitOutside)
     f :: LitMode Void -> T.Text -> [[ServerToken]]
     f mode =
@@ -581,7 +581,7 @@ testWhereBlock = testGroup "whereBlock"
       . whereBlock
       . UnstrippedTokens
       . stripServerTokens'
-      . tokenize' Vanilla
+      . tokenize' LitVanilla
 
 
 testProcess :: TestTree
@@ -661,7 +661,7 @@ testPrefixes = testGroup "Prefix tracking"
   ]
 
   where
-    (==>) = testFullTagsWithoutPrefixes fn Vanilla
+    (==>) = testFullTagsWithoutPrefixes fn LitVanilla
     fn = filename
 
 testData :: TestTree
@@ -934,7 +934,7 @@ testData = testGroup "Data"
     ==> ["(,,)", "(,,)"]
   ]
   where
-    (==>) = testTagNames filename Vanilla
+    (==>) = testTagNames filename LitVanilla
 
 testGADT :: TestTree
 testGADT = testGroup "GADT"
@@ -999,7 +999,7 @@ testGADT = testGroup "GADT"
     ["TyConProxy", "TyConProxy"]
   ]
   where
-    (==>) = testTagNames filename Vanilla
+    (==>) = testTagNames filename LitVanilla
 
 testFamilies :: TestTree
 testFamilies = testGroup "Families"
@@ -1034,7 +1034,7 @@ testFamilies = testGroup "Families"
   , "class C where\n\tdata X y ∷ *\n"  ==> ["C", "X"]
   ]
   where
-    (==>) = testTagNames filename Vanilla
+    (==>) = testTagNames filename LitVanilla
 
 testFunctions :: TestTree
 testFunctions = testGroup "Functions"
@@ -1221,7 +1221,7 @@ testFunctions = testGroup "Functions"
   , toplevelFunctionsWithoutSignatures
   ]
   where
-    (==>) = testTagNames filename Vanilla
+    (==>) = testTagNames filename LitVanilla
     toplevelFunctionsWithoutSignatures =
       testGroup "Toplevel functions without signatures"
       [ "$(return . map sumDeclaration $ [0..15])" ==> []
@@ -1415,7 +1415,7 @@ testClass = testGroup "Class"
     ["A", "F", "getF", "mkF"]
   ]
   where
-    (==>) = testTagNames filename Vanilla
+    (==>) = testTagNames filename LitVanilla
 
 testInstance :: TestTree
 testInstance = testGroup "Instance"
@@ -1471,7 +1471,7 @@ testInstance = testGroup "Instance"
     ["StMJournal", "unStMJournal"]
   ]
   where
-    (==>) = testTagNames filename Vanilla
+    (==>) = testTagNames filename LitVanilla
 
 testLiterate :: TestTree
 testLiterate = testGroup "Literate"
@@ -1531,7 +1531,7 @@ testPatterns = testGroup "Patterns"
     [":>"]
   ]
   where
-    (==>) = testTagNames filename Vanilla
+    (==>) = testTagNames filename LitVanilla
 
 testFFI :: TestTree
 testFFI = testGroup "FFI"
@@ -1541,4 +1541,4 @@ testFFI = testGroup "FFI"
   , "foreign import safe stdcall pattern :: Double -> IO Double" ==> ["pattern"]
   ]
   where
-    (==>) = testTagNames filename Vanilla
+    (==>) = testTagNames filename LitVanilla

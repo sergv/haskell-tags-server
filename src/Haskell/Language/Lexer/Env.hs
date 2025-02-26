@@ -12,15 +12,16 @@ module Haskell.Language.Lexer.Env
   , mkAlexEnv
   ) where
 
-import Haskell.Language.Lexer.Types (LiterateMode)
+import Data.Void (Void)
+import Haskell.Language.Lexer.Types
 
 -- | Environment for user rule predicates.
 data AlexEnv = AlexEnv
   { aeFilename     :: FilePath
-  , aeLiterateMode :: LiterateMode
+  , aeLiterateMode :: LitMode Void
   } deriving (Eq, Ord, Show)
 
-mkAlexEnv :: FilePath -> LiterateMode -> AlexEnv
+mkAlexEnv :: FilePath -> LitMode Void -> AlexEnv
 mkAlexEnv filename mode = AlexEnv
   { aeFilename     = filename
   , aeLiterateMode = mode

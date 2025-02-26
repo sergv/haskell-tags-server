@@ -13,13 +13,15 @@
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-
 module Haskell.Language.Lexer.Types
   ( mkSrcPos
   , Context(..)
-  , LiterateMode(..)
   , AlexCode(..)
   , LitStyle(..)
+  , LitMode(..)
+  , isLiterateEnabled
+  , isLiterateBirdOrOutside
+  , isLiterateLatexOrOutside
 
   , PragmaType(..)
   , ServerToken(..)
@@ -76,9 +78,6 @@ mkSrcPos line = SrcPos
   , posSuffix = mempty
   }
 
-data LiterateMode = Literate | Vanilla
-  deriving (Eq, Ord, Show)
-
 data Context
   = CtxHaskell
   | CtxQuasiquoter
@@ -90,6 +89,36 @@ newtype AlexCode = AlexCode { unAlexCode :: Int }
 
 data LitStyle = Bird | Latex
   deriving (Eq, Ord, Show, Enum, Bounded)
+
+data LitMode a
+  = LitInside !a -- ^ Inside literal code block
+  | LitOutside -- ^ Outside literal code block
+  | LitVanilla -- ^ Processing regular file without literate parts
+  deriving (Eq, Ord, Show, Functor)
+
+{-# INLINE isLiterateEnabled #-}
+isLiterateEnabled :: LitMode a -> Bool
+isLiterateEnabled = \case
+  LitInside _ -> True
+  LitOutside  -> True
+  LitVanilla  -> False
+
+{-# INLINE isLiterateBirdOrOutside #-}
+isLiterateBirdOrOutside :: LitMode LitStyle -> Bool
+isLiterateBirdOrOutside = \case
+  LitInside Bird  -> True
+  LitInside Latex -> False
+  LitOutside      -> True
+  LitVanilla      -> False
+
+{-# INLINE isLiterateLatexOrOutside #-}
+isLiterateLatexOrOutside :: LitMode LitStyle -> Bool
+isLiterateLatexOrOutside = \case
+  LitInside Bird  -> False
+  LitInside Latex -> True
+  LitOutside      -> True
+  LitVanilla      -> False
+
 
 data PragmaType = SourcePragma
   deriving (Show, Eq, Ord, Generic)

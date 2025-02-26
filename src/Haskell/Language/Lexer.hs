@@ -22,9 +22,8 @@ import System.FilePath
 -- import Haskell.Language.Lexer.Lexer (tokenizeM)
 -- import Haskell.Language.Lexer.Types (Token, LiterateMode(..))
 
-import Haskell.Language.Lexer.Types hiding (LiterateMode(..))
+import Haskell.Language.Lexer.Types
 import Haskell.Language.LexerSimple.Lexer qualified as SimpleLexer
-import Haskell.Language.LexerSimple.Types (LitMode(..))
 
 tokenize :: WithCallStack => FilePath -> BS.ByteString -> [Pos ServerToken]
 -- tokenize filename = runIdentity . tokenizeM filename mode

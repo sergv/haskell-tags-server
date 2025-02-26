@@ -50,7 +50,7 @@ runRulePredM'
   -> Int       -- ^ Length of the token
   -> AlexInput -- ^ Input stream after the token.
   -> a
-runRulePredM'  (RulePredM f)state inputBefore len _inputAfter =
+runRulePredM' (RulePredM f) state inputBefore len _inputAfter =
   f state inputBefore len
 
 instance Applicative (RulePredM r) where
@@ -82,8 +82,8 @@ isLiterate :: RulePredM AlexEnv Bool
 isLiterate = do
   env <- ask
   pure $ case aeLiterateMode env of
-    Literate -> True
-    Vanilla  -> False
+    LitOutside -> True
+    LitVanilla -> False
 
 isInBirdEnv :: RulePredM AlexState Bool
 isInBirdEnv = do

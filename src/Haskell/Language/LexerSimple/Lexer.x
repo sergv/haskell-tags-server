@@ -17,7 +17,7 @@ import Control.Monad.Writer.Strict
 import Control.Monad.State.Strict
 
 import Data.ByteString qualified as BS
-import Data.Void (Void, absurd)
+import Data.Void (Void)
 import Data.Word
 import Foreign.Ptr (plusPtr)
 import GHC.Stack.Ext (WithCallStack)
@@ -26,7 +26,7 @@ import Prettyprinter.Ext (Pretty(..), Doc, (<+>), (##))
 import Prettyprinter.Ext qualified as PP
 
 import Data.IgnoreEqOrdHashNFData
-import Haskell.Language.Lexer.Types hiding (LiterateMode(..))
+import Haskell.Language.Lexer.Types
 import Haskell.Language.LexerSimple.LensBlaze
 import Haskell.Language.LexerSimple.Types
 
@@ -353,9 +353,8 @@ tokenize litLoc input =
   runAlexM litLoc startCode' input scanTokens
   where
     startCode' = case litLoc of
-      LitVanilla  -> startCode
-      LitOutside  -> literateCode
-      LitInside x -> absurd x
+      LitVanilla -> startCode
+      LitOutside -> literateCode
 
 scanTokens :: WithCallStack => AlexM ()
 scanTokens = go
