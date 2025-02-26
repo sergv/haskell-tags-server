@@ -143,9 +143,9 @@ data ServerToken
   | RParen
   | Tilde
   | Semicolon
-  | T {-# UNPACK  #-} !Text
+  | T {-# UNPACK #-} !Text
   -- | Special token, not part of Haskell spec. Stores indentation.
-  | Newline {-# UNPACK  #-} !Int
+  | Newline {-# UNPACK #-} !Int
   -- | String contents is not tracked since it's irrelevant.
   | String
   -- | Actual character not tracked since it's irrelevant.
@@ -154,17 +154,16 @@ data ServerToken
   | Number
   | QuasiquoterStart
   | QuasiquoterEnd
-  | SpliceStart -- \$(
+  | SpliceStart -- \$(, ends with RParen
   | ToplevelSplice -- e.g. \$foo
   | LambdaBackslash -- \
-
   | CppDefine {-# UNPACK #-} !Text
   | HSCEnum      -- #{enum...}
   | HSCDirective -- e.g. #define foo bar...
   | HSCDirectiveBraced
     -- ^ e.g. #{define foo...\nbar}, #{\ndefine foo...\nbar}, ends with RBrace
-  | LBanana -- Arrows: (|
-  | RBanana -- Arrows: |)
+  | LBanana      -- Arrows: (|
+  | RBanana      -- Arrows: |)
   | Error (IgnoreEqOrdHashNFData (Doc Void))
   | DQuote -- '"' when not part of string in Alex or Happy
 
