@@ -74,8 +74,7 @@ import GHC.Base
 import GHC.Ptr
 import GHC.Word
 
-import Haskell.Language.Lexer.FastTags
-import Haskell.Language.Lexer.Types (LiterateStyle(..), AlexCode(..), Context(..))
+import Haskell.Language.Lexer.Types hiding (LiterateMode(..))
 import Haskell.Language.LexerSimple.LensBlaze
 
 data AlexInput = AlexInput
@@ -208,13 +207,13 @@ asPreprocessorDepthL :: Lens' AlexState Int16
 -- | Whether we're in bird-style or latex-style literate environment
 asLiterateLocL :: Lens' AlexState (LiterateLocation LiterateStyle)
 asHaveQQEndL   :: Lens' AlexState (Maybe Bool)
-asCodeL              = asIntStoreL . int16L' 0  0x000f
-asCommentDepthL      = asIntStoreL . int16L' 4  0x03ff
-asQuasiquoterDepthL  = asIntStoreL . int16L' 14 0x03ff
-asIndentationSizeL   = asIntStoreL . int16L  24
-asPreprocessorDepthL = asIntStoreL . int16L  40
-asLiterateLocL       = \f -> asIntStoreL (int16L' 56 0x0003 (fmap litLocToInt    . f . intToLitLoc))
-asHaveQQEndL         = \f -> asIntStoreL (int16L' 58 0x0003 (fmap maybeBoolToInt . f . intToMaybeBool))
+asCodeL              = asIntStoreL . intL   0  0x000f
+asCommentDepthL      = asIntStoreL . intL   4  0x03ff
+asQuasiquoterDepthL  = asIntStoreL . intL   14 0x03ff
+asIndentationSizeL   = asIntStoreL . int16L 24
+asPreprocessorDepthL = asIntStoreL . int16L 40
+asLiterateLocL       = \f -> asIntStoreL (intL 56 0x0003 (fmap litLocToInt    . f . intToLitLoc))
+asHaveQQEndL         = \f -> asIntStoreL (intL 58 0x0003 (fmap maybeBoolToInt . f . intToMaybeBool))
 
 mkAlexState :: LiterateLocation Void -> AlexCode -> AlexInput -> AlexState
 mkAlexState litLoc startCode input =

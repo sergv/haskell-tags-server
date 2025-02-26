@@ -45,7 +45,7 @@ import Data.SubkeyMap qualified as SubkeyMap
 import Data.SymbolMap (SymbolMap)
 import Data.SymbolMap qualified as SM
 import Data.Symbols
-import Haskell.Language.Lexer.FastTags qualified as FastTags
+import Haskell.Language.Lexer.Types qualified as Types
 import Haskell.Language.Server.Tags.LoadModule
 import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports
@@ -224,5 +224,5 @@ lookUpInSymbolMap sym sm =
         isRedundantConstructor :: ResolvedSymbol -> Bool
         isRedundantConstructor x =
           case (resolvedSymbolType x, resolvedSymbolParentName x) of
-            (FastTags.Constructor, Just p) -> p == resolvedSymbolName x
-            _                              -> False
+            (Types.Constructor, Just p) -> p == resolvedSymbolName x
+            _                           -> False

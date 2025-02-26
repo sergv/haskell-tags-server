@@ -153,7 +153,6 @@ library
     Haskell.Language.LexerSimple.Types
 
     Haskell.Language.Lexer
-    Haskell.Language.Lexer.FastTags
     Haskell.Language.Lexer.Types
 
     Haskell.Language.Lexer.Env

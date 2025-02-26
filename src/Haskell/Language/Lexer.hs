@@ -19,11 +19,10 @@ import Data.ByteString qualified as BS
 import GHC.Stack.Ext (WithCallStack)
 import System.FilePath
 
--- import Haskell.Language.Lexer.FastTags (Token)
 -- import Haskell.Language.Lexer.Lexer (tokenizeM)
--- import Haskell.Language.Lexer.Types (LiterateMode(..))
+-- import Haskell.Language.Lexer.Types (Token, LiterateMode(..))
 
-import Haskell.Language.Lexer.FastTags
+import Haskell.Language.Lexer.Types hiding (LiterateMode(..))
 import Haskell.Language.LexerSimple.Lexer qualified as SimpleLexer
 import Haskell.Language.LexerSimple.Types (LiterateLocation(..))
 

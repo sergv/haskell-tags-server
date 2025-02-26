@@ -11,5 +11,5 @@ module FasterRicherTags.Types
   ) where
 
 import FastTags.Tag (ParentTag(..))
-import Haskell.Language.Lexer.FastTags (Type(..), Line(..))
+import Haskell.Language.Lexer.Types (Type(..), Line(..))
 

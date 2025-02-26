@@ -33,7 +33,6 @@ import Data.ErrorMessage
 import Data.KeyMap qualified as KM
 import Data.Symbols.MacroName (mkMacroName)
 import Haskell.Language.Lexer.Env
-import Haskell.Language.Lexer.FastTags (PragmaType(..), ServerToken(..), Pos(..), unLine, valOf)
 import Haskell.Language.Lexer.Input (AlexInput, aiInput, aiLine, alexInputPrevChar, alexGetByte, retrieveToken)
 import Haskell.Language.Lexer.InputStack qualified as InputStack
 import Haskell.Language.Lexer.Monad

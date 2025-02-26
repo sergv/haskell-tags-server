@@ -32,9 +32,9 @@ import Data.Text qualified as T
 import Data.Word (Word8)
 import Lens.Micro
 
-import Haskell.Language.Lexer.FastTags
 import Haskell.Language.Lexer.InputStack (InputStack(..), InputType(..))
 import Haskell.Language.Lexer.InputStack qualified as InputStack
+import Haskell.Language.Lexer.Types
 
 -- | Type that represents current position in the analyzed module.
 data AlexInput = AlexInput

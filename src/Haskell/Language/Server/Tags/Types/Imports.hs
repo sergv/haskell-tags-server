@@ -41,7 +41,7 @@ import Data.SubkeyMap (HasSubkey(..))
 import Data.SymbolMap (SymbolMap)
 import Data.SymbolMap qualified as SM
 import Data.Symbols
-import Haskell.Language.Lexer.FastTags qualified as FastTags
+import Haskell.Language.Lexer.Types qualified as Types
 
 -- | Handle for when particular module enters another module's scope.
 data ImportKey = ImportKey
@@ -101,8 +101,8 @@ importBringsUnqualifiedNames exportedNames ImportSpec{ispecQualification} =
           -- fields, which do come unqualified. But actual functions don't (!).
           -- That's why this logic is not incorporated into main name resolution,
           -- but only in search.
-          if resolvedSymbolType p == FastTags.Type
-          then filter ((== FastTags.Function) . resolvedSymbolType) children
+          if resolvedSymbolType p == Types.Type
+          then filter ((== Types.Function) . resolvedSymbolType) children
           else [])
         (SM.childrenRelations exportedNames) of
         [] -> Nothing

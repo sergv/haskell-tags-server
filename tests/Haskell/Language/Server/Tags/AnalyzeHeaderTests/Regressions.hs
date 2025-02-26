@@ -26,7 +26,7 @@ import Data.Set qualified as S
 import Data.Text qualified as T
 
 import Data.Symbols
-import Haskell.Language.Lexer.FastTags (Type(..), Line(..))
+import Haskell.Language.Lexer.Types (Type(..), Line(..))
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
 

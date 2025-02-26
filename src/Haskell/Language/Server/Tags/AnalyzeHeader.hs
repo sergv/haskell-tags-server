@@ -40,9 +40,9 @@ import Prettyprinter qualified as PP
 import Prettyprinter.Combinators
 import Prettyprinter.Ext
 
-import Haskell.Language.Lexer.FastTags
+import Haskell.Language.Lexer.Types
   (stripNewlines, tokToName, Pos(..), Line, SrcPos(..), Type, posLine, unLine, PragmaType(..), ServerToken(..), Type(..))
-import Haskell.Language.Lexer.FastTags qualified as FastTags
+import Haskell.Language.Lexer.Types qualified as Types
 
 import Control.Monad.Logging
 import Data.ErrorMessage
@@ -352,20 +352,20 @@ analyzeExports filename importQualifiers ts = do
         PPattern : restWithName@(PName' SrcPos{posLine} name : rest)
           | isVanillaTypeName name
           , not $ isChildrenList filename rest ->
-            entryWithoutChildren name posLine FastTags.Pattern rest
+            entryWithoutChildren name posLine Types.Pattern rest
           | otherwise                 ->
-            entryWithoutChildren "pattern" posLine FastTags.Function restWithName
+            entryWithoutChildren "pattern" posLine Types.Function restWithName
         PPattern : restWithName@(PLParen : PAnyName' SrcPos{posLine} name : PRParen : rest)
           | isOpTypeName name
           , not $ isChildrenList filename rest ->
-            entryWithoutChildren name posLine FastTags.Pattern rest
+            entryWithoutChildren name posLine Types.Pattern rest
           | otherwise                 ->
-            entryWithoutChildren "pattern" posLine FastTags.Function restWithName
+            entryWithoutChildren "pattern" posLine Types.Function restWithName
         -- Type export
         PType : PName' SrcPos{posLine} name : rest ->
-          entryWithoutChildren name posLine FastTags.Family rest
+          entryWithoutChildren name posLine Types.Family rest
         PType : PLParen : PAnyName' SrcPos{posLine} name : PRParen : rest ->
-          entryWithoutChildren name posLine FastTags.Family rest
+          entryWithoutChildren name posLine Types.Family rest
         -- Module reexport
         PModule : PName name : rest ->
           consumeComma entries (newReexports <> reexports) rest
@@ -378,12 +378,12 @@ analyzeExports filename importQualifiers ts = do
               $ M.findWithDefault (modName :| []) (mkImportQualifier modName) importQualifiers
         -- Vanilla function/operator/consturtor/type export
         PLParen : PName' SrcPos{posLine} name : PRParen : rest ->
-          entryWithChildren "operator in export list" name posLine (typeForName FastTags.Type name) rest
+          entryWithChildren "operator in export list" name posLine (typeForName Types.Type name) rest
         PLParen : Pos SrcPos{posLine} (tokToName -> Just name) : PRParen : rest ->
-          entryWithChildren "operator in export list" name posLine (typeForName FastTags.Type name) rest
+          entryWithChildren "operator in export list" name posLine (typeForName Types.Type name) rest
         PName' SrcPos{posLine} name : rest ->
 
-          entryWithChildren "name in export list" name posLine (typeForName FastTags.Type name) rest
+          entryWithChildren "name in export list" name posLine (typeForName Types.Type name) rest
         PLParen : rest ->
           go entries reexports rest
         toks' ->
@@ -448,14 +448,14 @@ analyzeExports filename importQualifiers ts = do
       -> m ModuleExports
     consumeComma entries reexports = go entries reexports . dropCommas
 
-typeForName :: FastTags.Type -> Text -> FastTags.Type
+typeForName :: Types.Type -> Text -> Types.Type
 typeForName constructorLikeTag name =
   case T.uncons $ unqualSymNameText $ stripQualifiedPart name of
     Just (':', _) -> constructorLikeTag
     Just (c, _)
-      | isAlpha c -> if isUpper c then constructorLikeTag else FastTags.Function
-      | otherwise -> FastTags.Operator
-    Nothing -> FastTags.Function
+      | isAlpha c -> if isUpper c then constructorLikeTag else Types.Function
+      | otherwise -> Types.Operator
+    Nothing -> Types.Function
 
 isChildrenList :: FullPath 'File -> [Pos ServerToken] -> Bool
 isChildrenList filename toks =
