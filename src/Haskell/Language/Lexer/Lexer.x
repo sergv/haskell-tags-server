@@ -424,14 +424,14 @@ kw tok = \_ _ -> pure $ one tok
 
 tokenizeM
   :: (WithCallStack, Monad m)
-  => FilePath -> LiterateMode -> Text -> m (Either ErrorMessage [Pos ServerToken])
+  => FilePath -> LitMode Void -> Text -> m (Either ErrorMessage [Pos ServerToken])
 tokenizeM filename mode input =
   runAlexT filename mode code toplevelCode input scanTokens
   where
     code :: AlexCode
     code = case mode of
-      Vanilla  -> startCode
-      Literate -> literateCode
+      LitVanilla -> startCode
+      LitOutside -> literateCode
     -- Use 'startCode' as a toplevel until a macro will be defined.
     toplevelCode :: AlexCode
     toplevelCode = startCode
