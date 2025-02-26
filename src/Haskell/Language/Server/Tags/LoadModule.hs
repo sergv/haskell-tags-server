@@ -54,8 +54,8 @@ import Prettyprinter qualified as PP
 import Prettyprinter.Ext
 
 import Haskell.Language.Lexer (tokenize)
-import Haskell.Language.Lexer.FastTags (Pos, ServerToken, processTokens)
-import Haskell.Language.Lexer.FastTags qualified as FastTags
+import Haskell.Language.Lexer.Types (Pos, ServerToken, processTokens)
+import Haskell.Language.Lexer.Types qualified as Types
 
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Filesystem qualified as MonadFS
@@ -253,7 +253,7 @@ makeModule suggestedModuleName modifTime filename tokens = do
   (header, tokens') <- analyzeHeader filename tokens
   let syms           :: [ResolvedSymbol]
       errors         :: [Doc Void]
-      (syms, errors) = first (fmap (mkResolvedSymbol filename) . FastTags.removeDuplicatePatterns)
+      (syms, errors) = first (fmap (mkResolvedSymbol filename) . Types.removeDuplicatePatterns)
                      $ processTokens (T.unpack $ unFullPath filename) tokens'
       allSymbols     :: SymbolMap
       allSymbols     = SM.fromList syms
@@ -464,15 +464,15 @@ resolveModule nameResolution checkIfModuleIsAlreadyBeingLoaded readAndLoad mod =
                         Just sm -> do
                           (extraChildrenExports :: Set UnqualifiedSymbolName) <-
                             childrenNamesFromEntry nameResolution' mhModName sm $ name' <$ entry
-                          let childrenType :: FastTags.Type
+                          let childrenType :: Types.Type
                               childrenType = case typ of
-                                FastTags.Type   -> FastTags.Constructor
-                                FastTags.Family -> FastTags.Type
-                                typ'            -> typ'
-                              parent :: FastTags.ParentTag
-                              parent = FastTags.ParentTag
-                                { FastTags.ptName = getSymbolName $ getUnqualifiedSymbolName name'
-                                , FastTags.ptType = typ
+                                Types.Type   -> Types.Constructor
+                                Types.Family -> Types.Type
+                                typ'         -> typ'
+                              parent :: Types.ParentTag
+                              parent = Types.ParentTag
+                                { Types.ptName = getSymbolName $ getUnqualifiedSymbolName name'
+                                , Types.ptType = typ
                                 }
                               names :: Map UnqualifiedSymbolName ResolvedSymbol
                               names

@@ -26,8 +26,7 @@ import Prettyprinter.Ext (Pretty(..), Doc, (<+>), (##))
 import Prettyprinter.Ext qualified as PP
 
 import Data.IgnoreEqOrdHashNFData
-import Haskell.Language.Lexer.FastTags
-import Haskell.Language.Lexer.Types (LiterateStyle(..), AlexCode(..), mkSrcPos)
+import Haskell.Language.Lexer.Types hiding (LiterateMode(..))
 import Haskell.Language.LexerSimple.LensBlaze
 import Haskell.Language.LexerSimple.Types
 

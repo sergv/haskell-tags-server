@@ -57,7 +57,7 @@ import Data.ErrorMessage
 import Data.Path
 import Data.Promise qualified as Promise
 import Data.Symbols
-import Haskell.Language.Lexer.FastTags (Type, Line(..))
+import Haskell.Language.Lexer.Types (Type, Line(..))
 import Haskell.Language.Server.Tags.Types
 
 sexpDefaultPort :: Network.PortNumber

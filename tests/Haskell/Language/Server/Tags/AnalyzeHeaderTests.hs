@@ -30,7 +30,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import Haskell.Language.Lexer (tokenize)
-import Haskell.Language.Lexer.FastTags (Pos, ServerToken, Line(..), Type(..))
+import Haskell.Language.Lexer.Types (Pos, ServerToken, Line(..), Type(..))
 
 import Control.Monad.Logging.Simple
 import Data.KeyMap qualified as KM

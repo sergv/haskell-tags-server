@@ -50,7 +50,7 @@ import Data.SubkeyMap (SubkeyMap)
 import Data.SubkeyMap qualified as SubkeyMap
 import Data.SymbolMap (SymbolMap)
 import Data.Symbols
-import Haskell.Language.Lexer.FastTags (Type, Line)
+import Haskell.Language.Lexer.Types (Type, Line)
 import Haskell.Language.Server.Tags.Types.Imports
 
 data Module a = Module

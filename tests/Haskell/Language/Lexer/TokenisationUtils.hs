@@ -15,7 +15,7 @@ module Haskell.Language.Lexer.TokenisationUtils
   , untag
   , tokenize'
   , stripServerTokens'
-  , module Haskell.Language.Lexer.FastTags
+  , module Haskell.Language.Lexer.Types
   ) where
 
 import Test.Tasty
@@ -33,7 +33,7 @@ import Haskell.Language.Lexer (LiterateLocation(..))
 import Haskell.Language.LexerSimple.Lexer qualified as Lexer
 import TestUtils (makeTest)
 
-import Haskell.Language.Lexer.FastTags
+import Haskell.Language.Lexer.Types
   ( PragmaType(..)
   , ServerToken(..)
   , TokenVal

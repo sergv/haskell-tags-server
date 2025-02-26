@@ -14,7 +14,8 @@ module Haskell.Language.LexerSimple.LensBlaze
   , over
   , set
   , int16L
-  , int16L'
+  , int32L
+  , intL
   ) where
 
 import Control.Applicative
@@ -44,12 +45,18 @@ over l f = runIdentity . l (Identity . f)
 
 {-# INLINE int16L #-}
 int16L :: (Bits b, Integral b) => Int -> Lens' b Int16
-int16L n = int16L' n 0xffff
+int16L offset = intL offset 0xffff
 
-{-# INLINE int16L' #-}
-int16L' :: forall a b. (Integral a, Bits b, Integral b) => Int -> b -> Lens' b a
-int16L' n !mask = \f x ->
-  (\x' -> (fromIntegral x' `unsafeShiftL` n) .|. (x .&. reverseMask)) <$> f (fromIntegral ((x `unsafeShiftR` n) .&. mask :: b))
+{-# INLINE int32L #-}
+int32L :: (Bits b, Integral b) => Int -> Lens' b Int32
+int32L offset = intL offset 0xffffffff
+
+{-# INLINE intL #-}
+intL :: forall a b. (Integral a, Bits b, Integral b) => Int -> b -> Lens' b a
+intL !offset !mask = \f x ->
+  (\x' -> (fromIntegral x' `unsafeShiftL` offset) .|. (x .&. reverseMask)) <$>
+    f (fromIntegral ((x `unsafeShiftR` offset) .&. mask :: b))
   where
     reverseMask :: b
-    !reverseMask = complement $ mask `unsafeShiftL` n
+    !reverseMask = complement $ mask `unsafeShiftL` offset
+

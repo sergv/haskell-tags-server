@@ -63,7 +63,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Prettyprinter.Ext
 
-import Haskell.Language.Lexer.FastTags (Pos(..), TagVal(..), SrcPos(..))
+import Haskell.Language.Lexer.Types (Pos(..), TagVal(..), SrcPos(..))
 
 import Data.ErrorMessage
 import Data.KeyMap (HasKey(..))
