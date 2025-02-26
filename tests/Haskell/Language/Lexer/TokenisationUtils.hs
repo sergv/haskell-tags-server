@@ -29,7 +29,7 @@ import Data.Void (Void)
 import GHC.Stack.Ext (WithCallStack)
 import Prettyprinter.Ext qualified as PP
 
-import Haskell.Language.Lexer (LiterateLocation(..))
+import Haskell.Language.Lexer (LitMode(..))
 import Haskell.Language.LexerSimple.Lexer qualified as Lexer
 import TestUtils (makeTest)
 
@@ -56,7 +56,7 @@ filename = "/foo/bar/fn.hs"
 
 testFullTagsWithoutPrefixes
   :: WithCallStack
-  => FilePath -> LiterateLocation Void -> T.Text -> [Pos TagVal] -> TestTree
+  => FilePath -> LitMode Void -> T.Text -> [Pos TagVal] -> TestTree
 testFullTagsWithoutPrefixes fn mode = \source tags ->
   makeTest ((sort *** map PP.renderString) . processTokens fn . tokenize' mode) source (tags, warnings)
   where
@@ -65,7 +65,7 @@ testFullTagsWithoutPrefixes fn mode = \source tags ->
 
 testTagNames
   :: WithCallStack
-  => FilePath -> LiterateLocation Void -> T.Text -> [String] -> TestTree
+  => FilePath -> LitMode Void -> T.Text -> [String] -> TestTree
 testTagNames fn mode source tags =
   makeTest process source (tags, warnings)
   where
@@ -81,7 +81,7 @@ untag (Pos _ (TagVal name _ _)) = T.unpack name
 
 tokenize'
   :: WithCallStack
-  => LiterateLocation Void -> T.Text -> [Pos ServerToken]
+  => LitMode Void -> T.Text -> [Pos ServerToken]
 tokenize' mode =
     -- either (error . PP.renderString . PP.pretty) id
   -- . runIdentity
@@ -98,7 +98,7 @@ stripServerTokens' ts =
 
 -- tokenize''
 --   :: FilePath
---   -> LiterateLocation Void
+--   -> LitMode Void
 --   -> [(PathFragment, Text)]
 --   -> Text
 --   -> [Token]

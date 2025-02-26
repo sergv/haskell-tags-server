@@ -19,7 +19,7 @@ import Test.Tasty.HUnit (testCase)
 
 import FastTags.Tag qualified as FastTags
 
-import Haskell.Language.Lexer (LiterateLocation(..))
+import Haskell.Language.Lexer (LitMode(..))
 
 import Haskell.Language.Lexer.Tokenisation qualified as Tokenisation
 import Haskell.Language.Lexer.TokenisationUtils
