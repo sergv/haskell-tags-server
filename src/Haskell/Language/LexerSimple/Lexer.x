@@ -329,12 +329,12 @@ kw tok = \_ _ -> pure tok
 
 
 isLiterateEnabled'
-  :: AlexPred (LiterateLocation a)
+  :: AlexPred (LitMode a)
 isLiterateEnabled' litLoc _inputBefore _len _inputAfter =
   isLiterateEnabled litLoc
 
 shouldEndLiterateBird
-  :: AlexPred (LiterateLocation LiterateStyle)
+  :: AlexPred (LitMode LiterateStyle)
 shouldEndLiterateBird litLoc inputBefore _len _inputAfter =
   case unsafeTextHeadAscii $ (`plusPtr` 1) $ aiPtr inputBefore of
     -- 62 = '>'
@@ -342,20 +342,20 @@ shouldEndLiterateBird litLoc inputBefore _len _inputAfter =
     _  -> isLiterateBirdOrOutside litLoc
 
 shouldEndLiterateLatex
-  :: AlexPred (LiterateLocation LiterateStyle)
+  :: AlexPred (LitMode LiterateStyle)
 shouldEndLiterateLatex litLoc _inputBefore _len _inputAfter =
   isLiterateLatexOrOutside litLoc
 
 tokenize
   :: WithCallStack
-  => LiterateLocation Void -> BS.ByteString -> [Pos ServerToken]
+  => LitMode Void -> BS.ByteString -> [Pos ServerToken]
 tokenize litLoc input =
   runAlexM litLoc startCode' input scanTokens
   where
     startCode' = case litLoc of
-      Vanilla          -> startCode
-      LiterateOutside  -> literateCode
-      LiterateInside x -> absurd x
+      LitVanilla  -> startCode
+      LitOutside  -> literateCode
+      LitInside x -> absurd x
 
 scanTokens :: WithCallStack => AlexM ()
 scanTokens = go
@@ -377,7 +377,7 @@ continueScanning = do
   s@AlexState{asInput} <- get
   go (view asCodeL s) (view asLiterateLocL s) asInput
   where
-    go :: AlexCode -> LiterateLocation LiterateStyle -> AlexInput -> AlexM ServerToken
+    go :: AlexCode -> LitMode LiterateStyle -> AlexInput -> AlexM ServerToken
     go code !litLoc = go'
       where
         go' input =

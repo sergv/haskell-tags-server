@@ -11,7 +11,7 @@ module Haskell.Language.LexerSimple.Types
   , aiLineL
   , byteStringPos
   , Context(..)
-  , LiterateLocation(..)
+  , LitMode(..)
   , isLiterateEnabled
   , isLiterateBirdOrOutside
   , isLiterateLatexOrOutside
@@ -123,48 +123,48 @@ withAlexInput s f =
     stripBOM :: C8.ByteString -> C8.ByteString
     stripBOM xs = fromMaybe xs $ C8.stripPrefix "\xEF\xBB\xBF" xs
 
-data LiterateLocation a = LiterateInside a | LiterateOutside | Vanilla
+data LitMode a = LitInside a | LitOutside | LitVanilla
   deriving (Eq, Ord, Show, Functor)
 
 {-# INLINE litLocToInt #-}
-litLocToInt :: LiterateLocation LiterateStyle -> Int
+litLocToInt :: LitMode LiterateStyle -> Int
 litLocToInt = \case
-  Vanilla              -> 0
-  LiterateOutside      -> 1
-  LiterateInside Bird  -> 2
-  LiterateInside Latex -> 3
+  LitVanilla      -> 0
+  LitOutside      -> 1
+  LitInside Bird  -> 2
+  LitInside Latex -> 3
 
 {-# INLINE intToLitLoc #-}
-intToLitLoc :: Int -> LiterateLocation LiterateStyle
+intToLitLoc :: Int -> LitMode LiterateStyle
 intToLitLoc = \case
-  0 -> Vanilla
-  1 -> LiterateOutside
-  2 -> LiterateInside Bird
-  3 -> LiterateInside Latex
+  0 -> LitVanilla
+  1 -> LitOutside
+  2 -> LitInside Bird
+  3 -> LitInside Latex
   x -> error $ "Invalid literate location representation: " ++ show x
 
 {-# INLINE isLiterateEnabled #-}
-isLiterateEnabled :: LiterateLocation a -> Bool
+isLiterateEnabled :: LitMode a -> Bool
 isLiterateEnabled = \case
-  LiterateInside _ -> True
-  LiterateOutside  -> True
-  Vanilla          -> False
+  LitInside _ -> True
+  LitOutside  -> True
+  LitVanilla  -> False
 
 {-# INLINE isLiterateBirdOrOutside #-}
-isLiterateBirdOrOutside :: LiterateLocation LiterateStyle -> Bool
+isLiterateBirdOrOutside :: LitMode LiterateStyle -> Bool
 isLiterateBirdOrOutside = \case
-  LiterateInside Bird  -> True
-  LiterateInside Latex -> False
-  LiterateOutside      -> True
-  Vanilla              -> False
+  LitInside Bird  -> True
+  LitInside Latex -> False
+  LitOutside      -> True
+  LitVanilla      -> False
 
 {-# INLINE isLiterateLatexOrOutside #-}
-isLiterateLatexOrOutside :: LiterateLocation LiterateStyle -> Bool
+isLiterateLatexOrOutside :: LitMode LiterateStyle -> Bool
 isLiterateLatexOrOutside = \case
-  LiterateInside Bird  -> False
-  LiterateInside Latex -> True
-  LiterateOutside      -> True
-  Vanilla              -> False
+  LitInside Bird  -> False
+  LitInside Latex -> True
+  LitOutside      -> True
+  LitVanilla      -> False
 
 data AlexState = AlexState
   { asInput        :: {-# UNPACK #-} !AlexInput
@@ -205,7 +205,7 @@ asCommentDepthL, asQuasiquoterDepthL, asIndentationSizeL :: Lens' AlexState Int1
 -- | How many directives deep are we.
 asPreprocessorDepthL :: Lens' AlexState Int16
 -- | Whether we're in bird-style or latex-style literate environment
-asLiterateLocL :: Lens' AlexState (LiterateLocation LiterateStyle)
+asLiterateLocL :: Lens' AlexState (LitMode LiterateStyle)
 asHaveQQEndL   :: Lens' AlexState (Maybe Bool)
 asCodeL              = asIntStoreL . intL   0  0x000f
 asCommentDepthL      = asIntStoreL . intL   4  0x03ff
@@ -215,7 +215,7 @@ asPreprocessorDepthL = asIntStoreL . int16L 40
 asLiterateLocL       = \f -> asIntStoreL (intL 56 0x0003 (fmap litLocToInt    . f . intToLitLoc))
 asHaveQQEndL         = \f -> asIntStoreL (intL 58 0x0003 (fmap maybeBoolToInt . f . intToMaybeBool))
 
-mkAlexState :: LiterateLocation Void -> AlexCode -> AlexInput -> AlexState
+mkAlexState :: LitMode Void -> AlexCode -> AlexInput -> AlexState
 mkAlexState litLoc startCode input =
   set asCodeL startCode $
   set asLiterateLocL (vacuous litLoc) AlexState
@@ -227,17 +227,17 @@ mkAlexState litLoc startCode input =
 {-# INLINE alexEnterBirdLiterateEnv #-}
 alexEnterBirdLiterateEnv :: MonadState AlexState m => m ()
 alexEnterBirdLiterateEnv =
-  modify $ set asLiterateLocL (LiterateInside Bird)
+  modify $ set asLiterateLocL (LitInside Bird)
 
 {-# INLINE alexEnterLiterateLatexEnv #-}
 alexEnterLiterateLatexEnv :: MonadState AlexState m => m ()
 alexEnterLiterateLatexEnv =
-  modify $ set asLiterateLocL (LiterateInside Latex)
+  modify $ set asLiterateLocL (LitInside Latex)
 
 {-# INLINE alexExitLiterateEnv #-}
 alexExitLiterateEnv :: MonadState AlexState m => m ()
 alexExitLiterateEnv =
-  modify $ set asLiterateLocL LiterateOutside
+  modify $ set asLiterateLocL LitOutside
 
 {-# INLINE pushContext #-}
 pushContext :: MonadState AlexState m => Context -> m ()
@@ -302,7 +302,7 @@ type AlexM = WriterT [Pos ServerToken] (State AlexState)
 
 {-# INLINE runAlexM #-}
 runAlexM
-  :: LiterateLocation Void
+  :: LitMode Void
   -> AlexCode
   -> C8.ByteString
   -> AlexM ()

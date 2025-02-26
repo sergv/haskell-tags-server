@@ -11,7 +11,7 @@ module Haskell.Language.Lexer
   ( tokenize
   -- , tokenizeM
   -- , LiterateMode(..)
-  , LiterateLocation(..)
+  , LitMode(..)
   ) where
 
 -- import Data.Functor.Identity
@@ -24,7 +24,7 @@ import System.FilePath
 
 import Haskell.Language.Lexer.Types hiding (LiterateMode(..))
 import Haskell.Language.LexerSimple.Lexer qualified as SimpleLexer
-import Haskell.Language.LexerSimple.Types (LiterateLocation(..))
+import Haskell.Language.LexerSimple.Types (LitMode(..))
 
 tokenize :: WithCallStack => FilePath -> BS.ByteString -> [Pos ServerToken]
 -- tokenize filename = runIdentity . tokenizeM filename mode
@@ -35,9 +35,9 @@ tokenize :: WithCallStack => FilePath -> BS.ByteString -> [Pos ServerToken]
   --     | otherwise                        = Vanilla
 tokenize filename = SimpleLexer.tokenize mode
   where
-    mode :: LiterateLocation a
+    mode :: LitMode a
     mode
       | takeExtension filename `elem` [".lhs", ".lhs-boot"]
-      = LiterateOutside
+      = LitOutside
       | otherwise
-      = Vanilla
+      = LitVanilla

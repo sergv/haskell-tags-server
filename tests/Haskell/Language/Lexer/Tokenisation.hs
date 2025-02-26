@@ -19,7 +19,7 @@ import Data.Maybe (mapMaybe)
 import Data.Text qualified as T
 import Data.Void (Void)
 
-import Haskell.Language.Lexer (LiterateLocation(..))
+import Haskell.Language.Lexer (LitMode(..))
 import Haskell.Language.Lexer.TokenisationUtils
 import TestUtils (makeTest)
 
@@ -349,7 +349,7 @@ testTokeniseWithNewlines = testGroup "Tokenise with newlines"
   ]
   where
     (==>) = makeTest (f Vanilla)
-    (|=>) = makeTest (f LiterateOutside)
+    (|=>) = makeTest (f LitOutside)
     f mode =
         map valOf
       . tokenize' mode
@@ -539,8 +539,8 @@ testBreakBlocks = testGroup "Break blocks"
   ]
   where
     (==>) = makeTest (f Vanilla)
-    (|=>) = makeTest (f LiterateOutside)
-    f :: LiterateLocation Void -> T.Text -> [[ServerToken]]
+    (|=>) = makeTest (f LitOutside)
+    f :: LitMode Void -> T.Text -> [[ServerToken]]
     f mode =
         map (mapMaybe (embedServerToken . valOf) . unstrippedTokensOf)
       . breakBlocks ProcessVanilla
@@ -1499,7 +1499,7 @@ testLiterate = testGroup "Literate"
   ]
   where
     (==>) = makeTest f
-    f = L.sort . map untag . fst . processTokens "fn.lhs" . tokenize' LiterateOutside
+    f = L.sort . map untag . fst . processTokens "fn.lhs" . tokenize' LitOutside
 
 testPatterns :: TestTree
 testPatterns = testGroup "Patterns"
