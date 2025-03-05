@@ -266,13 +266,15 @@ test-suite test-haskell-tags-server
     TestUtils
   build-depends:
     , QuickCheck
-    , base
+    -- For MultilineStrings, GHC >= 9.12
+    , base >= 4.21
     , bytestring
     , containers
     , deepseq
     , exceptions
     , fast-tags
     , faster-richer-tags
+    , filepath >= 1.5
     , monad-control
     , mtl
     , network

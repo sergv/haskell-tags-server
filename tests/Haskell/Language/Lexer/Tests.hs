@@ -792,14 +792,14 @@ testFullPipeline = testGroup "Full processing pipeline"
     , Pos (SrcPos (Line 1) 0 mempty mempty) (TagVal "X" Module Nothing)
     ]
   -- Type goes ahead of Module.
-  , [ "module X\n\
+  , [ "module X where\n\
        \data X"
     ]
     ==>
     [ Pos (SrcPos (Line 1) 0 mempty mempty) (TagVal "X" Module Nothing)
     , Pos (SrcPos (Line 2) 0 mempty mempty) (TagVal "X" Type Nothing)
     ]
-  , [ "module Z\n\
+  , [ "module Z where\n\
       \data X = Y\n"
     ]
     ==>
@@ -807,7 +807,7 @@ testFullPipeline = testGroup "Full processing pipeline"
     , Pos (SrcPos (Line 2) 0 mempty mempty) (TagVal "X" Type Nothing)
     , Pos (SrcPos (Line 2) 0 mempty mempty) (TagVal "Y" Constructor (Just (FastTags.ParentTag "X" Type)))
     ]
-  , [ "module Z\n\
+  , [ "module Z where\n\
       \data X a =\n\
       \  Y a\n"
     ]

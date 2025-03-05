@@ -2496,7 +2496,12 @@ tests = testGroup "Header analysis tests"
 doTest :: HasCallStack => Test -> TestTree
 doTest TestCase{testName, input, expectedResult} =
   testCase testName $ do
-    (res, logs) <- runWriterT $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runErrorExceptT $ analyzeHeader filename tokens
+    (res, logs) <- runWriterT $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runErrorExceptT $ do
+      (tokens :: [Pos ServerToken]) <-
+        case tokenize (T.unpack (unFullPath filename)) $ TE.encodeUtf8 input of
+          Left err -> liftIO $ assertFailure $ renderString $ "Failed to get tokens:" ## err
+          Right xs -> pure xs
+      analyzeHeader filename tokens
     let logsDoc = "Logs, size " <> pretty (length logs) <> ":" ## PP.indent 2 (PP.vcat logs)
     case res of
       Left msg               -> assertFailure $ renderString $ pretty msg ## logsDoc
@@ -2532,6 +2537,3 @@ doTest TestCase{testName, input, expectedResult} =
               ]
         unless (header == expectedResult) $
           assertFailure $ renderString $ msg ## logsDoc
-  where
-    tokens :: [Pos ServerToken]
-    tokens = tokenize (T.unpack (unFullPath filename)) $ TE.encodeUtf8 input

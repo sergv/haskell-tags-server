@@ -20,8 +20,8 @@ module Haskell.Language.Lexer.Types
   , LitStyle(..)
   , LitMode(..)
   , isLiterateEnabled
-  , isLiterateBirdOrOutside
-  , isLiterateLatexOrOutside
+  , isLiterateBirdInside
+  , isLiterateLatexInside
 
   , PragmaType(..)
   , ServerToken(..)
@@ -103,21 +103,21 @@ isLiterateEnabled = \case
   LitOutside  -> True
   LitVanilla  -> False
 
-{-# INLINE isLiterateBirdOrOutside #-}
-isLiterateBirdOrOutside :: LitMode LitStyle -> Bool
-isLiterateBirdOrOutside = \case
-  LitInside Bird  -> True
-  LitInside Latex -> False
-  LitOutside      -> True
-  LitVanilla      -> False
+{-# INLINE isLiterateBirdInside #-}
+isLiterateBirdInside :: LitMode LitStyle -> Bool
+isLiterateBirdInside = \case
+    LitInside Bird  -> True
+    LitInside Latex -> False
+    LitOutside      -> True
+    LitVanilla      -> False
 
-{-# INLINE isLiterateLatexOrOutside #-}
-isLiterateLatexOrOutside :: LitMode LitStyle -> Bool
-isLiterateLatexOrOutside = \case
-  LitInside Bird  -> False
-  LitInside Latex -> True
-  LitOutside      -> True
-  LitVanilla      -> False
+{-# INLINE isLiterateLatexInside #-}
+isLiterateLatexInside :: LitMode LitStyle -> Bool
+isLiterateLatexInside = \case
+    LitInside Bird  -> False
+    LitInside Latex -> True
+    LitOutside      -> False
+    LitVanilla      -> False
 
 
 data PragmaType = SourcePragma

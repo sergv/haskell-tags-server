@@ -6,26 +6,25 @@
 -- Very important to have this one as it enables GHC to infer proper type of
 -- Alex 3.2.1 actions.
 --
--- The basic type is (Monad m => AlexInput -> Int -> AlexT m TokenVal), but
+-- The basic type is (Monad m => AlexInput -> Int -> AlexT m ServerToken), but
 -- monomorphism restriction breaks its inference.
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
 module Haskell.Language.LexerSimple.Lexer (tokenize) where
 
+import Control.Applicative as A
 import Control.Monad
 import Control.Monad.Writer.Strict
 import Control.Monad.State.Strict
 
 import Data.ByteString qualified as BS
+import Data.Char
+import Data.IgnoreEqOrdHashNFData
 import Data.Void (Void)
 import Data.Word
 import Foreign.Ptr (plusPtr)
-import GHC.Stack.Ext (WithCallStack)
-import Prettyprinter qualified as PP
-import Prettyprinter.Ext (Pretty(..), Doc, (<+>), (##))
-import Prettyprinter.Ext qualified as PP
+import Prettyprinter hiding (line)
 
-import Data.IgnoreEqOrdHashNFData
 import Haskell.Language.Lexer.Types
 import Haskell.Language.LexerSimple.LensBlaze
 import Haskell.Language.LexerSimple.Types
@@ -200,7 +199,6 @@ $nl ;
 -- Pragmas
 <0> "{-#" $ws* @source_pragma $ws* "#-}" { \_ _ -> pure $ Pragma SourcePragma }
 
-
 -- Nested comments
 <0, comment>
   "{-"                  { \_ _ -> startComment }
@@ -228,7 +226,7 @@ $space*                 { \_ len -> endIndentationCounting len }
 
 [\"]                    { \_ _ -> pure DQuote }
 
--- Characters.
+-- Character.
 [\'] ( [^ \' \\ \n \r] | @charescape ) [\']
                         { kw Character }
 }
@@ -305,7 +303,7 @@ $reserved_symbol        { \input _len -> reservedSymbolQQ (unsafeTextHead (aiPtr
 -- it's quicker to just ignore them.
 @number                 { kw Number }
 
-[\']* @qualificationPrefix ($ident | $large)+
+[']* @qualificationPrefix ($ident | $large)+
                         { \input len -> pure $! T $! takeText input len }
 @qualificationPrefix $symbol+
                         { \input len -> pure $! T $! takeText input len }
@@ -317,16 +315,14 @@ $reserved_symbol        { \input _len -> reservedSymbol (unsafeTextHead (aiPtr i
 
 }
 
-
 {
 
-type AlexAction m = AlexInput -> Int -> m ServerToken
+type AlexAction = AlexInput -> Int -> AlexM ServerToken
 type AlexPred a = a -> AlexInput -> Int -> AlexInput -> Bool
 
 {-# INLINE kw #-}
-kw :: Applicative m => ServerToken -> AlexAction m
+kw :: ServerToken -> AlexAction
 kw tok = \_ _ -> pure tok
-
 
 isLiterateEnabled'
   :: AlexPred (LitMode a)
@@ -339,64 +335,66 @@ shouldEndLiterateBird litLoc inputBefore _len _inputAfter =
   case unsafeTextHeadAscii $ (`plusPtr` 1) $ aiPtr inputBefore of
     -- 62 = '>'
     62 -> False
-    _  -> isLiterateBirdOrOutside litLoc
+    _  -> isLiterateBirdInside litLoc
 
 shouldEndLiterateLatex
   :: AlexPred (LitMode LitStyle)
 shouldEndLiterateLatex litLoc _inputBefore _len _inputAfter =
-  isLiterateLatexOrOutside litLoc
+  isLiterateLatexInside litLoc
 
 tokenize
-  :: WithCallStack
-  => LitMode Void -> BS.ByteString -> [Pos ServerToken]
+  :: LitMode Void -> BS.ByteString -> Either (Doc Void) [Pos ServerToken]
 tokenize litLoc input =
-  runAlexM litLoc startCode' input scanTokens
+  case runAlexM litLoc code input scanTokens of
+    (Nothing, xs) -> Right xs
+    (Just err, _) -> Left err
   where
-    startCode' = case litLoc of
+    code = case litLoc of
       LitVanilla -> startCode
       LitOutside -> literateCode
 
-scanTokens :: WithCallStack => AlexM ()
+scanTokens :: AlexM (Maybe (Doc Void))
 scanTokens = go
   where
     go = do
-      nextTok <- continueScanning
+      !nextTok <- continueScanning
       case nextTok of
-        EOF -> pure ()
-        _   -> do
+        EOF       -> pure Nothing
+        Error err -> pure $ Just $ unIgnoreEqOrdHashNFData err
+        _         -> do
           -- Use input after reading token to get proper prefix that includes
           -- token we currently read.
           AlexState{asInput} <- get
-          let !tok = Pos (mkSrcPos (aiLine asInput)) nextTok
-          tell [tok]
+          tell [(asInput, nextTok)]
           go
 
-continueScanning :: WithCallStack => AlexM ServerToken
+continueScanning :: AlexM ServerToken
 continueScanning = do
   s@AlexState{asInput} <- get
   go (view asCodeL s) (view asLiterateLocL s) asInput
   where
     go :: AlexCode -> LitMode LitStyle -> AlexInput -> AlexM ServerToken
-    go code !litLoc = go'
+    go !code !litLoc = go'
       where
-        go' input =
-          case alexScanUser litLoc input (unAlexCode code) :: AlexReturn (AlexAction AlexM) of
-            AlexEOF                           ->
+        go' input = do
+          case alexScanUser litLoc input (unAlexCode code) :: AlexReturn AlexAction of
+            AlexEOF                        ->
               pure EOF
-            AlexError input'@AlexInput{aiPtr} -> do
+            AlexError input'               -> do
               code' <- gets (view asCodeL)
-              pure $ Error $ IgnoreEqOrdHashNFData $ "Lexical error while in state" <+> pretty code'
-                <+> "at line" <+>
-                pretty (unLine (view aiLineL input')) <> ":" ## PP.squotes (PP.ppByteString (utf8BS 40 aiPtr))
-            AlexSkip input' _                 ->
+              pure $ Error $ IgnoreEqOrdHashNFData $ "Lexical error while in state" <+> pretty (show code') <+>
+                "at line" <+> pretty (view aiLineL input') <> ":" <+> squotes (pretty (takeText input' 40))
+            AlexSkip input' _              ->
               go' input'
-            AlexToken input' tokLen action    ->
+            AlexToken input' tokLen action ->
               alexSetInput input' *> action input tokLen
 
-dropUntilNL' :: AlexM ServerToken
-dropUntilNL' = do
+dropUntilNL_ :: AlexM ()
+dropUntilNL_ =
   modify $ \s -> s { asInput = dropUntilNL $ asInput s }
-  continueScanning
+
+dropUntilNL' :: AlexM ServerToken
+dropUntilNL' = dropUntilNL_ *> continueScanning
 
 dropUntilNLOr' :: Word8 -> AlexM ServerToken
 dropUntilNLOr' w = do
@@ -405,20 +403,10 @@ dropUntilNLOr' w = do
 
 dropUntilNLOrEither' :: Word8 -> Word8 -> AlexM ServerToken
 dropUntilNLOrEither' w1 w2 = do
-    modify $ \s -> s { asInput = dropUntilNLOrEither w1 w2 $ asInput s }
-    continueScanning
-
-dropUntil' :: Word8 -> AlexM ServerToken
-dropUntil' w = do
-  modify $ \s -> s { asInput = dropUntil w $ asInput s }
+  modify $ \s -> s { asInput = dropUntilNLOrEither w1 w2 $ asInput s }
   continueScanning
 
-dropUntil2' :: Word8 -> Word8 -> AlexM ServerToken
-dropUntil2' w1 w2 = do
-  modify $ \s -> s { asInput = dropUntil2 w1 w2 $ asInput s }
-  continueScanning
-
-startIndentationCounting :: WithCallStack => Int -> AlexM ServerToken
+startIndentationCounting :: Int -> AlexM ServerToken
 startIndentationCounting !n = do
   modify (\s -> set asCommentDepthL 1 $ set asIndentationSizeL (fromIntegral n) s)
   alexSetNextCode indentCommentCode
@@ -429,41 +417,37 @@ endIndentationCounting !n = do
   alexSetNextCode startCode
   Newline . (+ n) . fromIntegral <$> gets (view asIndentationSizeL)
 
-startIndentComment :: WithCallStack => AlexM ServerToken
+startIndentComment :: AlexM ServerToken
 startIndentComment = do
   void $ modifyCommentDepth (+ 1)
   alexSetNextCode indentCommentCode
   continueScanning
 
-startPreprocessorStripping :: WithCallStack => AlexM ServerToken
+startPreprocessorStripping :: AlexM ServerToken
 startPreprocessorStripping = do
   void $ modifyPreprocessorDepth (+ 1)
   alexSetNextCode stripCppCode
   continueScanning
 
-endPreprocessorStripping :: WithCallStack => AlexM ServerToken
+endPreprocessorStripping :: AlexM ServerToken
 endPreprocessorStripping = do
   newDepth <- modifyPreprocessorDepth (\x -> x - 1)
   when (newDepth == 0) $
     alexSetNextCode startCode
   continueScanning
 
-startComment :: WithCallStack => AlexM ServerToken
+startComment :: AlexM ServerToken
 startComment = do
   void $ modifyCommentDepth (+ 1)
   alexSetNextCode commentCode
   continueScanning
 
-endComment :: WithCallStack => AlexCode -> AlexM ServerToken
+endComment :: AlexCode -> AlexM ServerToken
 endComment nextCode = do
   newDepth <- modifyCommentDepth (\x -> x - 1)
   when (newDepth == 0) $
     alexSetNextCode nextCode
   continueScanning
-
-endString :: AlexCode -> AlexM ServerToken
-endString nextCode =
-  String <$ alexSetNextCode nextCode
 
 startQuasiquoter :: AlexInput -> AlexM ServerToken
 startQuasiquoter AlexInput{aiPtr} = do
@@ -495,11 +479,11 @@ endQuasiquoter :: AlexM ServerToken
 endQuasiquoter =
   QuasiquoterEnd <$ alexSetNextCode startCode
 
-pushLParen :: AlexAction AlexM
+pushLParen :: AlexAction
 pushLParen _ _ =
   LParen <$ pushContext CtxHaskell
 
-popRParen :: AlexAction AlexM
+popRParen :: AlexAction
 popRParen _ _ = do
   cs <- gets asContextStack
   case cs of
@@ -517,7 +501,8 @@ errorAtLine
   => Doc Void -> m ServerToken
 errorAtLine msg = do
   line <- gets (unLine . view aiLineL . asInput)
-  pure $ Error $ IgnoreEqOrdHashNFData $ "Error at line" <+> pretty line <> ":" <+> msg
+  pure $ Error $ IgnoreEqOrdHashNFData $
+    "Error at line" <+> pretty line <> ":" <+> msg
 
 startLiterateBird :: AlexM ()
 startLiterateBird = do
@@ -535,24 +520,39 @@ endLiterate = do
   alexExitLiterateEnv
 
 endLiterate' :: AlexM ServerToken
-endLiterate' = endLiterate *> continueScanning
+endLiterate' = do
+  alexSetNextCode literateCode
+  alexExitLiterateEnv
+  continueScanning
 
-reservedSymbol :: WithCallStack => Char -> AlexM ServerToken
+reservedSymbol :: Char -> AlexM ServerToken
 reservedSymbol = \case
   '→' -> pure Arrow
   '∷' -> pure DoubleColon
   '⇒' -> pure Implies
-  '∀' -> pure $! T $! "forall"
+  '∀' -> pure forallServerToken
   '⦇' -> pure LBanana
-  '⦈' -> pure RBanana
+  '⦈' -> A.pure RBanana
   '⟦' -> startUnconditionalQuasiQuoter
   '⟧' -> endQuasiquoter
-  c   -> error $ PP.renderString $ "Unexpected reserved symbol:" <+> pretty c
+  c   -> error $ "Unexpected reserved symbol: " ++ show c
 
-reservedSymbolQQ :: WithCallStack => Char -> AlexM ServerToken
-reservedSymbolQQ = \case
-  '⟧' -> endQuasiquoter
-  _   -> continueScanning
+reservedSymbolQQ :: Char -> AlexM ServerToken
+reservedSymbolQQ c = case ord c of
+  0x27e7 -> endQuasiquoter -- '\⟧'
+  _      -> continueScanning
+
+{-# INLINE countBackslashCR #-}
+countBackslashCR :: AlexInput -> Int
+countBackslashCR AlexInput{aiPtr} = case unsafeTextHeadAscii aiPtr of
+  -- '\\'
+  92 -> case unsafeTextHeadOfTailAscii aiPtr of
+    -- '\r'
+    13 -> 2
+    _  -> 1
+  -- '\r'
+  13 -> 1
+  _  -> 0
 
 -- Known codes
 
@@ -564,12 +564,12 @@ reservedSymbolQQ = \case
 {-# INLINE literateCode      #-}
 {-# INLINE stripCppCode      #-}
 startCode, qqCode, commentCode, indentCommentCode, indentCountCode, literateCode, stripCppCode :: AlexCode
-startCode         = AlexCode 0
-qqCode            = AlexCode qq
-commentCode       = AlexCode comment
-indentCommentCode = AlexCode indentComment
-indentCountCode   = AlexCode indentCount
-literateCode      = AlexCode literate
-stripCppCode      = AlexCode stripCpp
+startCode          = AlexCode 0
+qqCode             = AlexCode qq
+commentCode        = AlexCode comment
+indentCommentCode  = AlexCode indentComment
+indentCountCode    = AlexCode indentCount
+literateCode       = AlexCode literate
+stripCppCode       = AlexCode stripCpp
 
 }
