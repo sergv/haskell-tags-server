@@ -82,12 +82,9 @@ untag (Pos _ (TagVal name _ _)) = T.unpack name
 tokenize'
   :: WithCallStack
   => LitMode Void -> T.Text -> [Pos ServerToken]
-tokenize' mode =
-    -- either (error . PP.renderString . PP.pretty) id
-  -- . runIdentity
-  -- . Lexer.tokenizeM fn mode
-  -- .
-  Lexer.tokenize mode . TE.encodeUtf8
+tokenize' mode
+  = either (error . PP.renderString) id
+  . Lexer.tokenize mode . TE.encodeUtf8
 
 stripServerTokens' :: [Pos ServerToken] -> [Pos TokenVal]
 stripServerTokens' ts =

@@ -16,7 +16,9 @@ module Haskell.Language.Lexer
 
 -- import Data.Functor.Identity
 import Data.ByteString qualified as BS
+import Data.Void
 import GHC.Stack.Ext (WithCallStack)
+import Prettyprinter
 import System.FilePath
 
 -- import Haskell.Language.Lexer.Lexer (tokenizeM)
@@ -25,7 +27,7 @@ import System.FilePath
 import Haskell.Language.Lexer.Types
 import Haskell.Language.LexerSimple.Lexer qualified as SimpleLexer
 
-tokenize :: WithCallStack => FilePath -> BS.ByteString -> [Pos ServerToken]
+tokenize :: WithCallStack => FilePath -> BS.ByteString -> Either (Doc Void) [Pos ServerToken]
 -- tokenize filename = runIdentity . tokenizeM filename mode
   -- where
   --   mode :: LiterateMode

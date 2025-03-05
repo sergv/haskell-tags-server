@@ -1,5 +1,6 @@
 {-# LANGUAGE ExtendedLiterals  #-}
 {-# LANGUAGE MagicHash         #-}
+{-# LANGUAGE MultiWayIf        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE UnboxedTuples     #-}
@@ -7,11 +8,7 @@
 {-# OPTIONS_GHC -O2 #-}
 
 module Haskell.Language.LexerSimple.Types
-  ( AlexInput(..)
-  , aiLineL
-  , byteStringPos
-  , Context(..)
-  , AlexState(..)
+  ( AlexState(..)
   , mkAlexState
   , alexEnterBirdLiterateEnv
   , alexEnterLiterateLatexEnv
@@ -20,28 +17,27 @@ module Haskell.Language.LexerSimple.Types
   , modifyCommentDepth
   , modifyQuasiquoterDepth
   , modifyPreprocessorDepth
-  , retrieveToken
   , addIndentationSize
   , checkQuasiQuoteEndPresent
+
   , AlexM
   , runAlexM
   , alexSetInput
   , alexSetNextCode
-  , alexInputPrevChar
+
+  , AlexInput(..)
+  , aiLineL
+  , takeText
+  , countInputSpace
   , extractDefineOrLetName
   , dropUntilNL
   , dropUntilUnescapedNL
-  , dropUntil
   , dropUntilNLOr
   , dropUntilNLOrEither
-  , dropUntil2
-  , alexGetByte
   , unsafeTextHeadAscii
   , unsafeTextHeadOfTailAscii
   , unsafeTextHead
   , utf8BS
-  , takeText
-  , countInputSpace
 
   , asCodeL
   , asCommentDepthL
@@ -51,9 +47,12 @@ module Haskell.Language.LexerSimple.Types
   , asLiterateLocL
   , asHaveQQEndL
 
-  , countBackslashCR
+    -- * Alex interface
+  , alexInputPrevChar
+  , alexGetByte
   ) where
 
+import Control.Exception
 import Control.Monad.State.Strict
 import Control.Monad.Writer.Strict
 
@@ -62,62 +61,69 @@ import Data.ByteString.Char8 qualified as C8
 import Data.ByteString.Internal qualified as BSI
 import Data.Char
 import Data.Int
-import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Foreign.ForeignPtr
+import Foreign.Ptr
 import GHC.Base
 import GHC.Ptr
 import GHC.Word
+import Text.Printf
 
-import Haskell.Language.Lexer.Types
+import Haskell.Language.Lexer.Types (Context(..), AlexCode(..), LitMode(..), LitStyle(..), SrcPos(..), ServerToken(..), Pos(..), Line(..), increaseLine, Offset(..))
 import Haskell.Language.LexerSimple.LensBlaze
 
-data AlexInput = AlexInput
-  { aiPtr             :: {-# UNPACK #-} !(Ptr Word8)
-  -- , aiIntStore      :: {-# UNPACK #-} !Word64
-
-  , aiLine            :: {-# UNPACK #-} !Line
-  , aiAbsPos          :: {-# UNPACK #-} !Offset -- in number of characters
-  , aiLineLength      :: {-# UNPACK #-} !Int -- in bytes
+data AlexState = AlexState
+  { asInput        :: {-# UNPACK #-} !AlexInput
+  , asIntStore     :: {-# UNPACK #-} !Word64
+    -- ^ Integer field that stores all the other useful fields for lexing.
+  , asContextStack :: [Context]
   } deriving (Show, Eq, Ord)
 
-{-# INLINE aiLineL #-}
-aiLineL :: Lens' AlexInput Line
-aiLineL = lens aiLine (\b s -> s { aiLine = b })
+{-# INLINE asIntStoreL #-}
+asIntStoreL :: Lens' AlexState Word64
+asIntStoreL = lens asIntStore (\b s -> s { asIntStore = b })
 
-{-# INLINE byteStringPos #-}
-byteStringPos :: C8.ByteString -> Int
-byteStringPos (BSI.PS _payload offset _len) = offset
+{-# INLINE maybeBoolToInt #-}
+-- | Encode 'Maybe Bool' as bit mask to store it within integer store.
+maybeBoolToInt :: Maybe Bool -> Int
+maybeBoolToInt = \case
+  Nothing    -> 0
+  Just False -> 1
+  Just True  -> 2
 
-{-# INLINE withAlexInput #-}
-withAlexInput :: C8.ByteString -> (AlexInput -> a) -> a
-withAlexInput s f =
-  case s' of
-    BSI.PS ptr offset _len ->
-      inlinePerformIO $ withForeignPtr ptr $ \ptr' -> do
-        let !input = set aiLineL initLine AlexInput
-              { aiPtr        = ptr' `plusPtr` offset
-              , aiLine       = Line 0
-              , aiAbsPos     = initAbsPos
-              , aiLineLength = 0
-              }
-            !res = f input
-        touchForeignPtr ptr
-        pure res
-  where
-    -- Line numbering starts from 0 because we're adding additional newline
-    -- at the beginning to simplify processing. Thus, line numbers in the
-    -- result are 1-based.
-    initLine = Line 0
-    -- Same reasoning applies to the initial absolute position.
-    initAbsPos = Offset (-1)
+{-# INLINE intToMaybeBool #-}
+-- | Decode 'Maybe Bool' from bit mask stored within integer store.
+intToMaybeBool :: Int -> Maybe Bool
+intToMaybeBool = \case
+  0 -> Nothing
+  1 -> Just False
+  2 -> Just True
+  x -> error $ "Invalid integer representation of 'Maybe Bool': " ++ show x
 
-    -- Add '\0' at the end so that we'll find the end of stream (just
-    -- as in the old C days...)
-    s' = C8.cons '\n' $ C8.snoc (C8.snoc (stripBOM s) '\n') '\0'
-    stripBOM :: C8.ByteString -> C8.ByteString
-    stripBOM xs = fromMaybe xs $ C8.stripPrefix "\xEF\xBB\xBF" xs
+{-# INLINE asCodeL              #-}
+{-# INLINE asCommentDepthL      #-}
+{-# INLINE asQuasiquoterDepthL  #-}
+{-# INLINE asIndentationSizeL   #-}
+{-# INLINE asPreprocessorDepthL #-}
+{-# INLINE asLiterateLocL       #-}
+{-# INLINE asHaveQQEndL         #-}
+-- | Current Alex state the lexer is in. E.g. comments, string, TH quasiquoter
+     -- or vanilla toplevel mode.
+asCodeL :: Lens' AlexState AlexCode
+asCommentDepthL, asQuasiquoterDepthL, asIndentationSizeL :: Lens' AlexState Int16
+-- | How many directives deep are we.
+asPreprocessorDepthL :: Lens' AlexState Int16
+-- | Whether we're in bird-style or latex-style literate environment
+asLiterateLocL :: Lens' AlexState (LitMode LitStyle)
+asHaveQQEndL   :: Lens' AlexState (Maybe Bool)
+asCodeL              = asIntStoreL . intL 0  0x000f
+asCommentDepthL      = asIntStoreL . intL 4  0x03ff
+asQuasiquoterDepthL  = asIntStoreL . intL 14 0x03ff
+asIndentationSizeL   = asIntStoreL . int16L  24
+asPreprocessorDepthL = asIntStoreL . int16L  40
+asLiterateLocL       = \f -> asIntStoreL (intL 56 0x0003 (fmap litLocToInt    . f . intToLitLoc))
+asHaveQQEndL         = \f -> asIntStoreL (intL 58 0x0003 (fmap maybeBoolToInt . f . intToMaybeBool))
 
 {-# INLINE litLocToInt #-}
 litLocToInt :: LitMode LitStyle -> Int
@@ -136,63 +142,14 @@ intToLitLoc = \case
   3 -> LitInside Latex
   x -> error $ "Invalid literate location representation: " ++ show x
 
-data AlexState = AlexState
-  { asInput        :: {-# UNPACK #-} !AlexInput
-  , asIntStore     :: {-# UNPACK #-} !Word64
-  , asContextStack :: [Context]
-  } deriving (Show, Eq, Ord)
-
-{-# INLINE asIntStoreL #-}
-asIntStoreL :: Lens' AlexState Word64
-asIntStoreL = lens asIntStore (\b s -> s { asIntStore = b })
-
-{-# INLINE maybeBoolToInt #-}
-maybeBoolToInt :: Maybe Bool -> Int
-maybeBoolToInt = \case
-  Nothing    -> 0
-  Just False -> 1
-  Just True  -> 2
-
-{-# INLINE intToMaybeBool #-}
-intToMaybeBool :: Int -> Maybe Bool
-intToMaybeBool = \case
-  0 -> Nothing
-  1 -> Just False
-  2 -> Just True
-  x -> error $ "Invalid integer representation of 'Maybe Bool': " ++ show x
-
-{-# INLINE asCodeL              #-}
-{-# INLINE asCommentDepthL      #-}
-{-# INLINE asQuasiquoterDepthL  #-}
-{-# INLINE asIndentationSizeL   #-}
-{-# INLINE asPreprocessorDepthL #-}
-{-# INLINE asLiterateLocL       #-}
-{-# INLINE asHaveQQEndL         #-}
--- | Current Alex state the lexer is in. E.g. comments, string, TH quasiquoter
--- or vanilla toplevel mode.
-asCodeL        :: Lens' AlexState AlexCode
-asCommentDepthL, asQuasiquoterDepthL, asIndentationSizeL :: Lens' AlexState Int16
--- | How many directives deep are we.
-asPreprocessorDepthL :: Lens' AlexState Int16
--- | Whether we're in bird-style or latex-style literate environment
-asLiterateLocL :: Lens' AlexState (LitMode LitStyle)
-asHaveQQEndL   :: Lens' AlexState (Maybe Bool)
-asCodeL              = asIntStoreL . intL   0  0x000f
-asCommentDepthL      = asIntStoreL . intL   4  0x03ff
-asQuasiquoterDepthL  = asIntStoreL . intL   14 0x03ff
-asIndentationSizeL   = asIntStoreL . int16L 24
-asPreprocessorDepthL = asIntStoreL . int16L 40
-asLiterateLocL       = \f -> asIntStoreL (intL 56 0x0003 (fmap litLocToInt    . f . intToLitLoc))
-asHaveQQEndL         = \f -> asIntStoreL (intL 58 0x0003 (fmap maybeBoolToInt . f . intToMaybeBool))
-
 mkAlexState :: LitMode Void -> AlexCode -> AlexInput -> AlexState
 mkAlexState litLoc startCode input =
   set asCodeL startCode $
-  set asLiterateLocL (vacuous litLoc) AlexState
-    { asInput        = input
-    , asIntStore     = 0
-    , asContextStack = []
-    }
+    set asLiterateLocL (vacuous litLoc) AlexState
+      { asInput        = input
+      , asIntStore     = 0
+      , asContextStack = []
+      }
 
 {-# INLINE alexEnterBirdLiterateEnv #-}
 alexEnterBirdLiterateEnv :: MonadState AlexState m => m ()
@@ -211,36 +168,40 @@ alexExitLiterateEnv =
 
 {-# INLINE pushContext #-}
 pushContext :: MonadState AlexState m => Context -> m ()
-pushContext ctx = modify (\s -> s { asContextStack = ctx : asContextStack s })
+pushContext ctx =
+  modify (\s -> s { asContextStack = ctx : asContextStack s })
 
 {-# INLINE modifyCommentDepth #-}
 modifyCommentDepth :: MonadState AlexState m => (Int16 -> Int16) -> m Int16
 modifyCommentDepth f = do
   depth <- gets (view asCommentDepthL)
-  let depth' = f depth
+  let !depth' = f depth
   modify $ \s -> set asCommentDepthL depth' s
-  pure depth'
+  return depth'
 
 {-# INLINE modifyQuasiquoterDepth #-}
 modifyQuasiquoterDepth :: MonadState AlexState m => (Int16 -> Int16) -> m Int16
 modifyQuasiquoterDepth f = do
   depth <- gets (view asQuasiquoterDepthL)
-  let depth' = f depth
+  let !depth' = f depth
   modify $ \s -> set asQuasiquoterDepthL depth' s
-  pure depth'
+  return depth'
 
 {-# INLINE modifyPreprocessorDepth #-}
 modifyPreprocessorDepth :: MonadState AlexState m => (Int16 -> Int16) -> m Int16
 modifyPreprocessorDepth f = do
   depth <- gets (view asPreprocessorDepthL)
-  let depth' = f depth
+  let !depth' = f depth
   modify $ \s -> set asPreprocessorDepthL depth' s
-  pure depth'
+  return depth'
 
-{-# INLINE retrieveToken #-}
-retrieveToken :: AlexInput -> Int -> T.Text
-retrieveToken AlexInput{aiPtr} len =
-  TE.decodeUtf8 $ utf8BS len aiPtr
+{-# INLINE alexSetInput #-}
+alexSetInput :: MonadState AlexState m => AlexInput -> m ()
+alexSetInput input = modify $ \s -> s { asInput = input }
+
+{-# INLINE alexSetNextCode #-}
+alexSetNextCode :: MonadState AlexState m => AlexCode -> m ()
+alexSetNextCode code = modify $ set asCodeL code
 
 {-# INLINE addIndentationSize #-}
 addIndentationSize :: MonadState AlexState m => Int16 -> m ()
@@ -268,50 +229,137 @@ checkQuasiQuoteEndPresent
       , qqessPrevChar = c#
       }
 
-type AlexM = WriterT [Pos ServerToken] (State AlexState)
+type AlexM = WriterT [(AlexInput, ServerToken)] (State AlexState)
 
 {-# INLINE runAlexM #-}
 runAlexM
   :: LitMode Void
   -> AlexCode
   -> C8.ByteString
-  -> AlexM ()
-  -> [Pos ServerToken]
+  -> AlexM a
+  -> (a, [Pos ServerToken])
 runAlexM litLoc startCode input action =
-  withAlexInput input $ \input' ->
-    evalState (execWriterT action) $ mkAlexState litLoc startCode input'
+  performIO $
+    withAlexInput input $ \input' _ -> do
+      let (a, xs) = evalState (runWriterT action)
+                  $ mkAlexState litLoc startCode input'
+      -- Contents of 'xs' has been seq'ed so TokenVals in there should
+      -- have been forced and thus should not contain any references to the
+      -- original input bytestring. However, in GHC 9.0 it seems that
+      -- GHC does some transformation which results in some entries within 'xs'
+      -- being not fully evaluated and thus lead to an error since they get
+      -- forced outside of 'withForeignPtr' bounds. The call to 'evaluate' below
+      -- is intended to prevent such transformation from occuring.
+      _ <- evaluate xs
+      pure (a, map (\(x, y) -> Pos (mkSrcPosNoPrefix x) y) xs)
 
-{-# INLINE alexSetInput #-}
-alexSetInput :: MonadState AlexState m => AlexInput -> m ()
-alexSetInput input = modify $ \s -> s { asInput = input }
+mkSrcPosNoPrefix :: AlexInput -> SrcPos
+mkSrcPosNoPrefix input =
+  SrcPos { posLine   = view aiLineL input
+         , posOffset = Offset 0
+         , posPrefix = mempty
+         , posSuffix = mempty
+         }
 
-{-# INLINE alexSetNextCode #-}
-alexSetNextCode :: MonadState AlexState m => AlexCode -> m ()
-alexSetNextCode code = modify $ set asCodeL code
+data AlexInput = AlexInput
+  { aiPtr      :: {-# UNPACK #-} !(Ptr Word8)
+  , aiIntStore :: {-# UNPACK #-} !Word64
+    -- ^ Integer field that stores all the other useful fields for lexing.
+  } deriving (Eq, Ord)
 
--- Alex interface
-{-# INLINE alexInputPrevChar #-}
-alexInputPrevChar :: AlexInput -> Char
-alexInputPrevChar = const '\0'
+instance Show AlexInput where
+  show AlexInput{aiPtr, aiIntStore} =
+    printf "AlexInput 0x%08x 0x%08x" ptr aiIntStore
+    where
+      ptr :: Word
+      ptr = fromIntegral $ ptrToWordPtr aiPtr
+
+{-# INLINE aiIntStoreL #-}
+aiIntStoreL :: Lens' AlexInput Word64
+aiIntStoreL = lens aiIntStore (\b s -> s { aiIntStore = b })
+
+lineInt32L :: Lens' Int32 Line
+lineInt32L = lens (Line . fromIntegral) (\(Line x) _ -> fromIntegral x)
+
+int2Int32L :: Lens' Int32 Int
+int2Int32L = lens fromIntegral (\x _ -> fromIntegral x)
+
+{-# INLINE aiLineL       #-}
+{-# INLINE aiLineLengthL #-}
+-- | Current line in input stream.
+aiLineL       :: Lens' AlexInput Line
+-- | Length of current line.
+aiLineLengthL :: Lens' AlexInput Int
+
+aiLineL       = aiIntStoreL . int32L 0  . lineInt32L
+aiLineLengthL = aiIntStoreL . int32L 32 . int2Int32L
+
+{-# INLINE takeText #-}
+takeText :: AlexInput -> Int -> T.Text
+takeText AlexInput{aiPtr} len =
+  TE.decodeUtf8 $! utf8BS len aiPtr
+
+countInputSpace :: AlexInput -> Int -> Int
+countInputSpace AlexInput{aiPtr} len =
+  utf8FoldlBounded len inc 0 aiPtr
+  where
+    inc acc ' '#  = acc + 1
+    inc acc '\t'# = acc + 8
+    inc acc c#    = case fixChar c# of
+      1## -> acc + 1
+      _   -> acc
+
+{-# INLINE performIO #-}
+performIO :: IO a -> a
+performIO = BSI.accursedUnutterablePerformIO
+
+{-# INLINE withAlexInput #-}
+withAlexInput :: C8.ByteString -> (AlexInput -> Int -> IO a) -> IO a
+withAlexInput s f =
+  case s' of
+    BSI.PS ptr offset len ->
+      withForeignPtr ptr $ \ptr' -> do
+        let !input =
+             set aiLineL initLine $
+               AlexInput
+                 { aiPtr      = ptr' `plusPtr` offset
+                 , aiIntStore = 0
+                 }
+        f input $! len - offset
+  where
+    -- Line numbering starts from 0 because we're adding additional newline
+    -- at the beginning to simplify processing. Thus, line numbers in the
+    -- result are 1-based.
+    initLine = Line 0
+
+    -- Add '\0' at the end so that we'll find the end of stream (just
+    -- as in the old C days...)
+    s' = C8.cons '\n' $ C8.snoc (C8.snoc (stripBOM s) '\n') '\0'
+    stripBOM :: C8.ByteString -> C8.ByteString
+    stripBOM xs
+        | "\xEF\xBB\xBF" `C8.isPrefixOf` xs
+        = C8.drop 3 xs
+        | otherwise
+        = xs
 
 {-# INLINE extractDefineOrLetName #-}
 extractDefineOrLetName :: AlexInput -> Int -> T.Text
 extractDefineOrLetName AlexInput{aiPtr} n =
-    TE.decodeUtf8 $ regionToUtf8BS (Ptr start#) end
-    where
+  TE.decodeUtf8 $ regionToUtf8BS (Ptr start#) end
+  where
     !end        = aiPtr `plusPtr` n
     !(Ptr end#) = end
     start#      = (goBack# (end# `plusAddr#` -1#)) `plusAddr#` 1#
 
     goBack# :: Addr# -> Addr#
-    goBack# ptr# = case indexWord8OffAddr# ptr# 0# of
-        0#Word8  -> ptr#
-        9#Word8  -> ptr# -- '\n'
-        10#Word8 -> ptr# -- '\n'
-        13#Word8 -> ptr# -- '\r'
-        32#Word8 -> ptr# -- ' '
-        92#Word8 -> ptr# -- '\\'
-        _        -> goBack# (ptr# `plusAddr#` -1#)
+    goBack# ptr# = case word8ToWord# (indexWord8OffAddr# ptr# 0#) of
+      0##  -> ptr#
+      9##  -> ptr# -- '\n'
+      10## -> ptr# -- '\n'
+      13## -> ptr# -- '\r'
+      32## -> ptr# -- ' '
+      92## -> ptr# -- '\\'
+      _    -> goBack# (ptr# `plusAddr#` -1#)
 
 {-# INLINE dropUntilNL #-}
 dropUntilNL :: AlexInput -> AlexInput
@@ -324,47 +372,71 @@ dropUntilUnescapedNL input@AlexInput{aiPtr = start} =
   case dropUntilUnescapedNL# start of
     (# seenNewlines, end #) ->
       over aiLineL (\(Line n) -> Line (n + seenNewlines)) $
-      input { aiPtr = end }
-
-{-# INLINE dropUntil #-}
-dropUntil :: Word8 -> AlexInput -> AlexInput
-dropUntil w input@AlexInput{aiPtr} =
-  input { aiPtr = dropUntil# w aiPtr }
-
-{-# INLINE dropUntil2 #-}
-dropUntil2 :: Word8 -> Word8 -> AlexInput -> AlexInput
-dropUntil2 w1 w2 input@AlexInput{aiPtr} =
-  input { aiPtr = dropUntil2# w1 w2 aiPtr }
+        input { aiPtr = end }
 
 {-# INLINE dropUntilNLOr #-}
 dropUntilNLOr :: Word8 -> AlexInput -> AlexInput
 dropUntilNLOr w input@AlexInput{aiPtr} =
-    input { aiPtr = dropUntilNLOr# w aiPtr }
+  input { aiPtr = dropUntilNLOr# w aiPtr }
 
 {-# INLINE dropUntilNLOrEither #-}
 -- | Drop until either of two bytes.
 dropUntilNLOrEither :: Word8 -> Word8 -> AlexInput -> AlexInput
 dropUntilNLOrEither w1 w2 input@AlexInput{aiPtr} =
-    input { aiPtr = dropUntilNLOrEither# w1 w2 aiPtr }
+  input { aiPtr = dropUntilNLOrEither# w1 w2 aiPtr }
+
+-- Alex interface
+
+{-# INLINE alexInputPrevChar #-}
+alexInputPrevChar :: AlexInput -> Char
+alexInputPrevChar AlexInput{ aiPtr = Ptr ptr# } =
+  case base# `minusAddr#` start# of
+    0# -> C# (chr# ch0)
+    1# -> let !(# x, _ #) = readChar1# start# ch0 in C# x
+    2# -> let !(# x, _ #) = readChar2# start# ch0 in C# x
+    3# -> let !(# x, _ #) = readChar3# start# ch0 in C# x
+    _  -> '\0' -- Invalid!
+  where
+    ch0 :: Int#
+    !ch0 = word2Int# (word8ToWord# (indexWord8OffAddr# start# 0#))
+
+    base# = findCharStart ptr# `plusAddr#` -1#
+
+    start# = findCharStart base#
+
+    findCharStart :: Addr# -> Addr#
+    findCharStart p#
+        | startsWith10# w#
+        = findCharStart (p# `plusAddr#` -1#)
+        | otherwise
+        = p#
+      where
+        w# = word2Int# (word8ToWord# (indexWord8OffAddr# p# 0#))
 
 {-# INLINE alexGetByte #-}
 alexGetByte :: AlexInput -> Maybe (Word8, AlexInput)
 alexGetByte input@AlexInput{aiPtr} =
   case nextChar aiPtr of
-    (# '\0'#, _, _  #) -> Nothing
-    (# c#,    n, cs #) -> Just (b, input')
-      where
-        !b     = W8# (fixChar c#)
-        input' = case c# of
-          '\n'# ->
-            over aiLineL increaseLine $
-            input { aiPtr = cs, aiLineLength = 0, aiAbsPos = aiAbsPos input + 1 }
-          _     ->
-            input { aiPtr = cs, aiLineLength = aiLineLength input + I# n, aiAbsPos = aiAbsPos input + 1 }
+    (# c#, n, cs #) ->
+      case fixChar c# of
+        0##  -> Nothing -- Abort on an unknown character
+        -- '\n'
+        10## -> Just (10, input')
+          where
+            !input' =
+              over aiLineL increaseLine $
+                set aiLineLengthL 0 $
+                  input { aiPtr = cs }
+        c    -> Just (b, input')
+          where
+            !b     = W8# (wordToWord8# c)
+            !input' =
+              over aiLineLengthL (+ I# n) $
+                input { aiPtr = cs }
 
 -- Translate unicode character into special symbol we teached Alex to recognize.
 {-# INLINE fixChar #-}
-fixChar :: Char# -> Word8#
+fixChar :: Char# -> Word#
 fixChar = \case
   -- These should not be translated since Alex knows about them
   '→'#    -> reservedSym
@@ -375,6 +447,7 @@ fixChar = \case
   '⦈'#    -> reservedSym
   '⟦'#    -> reservedSym
   '⟧'#    -> reservedSym
+  '\x00'# -> fullStop
   '\x01'# -> fullStop
   '\x02'# -> fullStop
   '\x03'# -> fullStop
@@ -385,51 +458,52 @@ fixChar = \case
   '\x08'# -> other
   c# -> case ord# c# of
     c2# | isTrue# (c2# <=# 0x7f#) ->
-      wordToWord8# (int2Word# c2#) -- Plain ascii needs no fixing.
-        | otherwise   ->
-                  case generalCategory (C# c#) of
-                    UppercaseLetter      -> upper
-                    LowercaseLetter      -> lower
-                    TitlecaseLetter      -> upper
-                    ModifierLetter       -> suffix
-                    OtherLetter          -> lower
-                    NonSpacingMark       -> suffix
-                    DecimalNumber        -> digit
-                    OtherNumber          -> digit
-                    Space                -> space
-                    ConnectorPunctuation -> symbol
-                    DashPunctuation      -> symbol
-                    OtherPunctuation     -> symbol
-                    MathSymbol           -> symbol
-                    CurrencySymbol       -> symbol
-                    ModifierSymbol       -> symbol
-                    OtherSymbol          -> symbol
+          int2Word# c2# -- Plain ascii needs no fixing.
+            | otherwise   ->
+              case generalCategory (C# c#) of
+                UppercaseLetter      -> upper
+                LowercaseLetter      -> lower
+                TitlecaseLetter      -> upper
+                ModifierLetter       -> suffix
+                OtherLetter          -> lower
+                NonSpacingMark       -> suffix
+                DecimalNumber        -> digit
+                OtherNumber          -> digit
+                Space                -> space
+                ConnectorPunctuation -> symbol
+                DashPunctuation      -> symbol
+                OtherPunctuation     -> symbol
+                MathSymbol           -> symbol
+                CurrencySymbol       -> symbol
+                ModifierSymbol       -> symbol
+                OtherSymbol          -> symbol
 
-                    SpacingCombiningMark -> space
-                    EnclosingMark        -> other
-                    LetterNumber         -> symbol
-                    OpenPunctuation      -> symbol
-                    ClosePunctuation     -> symbol
-                    InitialQuote         -> symbol
-                    FinalQuote           -> symbol
-                    LineSeparator        -> space
-                    ParagraphSeparator   -> space
-                    Control              -> other
-                    Format               -> other
-                    Surrogate            -> other
-                    PrivateUse           -> other
-                    NotAssigned          -> other
+                SpacingCombiningMark -> space
+                EnclosingMark        -> other
+                LetterNumber         -> symbol
+                OpenPunctuation      -> symbol
+                ClosePunctuation     -> symbol
+                InitialQuote         -> symbol
+                FinalQuote           -> symbol
+                LineSeparator        -> space
+                ParagraphSeparator   -> space
+                Control              -> other
+                Format               -> other
+                Surrogate            -> other
+                PrivateUse           -> other
+                NotAssigned          -> other
   where
-    fullStop, space, upper, lower, symbol, digit, suffix, reservedSym, other :: Word8#
-    fullStop    = 0x00#Word8 -- Don't care about these
-    space       = 0x01#Word8
-    upper       = 0x02#Word8
-    lower       = 0x03#Word8
-    symbol      = 0x04#Word8
-    digit       = 0x05#Word8
-    suffix      = 0x06#Word8
-    reservedSym = 0x07#Word8
-    other       = 0x08#Word8
+    fullStop, space, upper, lower, symbol :: Word#
+    digit, suffix, reservedSym, other :: Word#
+    fullStop    = 0x00## -- Don't care about these
+    space       = 0x01##
+    upper       = 0x02##
+    lower       = 0x03##
+    symbol      = 0x04##
+    digit       = 0x05##
+    suffix      = 0x06##
+    reservedSym = 0x07##
+    other       = 0x08##
 
 {-# INLINE unsafeTextHeadAscii #-}
 unsafeTextHeadAscii :: Ptr Word8 -> Word8
@@ -456,76 +530,54 @@ dropUntilNL# :: Ptr Word8 -> Ptr Word8
 dropUntilNL# (Ptr start#) = Ptr (go start#)
   where
     go :: Addr# -> Addr#
-    go ptr# = case indexWord8OffAddr# ptr# 0# of
-      0#Word8  -> ptr#
-      10#Word8 -> ptr# -- '\n'
-      _        -> go (ptr# `plusAddr#` 1#)
+    go ptr# = case word8ToWord# (indexWord8OffAddr# ptr# 0#) of
+      0##  -> ptr#
+      10## -> ptr# -- '\n'
+      _    -> go (ptr# `plusAddr#` 1#)
 
 {-# INLINE dropUntilUnescapedNL# #-}
 dropUntilUnescapedNL# :: Ptr Word8 -> (# Int, Ptr Word8 #)
 dropUntilUnescapedNL# (Ptr start#) = go 0 start#
-    where
+  where
     go :: Int -> Addr# -> (# Int, Ptr Word8 #)
-    go !n ptr# = case indexWord8OffAddr# ptr# 0# of
-        0#Word8  -> (# n, Ptr ptr# #)
-        -- '\n'
-        10#Word8 -> (# n, Ptr ptr# #)
-        -- '\\'
-        92#Word8 ->
-            case indexWord8OffAddr# ptr# 1# of
-                0#Word8  -> (# n, Ptr (ptr# `plusAddr#` 1#) #)
-                -- '\n'
-                10#Word8 -> go (n + 1) (ptr# `plusAddr#` 2#)
-                _        -> go n (ptr# `plusAddr#` 2#)
-        _        -> go n (ptr# `plusAddr#` 1#)
+    go !n ptr# = case word8ToWord# (indexWord8OffAddr# ptr# 0#) of
+      0##  -> (# n, Ptr ptr# #)
+      -- '\n'
+      10## -> (# n, Ptr ptr# #)
+      -- '\\'
+      92## ->
+        case word8ToWord# (indexWord8OffAddr# ptr# 1#) of
+          0##  -> (# n, Ptr (ptr# `plusAddr#` 1#) #)
+          -- '\n'
+          10## -> go (n + 1) (ptr# `plusAddr#` 2#)
+          _    -> go n (ptr# `plusAddr#` 2#)
+      _    -> go n (ptr# `plusAddr#` 1#)
 
 {-# INLINE dropUntilNLOr# #-}
 dropUntilNLOr# :: Word8 -> Ptr Word8 -> Ptr Word8
 dropUntilNLOr# (W8# w#) (Ptr start#) = Ptr (go start#)
-    where
+  where
     go :: Addr# -> Addr#
     go ptr# = case word8ToWord# (indexWord8OffAddr# ptr# 0#) of
-        0##  -> ptr#
-        -- '\n'
-        10## -> ptr#
-        c# | isTrue# (c# `eqWord#` word8ToWord# w#) -> ptr#
+      0##  -> ptr#
+      -- '\n'
+      10## -> ptr#
+      c# | isTrue# (c# `eqWord#` word8ToWord# w#) -> ptr#
            | otherwise                 -> go (ptr# `plusAddr#` 1#)
 
 {-# INLINE dropUntilNLOrEither# #-}
 dropUntilNLOrEither# :: Word8 -> Word8 -> Ptr Word8 -> Ptr Word8
 dropUntilNLOrEither# (W8# w1#) (W8# w2#) (Ptr start#) = Ptr (go start#)
-    where
+  where
     go :: Addr# -> Addr#
     go ptr# = case word8ToWord# (indexWord8OffAddr# ptr# 0#) of
-        0##  -> ptr#
-        -- '\n'
-        10## -> ptr#
-        c# | isTrue# ((c# `eqWord#` word8ToWord# w1#) `orI#` (c# `eqWord#` word8ToWord# w2#))
-           -> ptr#
+      0##  -> ptr#
+      -- '\n'
+      10## -> ptr#
+      c# | isTrue# ((c# `eqWord#` word8ToWord# w1#) `orI#` (c# `eqWord#` word8ToWord# w2#))
+         -> ptr#
            | otherwise
            -> go (ptr# `plusAddr#` 1#)
-
-{-# INLINE dropUntil# #-}
-dropUntil# :: Word8 -> Ptr Word8 -> Ptr Word8
-dropUntil# (W8# w#) (Ptr start#) = Ptr (go start#)
-  where
-    go :: Addr# -> Addr#
-    go ptr# = case indexWord8OffAddr# ptr# 0# of
-      0#Word8 -> ptr#
-      1#Word8 -> ptr# -- '\n'
-      c# | isTrue# (c# `eqWord8#` w#) -> ptr#
-         | otherwise                  -> go (ptr# `plusAddr#` 1#)
-
-{-# INLINE dropUntil2# #-}
-dropUntil2# :: Word8 -> Word8 -> Ptr Word8 -> Ptr Word8
-dropUntil2# (W8# w1#) (W8# w2#) (Ptr start#) = Ptr (go start#)
-  where
-    go :: Addr# -> Addr#
-    go ptr# = case indexWord8OffAddr# ptr# 0# of
-      0#Word8  -> ptr#
-      10#Word8 -> ptr# -- '\n'
-      c# | isTrue# ((c# `eqWord8#` w1#) `orI#` (c# `eqWord8#` w2#)) -> ptr#
-         | otherwise                                                -> go (ptr# `plusAddr#` 1#)
 
 {-# INLINE utf8Foldl' #-}
 utf8Foldl' :: forall a. (a -> Char# -> a) -> a -> Ptr Word8 -> a
@@ -544,140 +596,122 @@ utf8FoldlBounded (I# len#) f x0 (Ptr ptr#) =
   go len# x0 ptr#
   where
     go :: Int#-> a -> Addr# -> a
-    go 0# !acc _ = acc
+    go 0# !acc _     = acc
     go n# !acc addr# =
       case utf8DecodeChar# addr# of
         (# _,  0#      #) -> acc
-        (# c#, nBytes# #) -> go (n# -# 1#) (acc `f` c#) (addr# `plusAddr#` nBytes#)
+        (# c#, nBytes# #) ->
+          go (n# -# 1#) (acc `f` c#) (addr# `plusAddr#` nBytes#)
 
 {-# INLINE utf8BS #-}
 utf8BS :: Int -> Ptr Word8 -> BS.ByteString
-utf8BS (I# n#) (Ptr start#) =
-  BSI.PS (inlinePerformIO (newForeignPtr_ (Ptr start#))) 0 (I# (go n# start# 0#))
+utf8BS (I# nChars#) (Ptr start#) =
+  BSI.PS (performIO (newForeignPtr_ (Ptr start#))) 0 (I# (go nChars# 0#))
   where
-    go :: Int# -> Addr# -> Int# -> Int#
-    go 0# _    m# = m#
-    go k# ptr# m# =
-      case utf8SizeChar# ptr# of
-        0#      -> m#
-        nBytes# -> go (k# -# 1#) (ptr# `plusAddr#` nBytes#) (m# +# nBytes#)
-
-{-# INLINE takeText #-}
-takeText :: AlexInput -> Int -> T.Text
-takeText AlexInput{aiPtr} len =
-    TE.decodeUtf8 $! utf8BS len aiPtr
-
-countInputSpace :: AlexInput -> Int -> Int
-countInputSpace AlexInput{aiPtr} len =
-  utf8FoldlBounded len inc 0 aiPtr
-  where
-    inc acc ' '#  = acc + 1
-    inc acc '\t'# = acc + 8
-    inc acc c#    = case word8ToWord# (fixChar c#) of
-      1## -> acc + 1
-      _   -> acc
-
-{-# INLINE inlinePerformIO #-}
-inlinePerformIO :: IO a -> a
-inlinePerformIO = BSI.accursedUnutterablePerformIO
+    go :: Int# -> Int# -> Int#
+    go 0# bytes# = bytes#
+    go k# bytes# =
+      case utf8SizeChar# (start# `plusAddr#` bytes#)  of
+        0#      -> bytes#
+        nBytes# -> go (k# -# 1#) (bytes# +# nBytes#)
 
 {-# INLINE regionToUtf8BS #-}
 regionToUtf8BS :: Ptr Word8 -> Ptr Word8 -> BS.ByteString
 regionToUtf8BS start end =
-    BSI.PS (inlinePerformIO (newForeignPtr_ start)) 0 (minusPtr end start)
+  BSI.PS (performIO (newForeignPtr_ start)) 0 (minusPtr end start)
 
 {-# INLINE utf8DecodeChar# #-}
 utf8DecodeChar# :: Addr# -> (# Char#, Int# #)
 utf8DecodeChar# a# =
-  case indexWord8OffAddr# a# 0# of
-    0#Word8 -> (# '\0'#, 0# #)
-    x#      ->
-      let !ch0 = word2Int# (word8ToWord# x#) in
-      case () of
-        () | isTrue# (ch0 <=# 0x7F#) -> (# chr# ch0, 1# #)
+  case word8ToWord# (indexWord8OffAddr# a# 0#) of
+    0## -> (# '\0'#, 0# #)
+    x#  ->
+      let !ch0 = word2Int# x# in
+      if  | startsWith0# ch0     -> (# chr# ch0, 1# #)
+          | startsWith110# ch0   -> readChar1# a# ch0
+          | startsWith1110# ch0  -> readChar2# a# ch0
+          | startsWith11110# ch0 -> readChar3# a# ch0
+          | otherwise            -> invalid# 1#
 
-          | isTrue# ((ch0 >=# 0xC0#) `andI#` (ch0 <=# 0xDF#)) ->
-            let !ch1 = word2Int# (word8ToWord# (indexWord8OffAddr# a# 1#)) in
-            if isTrue# ((ch1 <# 0x80#) `orI#` (ch1 >=# 0xC0#)) then err 1# else
-            (# chr# (((ch0 -# 0xC0#) `uncheckedIShiftL#` 6#) +#
-                      (ch1 -# 0x80#)),
-               2# #)
+-- all invalid# sequences end up here:
+{-# INLINE invalid# #-}
+invalid# :: Int# -> (# Char#, Int# #)
+invalid# nBytes# = (# '\8'#, nBytes# #)
+-- TODO: check whether following note from ghc applies to server's lexer:
+   -- '\xFFFD' would be the usual replacement character, but
+      -- that's a valid symbol in Haskell, so will result in a
+         -- confusing parse error later on.  Instead we use '\0' which
+            -- will signal a lexer error immediately.
 
-          | isTrue# ((ch0 >=# 0xE0#) `andI#` (ch0 <=# 0xEF#)) ->
-            let !ch1 = word2Int# (word8ToWord# (indexWord8OffAddr# a# 1#)) in
-            if isTrue# ((ch1 <# 0x80#) `orI#` (ch1 >=# 0xC0#)) then err 1# else
-            let !ch2 = word2Int# (word8ToWord# (indexWord8OffAddr# a# 2#)) in
-            if isTrue# ((ch2 <# 0x80#) `orI#` (ch2 >=# 0xC0#)) then err 2# else
-            (# chr# (((ch0 -# 0xE0#) `uncheckedIShiftL#` 12#) +#
-                     ((ch1 -# 0x80#) `uncheckedIShiftL#` 6#)  +#
-                      (ch2 -# 0x80#)),
-               3# #)
+{-# INLINE readChar1# #-}
+readChar1# :: Addr# -> Int# -> (# Char#, Int# #)
+readChar1# a# ch0 =
+  let !ch1 = word2Int# (word8ToWord# (indexWord8OffAddr# a# 1#)) in
+  if noValidUtf8Cont# ch1 then invalid# 1# else
+    (# chr# (((ch0 `andI#` 0x3F#) `uncheckedIShiftL#` 6#) `orI#`
+              (ch1 `andI#` 0x7F#)),
+      2# #)
 
-         | isTrue# ((ch0 >=# 0xF0#) `andI#` (ch0 <=# 0xF8#)) ->
-            let !ch1 = word2Int# (word8ToWord# (indexWord8OffAddr# a# 1#)) in
-            if isTrue# ((ch1 <# 0x80#) `orI#` (ch1 >=# 0xC0#)) then err 1# else
-            let !ch2 = word2Int# (word8ToWord# (indexWord8OffAddr# a# 2#)) in
-            if isTrue# ((ch2 <# 0x80#) `orI#` (ch2 >=# 0xC0#)) then err 2# else
-            let !ch3 = word2Int# (word8ToWord# (indexWord8OffAddr# a# 3#)) in
-            if isTrue# ((ch3 <# 0x80#) `orI#` (ch3 >=# 0xC0#)) then err 3# else
-            (# chr# (((ch0 -# 0xF0#) `uncheckedIShiftL#` 18#) +#
-                     ((ch1 -# 0x80#) `uncheckedIShiftL#` 12#) +#
-                     ((ch2 -# 0x80#) `uncheckedIShiftL#` 6#)  +#
-                      (ch3 -# 0x80#)),
-               4# #)
+{-# INLINE readChar2# #-}
+readChar2# :: Addr# -> Int# -> (# Char#, Int# #)
+readChar2# a# ch0 =
+  let !ch1 = word2Int# (word8ToWord# (indexWord8OffAddr# a# 1#)) in
+  if noValidUtf8Cont# ch1 then invalid# 1# else
+    let !ch2 = word2Int# (word8ToWord# (indexWord8OffAddr# a# 2#)) in
+    if noValidUtf8Cont# ch2 then invalid# 2# else
+      (# chr# (((ch0 `andI#` 0x1F#) `uncheckedIShiftL#` 12#) `orI#`
+                ((ch1 `andI#` 0x7F#) `uncheckedIShiftL#` 6#)  `orI#`
+                  (ch2 `andI#` 0x7F#)),
+        3# #)
 
-          | otherwise -> err 1#
-      where
-        -- all invalid sequences end up here:
-        err :: Int# -> (# Char#, Int# #)
-        err nBytes# = (# '\8'#, nBytes# #)
-        -- TODO: check whether following note from ghc applies to server's lexer:
-        -- '\xFFFD' would be the usual replacement character, but
-        -- that's a valid symbol in Haskell, so will result in a
-        -- confusing parse error later on.  Instead we use '\0' which
-        -- will signal a lexer error immediately.
+{-# INLINE readChar3# #-}
+readChar3# :: Addr# -> Int# -> (# Char#, Int# #)
+readChar3# a# ch0 =
+  let !ch1 = word2Int# (word8ToWord# (indexWord8OffAddr# a# 1#)) in
+  if noValidUtf8Cont# ch1 then invalid# 1# else
+    let !ch2 = word2Int# (word8ToWord# (indexWord8OffAddr# a# 2#)) in
+    if noValidUtf8Cont# ch2 then invalid# 2# else
+      let !ch3 = word2Int# (word8ToWord# (indexWord8OffAddr# a# 3#)) in
+      if noValidUtf8Cont# ch3 then invalid# 3# else
+        (# chr# (((ch0 `andI#` 0x0F#) `uncheckedIShiftL#` 18#) `orI#`
+                  ((ch1 `andI#` 0x7F#) `uncheckedIShiftL#` 12#) `orI#`
+                    ((ch2 `andI#` 0x7F#) `uncheckedIShiftL#` 6#)  `orI#`
+                      (ch3 `andI#` 0x7F#)),
+          4# #)
+
+{-# INLINE noValidUtf8Cont# #-}
+noValidUtf8Cont# :: Int# -> Bool
+noValidUtf8Cont# x = isTrue# ((x <# 0x80#) `orI#` (x ># 0xBF#))
+
+{-# INLINE startsWith0# #-}
+startsWith0# :: Int# -> Bool
+startsWith0# x = isTrue# ((x `andI#` 0x80#) ==# 0#)
+
+{-# INLINE startsWith10# #-}
+startsWith10# :: Int# -> Bool
+startsWith10# x = isTrue# ((x `andI#` 0xC0#) ==# 0x80#)
+
+{-# INLINE startsWith110# #-}
+startsWith110# :: Int# -> Bool
+startsWith110# x = isTrue# ((x `andI#` 0xE0#) ==# 0xC0#)
+
+{-# INLINE startsWith1110# #-}
+startsWith1110# :: Int# -> Bool
+startsWith1110# x = isTrue# ((x `andI#` 0xF0#) ==# 0xE0#)
+
+{-# INLINE startsWith11110# #-}
+startsWith11110# :: Int# -> Bool
+startsWith11110# x = isTrue# ((x `andI#` 0xF8#) ==# 0xF0#)
 
 {-# INLINE utf8SizeChar# #-}
 utf8SizeChar# :: Addr# -> Int#
 utf8SizeChar# a# =
-  case indexWord8OffAddr# a# 0# of
-    0#Word8 -> 0#
-    x#      ->
-      let !ch0 = word2Int# (word8ToWord# x#) in
-      case () of
-        _ | isTrue# (ch0 <=# 0x7F#) -> 1#
-
-          | isTrue# ((ch0 >=# 0xC0#) `andI#` (ch0 <=# 0xDF#)) ->
-            let !ch1 = word2Int# (word8ToWord# (indexWord8OffAddr# a# 1#)) in
-            if isTrue# ((ch1 <# 0x80#) `orI#` (ch1 >=# 0xC0#)) then 1# else
-            2#
-
-          | isTrue# ((ch0 >=# 0xE0#) `andI#` (ch0 <=# 0xEF#)) ->
-            let !ch1 = word2Int# (word8ToWord# (indexWord8OffAddr# a# 1#)) in
-            if isTrue# ((ch1 <# 0x80#) `orI#` (ch1 >=# 0xC0#)) then 1# else
-            let !ch2 = word2Int# (word8ToWord# (indexWord8OffAddr# a# 2#)) in
-            if isTrue# ((ch2 <# 0x80#) `orI#` (ch2 >=# 0xC0#)) then 2# else
-            3#
-
-         | isTrue# ((ch0 >=# 0xF0#) `andI#` (ch0 <=# 0xF8#)) ->
-            let !ch1 = word2Int# (word8ToWord# (indexWord8OffAddr# a# 1#)) in
-            if isTrue# ((ch1 <# 0x80#) `orI#` (ch1 >=# 0xC0#)) then 1# else
-            let !ch2 = word2Int# (word8ToWord# (indexWord8OffAddr# a# 2#)) in
-            if isTrue# ((ch2 <# 0x80#) `orI#` (ch2 >=# 0xC0#)) then 2# else
-            let !ch3 = word2Int# (word8ToWord# (indexWord8OffAddr# a# 3#)) in
-            if isTrue# ((ch3 <# 0x80#) `orI#` (ch3 >=# 0xC0#)) then 3# else
-            4#
-
-          | otherwise -> 1#
-
-{-# INLINE countBackslashCR #-}
-countBackslashCR :: AlexInput -> Int
-countBackslashCR AlexInput{aiPtr} = case unsafeTextHeadAscii aiPtr of
-    -- '\\'
-    92 -> case unsafeTextHeadOfTailAscii aiPtr of
-        -- '\r'
-        13 -> 2
-        _  -> 1
-    -- '\r'
-    13 -> 1
-    _  -> 0
+  case word8ToWord# (indexWord8OffAddr# a# 0#) of
+    0## -> 0#
+    x#  ->
+      let !ch0 = word2Int# x# in
+      if  | startsWith0# ch0     -> 1#
+          | startsWith110# ch0   -> 2#
+          | startsWith1110# ch0  -> 3#
+          | startsWith11110# ch0 -> 4#
+          | otherwise            -> 1#

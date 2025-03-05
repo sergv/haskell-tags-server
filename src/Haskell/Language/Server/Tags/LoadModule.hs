@@ -236,8 +236,13 @@ loadModuleFromSource
   -> FullPath 'File
   -> BS.ByteString
   -> m UnresolvedModule
-loadModuleFromSource suggestedModuleName modifTime filename source =
-  makeModule suggestedModuleName modifTime filename tokens
+loadModuleFromSource suggestedModuleName modifTime filename source = do
+  case tokens of
+    Left  err     ->
+      throwErrorWithCallStack $
+        "Failed to get tokens from" <+> pretty filename <> ":" ## err
+    Right tokens' ->
+      makeModule suggestedModuleName modifTime filename tokens'
   where
     tokens =
       tokenize (T.unpack $ unFullPath filename) source
