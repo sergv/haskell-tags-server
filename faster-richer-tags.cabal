@@ -279,7 +279,6 @@ test-suite test-haskell-tags-server
     , mtl
     , network
     , prettyprinter
-    , raw-strings-qq
     , scientific
     , sexp-grammar
     , tasty >= 0.7

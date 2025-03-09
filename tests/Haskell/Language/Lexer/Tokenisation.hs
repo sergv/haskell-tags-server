@@ -8,7 +8,6 @@
 
 {-# LANGUAGE MultilineStrings  #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes       #-}
 
 module Haskell.Language.Lexer.Tokenisation (tests) where
 
