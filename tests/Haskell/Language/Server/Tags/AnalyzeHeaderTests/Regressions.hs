@@ -8,9 +8,9 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE MultilineStrings  #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes       #-}
 
 module Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions
   ( aesonHeaderTest
@@ -34,7 +34,6 @@ import Data.KeyMap qualified as KM
 import Data.Path
 import Data.SubkeyMap qualified as SubkeyMap
 import TestUtils
-import Text.RawString.QQ qualified as QQ
 
 type Test = TestCase T.Text ModuleHeader
 
@@ -458,7 +457,8 @@ unixCompatHeaderTest = TestCase
 -- Raw headers
 
 aesonHeader :: T.Text
-aesonHeader = [QQ.r|{-# LANGUAGE CPP                  #-}
+aesonHeader = """
+{-# LANGUAGE CPP                  #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE IncoherentInstances  #-}
 {-# LANGUAGE NamedFieldPuns       #-}
@@ -551,10 +551,11 @@ import qualified Data.Set as Set ( Set, empty, singleton, size, union, unions )
 import qualified Data.Text as T ( Text, pack, unpack )
 import qualified Data.Vector as V ( unsafeIndex, null, length, create, fromList )
 import qualified Data.Vector.Mutable as VM ( unsafeNew, unsafeWrite )
-|]
+"""
 
 unixCompatHeader :: T.Text
-unixCompatHeader = [QQ.r|{-# LANGUAGE CPP #-}
+unixCompatHeader = """
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 {-|
@@ -580,4 +581,4 @@ module System.PosixCompat.Types (
 -- which mingw defines as short int (int16), it must be overriden to
 -- match the size of windows fileIndex (word64).
 import System.Posix.Types as AllPosixTypesButFileID hiding (FileID)
-|]
+"""
