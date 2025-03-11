@@ -38,14 +38,13 @@ newtype AlexT m a = AlexT (EitherCPST ErrorMessage (ReaderT AlexEnv (StateT Alex
 
 runAlexT
   :: Monad m
-  => FilePath
-  -> LitMode Void
+  => LitMode Void
   -> AlexCode
   -> AlexCode
   -> Text
   -> AlexT m a
   -> m (Either ErrorMessage a)
-runAlexT filename mode code toplevelCode input (AlexT action)
+runAlexT mode code toplevelCode input (AlexT action)
   = flip evalStateT s
   $ flip runReaderT env
   $ runEitherCPST action (pure . Left) (pure . Right)
@@ -53,5 +52,5 @@ runAlexT filename mode code toplevelCode input (AlexT action)
     s :: AlexState
     s   = mkAlexState (mkAlexInput input) code toplevelCode
     env :: AlexEnv
-    env = mkAlexEnv filename mode
+    env = mkAlexEnv mode
 

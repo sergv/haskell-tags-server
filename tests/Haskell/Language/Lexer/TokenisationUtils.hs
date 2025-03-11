@@ -29,8 +29,7 @@ import Data.Void (Void)
 import GHC.Stack.Ext (WithCallStack)
 import Prettyprinter.Ext qualified as PP
 
-import Haskell.Language.Lexer (LitMode(..))
-import Haskell.Language.LexerSimple.Lexer qualified as Lexer
+import Haskell.Language.Lexer (LitMode(..), tokenize)
 import TestUtils (makeTest)
 
 import Haskell.Language.Lexer.Types
@@ -83,8 +82,9 @@ tokenize'
   :: WithCallStack
   => LitMode Void -> T.Text -> [Pos ServerToken]
 tokenize' mode
-  = either (error . PP.renderString) id
-  . Lexer.tokenize mode . TE.encodeUtf8
+  = either (error . PP.renderString . PP.pretty) id
+  . tokenize mode
+  . TE.encodeUtf8
 
 stripServerTokens' :: [Pos ServerToken] -> [Pos TokenVal]
 stripServerTokens' ts =
@@ -92,12 +92,3 @@ stripServerTokens' ts =
     (ts', [])       -> ts'
     (_,   es@(_:_)) -> error $ PP.renderString $
       PP.ppFoldableHeaderWith id "Errors while stripping server tokens:" es
-
--- tokenize''
---   :: FilePath
---   -> LitMode Void
---   -> [(PathFragment, Text)]
---   -> Text
---   -> [Token]
--- tokenize'' fn mode includes =
---   either (error . show) id . runIdentity . Lexer.tokenizeM fn mode

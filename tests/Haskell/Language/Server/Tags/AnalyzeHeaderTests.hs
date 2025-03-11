@@ -29,7 +29,7 @@ import Prettyprinter.Ext
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import Haskell.Language.Lexer (tokenize)
+import Haskell.Language.Lexer (tokenize, modeFromFilename)
 import Haskell.Language.Lexer.Types (Pos, ServerToken, Line(..), Type(..))
 
 import Control.Monad.Logging.Simple
@@ -2498,8 +2498,8 @@ doTest TestCase{testName, input, expectedResult} =
   testCase testName $ do
     (res, logs) <- runWriterT $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runErrorExceptT $ do
       (tokens :: [Pos ServerToken]) <-
-        case tokenize (T.unpack (unFullPath filename)) $ TE.encodeUtf8 input of
-          Left err -> liftIO $ assertFailure $ renderString $ "Failed to get tokens:" ## err
+        case tokenize (modeFromFilename filename) $ TE.encodeUtf8 input of
+          Left err -> liftIO $ assertFailure $ renderString $ "Failed to get tokens:" ## pretty err
           Right xs -> pure xs
       analyzeHeader filename tokens
     let logsDoc = "Logs, size " <> pretty (length logs) <> ":" ## PP.indent 2 (PP.vcat logs)

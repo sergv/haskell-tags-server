@@ -19,10 +19,12 @@ import Control.Monad.State.Strict
 
 import Data.ByteString qualified as BS
 import Data.Char
+import Data.ErrorMessage
 import Data.IgnoreEqOrdHashNFData
 import Data.Void (Void)
 import Data.Word
 import Foreign.Ptr (plusPtr)
+import GHC.Stack.Ext
 import Prettyprinter hiding (line)
 
 import Haskell.Language.Lexer.Types
@@ -343,7 +345,7 @@ shouldEndLiterateLatex litLoc _inputBefore _len _inputAfter =
   isLiterateLatexInside litLoc
 
 tokenize
-  :: LitMode Void -> BS.ByteString -> Either (Doc Void) [Pos ServerToken]
+  :: WithCallStack => LitMode Void -> BS.ByteString -> Either ErrorMessage [Pos ServerToken]
 tokenize litLoc input =
   case runAlexM litLoc code input scanTokens of
     (Nothing, xs) -> Right xs
@@ -353,14 +355,14 @@ tokenize litLoc input =
       LitVanilla -> startCode
       LitOutside -> literateCode
 
-scanTokens :: AlexM (Maybe (Doc Void))
+scanTokens :: WithCallStack => AlexM (Maybe ErrorMessage)
 scanTokens = go
   where
     go = do
       !nextTok <- continueScanning
       case nextTok of
         EOF       -> pure Nothing
-        Error err -> pure $ Just $ unIgnoreEqOrdHashNFData err
+        Error err -> pure $ Just $ ErrorMessage (unIgnoreEqOrdHashNFData err) callStack
         _         -> do
           -- Use input after reading token to get proper prefix that includes
           -- token we currently read.

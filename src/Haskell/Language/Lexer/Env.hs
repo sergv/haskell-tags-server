@@ -16,14 +16,12 @@ import Data.Void (Void)
 import Haskell.Language.Lexer.Types
 
 -- | Environment for user rule predicates.
-data AlexEnv = AlexEnv
-  { aeFilename     :: FilePath
-  , aeLiterateMode :: LitMode Void
+newtype AlexEnv = AlexEnv
+  { aeLiterateMode :: LitMode Void
   } deriving (Eq, Ord, Show)
 
-mkAlexEnv :: FilePath -> LitMode Void -> AlexEnv
-mkAlexEnv filename mode = AlexEnv
-  { aeFilename     = filename
-  , aeLiterateMode = mode
+mkAlexEnv :: LitMode Void -> AlexEnv
+mkAlexEnv mode = AlexEnv
+  { aeLiterateMode = mode
   }
 

@@ -53,7 +53,7 @@ import Data.Void (Void)
 import Prettyprinter qualified as PP
 import Prettyprinter.Ext
 
-import Haskell.Language.Lexer (tokenize)
+import Haskell.Language.Lexer (tokenize, modeFromFilename)
 import Haskell.Language.Lexer.Types (Pos, ServerToken, processTokens)
 import Haskell.Language.Lexer.Types qualified as Types
 
@@ -240,12 +240,12 @@ loadModuleFromSource suggestedModuleName modifTime filename source = do
   case tokens of
     Left  err     ->
       throwErrorWithCallStack $
-        "Failed to get tokens from" <+> pretty filename <> ":" ## err
+        "Failed to get tokens from" <+> pretty filename <> ":" ## pretty err
     Right tokens' ->
       makeModule suggestedModuleName modifTime filename tokens'
   where
     tokens =
-      tokenize (T.unpack $ unFullPath filename) source
+      tokenize (modeFromFilename filename) source
 
 makeModule
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
