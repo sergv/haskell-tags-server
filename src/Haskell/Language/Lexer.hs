@@ -7,38 +7,34 @@
 -- Created     :  Thursday,  3 November 2016
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE OverloadedStrings #-}
+
 module Haskell.Language.Lexer
   ( tokenize
-  -- , tokenizeM
-  -- , LiterateMode(..)
+  , modeFromFilename
   , LitMode(..)
   ) where
 
--- import Data.Functor.Identity
 import Data.ByteString qualified as BS
-import Data.Void
+import Data.ErrorMessage
+-- import Data.Functor.Identity
+-- import Data.Text.Encoding qualified as T
+import Data.Void (Void)
 import GHC.Stack.Ext (WithCallStack)
-import Prettyprinter
-import System.FilePath
 
+import Data.Path
 -- import Haskell.Language.Lexer.Lexer (tokenizeM)
--- import Haskell.Language.Lexer.Types (Token, LiterateMode(..))
-
-import Haskell.Language.Lexer.Types
 import Haskell.Language.LexerSimple.Lexer qualified as SimpleLexer
 
-tokenize :: WithCallStack => FilePath -> BS.ByteString -> Either (Doc Void) [Pos ServerToken]
--- tokenize filename = runIdentity . tokenizeM filename mode
-  -- where
-  --   mode :: LiterateMode
-  --   mode
-  --     | takeExtension filename == ".lhs" = Literate
-  --     | otherwise                        = Vanilla
-tokenize filename = SimpleLexer.tokenize mode
-  where
-    mode :: LitMode a
-    mode
-      | takeExtension filename `elem` [".lhs", ".lhs-boot"]
-      = LitOutside
-      | otherwise
-      = LitVanilla
+import Haskell.Language.Lexer.Types
+
+modeFromFilename :: TakeExtension a => a -> LitMode b
+modeFromFilename filename
+  | takeExtension filename `elem` [mkExtension ".lhs", mkExtension ".lhs-boot"]
+  = LitOutside
+  | otherwise
+  = LitVanilla
+
+tokenize :: WithCallStack => LitMode Void -> BS.ByteString -> Either ErrorMessage [Pos ServerToken]
+-- tokenize mode = runIdentity . tokenizeM mode . T.decodeUtf8
+tokenize = SimpleLexer.tokenize

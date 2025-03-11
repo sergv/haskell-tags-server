@@ -424,9 +424,9 @@ kw tok = \_ _ -> pure $ one tok
 
 tokenizeM
   :: (WithCallStack, Monad m)
-  => FilePath -> LitMode Void -> Text -> m (Either ErrorMessage [Pos ServerToken])
-tokenizeM filename mode input =
-  runAlexT filename mode code toplevelCode input scanTokens
+  => LitMode Void -> Text -> m (Either ErrorMessage [Pos ServerToken])
+tokenizeM mode input =
+  runAlexT mode code toplevelCode input scanTokens
   where
     code :: AlexCode
     code = case mode of
