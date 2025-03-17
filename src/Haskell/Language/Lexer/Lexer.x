@@ -408,12 +408,6 @@ $nl $space*             { \_ len -> pure $! one $! Newline $! len - 1 }
 
 {
 
-foo :: a -> a
-foo x = x
-
--- -- Like (NonEmpty TokenVal)
--- data SomeTokens = SomeTokens !TokenVal ![TokenVal]
-
 type AlexAction m = AlexInput -> Int -> m (NonEmpty ServerToken)
 
 one :: a -> NonEmpty a

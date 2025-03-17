@@ -33,8 +33,8 @@ data InputType = OriginalSource | Macro
 -- | Abstraction of input text into a stream so that it can have macro
 -- definitions. When a macro is encountered, current stream is paused
 -- and a new stream should be formed out of the macro definition.
-data InputStack =
-    OriginalSourceStack Text
+data InputStack
+  = OriginalSourceStack Text
   | ExpandingConstant
       !MacroName            -- ^ Macro name
       !Text                 -- ^ Macro body
