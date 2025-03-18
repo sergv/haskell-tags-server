@@ -274,6 +274,12 @@ testTokenise = testGroup "Tokenise"
     , Newline 0
     , T "bar", Newline 0
     ]
+  , """
+    type Foo = #{type int64_t}
+    """
+    ==>
+    [ KWType, T "Foo", Equals, HSCDirectiveBraced, T "int64_t", RBrace, Newline 0
+    ]
   ]
   where
     (==>) = makeTest f

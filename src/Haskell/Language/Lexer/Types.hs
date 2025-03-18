@@ -189,8 +189,7 @@ data ServerToken
   | CppDefine {-# UNPACK #-} !Text
   | HSCEnum      -- #{enum...}
   | HSCDirective -- e.g. #define foo bar...
-  | HSCDirectiveBraced
-    -- ^ e.g. #{define foo...\nbar}, #{\ndefine foo...\nbar}, ends with RBrace
+  | HSCDirectiveBraced -- ^ e.g. #{define foo...\nbar}, #{\ndefine foo...\nbar}, ends with RBrace
   | LBanana      -- Arrows: (|
   | RBanana      -- Arrows: |)
   | Error (IgnoreEqOrdHashNFData (Doc Void))

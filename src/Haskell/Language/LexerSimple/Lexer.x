@@ -153,7 +153,7 @@ $hexdigit   = [0-9a-fA-F]
   { \_ _ -> pure HSCEnum }
 ^ @cpp_dir_start @all_cpp_and_hsc_directives
   { \_ _ -> pure HSCDirective }
-^ @cpp_dir_start "{" (@cpp_ws | @nl)* @all_cpp_and_hsc_directives
+@cpp_dir_start "{" (@cpp_ws | @nl)* @all_cpp_and_hsc_directives
   { \_ _ -> pure HSCDirectiveBraced }
 
 -- Drop everything else that starts with #, e.g.
