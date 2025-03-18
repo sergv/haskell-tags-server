@@ -42,6 +42,7 @@ testTokenizeCpp = testGroup "Tokenize with preprocessor"
     """
     ==>
     [ Newline 0
+    , CppDefine "FOO"
     , Newline 0
     , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
     , T "bar", T "x", Equals, T "x", Newline 0
@@ -56,6 +57,7 @@ testTokenizeCpp = testGroup "Tokenize with preprocessor"
     """
     ==>
     [ Newline 0
+    , CppDefine "FOO"
     , Newline 0
     , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
     , T "bar", T "x", Equals, T "x", Newline 0
@@ -71,6 +73,7 @@ testTokenizeCpp = testGroup "Tokenize with preprocessor"
     """
     ==>
     [ Newline 0
+    , CppDefine "FOO"
     , Newline 0
     , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
     , T "bar", T "x", Equals, T "x", Newline 0
@@ -79,7 +82,7 @@ testTokenizeCpp = testGroup "Tokenize with preprocessor"
     textShowSource
     ==>
     [ Newline 0
-    , Newline 0
+    , CppDefine "GTEXT_SHOW"
     , Newline 0
     , Newline 0
     , T "bar", DoubleColon, T "a", Arrow, T "a", Newline 0
