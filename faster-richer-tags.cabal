@@ -41,6 +41,7 @@ common ghc-options
     -Wno-missing-local-signatures
     -Wno-safe
     -Wno-unsafe
+    -Wno-unused-packages
 
     -Wno-redundant-constraints
 
