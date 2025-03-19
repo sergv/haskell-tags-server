@@ -9,6 +9,7 @@
 
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE GADTs             #-}
+{-# LANGUAGE MultilineStrings  #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -69,8 +70,10 @@ moduleWithUnqualifiedImportTest :: Test
 moduleWithUnqualifiedImportTest = TestCase
   { testName       = "Unqualified import"
   , input          =
-      "module ModuleWithUnqualifiedImport where\n\
-      \import Imported1"
+      """
+      module ModuleWithUnqualifiedImport where
+      import Imported1
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithUnqualifiedImport"
       , mhExports          = NoExports
@@ -92,8 +95,10 @@ moduleWithUnqualifiedSourceImportTest :: Test
 moduleWithUnqualifiedSourceImportTest = TestCase
   { testName       = "Unqualified import with {-# SOURCE #-}"
   , input          =
-      "module ModuleWithUnqualifiedImport where\n\
-      \import {-# SOURCE #-} Imported1"
+      """
+      module ModuleWithUnqualifiedImport where
+      import {-# SOURCE #-} Imported1
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithUnqualifiedImport"
       , mhExports          = NoExports
@@ -115,8 +120,10 @@ moduleWithUnqualifiedSafeImportTest :: Test
 moduleWithUnqualifiedSafeImportTest = TestCase
   { testName       = "Unqualified safe import"
   , input          =
-      "module ModuleWithUnqualifiedImport where\n\
-      \import safe Imported1"
+      """
+      module ModuleWithUnqualifiedImport where
+      import safe Imported1
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithUnqualifiedImport"
       , mhExports          = NoExports
@@ -138,8 +145,10 @@ moduleWithPatternImportTest :: Test
 moduleWithPatternImportTest = TestCase
   { testName       = "Pattern import"
   , input          =
-      "module ModuleWithPatternImport where\n\
-      \import Imported1 (pattern Pat)"
+      """
+      module ModuleWithPatternImport where
+      import Imported1 (pattern Pat)
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithPatternImport"
       , mhExports          = NoExports
@@ -169,8 +178,10 @@ moduleWithUnqualifiedImportAndEmptyImportListTest :: Test
 moduleWithUnqualifiedImportAndEmptyImportListTest = TestCase
   { testName       = "Unqualified import and empty import list"
   , input          =
-      "module Test where\n\
-      \import Imported1 ()"
+      """
+      module Test where
+      import Imported1 ()
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -195,8 +206,10 @@ moduleWithUnqualifiedImportAndEmptyHiddenImportListTest :: Test
 moduleWithUnqualifiedImportAndEmptyHiddenImportListTest = TestCase
   { testName       = "Unqualified import and empty hidden import list"
   , input          =
-      "module Test where\n\
-      \import Imported1 hiding ()"
+      """
+      module Test where
+      import Imported1 hiding ()
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -221,8 +234,10 @@ moduleWithUnqualifiedImportAndSingletonImportListTest :: Test
 moduleWithUnqualifiedImportAndSingletonImportListTest = TestCase
   { testName       = "Unqualified import and singleton import list"
   , input          =
-      "module Test where\n\
-      \import Imported1 (foo)"
+      """
+      module Test where
+      import Imported1 (foo)
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -252,8 +267,10 @@ moduleWithUnqualifiedImportAndNonemptyImportListTest :: Test
 moduleWithUnqualifiedImportAndNonemptyImportListTest = TestCase
   { testName       = "Unqualified import and nonempty import list"
   , input          =
-      "module Test where\n\
-      \import Imported1 (foo, bar, baz)"
+      """
+      module Test where
+      import Imported1 (foo, bar, baz)
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -292,8 +309,10 @@ moduleWithUnqualifiedImportAndNonemptyImportListWithDifferentVisibilitiesTest = 
   { testName       =
       "Unqualified import and nonempty import list with different visibilities"
   , input          =
-      "module Test where\n\
-      \import Imported1 (foo, Bar(..), Baz(Quux, Fizz), type Typ, type (++), pattern Pat, pattern (:++), (:$:), (:$$:)(..), (:$$*:)((:$$$*:), (:$$$**:)))"
+      """
+      module Test where
+      import Imported1 (foo, Bar(..), Baz(Quux, Fizz), type Typ, type (++), pattern Pat, pattern (:++), (:$:), (:$$:)(..), (:$$*:)((:$$$*:), (:$$$**:)))
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -365,8 +384,10 @@ moduleWithQualifiedImportTest :: Test
 moduleWithQualifiedImportTest = TestCase
   { testName       = "Qualified import"
   , input          =
-      "module ModuleWithQualifiedImport where\n\
-      \import qualified Imported1"
+      """
+      module ModuleWithQualifiedImport where
+      import qualified Imported1
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithQualifiedImport"
       , mhExports          = NoExports
@@ -394,8 +415,10 @@ moduleWithQualifiedSafeAndPackageImportTest :: Test
 moduleWithQualifiedSafeAndPackageImportTest = TestCase
   { testName       = "Qualified safe import with package import"
   , input          =
-      "module ModuleWithQualifiedImport where\n\
-      \import safe qualified \"foobar\" Imported1"
+      """
+      module ModuleWithQualifiedImport where
+      import safe qualified "foobar" Imported1
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithQualifiedImport"
       , mhExports          = NoExports
@@ -422,8 +445,10 @@ moduleWithQualifiedImportAndAliasTest :: Test
 moduleWithQualifiedImportAndAliasTest = TestCase
   { testName       = "Qualified import and alias"
   , input          =
-      "module ModuleWithQualifiedImportAndAlias where\n\
-      \import qualified Imported1 as Imp"
+      """
+      module ModuleWithQualifiedImportAndAlias where
+      import qualified Imported1 as Imp
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithQualifiedImportAndAlias"
       , mhExports          = NoExports
@@ -450,8 +475,10 @@ moduleWithImportAndAliasTest :: Test
 moduleWithImportAndAliasTest = TestCase
   { testName       = "Import and alias"
   , input          =
-      "module ModuleWithImportAndAlias where\n\
-      \import Imported1 as Imp"
+      """
+      module ModuleWithImportAndAlias where
+      import Imported1 as Imp
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithImportAndAlias"
       , mhExports          = NoExports
@@ -478,8 +505,10 @@ moduleWithImportAndAliasAndHidingImportListTest :: Test
 moduleWithImportAndAliasAndHidingImportListTest = TestCase
   { testName       = "Import, alias and hiding import list"
   , input          =
-      "module ModuleWithImportAndAliasAandHidingImportList where\n\
-      \import Imported1 as Imp hiding (Foo(..), bar, Quux(Baz))"
+      """
+      module ModuleWithImportAndAliasAandHidingImportList where
+      import Imported1 as Imp hiding (Foo(..), bar, Quux(Baz))
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithImportAndAliasAandHidingImportList"
       , mhExports          = NoExports
@@ -526,8 +555,10 @@ moduleWithImportOfSpeciallyNamedOperatorsTest :: Test
 moduleWithImportOfSpeciallyNamedOperatorsTest = TestCase
   { testName       = "import of operators with special names"
   , input          =
-      "module ModuleWithImportOfSpeciallyNamedOperators where\n\
-      \import Imported1 ((.), (!), (~), (.+.))"
+      """
+      module ModuleWithImportOfSpeciallyNamedOperators where
+      import Imported1 ((.), (!), (~), (.+.))
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithImportOfSpeciallyNamedOperators"
       , mhExports          = NoExports
@@ -569,10 +600,12 @@ moduleWithMultipleImports :: Test
 moduleWithMultipleImports = TestCase
   { testName       = "Module multiple imports"
   , input          =
-      "module Test where \n\
-      \import Mod1\n\
-      \import Mod2 as Foo\n\
-      \"
+      """
+      module Test where
+      import Mod1
+      import Mod2 as Foo
+
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -605,14 +638,15 @@ mkModuleWithImportsAfterDefinitionTest :: String -> T.Text -> Test
 mkModuleWithImportsAfterDefinitionTest testName thing = TestCase
   { testName
   , input          =
-      "module Test where \n\
-      \import Quux.Mod1\n\
-      \\n\
-      \" <> thing <> " :: a -> a\n\
-      \" <> thing <> " x = x\n\
-      \\n\
-      \import Mod2 as Foo\n\
-      \"
+      """
+      module Test where
+      import Quux.Mod1
+
+
+      """
+      <> thing <> " :: a -> a\n"
+      <> thing <> " x = x\n\n"
+      <> "import Mod2 as Foo\n"
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -671,16 +705,18 @@ moduleWithParensInImportList1 :: Test
 moduleWithParensInImportList1 = TestCase
   { testName       = "Import of \"pattern\" function 1"
   , input          =
-      "module Test where\n\
-      \import Foo\n\
-      \#ifdef FOO\n\
-      \  ( foo\n\
-      \#else\n\
-      \  ( bar\n\
-      \#endif\n\
-      \  )\n\
-      \import Bar\n\
-      \"
+      """
+      module Test where
+      import Foo
+      #ifdef FOO
+        ( foo
+      #else
+        ( bar
+      #endif
+        )
+      import Bar
+
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -722,19 +758,21 @@ moduleWithParensInImportList2 :: Test
 moduleWithParensInImportList2 = TestCase
   { testName       = "Import of \"pattern\" function 2"
   , input          =
-      "module Test where\n\
-      \import Foo\n\
-      \#ifdef FOO\n\
-      \  ( foo\n\
-      \  , bar\n\
-      \#else\n\
-      \  ( baz\n\
-      \  , quux\n\
-      \#endif\n\
-      \  , fizz\n\
-      \  )\n\
-      \import Bar\n\
-      \"
+      """
+      module Test where
+      import Foo
+      #ifdef FOO
+        ( foo
+        , bar
+      #else
+        ( baz
+        , quux
+      #endif
+        , fizz
+        )
+      import Bar
+
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -779,19 +817,21 @@ moduleWithMultilinePreprocessor :: Test
 moduleWithMultilinePreprocessor = TestCase
   { testName       = "Multiline preprocessor"
   , input          =
-      "module Test where\n\
-      \import Foo\n\
-      \  ( foo\n\
-      \#ifdef FOO \\\n\
-      \  && !BAR\n\
-      \  , bar\n\
-      \#else\n\
-      \  , baz\n\
-      \#endif\n\
-      \  , quux\n\
-      \  )\n\
-      \import Bar\n\
-      \"
+      """
+      module Test where
+      import Foo
+        ( foo
+      #ifdef FOO \\
+        && !BAR
+        , bar
+      #else
+        , baz
+      #endif
+        , quux
+        )
+      import Bar
+
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -830,8 +870,10 @@ moduleWithImportOfPatternFuncTest :: Test
 moduleWithImportOfPatternFuncTest = TestCase
   { testName       = "Import of \"pattern\" function"
   , input          =
-      "module Test where\n\
-      \import Imported1 (pattern)"
+      """
+      module Test where
+      import Imported1 (pattern)
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -861,8 +903,10 @@ moduleWithImportOfManyFuncsAndPatternFuncTest :: Test
 moduleWithImportOfManyFuncsAndPatternFuncTest = TestCase
   { testName       = "Import of several functions, including \"pattern\" function"
   , input          =
-      "module Test where\n\
-      \import Imported1 (Foo(..), pattern, (++), Bar)"
+      """
+      module Test where
+      import Imported1 (Foo(..), pattern, (++), Bar)
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -904,8 +948,10 @@ moduleWithoutCommasAndPatternFuncImportBeforeOperator :: Test
 moduleWithoutCommasAndPatternFuncImportBeforeOperator = TestCase
   { testName       = "Module without commas in import list and import of pattern function before operator function"
   , input          =
-      "module Test where\n\
-      \import Imported1 (Foo(..) pattern (++) Bar)"
+      """
+      module Test where
+      import Imported1 (Foo(..) pattern (++) Bar)
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -947,8 +993,10 @@ moduleWithoutCommasAndPatternFuncImportBeforeConstructorWithChildren :: Test
 moduleWithoutCommasAndPatternFuncImportBeforeConstructorWithChildren = TestCase
   { testName       = "Module without commas in import list and import of pattern function before constructor with children"
   , input          =
-      "module Test where\n\
-      \import Imported1 (pattern Foo(..) (++) Bar)"
+      """
+      module Test where
+      import Imported1 (pattern Foo(..) (++) Bar)
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -990,8 +1038,10 @@ moduleWithoutCommasAndPatternFuncImportBeforeOperatorConstructorWithChildren :: 
 moduleWithoutCommasAndPatternFuncImportBeforeOperatorConstructorWithChildren = TestCase
   { testName       = "Module without commas in import list and import of pattern function before operator constructor with children"
   , input          =
-      "module Test where\n\
-      \import Imported1 (pattern (:++)(..) (++) Bar)"
+      """
+      module Test where
+      import Imported1 (pattern (:++)(..) (++) Bar)
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -1033,8 +1083,10 @@ moduleWithoutCommasAndSeveralPatternImports :: Test
 moduleWithoutCommasAndSeveralPatternImports = TestCase
   { testName       = "Module without commas in import list"
   , input          =
-      "module Test where\n\
-      \import Imported1 (Foo(..) pattern (:++) Bar pattern Baz)"
+      """
+      module Test where
+      import Imported1 (Foo(..) pattern (:++) Bar pattern Baz)
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -1076,8 +1128,10 @@ moduleWithAmbigousImportList :: Test
 moduleWithAmbigousImportList = TestCase
   { testName       = "Ambigous import list"
   , input          =
-      "module Test where\n\
-      \import Imported1 (Foo (:$$:)(..) Bar (:$$$:)(X) Baz (:?:) (:+:)((:++:)))"
+      """
+      module Test where
+      import Imported1 (Foo (:$$:)(..) Bar (:$$$:)(X) Baz (:?:) (:+:)((:++:)))
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -1135,8 +1189,10 @@ moduleWithImportListWithoutCommas :: Test
 moduleWithImportListWithoutCommas = TestCase
   { testName       = "Import list without commas"
   , input          =
-      "module Test where\n\
-      \import Imported1 (foo Bar(..) Baz(Quux, Fizz) (:$:) (:$$:)(..) (:$$*:)((:$$$*:), (:$$$**:)) pattern Pat pattern (:++))"
+      """
+      module Test where
+      import Imported1 (foo Bar(..) Baz(Quux, Fizz) (:$:) (:$$:)(..) (:$$*:)((:$$$*:), (:$$$**:)) pattern Pat pattern (:++))
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -1200,8 +1256,10 @@ moduleWithImportsThatHaveChildrenListWithoutCommas :: Test
 moduleWithImportsThatHaveChildrenListWithoutCommas = TestCase
   { testName       = "Import list where children list has no commas"
   , input          =
-      "module Test where\n\
-      \import Imported1 (Baz(Quux, Fizz), (:$$*:)((:$$$*:) (:$$$**:)))"
+      """
+      module Test where
+      import Imported1 (Baz(Quux, Fizz), (:$$*:)((:$$$*:) (:$$$**:)))
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -1241,15 +1299,17 @@ moduleWithUnbalancedParensInImportList :: Test
 moduleWithUnbalancedParensInImportList = TestCase
   { testName       = "Module with unbalanced parens in import list"
   , input          =
-      "module Test where \n\
-      \import Mod\n\
-      \#if FOO\n\
-      \  ( Foo(X, Y)\n\
-      \#else\n\
-      \  ( Foo\n\
-      \#endif\n\
-      \  , Bar\n\
-      \  )"
+      """
+      module Test where
+      import Mod
+      #if FOO
+        ( Foo(X, Y)
+      #else
+        ( Foo
+      #endif
+        , Bar
+        )
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -1290,18 +1350,20 @@ moduleWithUnbalancedParensInImportChildrenList :: Test
 moduleWithUnbalancedParensInImportChildrenList = TestCase
   { testName       = "Module with unbalanced parens in import children list"
   , input          =
-      "module Test where \n\
-      \import Mod\n\
-      \  ( Foo\n\
-      \#if FOO\n\
-      \    ( X\n\
-      \#else\n\
-      \    ( Z\n\
-      \#endif\n\
-      \    , Y\n\
-      \    )\n\
-      \  , Bar\n\
-      \  )"
+      """
+      module Test where
+      import Mod
+        ( Foo
+      #if FOO
+          ( X
+      #else
+          ( Z
+      #endif
+          , Y
+          )
+        , Bar
+        )
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -1339,10 +1401,12 @@ moduleWithSingleHSC2HSDirectiveInImportList :: Test
 moduleWithSingleHSC2HSDirectiveInImportList = TestCase
   { testName       = "Module with single hsc2hs directive in import list"
   , input          =
-      "module Test where \n\
-      \import Mod\n\
-      \  ( #{type int64_t} \n\
-      \  )"
+      """
+      module Test where
+      import Mod
+        ( #{type int64_t}
+        )
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -1364,13 +1428,15 @@ moduleWithSomeHSC2HSDirectivesInImportList1 :: Test
 moduleWithSomeHSC2HSDirectivesInImportList1 = TestCase
   { testName       = "Module with some hsc2hs directives in import list #1"
   , input          =
-      "module Test where \n\
-      \import Mod\n\
-      \  ( Foo\n\
-      \  , #{type int64_t} \n\
-      \  , Bar \n\
-      \  , #{type baz_t} \n\
-      \  )"
+      """
+      module Test where
+      import Mod
+        ( Foo
+        , #{type int64_t}
+        , Bar
+        , #{type baz_t}
+        )
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -1392,13 +1458,15 @@ moduleWithSomeHSC2HSDirectivesInImportList2 :: Test
 moduleWithSomeHSC2HSDirectivesInImportList2 = TestCase
   { testName       = "Module with some hsc2hs directives in import list #2"
   , input          =
-      "module Test where \n\
-      \import Mod\n\
-      \  ( Foo\n\
-      \  , #{type int64_t} \n\
-      \  , #{type baz_t} \n\
-      \  , Bar \n\
-      \  )"
+      """
+      module Test where
+      import Mod
+        ( Foo
+        , #{type int64_t}
+        , #{type baz_t}
+        , Bar
+        )
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -1420,14 +1488,16 @@ moduleWithSomeHSC2HSDirectivesInImportList3 :: Test
 moduleWithSomeHSC2HSDirectivesInImportList3 = TestCase
   { testName       = "Module with some hsc2hs directives in import list #3"
   , input          =
-      "module Test where \n\
-      \import Mod\n\
-      \  ( pattern Foo\n\
-      \  , #{type int64_t} \n\
-      \  , pattern Bar \n\
-      \  , Frob(..) \n\
-      \  , #{type baz_t} \n\
-      \  )"
+      """
+      module Test where
+      import Mod
+        ( pattern Foo
+        , #{type int64_t}
+        , pattern Bar
+        , Frob(..)
+        , #{type baz_t}
+        )
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = NoExports
@@ -1445,12 +1515,13 @@ moduleWithSomeHSC2HSDirectivesInImportList3 = TestCase
       }
   }
 
-
 moduleWithEmptyExportsTest :: Test
 moduleWithEmptyExportsTest = TestCase
   { testName       = "Empty exports"
   , input          =
-      "module ModuleWithEmptyExport () where"
+      """
+      module ModuleWithEmptyExport () where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithEmptyExport"
       , mhExports          = EmptyExports
@@ -1463,7 +1534,9 @@ moduleWithQuaifiedExportsTest :: Test
 moduleWithQuaifiedExportsTest = TestCase
   { testName       = "Qualified exports"
   , input          =
-      "module ModuleWithEmptyExport (Foo.bar, Baz.Quux(..)) where"
+      """
+      module ModuleWithEmptyExport (Foo.bar, Baz.Quux(..)) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithEmptyExport"
       , mhExports          = SpecificExports ModuleExports
@@ -1489,11 +1562,9 @@ moduleWithExportsTest :: Test
 moduleWithExportsTest = TestCase
   { testName       = "Module exports"
   , input          =
-      "module ModuleWithExport\
-      \ (foo, Bar(..), Baz(Quux, Fizz, wat, (??)),\
-      \ Frob(.., Frob', Frob''), pattern Pat, pattern (:!:),\
-      \ module Frob, type Typ, type (++),\
-      \ (:$:), (:$$:)(..), (:$$*:)((:$$$*:), (:$$$**:))) where"
+      """
+      module ModuleWithExport (foo, Bar(..), Baz(Quux, Fizz, wat, (??)), Frob(.., Frob', Frob''), pattern Pat, pattern (:!:), module Frob, type Typ, type (++), (:$:), (:$$:)(..), (:$$*:)((:$$$*:), (:$$$**:))) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
       , mhExports          = SpecificExports ModuleExports
@@ -1566,48 +1637,50 @@ moduleWithMultilineExportsTest :: Test
 moduleWithMultilineExportsTest = TestCase
   { testName       = "Peculiarly indented export list"
   , input          =
-      "module ModuleWithExport\n\
-      \ (\n\
-      \   foo\n\
-      \ , \n\
-      \  Bar\n\
-      \    (..)\n\
-      \ ,        Baz(\n\
-      \  Quux\n\
-      \    ,\n\
-      \   Fizz \n\
-      \  )\n\
-      \    ,\n\
-      \\n\
-      \                   Frob         \n\
-      \                     (       \n\
-      \                ..  \n\
-      \             ,                \n\
-      \       Frob'      \n\
-      \             ,                  \n\
-      \        Frob''            \n\
-      \    )                                       \n\
-      \              , \n\
-      \\n\
-      \  pattern\n\
-      \     Pat\n\
-      \\n\
-      \             pattern      \n\
-      \        (:!:)   \n\
-      \  , \n\
-      \    module \n\
-      \  Frob\n\
-      \     ,     \n\
-      \         (      :$:     )             , \n\
-      \      (   \n\
-      \   :$$:      \n\
-      \    )      (  ..    ) \n\
-      \      ,       (  \n\
-      \       :$$*:   )   (  \n\
-      \         (:$$$*:)  \n\
-      \ , (:$$$**:)   )        \n\
-      \   ) \n\
-      \   where"
+      """
+      module ModuleWithExport
+       (
+         foo
+       ,
+        Bar
+          (..)
+       ,        Baz(
+        Quux
+          ,
+         Fizz
+        )
+          ,
+
+                         Frob
+                           (
+                      ..
+                   ,
+             Frob'
+                   ,
+              Frob''
+          )
+                    ,
+
+        pattern
+           Pat
+
+                   pattern
+              (:!:)
+        ,
+          module
+        Frob
+           ,
+               (      :$:     )             ,
+            (
+         :$$:
+          )      (  ..    )
+            ,       (
+             :$$*:   )   (
+               (:$$$*:)
+       , (:$$$**:)   )
+         )
+         where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
       , mhExports          = SpecificExports ModuleExports
@@ -1670,7 +1743,9 @@ moduleWithExportsOfSpeciallyNamedOperatorsTest :: Test
 moduleWithExportsOfSpeciallyNamedOperatorsTest = TestCase
   { testName       = "Export of operators with special names"
   , input          =
-      "module ModuleWithExport ((.), (!), (~), (.+.), (Test..||.)) where"
+      """
+      module ModuleWithExport ((.), (!), (~), (.+.), (Test..||.)) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
       , mhExports          = SpecificExports ModuleExports
@@ -1708,7 +1783,9 @@ moduleStarExports :: Test
 moduleStarExports = TestCase
   { testName       = "Star exports"
   , input          =
-      "module Data.Kind ( Type, Constraint, type (*), type (★) ) where"
+      """
+      module Data.Kind ( Type, Constraint, type (*), type (★) ) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Data.Kind"
       , mhExports          = SpecificExports ModuleExports
@@ -1736,11 +1813,13 @@ moduleWithTypeExportsTest1 :: Test
 moduleWithTypeExportsTest1 = TestCase
   { testName       = "Exports type children"
   , input          =
-      "module ModuleWithTypeExports\n\
-      \  ( Foo\n\
-      \  , Bar(type Baz)\n\
-      \  )\n\
-      \  where"
+      """
+      module ModuleWithTypeExports
+        ( Foo
+        , Bar(type Baz)
+        )
+        where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithTypeExports"
       , mhExports          = SpecificExports ModuleExports
@@ -1768,11 +1847,13 @@ moduleWithTypeExportsTest2 :: Test
 moduleWithTypeExportsTest2 = TestCase
   { testName       = "Export type operator children"
   , input          =
-      "module ModuleWithTypeOpExports\n\
-      \  ( (+)\n\
-      \  , (**)(type (!!))\n\
-      \  )\n\
-      \  where"
+      """
+      module ModuleWithTypeOpExports
+        ( (+)
+        , (**)(type (!!))
+        )
+        where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithTypeOpExports"
       , mhExports          = SpecificExports ModuleExports
@@ -1800,11 +1881,13 @@ moduleWithQualifiedOperatorChildrenExportTest :: Test
 moduleWithQualifiedOperatorChildrenExportTest = TestCase
   { testName       = "Export qualified children operator"
   , input          =
-      "module ModuleWithQualifiedOperatorChildrenExports\n\
-      \  ( (Foo.+)\n\
-      \  , Foo.Bar((Foo.<><>))\n\
-      \  )\n\
-      \  where"
+      """
+      module ModuleWithQualifiedOperatorChildrenExports
+        ( (Foo.+)
+        , Foo.Bar((Foo.<><>))
+        )
+        where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithQualifiedOperatorChildrenExports"
       , mhExports          = SpecificExports ModuleExports
@@ -1832,14 +1915,16 @@ moduleWithDisabledSectionTest1 :: Test
 moduleWithDisabledSectionTest1 = TestCase
   { testName       = "Module header with a part guarded by #if 0"
   , input          =
-      "module Test\n\
-      \  (\n\
-      \    Foo( X, Y, Z)\n\
-      \#if 0\n\
-      \  , Bar\n\
-      \#endif\n\
-      \  , Baz\n\
-      \  ) where"
+      """
+      module Test
+        (
+          Foo( X, Y, Z)
+      #if 0
+        , Bar
+      #endif
+        , Baz
+        ) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = SpecificExports ModuleExports
@@ -1869,15 +1954,17 @@ moduleWithDisabledSectionTest2 :: Test
 moduleWithDisabledSectionTest2 = TestCase
   { testName       = "Module header with a part guarded by a multiline #if 0"
   , input          =
-      "module Test\n\
-      \  (\n\
-      \    Foo( X, Y, Z)\n\
-      \#if  \\\n\
-      \           0\n\
-      \  , Bar\n\
-      \#endif\n\
-      \  , Baz\n\
-      \  ) where"
+      """
+      module Test
+        (
+          Foo( X, Y, Z)
+      #if  \\
+                 0
+        , Bar
+      #endif
+        , Baz
+        ) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = SpecificExports ModuleExports
@@ -1908,23 +1995,25 @@ moduleWithDisabledAndEnabledSectionsTest :: Test
 moduleWithDisabledAndEnabledSectionsTest = TestCase
   { testName       = "Module header with a part guarded by #if 0 and some parts guarded by #if <nonzero>"
   , input          =
-      "module Test\n\
-      \  (\n\
-      \    Foo( X, Y, Z)\n\
-      \#if 0\n\
-      \  , Bar\n\
-      \#endif\n\
-      \  , Baz\n\
-      \#if 10\n\
-      \  , Quux\n\
-      \#endif\n\
-      \#if 01\n\
-      \  , Fizz\n\
-      \#endif\n\
-      \#if 101\n\
-      \  , Buzz\n\
-      \#endif\n\
-      \  ) where"
+      """
+      module Test
+        (
+          Foo( X, Y, Z)
+      #if 0
+        , Bar
+      #endif
+        , Baz
+      #if 10
+        , Quux
+      #endif
+      #if 01
+        , Fizz
+      #endif
+      #if 101
+        , Buzz
+      #endif
+        ) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = SpecificExports ModuleExports
@@ -1966,7 +2055,9 @@ moduleWithExportOfPatternFuncTest :: Test
 moduleWithExportOfPatternFuncTest = TestCase
   { testName       = "Export of \"pattern\" function"
   , input          =
-      "module ModuleWithExport (pattern) where"
+      """
+      module ModuleWithExport (pattern) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
       , mhExports          = SpecificExports ModuleExports
@@ -1988,7 +2079,9 @@ moduleWithExportOfManyFuncsAndPatternFuncTest :: Test
 moduleWithExportOfManyFuncsAndPatternFuncTest = TestCase
   { testName       = "Export of several functions, including \"pattern\" function"
   , input          =
-      "module ModuleWithExport (Foo(..), pattern, (++), Bar) where"
+      """
+      module ModuleWithExport (Foo(..), pattern, (++), Bar) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
       , mhExports          = SpecificExports ModuleExports
@@ -2023,7 +2116,9 @@ moduleWithoutCommasAndPatternFuncExportBeforeOperator = TestCase
   { testName       =
       "Module without commas in export list and export of pattern function before operator function"
   , input          =
-      "module ModuleWithExport (Foo(..) pattern (++) Bar) where"
+      """
+      module ModuleWithExport (Foo(..) pattern (++) Bar) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
       , mhExports          = SpecificExports ModuleExports
@@ -2058,7 +2153,9 @@ moduleWithoutCommasAndPatternFuncExportBeforeConstructorWithChildren = TestCase
   { testName       =
       "Module without commas in export list and export of pattern function before constructor with children"
   , input          =
-      "module ModuleWithExport (pattern Foo(..) (++) Bar) where"
+      """
+      module ModuleWithExport (pattern Foo(..) (++) Bar) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
       , mhExports          = SpecificExports ModuleExports
@@ -2093,7 +2190,9 @@ moduleWithoutCommasAndPatternFuncExportBeforeOperatorConstructorWithChildren = T
   { testName       =
       "Module without commas in export list and export of pattern function before operator constructor with children"
   , input          =
-      "module ModuleWithExport (pattern (:++)(..) (++) Bar) where"
+      """
+      module ModuleWithExport (pattern (:++)(..) (++) Bar) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
       , mhExports          = SpecificExports ModuleExports
@@ -2128,7 +2227,9 @@ moduleWithoutCommasAndSeveralPatternExports = TestCase
   { testName       =
       "Export of several functions without commas, including \"pattern\" function"
   , input          =
-      "module ModuleWithExport (Foo(..) pattern (:++) Bar pattern Baz) where"
+      """
+      module ModuleWithExport (Foo(..) pattern (:++) Bar pattern Baz) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
       , mhExports          = SpecificExports ModuleExports
@@ -2161,7 +2262,9 @@ moduleWithExportListWithoutCommasTest :: Test
 moduleWithExportListWithoutCommasTest = TestCase
   { testName       = "Export list without commas"
   , input          =
-      "module ModuleWithExport (foo Bar(..) Baz(Quux, Fizz) pattern Pat pattern (:!:) module Frob (:$:) (:$$:)(..) module Bazzz (:$$*:)((:$$$*:), (:$$$**:)) module Quuxxx) where"
+      """
+      module ModuleWithExport (foo Bar(..) Baz(Quux, Fizz) pattern Pat pattern (:!:) module Frob (:$:) (:$$:)(..) module Bazzz (:$$*:)((:$$$*:), (:$$$**:)) module Quuxxx) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
       , mhExports          = SpecificExports ModuleExports
@@ -2220,7 +2323,9 @@ moduleWithExportListWithoutCommasAndStructuresAfterNameWithoutChildrenTest :: Te
 moduleWithExportListWithoutCommasAndStructuresAfterNameWithoutChildrenTest = TestCase
   { testName       = "Export list without commas and structures after name without children"
   , input          =
-      "module ModuleWithExport (foo module Foo (++) module Bar baz pattern Baz quux type Quux pattern Pat module Patterns) where"
+      """
+      module ModuleWithExport (foo module Foo (++) module Bar baz pattern Baz quux type Quux pattern Pat module Patterns) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
       , mhExports          = SpecificExports ModuleExports
@@ -2254,14 +2359,16 @@ moduleWithUnbalancedParensInExportList :: Test
 moduleWithUnbalancedParensInExportList = TestCase
   { testName       = "Module with unbalanced parens in export list"
   , input          =
-      "module Test\n\
-      \#if FOO\n\
-      \  ( Foo(X, Y)\n\
-      \#else\n\
-      \  ( Foo\n\
-      \#endif\n\
-      \  , Bar\n\
-      \  ) where"
+      """
+      module Test
+      #if FOO
+        ( Foo(X, Y)
+      #else
+        ( Foo
+      #endif
+        , Bar
+        ) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = SpecificExports ModuleExports
@@ -2294,17 +2401,19 @@ moduleWithUnbalancedParensInExportChildrenList :: Test
 moduleWithUnbalancedParensInExportChildrenList = TestCase
   { testName       = "Module with unbalanced parens in export children list"
   , input          =
-      "module Test\n\
-      \  ( Foo\n\
-      \#if FOO\n\
-      \      ( X\n\
-      \#else\n\
-      \      ( Z\n\
-      \#endif\n\
-      \      , Y\n\
-      \      )\n\
-      \  , Bar\n\
-      \  ) where"
+      """
+      module Test
+        ( Foo
+      #if FOO
+            ( X
+      #else
+            ( Z
+      #endif
+            , Y
+            )
+        , Bar
+        ) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = SpecificExports ModuleExports
@@ -2334,14 +2443,16 @@ moduleWithDuplicateModuleNameTest :: Test
 moduleWithDuplicateModuleNameTest = TestCase
   { testName       = "Module duplicate module name"
   , input          =
-      "#if FOO\n\
-      \module Test\n\
-      \#else\n\
-      \module Test\n\
-      \#endif\n\
-      \  ( Foo( X, Y, Z)\n\
-      \  , Bar\n\
-      \  ) where"
+      """
+      #if FOO
+      module Test
+      #else
+      module Test
+      #endif
+        ( Foo( X, Y, Z)
+        , Bar
+        ) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = SpecificExports ModuleExports
@@ -2371,7 +2482,9 @@ moduleWithExportsThatHaveChildrenListWithoutCommasTest :: Test
 moduleWithExportsThatHaveChildrenListWithoutCommasTest = TestCase
   { testName       = "Exports that have children list without commas"
   , input          =
-      "module ModuleWithExport (Bar(..), Baz(Quux Fizz), (:$:), (:$$*:)((:$$$*:) (:$$$**:))) where"
+      """
+      module ModuleWithExport (Bar(..), Baz(Quux Fizz), (:$:), (:$$*:)((:$$$*:) (:$$$**:))) where
+      """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithExport"
       , mhExports          = SpecificExports ModuleExports
