@@ -279,10 +279,15 @@ analyzeImports filename imports qualifiers ts = do
           entryWithChildren "name in import list" name rest
         PLParen : rest                                                    ->
           findImportListEntries importType acc rest
-        Pos _ (HSCDirective; HSCDirectiveBraced) : rest                   -> do
+        Pos _ HSCDirective : rest                                         -> do
           -- We cannot run hsc2hs here so we'll conservatively
           -- assume that everything is imported from a module.
           (_, remaining) <- findImportListEntries importType mempty $ dropCommas rest
+          pure (AssumedWildcardImportList, remaining)
+        Pos _ HSCDirectiveBraced : rest                                   -> do
+          -- We cannot run hsc2hs here so we'll conservatively
+          -- assume that everything is imported from a module.
+          (_, remaining) <- findImportListEntries importType mempty $ dropCommas $ dropBalancedBraces 1 rest
           pure (AssumedWildcardImportList, remaining)
         rest                                                              ->
           throwErrorWithCallStack $ "Unrecognised shape of import list:" ## ppTokens rest
@@ -613,3 +618,10 @@ isVanillaTypeName = maybe False (isUpper . fst) . T.uncons
 isOpTypeName :: Text -> Bool
 isOpTypeName = maybe False ((== ':') . fst) . T.uncons
 
+dropBalancedBraces :: Int -> [Pos ServerToken] -> [Pos ServerToken]
+dropBalancedBraces _ []                              = []
+dropBalancedBraces 0 ts                              = ts
+dropBalancedBraces n (Pos _ HSCDirectiveBraced : ts) = dropBalancedBraces (n + 1) ts
+dropBalancedBraces n (Pos _ LBrace       : ts)       = dropBalancedBraces (n + 1) ts
+dropBalancedBraces n (Pos _ RBrace       : ts)       = dropBalancedBraces (n - 1) ts
+dropBalancedBraces n (_                  : ts)       = dropBalancedBraces n ts
