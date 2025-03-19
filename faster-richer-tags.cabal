@@ -239,7 +239,7 @@ executable haskell-tags-server
     "-with-rtsopts=-N"
     -main-is HaskellTagsServerMain
 
-test-suite test-haskell-tags-server
+test-suite test-faster-richer-tags
   import: ghc-options
   if !os(windows)
     build-depends: unix >= 2.6
