@@ -164,7 +164,7 @@ analyzeImports filename imports qualifiers ts = do
       PName name : (d -> PAs : (d -> PName qualName : rest))                     -> pure (rest, name, Just qualName, False)
       PName name :                                    rest                       -> pure (rest, name, Nothing, False)
       _                                                                          -> mzero
-    -- Make sence of the data collected before
+    -- Make sense of the data collected before
     let qualType = case (isQual || isQualPost, qualName) of
           (True,  Nothing)        -> Qualified $ mkQual name
           (True,  Just qualName') -> Qualified $ mkQual qualName'
