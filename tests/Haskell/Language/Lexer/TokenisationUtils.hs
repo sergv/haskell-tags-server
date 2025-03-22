@@ -41,7 +41,6 @@ import Haskell.Language.Lexer.Types
   , Type(..)
   , SrcPos(..)
   , Line(..)
-  , breakBlocks
   , whereBlock
   , processTokens
   , UnstrippedTokens(..)

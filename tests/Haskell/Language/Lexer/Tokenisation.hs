@@ -11,7 +11,6 @@
 
 module Haskell.Language.Lexer.Tokenisation (tests) where
 
-import FastTags.Tag
 import Test.Tasty
 
 import Data.List qualified as L
@@ -19,8 +18,9 @@ import Data.Maybe (mapMaybe)
 import Data.Text qualified as T
 import Data.Void (Void)
 
-import Haskell.Language.Lexer (LitMode(..))
+import Haskell.Language.Blocks
 import Haskell.Language.Lexer.TokenisationUtils
+import Haskell.Language.Lexer.Types
 import TestUtils (makeTest)
 
 tests :: TestTree
@@ -672,6 +672,18 @@ testBreakBlocks = testGroup "Break blocks"
       [ [T "a", Newline 1, T "a", Newline 1, T "a"]
       , [T "b"]
       ]
+      -- CPP defines are ignored
+    , """
+      a
+       a
+      #define FOO
+       a
+      b
+      """
+      ==>
+      [ [T "a", Newline 1, T "a", Newline 1, CppDefine "FOO", T "a"]
+      , [T "b"]
+      ]
       -- intervening blank lines are ignored
     , """
       a
@@ -801,12 +813,9 @@ testBreakBlocks = testGroup "Break blocks"
     (==>) = makeTest (f LitVanilla)
     (|=>) = makeTest (f LitOutside)
     f :: LitMode Void -> T.Text -> [[ServerToken]]
-    f mode =
-      map (mapMaybe (embedServerToken . valOf) . unstrippedTokensOf)
+    f mode
+      = map (map valOf)
       . breakBlocks ProcessVanilla
-      . id
-      . UnstrippedTokens
-      . stripServerTokens'
       . tokenize' mode
 
 testWhereBlock :: TestTree

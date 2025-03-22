@@ -75,6 +75,7 @@ instance Store    ImportTarget
 instance Pretty ImportTarget where
   pretty = ppGeneric
 
+
 -- | Information about import statement
 data ImportSpec = ImportSpec
   { ispecImportKey     :: !ImportKey
@@ -87,6 +88,7 @@ instance Store  ImportSpec
 
 instance Pretty ImportSpec where
   pretty = ppGeneric
+
 
 -- NB See [Record fields visibility] why this function must not be
 -- incorporated into main name resolution logic (i.e. the 'LoadModule' module).
@@ -121,8 +123,8 @@ importBringsNamesQualifiedWith :: ImportSpec -> ImportQualifier -> Bool
 importBringsNamesQualifiedWith ImportSpec{ispecQualification} q =
   getQualifier ispecQualification == Just q
 
-data ImportQualification =
-    -- | Qualified import, e.g.
+data ImportQualification
+  = -- | Qualified import, e.g.
     --
     -- import qualified X as Y
     --
@@ -155,8 +157,9 @@ getQualifier (Qualified q)                   = Just q
 getQualifier Unqualified                     = Nothing
 getQualifier (BothQualifiedAndUnqualified q) = Just q
 
-data ImportType =
-    -- | Explicit import list of an import statement, e.g.
+
+data ImportType
+  = -- | Explicit import list of an import statement, e.g.
     --
     -- import Foo (x, y, z(Baz))
     -- import Bar ()
@@ -175,8 +178,9 @@ instance Store    ImportType
 instance Pretty ImportType where
   pretty = ppGeneric
 
-data ImportListSpec a =
-    NoImportList
+
+data ImportListSpec a
+  = NoImportList
     -- | When we canot precisely analyse an import list it's
     -- conservatively defaulted to "import all".
   | AssumedWildcardImportList
@@ -188,6 +192,7 @@ instance Store  a => Store  (ImportListSpec a)
 
 instance Pretty a => Pretty (ImportListSpec a) where
   pretty = ppGeneric
+
 
 -- | User-provided import/hiding list.
 data ImportList = ImportList
@@ -201,6 +206,7 @@ instance Store  ImportList
 instance Pretty ImportList where
   pretty ImportList{ilImportType, ilEntries} =
     ppFoldableHeader ("Import list[" <> pretty ilImportType <> "]") ilEntries
+
 
 data EntryWithChildren childAnn name = EntryWithChildren
   { entryName               :: !name
@@ -226,15 +232,15 @@ instance HasKey (EntryWithChildren ann SymbolName) where
   {-# INLINE getKey #-}
   getKey = entryName
 
-data ChildrenVisibility ann =
-    -- | Wildcard import/export, e.g. Foo(..)
+data ChildrenVisibility ann
+  = -- | Wildcard import/export, e.g. Foo(..)
     VisibleAllChildren
     -- | Import/export with explicit list of children, e.g. Foo(Bar, Baz), Quux(foo, bar).
     -- Set is always non-empty.
   | VisibleSpecificChildren !(Map UnqualifiedSymbolName ann)
     -- | Wildcard export with some things added in, so they'll be visible on
     -- wildcard import, e.g.
-    -- ErrorCall(..,ErrorCall)
+    -- ErrorCall(.., ErrorCall)
   | VisibleAllChildrenPlusSome !(Map UnqualifiedSymbolName ann)
   deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
 
