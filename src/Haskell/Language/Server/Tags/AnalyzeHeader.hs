@@ -19,7 +19,6 @@ module Haskell.Language.Server.Tags.AnalyzeHeader
   ) where
 
 import Control.Arrow (first, second)
-import Control.Category ((>>>))
 import Control.Monad (mzero)
 import Control.Monad.Except.Ext
 import Control.Monad.Trans.Maybe
@@ -67,7 +66,7 @@ analyzeHeader filename ts =
       (dropNLs -> Pos _ (T modName) :
         (break ((== KWWhere) . valOf) . dropNLs -> (exportList, Pos _ KWWhere : body))) -> do
       (importSpecs, importQualifiers, body') <- analyzeImports filename mempty mempty body
-      exports                                <- analyzeExports filename importQualifiers exportList
+      exports                                <- analyzeExports filename importQualifiers $ dropAllCppDefines exportList
       let header = ModuleHeader
             { mhModName          = mkModuleName modName
             , mhImports          = importSpecs
@@ -112,10 +111,13 @@ pattern PType         <- Pos _ KWType
 pattern PAnyName      :: Text -> Pos ServerToken
 pattern PAnyName name <- Pos _ (tokToName -> Just name)
 
-pattern PName'             :: SrcPos -> Text -> Pos ServerToken
-pattern PName' pos name    <- Pos pos (T name)
-pattern PAnyName'          :: SrcPos -> Text -> Pos ServerToken
-pattern PAnyName' pos name <- Pos pos (tokToName -> Just name)
+-- pattern PCppDefine     :: Text -> Pos ServerToken
+-- pattern PCppDefine str <- Pos _ (CppDefine str)
+
+pattern PName'              :: Line -> Text -> Pos ServerToken
+pattern PName' line name    <- Pos SrcPos{posLine = line} (T name)
+pattern PAnyName'           :: Line -> Text -> Pos ServerToken
+pattern PAnyName' line name <- Pos SrcPos{posLine = line} (tokToName -> Just name)
 
 analyzeImports
   :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadLog m)
@@ -152,7 +154,7 @@ analyzeImports filename imports qualifiers ts = do
         ts3    :: [Pos ServerToken]
         isQual :: Bool
         (ts3, isQual)
-          = first (d >>> dropPackageImport)
+          = first (dropPackageImport . d)
           . extractQualified
           . d
           . dropSafeImport
@@ -210,6 +212,7 @@ analyzeImports filename imports qualifiers ts = do
           , ispecQualification = qual
           , ispecImportList    = importList
           }
+
     -- Analyze comma-separated list of entries, starting at _|_:
     -- - Foo_|_
     -- - Foo_|_(Bar, Baz)
@@ -225,99 +228,105 @@ analyzeImports filename imports qualifiers ts = do
           PHiding : (dropNLs -> PLParen : rest) -> findImportListEntries Hidden mempty (dropNLs rest)
           PLParen : rest                        -> findImportListEntries Imported mempty (dropNLs rest)
           _                                     -> pure (NoImportList, toks)
+
     findImportListEntries
       :: ImportType
       -> KeyMap Set (EntryWithChildren () UnqualifiedSymbolName)
       -> [Pos ServerToken]
       -> m (ImportListSpec ImportList, [Pos ServerToken])
-    findImportListEntries importType acc toks' = do
-      -- logDebug $ "[findImportListEntries] toks =" <+> ppTokens toks
-      case dropNLs toks' of
-        []                                                                ->
-          pure (SpecificImports importList, [])
-        -- Reaching here means tricks with preprocessor which we cannot
-        -- reasonably handle. E.g.
-        --
-        -- > import Foo
-        -- > #ifdef FOO
-        -- >   ( foo
-        -- >   , bar
-        -- > #else
-        -- >   ( baz
-        -- >   , quux
-        -- > #endif
-        -- >   , fizz
-        -- >   )
-        rest@(PImport : _)                                                ->
-          pure (SpecificImports importList, rest)
-        PRParen : rest                                                    ->
-          pure (SpecificImports importList, rest)
-        -- Type import
-        PType : PName name : rest                                         ->
-          entryWithoutChildren name rest
-        PType : PLParen : PAnyName name : PRParen : rest                  ->
-          entryWithoutChildren name rest
-        -- Pattern import
-        PPattern : restWithName@(PName name : rest)
-          | isVanillaTypeName name
-          , not $ isChildrenList filename rest ->
-            entryWithoutChildren name rest
-          | otherwise                          ->
-            entryWithoutChildren "pattern" restWithName
-        PPattern : restWithName@(PLParen : PAnyName name : PRParen : rest)
-          | isOpTypeName name
-          , not $ isChildrenList filename rest ->
-            entryWithoutChildren name rest
-          | otherwise                          ->
-            entryWithoutChildren "pattern" restWithName
-        -- Vanilla function/operator/consturtor/type import
-        PLParen : PAnyName name : PRParen : rest                          ->
-          entryWithChildren "operator in import list" name rest
-        PLParen : PName name : PRParen : rest                             ->
-          entryWithChildren "operator in import list" name rest
-        PName name : rest                                                 ->
-          entryWithChildren "name in import list" name rest
-        PLParen : rest                                                    ->
-          findImportListEntries importType acc rest
-        Pos _ HSCDirective : rest                                         -> do
-          -- We cannot run hsc2hs here so we'll conservatively
-          -- assume that everything is imported from a module.
-          (_, remaining) <- findImportListEntries importType mempty $ dropCommas rest
-          pure (AssumedWildcardImportList, remaining)
-        Pos _ HSCDirectiveBraced : rest                                   -> do
-          -- We cannot run hsc2hs here so we'll conservatively
-          -- assume that everything is imported from a module.
-          (_, remaining) <- findImportListEntries importType mempty $ dropCommas $ dropBalancedBraces 1 rest
-          pure (AssumedWildcardImportList, remaining)
-        rest                                                              ->
-          throwErrorWithCallStack $ "Unrecognised shape of import list:" ## ppTokens rest
+    findImportListEntries importType = go
       where
-        importList :: ImportList
-        importList = ImportList
-          { ilEntries    = acc
-          , ilImportType = importType
-          }
-        entryWithChildren
-          :: Doc Void
-          -> Text
-          -> [Pos ServerToken]
-          -> m (ImportListSpec ImportList, [Pos ServerToken])
-        entryWithChildren descr name rest = do
-          (children, rest') <- snd $ analyzeChildren descr filename $ dropNLs rest
-          name'             <- mkUnqualName name
-          let newEntry = EntryWithChildren name' $ (() <$) <$> children
-          findImportListEntries importType (KM.insert newEntry acc) $ dropCommas rest'
-        entryWithoutChildren :: Text -> [Pos ServerToken] -> m (ImportListSpec ImportList, [Pos ServerToken])
-        entryWithoutChildren name rest = do
-          name' <- mkUnqualName name
-          let newEntry = mkEntryWithoutChildren name'
-          findImportListEntries importType (KM.insert newEntry acc) $ dropCommas rest
-        mkUnqualName :: Text -> m UnqualifiedSymbolName
-        mkUnqualName name =
-          case mkUnqualifiedSymbolName (mkSymbolName name) of
-            Nothing    ->
-              throwErrorWithCallStack $ "Invalid qualified entry on import list:" <+> docFromText name
-            Just name' -> pure name'
+        go acc toks' = do
+          -- logDebug $ "[findImportListEntries] toks =" <+> ppTokens toks
+          case dropNLs toks' of
+            []                                                                ->
+              pure (SpecificImports importList, [])
+            -- Reaching here means tricks with preprocessor which we cannot
+            -- reasonably handle. E.g.
+            --
+            -- > import Foo
+            -- > #ifdef FOO
+            -- >   ( foo
+            -- >   , bar
+            -- > #else
+            -- >   ( baz
+            -- >   , quux
+            -- > #endif
+            -- >   , fizz
+            -- >   )
+            rest@(PImport : _)                                                ->
+              pure (SpecificImports importList, rest)
+            PRParen : rest                                                    ->
+              pure (SpecificImports importList, rest)
+            -- Type import
+            PType : PName name : rest                                         ->
+              entryWithoutChildren name rest
+            PType : PLParen : PAnyName name : PRParen : rest                  ->
+              entryWithoutChildren name rest
+            -- Pattern import
+            PPattern : restWithName@(PName name : rest)
+              | isVanillaTypeName name
+              , not $ isChildrenList filename rest ->
+                entryWithoutChildren name rest
+              | otherwise                          ->
+                entryWithoutChildren "pattern" restWithName
+            PPattern : restWithName@(PLParen : PAnyName name : PRParen : rest)
+              | isOpTypeName name
+              , not $ isChildrenList filename rest ->
+                entryWithoutChildren name rest
+              | otherwise                          ->
+                entryWithoutChildren "pattern" restWithName
+            -- Vanilla function/operator/consturtor/type import
+            PLParen : PAnyName name : PRParen : rest                          ->
+              entryWithChildren "operator in import list" name rest
+            PLParen : PName name : PRParen : rest                             ->
+              entryWithChildren "operator in import list" name rest
+            PName name : rest                                                 ->
+              entryWithChildren "name in import list" name rest
+            PLParen : rest                                                    ->
+              go acc rest
+            Pos _ HSCDirective : rest                                         -> do
+              -- We cannot run hsc2hs here so we'll conservatively
+              -- assume that everything is imported from a module.
+              (_, remaining) <- go mempty $ dropCommas rest
+              pure (AssumedWildcardImportList, remaining)
+            Pos _ HSCDirectiveBraced : rest                                   -> do
+              -- We cannot run hsc2hs here so we'll conservatively
+              -- assume that everything is imported from a module.
+              (_, remaining) <- go mempty $ dropCommas $ dropBalancedBraces 1 rest
+              pure (AssumedWildcardImportList, remaining)
+            rest                                                              ->
+              throwErrorWithCallStack $ "Unrecognised shape of import list:" ## ppTokens rest
+          where
+            importList :: ImportList
+            importList = ImportList
+              { ilEntries    = acc
+              , ilImportType = importType
+              }
+
+            entryWithChildren
+              :: Doc Void
+              -> Text
+              -> [Pos ServerToken]
+              -> m (ImportListSpec ImportList, [Pos ServerToken])
+            entryWithChildren descr name rest = do
+              (children, rest') <- snd $ analyzeChildren descr filename $ dropNLs rest
+              name'             <- mkUnqualName name
+              let newEntry = EntryWithChildren name' $ (() <$) <$> children
+              go (KM.insert newEntry acc) $ dropCommas rest'
+
+            entryWithoutChildren :: Text -> [Pos ServerToken] -> m (ImportListSpec ImportList, [Pos ServerToken])
+            entryWithoutChildren name rest = do
+              name' <- mkUnqualName name
+              let newEntry = mkEntryWithoutChildren name'
+              go (KM.insert newEntry acc) $ dropCommas rest
+
+mkUnqualName :: (WithCallStack, MonadError ErrorMessage m) => Text -> m UnqualifiedSymbolName
+mkUnqualName name =
+  case mkUnqualifiedSymbolName (mkSymbolName name) of
+    Nothing    ->
+      throwErrorWithCallStack $ "Invalid qualified entry on import list:" <+> docFromText name
+    Just name' -> pure name'
 
 analyzeExports
   :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadLog m)
@@ -354,23 +363,23 @@ analyzeExports filename importQualifiers ts = do
         PRParen : _ ->
           pure exports
         -- Pattern export
-        PPattern : restWithName@(PName' SrcPos{posLine} name : rest)
+        PPattern : restWithName@(PName' line name : rest)
           | isVanillaTypeName name
           , not $ isChildrenList filename rest ->
-            entryWithoutChildren name posLine Types.Pattern rest
+            entryWithoutChildren name line Types.Pattern rest
           | otherwise                 ->
-            entryWithoutChildren "pattern" posLine Types.Function restWithName
-        PPattern : restWithName@(PLParen : PAnyName' SrcPos{posLine} name : PRParen : rest)
+            entryWithoutChildren "pattern" line Types.Function restWithName
+        PPattern : restWithName@(PLParen : PAnyName' line name : PRParen : rest)
           | isOpTypeName name
           , not $ isChildrenList filename rest ->
-            entryWithoutChildren name posLine Types.Pattern rest
+            entryWithoutChildren name line Types.Pattern rest
           | otherwise                 ->
-            entryWithoutChildren "pattern" posLine Types.Function restWithName
+            entryWithoutChildren "pattern" line Types.Function restWithName
         -- Type export
-        PType : PName' SrcPos{posLine} name : rest ->
-          entryWithoutChildren name posLine Types.Family rest
-        PType : PLParen : PAnyName' SrcPos{posLine} name : PRParen : rest ->
-          entryWithoutChildren name posLine Types.Family rest
+        PType : PName' line name : rest ->
+          entryWithoutChildren name line Types.Family rest
+        PType : PLParen : PAnyName' line name : PRParen : rest ->
+          entryWithoutChildren name line Types.Family rest
         -- Module reexport
         PModule : PName name : rest ->
           consumeComma entries (newReexports <> reexports) rest
@@ -382,13 +391,12 @@ analyzeExports filename importQualifiers ts = do
               $ toList
               $ M.findWithDefault (modName :| []) (mkImportQualifier modName) importQualifiers
         -- Vanilla function/operator/consturtor/type export
-        PLParen : PName' SrcPos{posLine} name : PRParen : rest ->
-          entryWithChildren "operator in export list" name posLine (typeForName Types.Type name) rest
+        PLParen : PName' line name : PRParen : rest ->
+          entryWithChildren "operator in export list" name line (typeForName Types.Type name) rest
         PLParen : Pos SrcPos{posLine} (tokToName -> Just name) : PRParen : rest ->
           entryWithChildren "operator in export list" name posLine (typeForName Types.Type name) rest
-        PName' SrcPos{posLine} name : rest ->
-
-          entryWithChildren "name in export list" name posLine (typeForName Types.Type name) rest
+        PName' line name : rest ->
+          entryWithChildren "name in export list" name line (typeForName Types.Type name) rest
         PLParen : rest ->
           go entries reexports rest
         toks' ->
@@ -464,9 +472,12 @@ typeForName constructorLikeTag name =
 
 isChildrenList :: FullPath 'File -> [Pos ServerToken] -> Bool
 isChildrenList filename toks =
-  case fst (analyzeChildren mempty filename toks :: (ChildrenPresence, Either ErrorMessage (Maybe (ChildrenVisibility PosAndType), [Pos ServerToken]))) of
+  case fst res of
     ChildrenPresent -> True
     ChildrenAbsent  -> False
+  where
+    res :: (ChildrenPresence, Either ErrorMessage (Maybe (ChildrenVisibility PosAndType), [Pos ServerToken]))
+    res = analyzeChildren mempty filename toks
 
 data ChildrenPresence = ChildrenPresent | ChildrenAbsent
 
@@ -511,7 +522,9 @@ analyzeChildren listType filename toks =
       | not $ isNonOperatorName name -> analyzeList rest
       | otherwise                    -> (ChildrenAbsent, pure (Nothing, toks))
     toks'                                            ->
-      (ChildrenAbsent, throwErrorWithCallStack $ "Cannot handle children of" <+> listType <> ":" ## ppTokens toks')
+      ( ChildrenAbsent
+      , throwErrorWithCallStack $ "While analyzing" <+> PP.squotes (pretty filename) <> ": cannot handle children of" <+> listType <> ":" ## ppTokens toks'
+      )
   where
     analyzeList
       :: WithCallStack
@@ -541,23 +554,23 @@ analyzeChildren listType filename toks =
       -> [Pos ServerToken]
       -> (ChildrenPresence, m (Map UnqualifiedSymbolName PosAndType, WildcardPresence, [Pos ServerToken]))
     extractChildren wildcardPresence !names = \case
-      []                                                                ->
+      []                                                     ->
         (childrenPresence, pure (names, wildcardPresence, []))
-      PRParen : rest                                                    ->
+      PRParen : rest                                         ->
         (childrenPresence, pure (names, wildcardPresence, rest))
-      PType : PName' SrcPos{posLine} name : rest                        ->
-        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType filename posLine Type) names) $ dropCommas rest
-      PType : PLParen : PAnyName' SrcPos{posLine} name : PRParen : rest ->
-        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType filename posLine Type) names) $ dropCommas rest
-      PName ".." : rest                                                 ->
+      PType : PName' line name : rest                        ->
+        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType filename line Type) names) $ dropCommas rest
+      PType : PLParen : PAnyName' line name : PRParen : rest ->
+        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType filename line Type) names) $ dropCommas rest
+      PName ".." : rest                                      ->
         extractChildren (wildcardPresence <> WildcardPresent) names $ dropCommas rest
-      PAnyName' SrcPos{posLine} name : rest                             ->
-        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType filename posLine (typeForName Constructor name)) names) $ dropCommas rest
-      PLParen : PAnyName' SrcPos{posLine} name : PRParen : rest         ->
-        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType filename posLine (typeForName Constructor name)) names) $ dropCommas rest
-      PLParen : rest                                                    ->
+      PAnyName' line name : rest                             ->
+        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType filename line (typeForName Constructor name)) names) $ dropCommas rest
+      PLParen : PAnyName' line name : PRParen : rest         ->
+        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType filename line (typeForName Constructor name)) names) $ dropCommas rest
+      PLParen : rest                                         ->
         extractChildren wildcardPresence names $ dropNLs rest
-      toks'                                                             ->
+      toks'                                                  ->
         (ChildrenAbsent, throwErrorWithCallStack $ "Unrecognised children list structure:" ## ppTokens toks')
       where
         childrenPresence
@@ -625,3 +638,16 @@ dropBalancedBraces n (Pos _ HSCDirectiveBraced : ts) = dropBalancedBraces (n + 1
 dropBalancedBraces n (Pos _ LBrace       : ts)       = dropBalancedBraces (n + 1) ts
 dropBalancedBraces n (Pos _ RBrace       : ts)       = dropBalancedBraces (n - 1) ts
 dropBalancedBraces n (_                  : ts)       = dropBalancedBraces n ts
+
+dropAllCppDefines :: [Pos ServerToken] -> [Pos ServerToken]
+dropAllCppDefines = filter $ \case
+  Pos _ CppDefine{} -> False
+  _                 -> True
+
+-- dropCppDefinesInBalancedParens :: Int -> [Pos ServerToken] -> [Pos ServerToken]
+-- dropCppDefinesInBalancedParens _ []                              = []
+-- dropCppDefinesInBalancedParens 0 ts                              = ts
+-- dropCppDefinesInBalancedParens n (Pos _ HSCDirectiveBraced : ts) = dropBalancedBraces (n + 1) ts
+-- dropCppDefinesInBalancedParens n (Pos _ LBrace       : ts)       = dropBalancedBraces (n + 1) ts
+-- dropCppDefinesInBalancedParens n (Pos _ RBrace       : ts)       = dropBalancedBraces (n - 1) ts
+-- dropCppDefinesInBalancedParens n (_                  : ts)       = dropBalancedBraces n ts

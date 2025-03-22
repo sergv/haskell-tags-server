@@ -866,6 +866,73 @@ moduleWithMultilinePreprocessor = TestCase
       }
   }
 
+moduleWithDefineInImportList :: Test
+moduleWithDefineInImportList = TestCase
+  { testName       = "Module define in import list"
+  , input          =
+      """
+      module Test where
+      import Mod
+        ( Foo
+      #define FOO
+        , Bar
+      #ifndef BAR
+      #define BAR
+      #endif
+        , Frob1(..)
+      #define FOO
+        , Frob2(
+      #define FOO
+              Baz1
+      #define FOO
+              ,
+      #define FOO
+      #define FOO
+              Baz2
+      #define FOO
+            )
+        )
+      """
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "Test"
+      , mhExports          = NoExports
+      , mhImportQualifiers = mempty
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Mod"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = SpecificImports ImportList
+                  { ilEntries    = KM.fromList
+                      [ EntryWithChildren
+                          { entryName               = mkUnqualSymName "Foo"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName "Bar"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName "Frob1"
+                          , entryChildrenVisibility = Just VisibleAllChildren
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName "Frob2"
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
+                              [ mkUnqualSymName "Baz1"
+                              , mkUnqualSymName "Baz2"
+                              ]
+                          }
+                      ]
+                  , ilImportType = Imported
+                  }
+              }
+          ]
+      }
+  }
+
 moduleWithImportOfPatternFuncTest :: Test
 moduleWithImportOfPatternFuncTest = TestCase
   { testName       = "Import of \"pattern\" function"
@@ -2051,6 +2118,102 @@ moduleWithDisabledAndEnabledSectionsTest = TestCase
       }
   }
 
+moduleWithDefineInExportList :: Test
+moduleWithDefineInExportList = TestCase
+  { testName       = "Module with define in export list"
+  , input          =
+      """
+      module ModuleWithExport
+        ( foo
+        , Bar(..)
+      #define FOO
+        , Baz(Quux, Fizz,
+      #define BAZ
+          wat, (??))
+        , Frob(.., Frob', Frob'')
+        , pattern Pat
+      #ifndef BAR
+      #define BAR
+      #endif
+        , pattern (:!:)
+        , module Frob, type Typ
+        , type (++)
+        , (:$:)
+        , (:$$:)(..)
+        , (:$$*:)((:$$$*:)
+        , (:$$$**:))
+        ) where
+      """
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "ModuleWithExport"
+      , mhExports          = SpecificExports ModuleExports
+          { meExportedEntries    = KM.fromList
+              [ EntryWithChildren
+                  { entryName               = (mkSymbolName "foo", pt 1 Function)
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = (mkSymbolName "Bar", pt 1 Type)
+                  , entryChildrenVisibility = Just VisibleAllChildren
+                  }
+              , EntryWithChildren
+                  { entryName               = (mkSymbolName "Baz", pt 1 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName "Quux", pt 1 Constructor)
+                      , (mkUnqualSymName "Fizz", pt 1 Constructor)
+                      , (mkUnqualSymName "wat",  pt 1 Function)
+                      , (mkUnqualSymName "??",   pt 1 Operator)
+                      ]
+                  }
+              , EntryWithChildren
+                  { entryName               = (mkSymbolName "Frob", pt 1 Type)
+                  , entryChildrenVisibility = Just $ VisibleAllChildrenPlusSome $ M.fromList
+                      [ (mkUnqualSymName "Frob'", pt 1 Constructor)
+                      , (mkUnqualSymName "Frob''", pt 1 Constructor)
+                      ]
+                  }
+              , EntryWithChildren
+                  { entryName               = (mkSymbolName "Pat", pt 1 Pattern)
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = (mkSymbolName ":!:", pt 1 Pattern)
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = (mkSymbolName "Typ", pt 1 Family)
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = (mkSymbolName "++", pt 1 Family)
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = (mkSymbolName ":$:", pt 1 Type)
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = (mkSymbolName ":$$:", pt 1 Type)
+                  , entryChildrenVisibility = Just VisibleAllChildren
+                  }
+              , EntryWithChildren
+                  { entryName               = (mkSymbolName ":$$*:", pt 1 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName ":$$$*:",  pt 1 Constructor)
+                      , (mkUnqualSymName ":$$$**:", pt 1 Constructor)
+                      ]
+                  }
+              ]
+          , meReexports          = S.singleton $ mkModuleName "Frob"
+          , meHasWildcardExports = True
+          }
+      , mhImportQualifiers = mempty
+      , mhImports          = mempty
+      }
+  }
+
+
+
 moduleWithExportOfPatternFuncTest :: Test
 moduleWithExportOfPatternFuncTest = TestCase
   { testName       = "Export of \"pattern\" function"
@@ -2553,6 +2716,7 @@ tests = testGroup "Header analysis tests"
     , doTest moduleWithParensInImportList1
     , doTest moduleWithParensInImportList2
     , doTest moduleWithMultilinePreprocessor
+    , doTest moduleWithDefineInImportList
     , testGroup "pattern as a function name"
         [ doTest moduleWithImportOfPatternFuncTest
         , doTest moduleWithImportOfManyFuncsAndPatternFuncTest
@@ -2587,6 +2751,7 @@ tests = testGroup "Header analysis tests"
     , doTest moduleWithDisabledSectionTest1
     , doTest moduleWithDisabledSectionTest2
     , doTest moduleWithDisabledAndEnabledSectionsTest
+    , doTest moduleWithDefineInExportList
     , testGroup "pattern as a function name"
         [ doTest moduleWithExportOfPatternFuncTest
         , doTest moduleWithExportOfManyFuncsAndPatternFuncTest

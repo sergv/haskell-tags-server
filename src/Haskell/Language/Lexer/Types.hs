@@ -22,6 +22,7 @@ module Haskell.Language.Lexer.Types
   , isLiterateEnabled
   , isLiterateBirdInside
   , isLiterateLatexInside
+  , ProcessMode(..)
 
   , PragmaType(..)
   , ServerToken(..)
@@ -31,6 +32,7 @@ module Haskell.Language.Lexer.Types
   , stripServerTokens
   , embedServerToken
   , removeDuplicatePatterns
+
 
   , forallServerToken
   , patternServerToken
@@ -62,12 +64,12 @@ import FastTags.Tag
   , TagVal(..)
   , ParentTag(..)
   , Type(..)
-  , breakBlocks
   , whereBlock
   , UnstrippedTokens(..)
   , unstrippedTokensOf
   )
 import FastTags.Token (Line(..), Offset(..), SrcPos(..), increaseLine, posLine, unLine)
+import FastTags.Tag (ProcessMode(..))
 
 {-# INLINE mkSrcPos #-}
 mkSrcPos :: Line -> SrcPos
