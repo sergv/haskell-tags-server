@@ -23,6 +23,7 @@ import Haskell.Language.Lexer.Tests qualified as LexerTests
 import Haskell.Language.Lexer.Preprocessor.Tests qualified as PreprocessorTests
 import Haskell.Language.Server.Tags.AnalyzeHeaderTests qualified as AnalyzeHeaderTests
 import Haskell.Language.Server.Tags.TypesTests qualified as TypesTests
+import Haskell.Language.ModuleTests qualified as ModuleTests
 import ServerTests qualified
 
 main :: IO ()
@@ -41,5 +42,6 @@ main = withSocketsDo $ do
         , AnalyzeHeaderTests.tests
         , LexerTests.tests
         , PreprocessorTests.tests
+        , ModuleTests.tests
         ]
   defaultMainWithIngredients defaultIngredients tests

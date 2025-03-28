@@ -244,8 +244,8 @@ loadModuleFromSource suggestedModuleName modifTime filename source = do
     Right tokens' ->
       makeModule suggestedModuleName modifTime filename tokens'
   where
-    tokens =
-      tokenize (modeFromFilename filename) source
+    tokens :: Either ErrorMessage [Pos ServerToken]
+    tokens = tokenize (modeFromFilename filename) source
 
 makeModule
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)

@@ -176,6 +176,9 @@ library
     Haskell.Language.Server.Tags.Types.Modules
 
     Prettyprinter.Ext
+
+    -- Interface for tests
+    Haskell.Language.Server.Tags.LoadModule
   other-modules:
     Control.Monad.EitherCPS
 
@@ -184,7 +187,6 @@ library
     Data.Path.Internal
     Data.Strict.Pair
 
-    Haskell.Language.Server.Tags.LoadModule
     Haskell.Language.Server.Tags.Search
     Haskell.Language.Server.Tags.SearchM
   hs-source-dirs:
@@ -254,6 +256,7 @@ test-suite test-faster-richer-tags
     Main.hs
   other-modules:
     Control.Monad.Logging.DiscardLogs
+    Data.GenericDiff
     Data.Map.NonEmpty.Tests
     Haskell.Language.Lexer.Preprocessor.Tests
     Haskell.Language.Lexer.Tests
@@ -262,6 +265,7 @@ test-suite test-faster-richer-tags
     Haskell.Language.Server.Tags.AnalyzeHeaderTests
     Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions
     Haskell.Language.Server.Tags.TypesTests
+    Haskell.Language.ModuleTests
     PortPool
     ServerTests
     ServerTests.Data
@@ -274,6 +278,7 @@ test-suite test-faster-richer-tags
     , bytestring
     , containers
     , deepseq
+    , dlist
     , exceptions
     , fast-tags
     , faster-richer-tags
@@ -288,6 +293,7 @@ test-suite test-faster-richer-tags
     , tasty-hunit >= 0.4
     , tasty-quickcheck
     , text
+    , time
     , transformers
     , transformers-base
   ghc-options:
