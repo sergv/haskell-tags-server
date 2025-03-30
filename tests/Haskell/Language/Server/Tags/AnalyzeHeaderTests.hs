@@ -13,13 +13,16 @@
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 module Haskell.Language.Server.Tags.AnalyzeHeaderTests (tests) where
 
 import Control.Arrow
-import Control.Monad (unless)
+import Control.Monad
 import Control.Monad.ErrorExcept
 import Control.Monad.Writer
 
+import Data.Foldable
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
 import Data.Set qualified as S
@@ -34,6 +37,7 @@ import Haskell.Language.Lexer (tokenize, modeFromFilename)
 import Haskell.Language.Lexer.Types (Pos, ServerToken, Line(..), Type(..))
 
 import Control.Monad.Logging.Simple
+import Data.GenericDiff
 import Data.KeyMap qualified as KM
 import Data.Path
 import Data.SubkeyMap qualified as SubkeyMap
@@ -2788,30 +2792,8 @@ doTest TestCase{testName, input, expectedResult} =
       Right (Just header, _) -> do
         let msg = ppDictHeader "Headers are different" $
               ("Input" :-> PP.dquotes (pretty input)) :
-              [ name :-> ppDictAssocList ["Actual" :-> x, "Expected" :-> y]
-              | (name, different, x, y) <-
-                [ ( "ModuleName"
-                  , mhModName header /= mhModName expectedResult
-                  , pretty $ mhModName header
-                  , pretty $ mhModName expectedResult
-                  )
-                , ( "Exports"
-                  , mhExports header /= mhExports expectedResult
-                  , pretty $ mhExports header
-                  , pretty $ mhExports expectedResult
-                  )
-                , ( "ImportQualifiers"
-                  , mhImportQualifiers header /= mhImportQualifiers expectedResult
-                  , ppMapWith pretty ppNE $ mhImportQualifiers header
-                  , ppMapWith pretty ppNE $ mhImportQualifiers expectedResult
-                  )
-                , ( "Imports"
-                  , mhImports header /= mhImports expectedResult
-                  , ppSubkeyMapWith pretty pretty ppNE $ mhImports header
-                  , ppSubkeyMapWith pretty pretty ppNE $ mhImports expectedResult
-                  )
-                ]
-              , different
+              [ ppDifference diff
+              | diff <- toList $ genericDiff $ ActualExpected header expectedResult
               ]
         unless (header == expectedResult) $
           assertFailure $ renderString $ msg ## logsDoc

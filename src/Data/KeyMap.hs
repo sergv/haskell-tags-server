@@ -46,6 +46,8 @@ import Data.Store (Store)
 import GHC.Generics
 
 import Prettyprinter.Combinators
+import Prettyprinter.Generics
+import Prettyprinter.MetaDoc
 
 -- | Map than maintains sets of values that all share some key.
 -- Every value must be a member of 'HasKey' typeclass.
@@ -61,6 +63,13 @@ instance (NFData (f a), NFData (Key a)) => NFData (KeyMap f a)
 
 instance (Pretty (Key a), Pretty (f a)) => Pretty (KeyMap f a) where
   pretty = ppAssocList . M.toList . unKeyMap
+
+instance {-# OVERLAPS #-} (PPGenericOverride (Key a), PPGenericOverride (f a)) => PPGenericOverride (KeyMap f a) where
+  ppGenericOverride
+    = compositeMetaDoc
+    . ppAssocListWith (mdPayload . ppGenericOverride) (mdPayload . ppGenericOverride)
+    . M.toList
+    . unKeyMap
 
 instance (Ord (Key a), Semigroup (f a)) => Semigroup (KeyMap f a) where
   {-# INLINE (<>) #-}

@@ -151,13 +151,10 @@ resolveQualifier qual ModuleHeader{mhImports, mhImportQualifiers} =
   where
     qualifiedModName = getImportQualifier qual
 
-data ModuleExportSpec a =
-    -- | Export list completely absent.
-    NoExports
-  | -- | Export list specifies no entries.
-    EmptyExports
-  | -- | Exprort list specifies entries.
-    SpecificExports !a
+data ModuleExportSpec a
+  = NoExports          -- ^ Export list completely absent.
+  | EmptyExports       -- ^ Export list specifies no entries.
+  | SpecificExports !a -- ^ Exprort list specifies entries.
   deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
 
 instance NFData a => NFData (ModuleExportSpec a)
