@@ -8,6 +8,7 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE NamedFieldPuns       #-}
+{-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -36,13 +37,14 @@ module Data.SubkeyMap
   , keys
   , restrictKeys
   , withoutKeys
+
+  , ppSubkeyMapWith
   ) where
 
 import Prelude hiding (lookup, null)
 
 import Control.Arrow
 import Control.DeepSeq
-
 import Data.Kind (Type)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
@@ -51,6 +53,7 @@ import Data.Set (Set)
 import Data.Set qualified as S
 import Data.Store (Store)
 import GHC.Generics (Generic)
+import Prettyprinter.Combinators
 
 class (Ord k, Ord (Subkey k)) => HasSubkey k where
   type Subkey k :: Type
@@ -228,3 +231,18 @@ withoutKeys SubkeyMap{smMainMap, smSubMap} ks =
 {-# INLINE indexBySet #-}
 indexBySet :: Ord k => Map k v -> Set k -> [(k, v)]
 indexBySet m ixs = M.toList $ M.restrictKeys m ixs
+
+ppSubkeyMapWith
+  :: (k -> Doc ann)
+  -> (Subkey k -> Doc ann)
+  -> (v -> Doc ann)
+  -> SubkeyMap k v
+  -> Doc ann
+ppSubkeyMapWith ppKey ppSubKey ppVal sm = ppDictHeader "SubkeyMap"
+  [ "MainEntries" :-> ppAssocListWith ppKey ppVal (toList sm)
+  , "SubEntries"  :-> ppAssocListWith ppSubKey (ppSetWith ppKey) $ toSubkeyKeyList sm
+  ]
+
+instance (Pretty k, Pretty (Subkey k), Pretty v) => Pretty (SubkeyMap k v) where
+  pretty = ppSubkeyMapWith pretty pretty pretty
+

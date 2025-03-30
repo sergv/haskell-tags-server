@@ -17,7 +17,7 @@ module Prettyprinter.Ext
   , show'
   , show''
   , ppKeyMapWith
-  , ppSubkeyMapWith
+  , SubkeyMap.ppSubkeyMapWith
   , ppNEMap
   , ppMonoidalMapWith
   , docFromByteString
@@ -45,7 +45,6 @@ import Data.Map.NonEmpty (NonEmptyMap)
 import Data.Map.NonEmpty qualified as NEMap
 import Data.MonoidalMap (MonoidalMap)
 import Data.MonoidalMap qualified as MM
-import Data.SubkeyMap (SubkeyMap)
 import Data.SubkeyMap qualified as SubkeyMap
 
 docFromByteString :: UTF8.ByteString -> Doc ann
@@ -58,17 +57,6 @@ ppKeyMapWith
   -> KeyMap f a
   -> Doc ann
 ppKeyMapWith ppKey ppVal = ppAssocListWith ppKey (ppListWith ppVal . toList) . KM.toList
-
-ppSubkeyMapWith
-  :: (k -> Doc ann)
-  -> (SubkeyMap.Subkey k -> Doc ann)
-  -> (v -> Doc ann)
-  -> SubkeyMap k v
-  -> Doc ann
-ppSubkeyMapWith ppKey ppSubKey ppVal sm = ppDictHeader "SubkeyMap"
-  [ "MainEntries" :-> ppAssocListWith ppKey ppVal (SubkeyMap.toList sm)
-  , "SubEntries"  :-> ppAssocListWith ppSubKey (ppSetWith ppKey) $ SubkeyMap.toSubkeyKeyList sm
-  ]
 
 ppNEMap :: (Pretty k, Pretty v) => NonEmptyMap k v -> Doc ann
 ppNEMap = ppAssocList . toList . NEMap.toNonEmpty
