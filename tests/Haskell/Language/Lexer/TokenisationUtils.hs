@@ -56,7 +56,7 @@ testFullTagsWithoutPrefixes
   :: WithCallStack
   => FilePath -> LitMode Void -> T.Text -> [Pos TagVal] -> TestTree
 testFullTagsWithoutPrefixes fn mode = \source tags ->
-  makeTest ((sort *** map PP.renderString) . processTokens fn . tokenize' mode) source (tags, warnings)
+  makeTest ((sort *** map PP.renderStringWide) . processTokens fn . tokenize' mode) source (tags, warnings)
   where
     warnings :: [String]
     warnings = []
@@ -72,7 +72,7 @@ testTagNames fn mode source tags =
 
     process :: T.Text -> ([String], [String])
     process =
-      (sort . map untag *** map PP.renderString) . processTokens fn . tokenize' mode
+      (sort . map untag *** map PP.renderStringWide) . processTokens fn . tokenize' mode
 
 untag :: Pos TagVal -> String
 untag (Pos _ (TagVal name _ _)) = T.unpack name
@@ -81,7 +81,7 @@ tokenize'
   :: WithCallStack
   => LitMode Void -> T.Text -> [Pos ServerToken]
 tokenize' mode
-  = either (error . PP.renderString . PP.pretty) id
+  = either (error . PP.renderStringWide . PP.pretty) id
   . tokenize mode
   . TE.encodeUtf8
 
@@ -89,5 +89,5 @@ stripServerTokens' :: [Pos ServerToken] -> [Pos TokenVal]
 stripServerTokens' ts =
   case stripServerTokens ts of
     (ts', [])       -> ts'
-    (_,   es@(_:_)) -> error $ PP.renderString $
+    (_,   es@(_:_)) -> error $ PP.renderStringWide $
       PP.ppFoldableHeaderWith id "Errors while stripping server tokens:" es

@@ -2153,58 +2153,58 @@ moduleWithDefineInExportList = TestCase
       , mhExports          = SpecificExports ModuleExports
           { meExportedEntries    = KM.fromList
               [ EntryWithChildren
-                  { entryName               = (mkSymbolName "foo", pt 1 Function)
+                  { entryName               = (mkSymbolName "foo", pt 2 Function)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = (mkSymbolName "Bar", pt 1 Type)
+                  { entryName               = (mkSymbolName "Bar", pt 3 Type)
                   , entryChildrenVisibility = Just VisibleAllChildren
                   }
               , EntryWithChildren
-                  { entryName               = (mkSymbolName "Baz", pt 1 Type)
+                  { entryName               = (mkSymbolName "Baz", pt 5 Type)
                   , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
-                      [ (mkUnqualSymName "Quux", pt 1 Constructor)
-                      , (mkUnqualSymName "Fizz", pt 1 Constructor)
-                      , (mkUnqualSymName "wat",  pt 1 Function)
-                      , (mkUnqualSymName "??",   pt 1 Operator)
+                      [ (mkUnqualSymName "Quux", pt 5 Constructor)
+                      , (mkUnqualSymName "Fizz", pt 5 Constructor)
+                      , (mkUnqualSymName "wat",  pt 7 Function)
+                      , (mkUnqualSymName "??",   pt 7 Operator)
                       ]
                   }
               , EntryWithChildren
-                  { entryName               = (mkSymbolName "Frob", pt 1 Type)
+                  { entryName               = (mkSymbolName "Frob", pt 8 Type)
                   , entryChildrenVisibility = Just $ VisibleAllChildrenPlusSome $ M.fromList
-                      [ (mkUnqualSymName "Frob'", pt 1 Constructor)
-                      , (mkUnqualSymName "Frob''", pt 1 Constructor)
+                      [ (mkUnqualSymName "Frob'", pt 8 Constructor)
+                      , (mkUnqualSymName "Frob''", pt 8 Constructor)
                       ]
                   }
               , EntryWithChildren
-                  { entryName               = (mkSymbolName "Pat", pt 1 Pattern)
+                  { entryName               = (mkSymbolName "Pat", pt 9 Pattern)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = (mkSymbolName ":!:", pt 1 Pattern)
+                  { entryName               = (mkSymbolName ":!:", pt 13 Pattern)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = (mkSymbolName "Typ", pt 1 Family)
+                  { entryName               = (mkSymbolName "Typ", pt 14 Family)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = (mkSymbolName "++", pt 1 Family)
+                  { entryName               = (mkSymbolName "++", pt 15 Family)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = (mkSymbolName ":$:", pt 1 Type)
+                  { entryName               = (mkSymbolName ":$:", pt 16 Type)
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = (mkSymbolName ":$$:", pt 1 Type)
+                  { entryName               = (mkSymbolName ":$$:", pt 17 Type)
                   , entryChildrenVisibility = Just VisibleAllChildren
                   }
               , EntryWithChildren
-                  { entryName               = (mkSymbolName ":$$*:", pt 1 Type)
+                  { entryName               = (mkSymbolName ":$$*:", pt 18 Type)
                   , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
-                      [ (mkUnqualSymName ":$$$*:",  pt 1 Constructor)
-                      , (mkUnqualSymName ":$$$**:", pt 1 Constructor)
+                      [ (mkUnqualSymName ":$$$*:",  pt 18 Constructor)
+                      , (mkUnqualSymName ":$$$**:", pt 19 Constructor)
                       ]
                   }
               ]
@@ -2781,13 +2781,13 @@ doTest TestCase{testName, input, expectedResult} =
     (res, logs) <- runWriterT $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runErrorExceptT $ do
       (tokens :: [Pos ServerToken]) <-
         case tokenize (modeFromFilename filename) $ TE.encodeUtf8 input of
-          Left err -> liftIO $ assertFailure $ renderString $ "Failed to get tokens:" ## pretty err
+          Left err -> liftIO $ assertFailure $ renderStringWide $ "Failed to get tokens:" ## pretty err
           Right xs -> pure xs
       analyzeHeader filename tokens
     let logsDoc = "Logs, size " <> pretty (length logs) <> ":" ## PP.indent 2 (PP.vcat logs)
     case res of
-      Left msg               -> assertFailure $ renderString $ pretty msg ## logsDoc
-      Right (Nothing, _)     -> assertFailure $ renderString $
+      Left msg               -> assertFailure $ renderStringWide $ pretty msg ## logsDoc
+      Right (Nothing, _)     -> assertFailure $ renderStringWide $
         "No header detected, but was expecting header" ## pretty expectedResult ## logsDoc
       Right (Just header, _) -> do
         let msg = ppDictHeader "Headers are different" $
@@ -2796,4 +2796,4 @@ doTest TestCase{testName, input, expectedResult} =
               | diff <- toList $ genericDiff $ ActualExpected header expectedResult
               ]
         unless (header == expectedResult) $
-          assertFailure $ renderString $ msg ## logsDoc
+          assertFailure $ renderStringWide $ msg ## logsDoc

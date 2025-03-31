@@ -25,6 +25,7 @@ module Prettyprinter.Ext
   , module Prettyprinter.Combinators
   , module Prettyprinter.Generics
   , module Prettyprinter.Show
+  , renderStringWide
   ) where
 
 import Data.ByteString.Lazy.UTF8 qualified as UTF8
@@ -73,3 +74,6 @@ show' = T.pack . show
 
 show'' :: Show a => a -> TL.Text
 show'' = TL.pack . show
+
+renderStringWide :: Doc ann -> String
+renderStringWide = renderStringWith (LayoutOptions (AvailablePerLine 200 1))

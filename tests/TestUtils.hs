@@ -59,7 +59,7 @@ makeAssertion'
   => (a -> Either ErrorMessage b) -> a -> b -> Assertion
 makeAssertion' f x expected =
   case f x of
-    Left msg     -> assertFailure $ renderString $
+    Left msg     -> assertFailure $ renderStringWide $
       "Got error message:" ## pretty msg
     Right actual -> assertBool msg (actual == expected)
       where
