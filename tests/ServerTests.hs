@@ -118,7 +118,7 @@ data ServerConnection = ServerConnection
   }
 
 reportErr :: MonadBase IO m => Doc Void -> m a
-reportErr = liftBase . throwIO . ErrorCall . renderString
+reportErr = liftBase . throwIO . ErrorCall . renderStringWide
 
 withConnection
   :: forall m a. (MonadMask m, MonadBaseControl IO m, MonadFS m)
@@ -235,7 +235,7 @@ mkFindSymbolTest pool ServerTest{stTestName, stNameResolutionStrictness, stWorki
       Left err -> assertFailure' $ "Failure:" ## pretty err
   where
     assertFailure' :: MonadBase IO m => Doc ann -> m a
-    assertFailure' = liftBase . assertFailure . renderString
+    assertFailure' = liftBase . assertFailure . renderStringWide
 
 responseType :: Sexp -> Maybe Text
 responseType (ParenList (Symbol x : _)) = Just x

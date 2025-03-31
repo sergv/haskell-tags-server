@@ -95,7 +95,7 @@ doTest TestCase{testName, input, expectedResult = expectedResult :: UnresolvedMo
         loadModuleFromSource Nothing zeroTime filename $ TE.encodeUtf8 input
     let logsDoc = "Logs, size " <> pretty (length logs) <> ":" ## PP.indent 2 (PP.vcat logs)
     case res of
-      Left  msg -> assertFailure $ renderString $ pretty msg ## logsDoc
+      Left  msg -> assertFailure $ renderStringWide $ pretty msg ## logsDoc
       Right mod -> do
         let msg = ppDictHeader "Modules are different" $
               ("Input" :-> PP.dquotes (pretty input)) :
@@ -103,4 +103,4 @@ doTest TestCase{testName, input, expectedResult = expectedResult :: UnresolvedMo
               | diff <- toList $ genericDiff $ ActualExpected mod expectedResult
               ]
         unless (mod == expectedResult) $
-          assertFailure $ renderString $ msg ## logsDoc
+          assertFailure $ renderStringWide $ msg ## logsDoc
