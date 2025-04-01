@@ -681,7 +681,7 @@ testBreakBlocks = testGroup "Break blocks"
       b
       """
       ==>
-      [ [T "a", Newline 1, T "a", Newline 1, CppDefine "FOO", T "a"]
+      [ [T "a", Newline 1, T "a", Newline 0, CppDefine "FOO", Newline 1, T "a"]
       , [T "b"]
       ]
       -- intervening blank lines are ignored
