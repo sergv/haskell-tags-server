@@ -70,28 +70,39 @@ breakBlock :: [Pos ServerToken] -> ([Pos ServerToken], [Pos ServerToken])
 breakBlock = go []
   where
     go :: [Pos ServerToken] -> [Pos ServerToken] -> ([Pos ServerToken], [Pos ServerToken])
-    go acc [] = (reverse acc, [])
+    go acc [] =
+      (reverse acc, [])
     go acc (Pos _ Newline{} : t@(Pos _ KWModule) : ts) =
       (reverse acc ++ t : importList, drop 1 rest)
       where
         (importList, rest) = span ((/= KWWhere) . valOf) ts
-    go acc (t@(Pos _ tok) : ts) = case tok of
-      Newline indent -> collectIndented acc indent ts
-      LBrace         -> collectBracedBlock (t : acc) go ts 1
-      HSCEnum        -> collectBracedBlock (t : acc) go ts 1
-      _              -> go (t : acc) ts
+    go acc (t@(Pos _ tok) : ts) =
+      case tok of
+        Newline indent -> collectIndented acc indent ts
+        LBrace         -> collectBracedBlock (t : acc) go ts 1
+        HSCEnum        -> collectBracedBlock (t : acc) go ts 1
+        _              -> go (t : acc) ts
 
     collectIndented :: [Pos ServerToken] -> Int -> [Pos ServerToken] -> ([Pos ServerToken], [Pos ServerToken])
     collectIndented acc indent = goIndented acc
       where
-        goIndented acc' ts' = case ts' of
+        goIndented acc' toks = case toks of
           Pos _ Newline{} : Pos _ KWModule : _ ->
-            (reverse acc', ts')
+            (reverse acc', toks)
 
-          []     -> (reverse acc', [])
-          t : ts -> case t of
-            Pos _ (Newline n) | n <= indent ->
-                                (reverse acc', ts')
+          []                -> (reverse acc', [])
+
+          t : []            -> case t of
+            Pos _ (Newline n)
+              | n <= indent
+              -> (reverse acc', toks)
+            _ -> (reverse $ t : acc', [])
+          t : ts@(t2 : ts') -> case t of
+            Pos _ (Newline n)
+              | Pos _ CppDefine{} <- t2
+              -> goIndented (t2 : t : acc') ts'
+              | n <= indent
+              -> (reverse acc', toks)
             Pos _ LBrace ->
               collectBracedBlock (t : acc') goIndented ts 1
             _ ->
