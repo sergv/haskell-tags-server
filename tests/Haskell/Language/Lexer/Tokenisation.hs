@@ -11,6 +11,7 @@
 
 module Haskell.Language.Lexer.Tokenisation (tests) where
 
+import GHC.Stack.Types (HasCallStack)
 import Test.Tasty
 
 import Data.List qualified as L
@@ -810,7 +811,9 @@ testBreakBlocks = testGroup "Break blocks"
     ]
   ]
   where
+    (==>) :: HasCallStack => T.Text -> [[ServerToken]] -> TestTree
     (==>) = makeTest (f LitVanilla)
+    (|=>) :: HasCallStack => T.Text -> [[ServerToken]] -> TestTree
     (|=>) = makeTest (f LitOutside)
     f :: LitMode Void -> T.Text -> [[ServerToken]]
     f mode

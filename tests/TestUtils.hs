@@ -21,7 +21,7 @@ module TestUtils
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe
 import Data.Text qualified as T
-import GHC.Stack.Ext (WithCallStack)
+import GHC.Stack.Types (HasCallStack)
 import Prettyprinter.Ext
 import Test.Tasty (TestTree)
 import Test.Tasty.HUnit (Assertion, testCase, assertBool, assertFailure)
@@ -44,11 +44,11 @@ mkUnqualSymName name =
 neSingleton :: a -> NonEmpty a
 neSingleton x = x :| []
 
-makeTest :: (WithCallStack, Show a, Eq b, Show b) => (a -> b) -> a -> b -> TestTree
+makeTest :: (HasCallStack, Show a, Eq b, Show b) => (a -> b) -> a -> b -> TestTree
 makeTest f x expected =
   testCase (take 70 $ show x) $ makeAssertion f x expected
 
-makeAssertion :: (Show a, Eq b, Show b) => (a -> b) -> a -> b -> Assertion
+makeAssertion :: (HasCallStack, Show a, Eq b, Show b) => (a -> b) -> a -> b -> Assertion
 makeAssertion f x expected = assertBool msg (actual == expected)
   where
     actual = f x
