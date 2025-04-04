@@ -59,12 +59,15 @@ class (Ord k, Ord (Subkey k)) => HasSubkey k where
   type Subkey k :: Type
   getSubkey :: k -> Subkey k
 
--- | Map which can index same set of values by two keys. One key is the
--- main one (the bigger one), the second key is the subkey which is a projection
--- of the main key. -- Since it is a projection, it may reference several
--- values.
+-- | Map which can index same set of values by two keys. One key is
+-- the main one (the bigger one), the second key is the subkey which
+-- is a projection of the main key.
+--
+-- Since second key is a projection, it may reference several values.
+--
 -- Deletions are not provided for the time being in order to simplify
 -- impementation.
+--
 -- Invariant: both keys are kept in sync with each other.
 data SubkeyMap k v = SubkeyMap
   { smMainMap :: !(Map k v)
