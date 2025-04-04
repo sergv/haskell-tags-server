@@ -6,6 +6,7 @@
 
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE MonoLocalBinds    #-}
+{-# LANGUAGE MultilineStrings  #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -18,6 +19,8 @@ import Control.Monad
 import Control.Monad.ErrorExcept
 import Control.Monad.Writer
 import Data.Foldable
+import Data.List.NonEmpty qualified as NE
+import Data.Maybe
 import Data.Text (Text)
 import Data.Text.Encoding qualified as TE
 import Prettyprinter qualified as PP
@@ -28,12 +31,17 @@ import Test.Tasty.HUnit
 import Control.Monad.Logging.Simple
 import Data.ErrorMessage
 import Data.GenericDiff
+import Data.KeyMap qualified as KeyMap
 import Data.Path
+import Data.SubkeyMap qualified as SubkeyMap
+import Data.SymbolMap qualified as SymbolMap
 import Data.Symbols
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDate)
 import Data.Time.Clock
+import FasterRicherTags.Types
 import Haskell.Language.Server.Tags.LoadModule (loadModuleFromSource)
-import Haskell.Language.Server.Tags.Types.Modules
+import Haskell.Language.Server.Tags.Types.Imports
+import Haskell.Language.Server.Tags.Types.Modules as Mods
 
 import TestUtils
 
@@ -57,7 +65,7 @@ zeroTime = UTCTime
   }
 
 defaltMod :: UnresolvedModule
-defaltMod = Module
+defaltMod = Mods.Module
   { modHeader           = defaultModHeader
   , modAllSymbols       = mempty
   , modFile             = filename
@@ -79,9 +87,53 @@ emptyModuleTest = TestCase
     }
   }
 
+simpleModuleTest :: Test
+simpleModuleTest = TestCase
+  { testName       = "Simple regular module 1"
+  , input          =
+      """
+      module Foo where
+
+      import Bar (xyz)
+
+      foo :: Int -> Int
+      foo = id
+      """
+  , expectedResult = defaltMod
+    { modHeader     = defaultModHeader
+      { mhModName = mkModuleName "Foo"
+      , mhExports = NoExports
+      , mhImports = SubkeyMap.fromList
+        [ let key = ImportKey VanillaModule (mkModuleName "Bar") in
+          ( key
+          , NE.singleton $ ImportSpec key Unqualified $ SpecificImports $ ImportList
+              { ilImportType = Imported
+              , ilEntries    = KeyMap.fromList
+                [ EntryWithChildren (mkSymName "xyz") Nothing
+                ]
+              }
+          )
+        ]
+      }
+    , modAllSymbols = SymbolMap.fromList
+        [ mkResolvedSymbolFromParts filename (Line 5) (mkSymName "foo") Function Nothing
+        ]
+    }
+  }
+
+mkSymName
+  :: HasCallStack
+  => Text
+  -> UnqualifiedSymbolName
+mkSymName str
+  = fromMaybe (error $ "Invalid symbol name: " ++ show str)
+  $ mkUnqualifiedSymbolName
+  $ mkSymbolName str
+
 tests :: TestTree
 tests = testGroup "Whole module tests"
   [ doTest emptyModuleTest
+  , doTest simpleModuleTest
   ]
 
 instance Pretty UTCTime where
