@@ -2790,10 +2790,18 @@ doTest TestCase{testName, input, expectedResult} =
       Right (Nothing, _)     -> assertFailure $ renderStringWide $
         "No header detected, but was expecting header" ## pretty expectedResult ## logsDoc
       Right (Just header, _) -> do
-        let msg = ppDictHeader "Headers are different" $
+        let header'         = normalizeHeader $ normalizeHeader header
+            expectedResult' = normalizeHeader expectedResult
+            msg             = ppDictHeader "Headers are different" $
               ("Input" :-> PP.dquotes (pretty input)) :
               [ ppDifference diff
-              | diff <- toList $ genericDiff $ ActualExpected header expectedResult
+              | diff <- toList $ genericDiff $ ActualExpected header' expectedResult'
               ]
-        unless (header == expectedResult) $
+        unless (header' == expectedResult') $
           assertFailure $ renderStringWide $ msg ## logsDoc
+
+normalizeHeader :: ModuleHeader -> ModuleHeader
+normalizeHeader mh = mh
+  { mhImportQualifiers = fmap NE.sort $ mhImportQualifiers mh
+  , mhImports          = fmap NE.sort $ mhImports mh
+  }
