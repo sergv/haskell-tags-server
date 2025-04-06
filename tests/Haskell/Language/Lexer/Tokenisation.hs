@@ -819,7 +819,7 @@ testBreakBlocks = testGroup "Break blocks"
     f :: LitMode Void -> T.Text -> [[ServerToken]]
     f mode
       = map (map valOf . toList)
-      . breakBlocks ProcessVanilla
+      . breakBlocks ProcessVanilla StripDirectives
       . tokenize' mode
 
 testWhereBlock :: TestTree

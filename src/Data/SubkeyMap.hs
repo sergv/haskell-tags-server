@@ -27,6 +27,7 @@ module Data.SubkeyMap
   , traverseWithKey
   , traverseMaybeWithKey
   , fromMap
+  , singleton
   , fromList
   , fromFoldable
   , toMap
@@ -174,6 +175,11 @@ fromMap m = SubkeyMap
   { smMainMap = m
   , smSubMap  = M.fromListWith (<>) $ map (getSubkey &&& S.singleton) $ M.keys m
   }
+
+{-# INLINE singleton #-}
+singleton :: (HasSubkey k, Semigroup v) => k -> v -> SubkeyMap k v
+singleton k v =
+  SubkeyMap (M.singleton k v) (M.singleton (getSubkey k) (S.singleton k))
 
 {-# INLINE fromList #-}
 fromList :: (HasSubkey k, Semigroup v) => [(k, v)] -> SubkeyMap k v

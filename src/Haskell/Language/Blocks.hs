@@ -6,21 +6,26 @@
 
 module Haskell.Language.Blocks
   ( breakBlocks
+  , DirectivesMode(..)
   ) where
 
 import Data.List.NonEmpty (NonEmpty(..))
 
 import Haskell.Language.Lexer.Types
 
+data DirectivesMode = KeepDirectives | StripDirectives
+
 -- | Break the input up into blocks based on indentation.
-breakBlocks :: ProcessMode -> [Pos ServerToken] -> [NonEmpty (Pos ServerToken)]
-breakBlocks mode
+breakBlocks :: ProcessMode -> DirectivesMode -> [Pos ServerToken] -> [NonEmpty (Pos ServerToken)]
+breakBlocks mode dirMode
   = go
   . stripSemicolonsNotInBraces
   . (case mode of
       ProcessVanilla   -> id
       ProcessAlexHappy -> uncurry (++) . firstLastBracedBlock)
-  . stripToplevelHscDirectives
+  . (case dirMode of
+      KeepDirectives  -> id
+      StripDirectives -> stripToplevelHscDirectives)
   . filterBlank
   where
     go :: [Pos ServerToken] -> [NonEmpty (Pos ServerToken)]

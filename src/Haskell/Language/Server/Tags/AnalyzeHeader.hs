@@ -19,7 +19,6 @@ module Haskell.Language.Server.Tags.AnalyzeHeader
   ) where
 
 import Control.Arrow (first, second)
-import Control.Monad (mzero)
 import Control.Monad.Except.Ext
 import Control.Monad.Trans.Maybe
 
@@ -28,6 +27,7 @@ import Data.Foldable.Ext (toList, foldFor)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
+import Data.Monoid (Ap(..))
 import Data.Semigroup
 import Data.Set (Set)
 import Data.Set qualified as S
@@ -40,19 +40,39 @@ import Prettyprinter.Combinators
 import Prettyprinter.Ext
 
 import Haskell.Language.Lexer.Types
-  (stripNewlines, tokToName, Pos(..), Line, SrcPos(..), Type, posLine, unLine, PragmaType(..), ServerToken(..), Type(..))
+  (stripNewlines, tokToName, Pos(..), Line, SrcPos(..), Type, posLine, unLine, PragmaType(..), ServerToken(..), Type(..), ProcessMode(..))
 import Haskell.Language.Lexer.Types qualified as Types
 
 import Control.Monad.Logging
 import Data.ErrorMessage
 import Data.KeyMap (KeyMap)
 import Data.KeyMap qualified as KM
+import Data.MonoidalMap (MonoidalMap)
+import Data.MonoidalMap qualified as MonoidalMap
 import Data.Path
 import Data.SubkeyMap (SubkeyMap)
 import Data.SubkeyMap qualified as SubkeyMap
 import Data.Symbols
+import Haskell.Language.Blocks
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
+
+extractImportBlocks
+  :: [Pos ServerToken]
+  -> ( [NonEmpty (Pos ServerToken)] -- each import in its own block
+     , [Pos ServerToken]   -- remaining tokens
+     )
+extractImportBlocks = go [] [] . breakBlocks ProcessVanilla KeepDirectives
+  where
+    go
+      :: [NonEmpty (Pos ServerToken)]
+      -> [NonEmpty (Pos ServerToken)]
+      -> [NonEmpty (Pos ServerToken)]
+      -> ([NonEmpty (Pos ServerToken)], [Pos ServerToken])
+    go imports other = \case
+      block@(Pos _ KWImport{} :| _) : tss -> go (block : imports) other tss
+      ts : tss                            -> go imports (ts : other) tss
+      []                                  -> (reverse imports, foldMap toList $ reverse other)
 
 analyzeHeader
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
@@ -65,15 +85,17 @@ analyzeHeader filename ts =
     Pos _ KWModule :
       (dropNLs -> Pos _ (T modName) :
         (break ((== KWWhere) . valOf) . dropNLs -> (exportList, Pos _ KWWhere : body))) -> do
-      (importSpecs, importQualifiers, body') <- analyzeImports filename mempty mempty body
-      exports                                <- analyzeExports filename importQualifiers $ dropAllCppDefines exportList
+      let (imports, rest) = extractImportBlocks body
+      (importSpecs, importQualifiers) <- analyzeImports filename imports
+      let importQualifiers' = MonoidalMap.unMonoidalMap importQualifiers
+      exports                         <- analyzeExports filename importQualifiers' $ dropAllCppDefines exportList
       let header = ModuleHeader
             { mhModName          = mkModuleName modName
             , mhImports          = importSpecs
-            , mhImportQualifiers = importQualifiers
+            , mhImportQualifiers = importQualifiers'
             , mhExports          = exports
             }
-      pure (Just header, body')
+      pure (Just header, rest)
       -- No header present.
     _ -> pure (Nothing, ts)
 
@@ -122,204 +144,217 @@ pattern PAnyName' line name <- Pos SrcPos{posLine = line} (tokToName -> Just nam
 analyzeImports
   :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => FullPath 'File
-  -> SubkeyMap ImportKey (NonEmpty ImportSpec)
-  -> Map ImportQualifier (NonEmpty ModuleName)
-  -> [Pos ServerToken]
+  -> [NonEmpty (Pos ServerToken)]
   -> m ( SubkeyMap ImportKey (NonEmpty ImportSpec)
-       , Map ImportQualifier (NonEmpty ModuleName)
-       , [Pos ServerToken]
+       , MonoidalMap ImportQualifier (NonEmpty ModuleName)
        )
-analyzeImports filename imports qualifiers ts = do
-  -- logDebug $ "[analyzeImports] ts =" <+> ppTokens ts
-  let d = dropNLs
-  res <- runMaybeT $ do
-    -- Drop initial "import" keyword and {-# SOURCE #-} pragma, if any
-    (ts2, importTarget) <- case dropWhile (\case { PImport -> False; PForeign -> False; _ -> True }) $ d ts of
-      PImport  : (d -> PSourcePragma : rest) -> pure (rest, HsBootModule)
-      PImport  :                       rest  -> pure (rest, VanillaModule)
-      _                                      -> mzero
-    let dropSafeImport :: [Pos ServerToken] -> [Pos ServerToken]
-        dropSafeImport = \case
-          PName "safe" : rest -> rest
-          rest                -> rest
-        dropPackageImport :: [Pos ServerToken] -> [Pos ServerToken]
-        dropPackageImport = \case
-          PString : rest      -> rest
-          rest                -> rest
-        extractQualified :: [Pos ServerToken] -> ([Pos ServerToken], Bool)
-        extractQualified = \case
-          PQualified : rest -> (rest, True)
-          rest              -> (rest, False)
-
-        ts3    :: [Pos ServerToken]
-        isQual :: Bool
-        (ts3, isQual)
-          = first (dropPackageImport . d)
-          . extractQualified
-          . d
-          . dropSafeImport
-          . d
-          $ ts2
-    -- Extract import name and renaming alias, if any
-    (ts4, name, qualName, isQualPost) <- case d ts3 of
-      PName name : (d -> PQualified : (d -> PAs : (d -> PName qualName : rest))) -> pure (rest, name, Just qualName, True)
-      PName name : (d -> PAs : (d -> PName qualName : rest))                     -> pure (rest, name, Just qualName, False)
-      PName name :                                    rest                       -> pure (rest, name, Nothing, False)
-      _                                                                          -> mzero
-    -- Make sense of the data collected before
-    let qualType = case (isQual || isQualPost, qualName) of
-          (True,  Nothing)        -> Qualified $ mkQual name
-          (True,  Just qualName') -> Qualified $ mkQual qualName'
-          (False, Nothing)        -> Unqualified
-          (False, Just qualName') -> BothQualifiedAndUnqualified $ mkQual qualName'
-    pure (name, qualType, importTarget, ts4)
-  case res of
-    Nothing                                  -> pure (imports, qualifiers, ts)
-    Just (name, qualType, importTarget, ts5) -> add name qualType importTarget ts5
+analyzeImports filename = getAp . foldMap (Ap . go . toList)
   where
     mkQual = mkImportQualifier . mkModuleName
-    add
-      :: Text
-      -> ImportQualification
-      -> ImportTarget
-      -> [Pos ServerToken]
+
+    go
+      :: [Pos ServerToken]
       -> m ( SubkeyMap ImportKey (NonEmpty ImportSpec)
-           , Map ImportQualifier (NonEmpty ModuleName)
-           , [Pos ServerToken]
+           , MonoidalMap ImportQualifier (NonEmpty ModuleName)
            )
-    add name qual importTarget toks = do
-      (importList, toks') <- analyzeImportList toks
-      let spec     = mkNewSpec importList
-          imports' = SubkeyMap.insertWith
-                       (<>)
-                       (ImportKey importTarget modName)
-                       (spec :| [])
-                       imports
-      analyzeImports filename imports' qualifiers' toks'
+    go ts = do
+      -- logDebug $ "[analyzeImports] ts =" <+> ppTokens ts
+      let d = dropNLs
+      res <- runMaybeT $ do
+        -- Drop initial "import" keyword and {-# SOURCE #-} pragma, if any
+        (ts2, importTarget) <- case dropWhile (\case { PImport -> False; PForeign -> False; _ -> True }) $ d ts of
+          PImport  : (d -> PSourcePragma : rest) -> pure (rest, HsBootModule)
+          PImport  :                       rest  -> pure (rest, VanillaModule)
+          _                                      ->
+            throwErrorWithCallStack $ "Invalid shape of import block:" ## ppTokens ts
+        let dropSafeImport :: [Pos ServerToken] -> [Pos ServerToken]
+            dropSafeImport = \case
+              PName "safe" : rest -> rest
+              rest                -> rest
+            dropPackageImport :: [Pos ServerToken] -> [Pos ServerToken]
+            dropPackageImport = \case
+              PString : rest      -> rest
+              rest                -> rest
+            extractQualified :: [Pos ServerToken] -> ([Pos ServerToken], Bool)
+            extractQualified = \case
+              PQualified : rest -> (rest, True)
+              rest              -> (rest, False)
+
+            ts3    :: [Pos ServerToken]
+            isQual :: Bool
+            (ts3, isQual)
+              = first (dropPackageImport . d)
+              . extractQualified
+              . d
+              . dropSafeImport
+              . d
+              $ ts2
+        -- Extract import name and renaming alias, if any
+        (ts4, name, qualName, isQualPost) <- case d ts3 of
+          PName name : (d -> PQualified : (d -> PAs : (d -> PName qualName : rest))) -> pure (rest, name, Just qualName, True)
+          PName name : (d -> PAs : (d -> PName qualName : rest))                     -> pure (rest, name, Just qualName, False)
+          PName name :                                    rest                       -> pure (rest, name, Nothing, False)
+          _                                                                          ->
+            throwErrorWithCallStack $ "Cannot extract import name and renaming alias from import block:" ## ppTokens ts3
+        -- Make sense of the data collected before
+        let qualType = case (isQual || isQualPost, qualName) of
+              (True,  Nothing)        -> Qualified $ mkQual name
+              (True,  Just qualName') -> Qualified $ mkQual qualName'
+              (False, Nothing)        -> Unqualified
+              (False, Just qualName') -> BothQualifiedAndUnqualified $ mkQual qualName'
+        pure (name, qualType, importTarget, ts4)
+      case res of
+        Nothing                                  -> pure (mempty, mempty)
+        Just (name, qualType, importTarget, ts5) -> add name qualType importTarget ts5
       where
-        modName :: ModuleName
-        modName = mkModuleName name
-        qualifiers' :: Map ImportQualifier (NonEmpty ModuleName)
-        qualifiers' = case getQualifier qual of
-                        Just q  -> M.insertWith (<>) q (modName :| []) qualifiers
-                        Nothing -> qualifiers
-        mkNewSpec :: ImportListSpec ImportList -> ImportSpec
-        mkNewSpec importList = ImportSpec
-          { ispecImportKey     = ImportKey
-              { ikModuleName   = modName
-              , ikImportTarget = importTarget
+        add
+          :: Text
+          -> ImportQualification
+          -> ImportTarget
+          -> [Pos ServerToken]
+          -> m ( SubkeyMap ImportKey (NonEmpty ImportSpec)
+               , MonoidalMap ImportQualifier (NonEmpty ModuleName)
+               )
+        add name qual importTarget toks = do
+          (importList, toks') <- analyzeImportList filename toks
+          let spec    = mkNewSpec importList
+              imports = SubkeyMap.singleton
+                          (ImportKey importTarget modName)
+                          (spec :| [])
+          case toks' of
+            [] -> pure (imports, qualifiers)
+            _  ->
+              throwErrorWithCallStack $ "Trailing tokens after import list:" ## ppTokens toks'
+          where
+            modName :: ModuleName
+            modName = mkModuleName name
+            qualifiers :: MonoidalMap ImportQualifier (NonEmpty ModuleName)
+            qualifiers = case getQualifier qual of
+              Just q  -> MonoidalMap.singleton q (modName :| [])
+              Nothing -> mempty
+            mkNewSpec :: ImportListSpec ImportList -> ImportSpec
+            mkNewSpec importList = ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikModuleName   = modName
+                  , ikImportTarget = importTarget
+                  }
+              , ispecQualification = qual
+              , ispecImportList    = importList
               }
-          , ispecQualification = qual
-          , ispecImportList    = importList
+
+-- Analyze comma-separated list of entries, starting at _|_:
+-- - Foo_|_
+-- - Foo_|_(Bar, Baz)
+-- - Foo_|_ hiding (Bar, Baz)
+-- - Quux_|_(..)
+analyzeImportList
+  :: (Applicative m, MonadError ErrorMessage m)
+  => FullPath 'File
+  -> [Pos ServerToken]
+  -> m (ImportListSpec ImportList, [Pos ServerToken])
+analyzeImportList filename toks = do
+  -- logDebug $ "[analyzeImpotrList] toks =" <+> ppTokens toks
+  case lastNL toks of
+    PNewline 0 : _ -> pure (NoImportList, toks)
+    toks'          -> case dropNLs toks' of
+      []                                    -> pure (NoImportList, toks)
+      PHiding : (dropNLs -> PLParen : rest) -> findImportListEntries filename Hidden mempty (dropNLs rest)
+      PLParen : rest                        -> findImportListEntries filename Imported mempty (dropNLs rest)
+      _                                     -> pure (NoImportList, toks)
+
+findImportListEntries
+  :: forall m. (Applicative m, MonadError ErrorMessage m)
+  => FullPath 'File
+  -> ImportType
+  -> KeyMap Set (EntryWithChildren () UnqualifiedSymbolName)
+  -> [Pos ServerToken]
+  -> m (ImportListSpec ImportList, [Pos ServerToken])
+findImportListEntries filename importType = go'
+  where
+    go' acc toks' = do
+      -- logDebug $ "[findImportListEntries] toks =" <+> ppTokens toks
+      case dropNLs toks' of
+        []                                                                ->
+          pure (SpecificImports importList, [])
+        -- Reaching here means tricks with preprocessor which we cannot
+        -- reasonably handle. E.g.
+        --
+        -- > import Foo
+        -- > #ifdef FOO
+        -- >   ( foo
+        -- >   , bar
+        -- > #else
+        -- >   ( baz
+        -- >   , quux
+        -- > #endif
+        -- >   , fizz
+        -- >   )
+        rest@(PImport : _)                                                ->
+          pure (SpecificImports importList, rest)
+        PRParen : rest                                                    ->
+          pure (SpecificImports importList, rest)
+        -- Type import
+        PType : PName name : rest                                         ->
+          entryWithoutChildren name rest
+        PType : PLParen : PAnyName name : PRParen : rest                  ->
+          entryWithoutChildren name rest
+        -- Pattern import
+        PPattern : restWithName@(PName name : rest)
+          | isVanillaTypeName name
+          , not $ isChildrenList filename rest ->
+            entryWithoutChildren name rest
+          | otherwise                          ->
+            entryWithoutChildren "pattern" restWithName
+        PPattern : restWithName@(PLParen : PAnyName name : PRParen : rest)
+          | isOpTypeName name
+          , not $ isChildrenList filename rest ->
+            entryWithoutChildren name rest
+          | otherwise                          ->
+            entryWithoutChildren "pattern" restWithName
+        -- Vanilla function/operator/consturtor/type import
+        PLParen : PAnyName name : PRParen : rest                          ->
+          entryWithChildren "operator in import list" name rest
+        PLParen : PName name : PRParen : rest                             ->
+          entryWithChildren "operator in import list" name rest
+        PName name : rest                                                 ->
+          entryWithChildren "name in import list" name rest
+        PLParen : rest                                                    ->
+          go' acc rest
+        Pos _ HSCDirective : rest                                         -> do
+          -- We cannot run hsc2hs here so we'll conservatively
+          -- assume that everything is imported from a module.
+          (_, remaining) <- go' mempty $ dropCommas rest
+          pure (AssumedWildcardImportList, remaining)
+        Pos _ HSCDirectiveBraced : rest                                   -> do
+          -- We cannot run hsc2hs here so we'll conservatively
+          -- assume that everything is imported from a module.
+          (_, remaining) <- go' mempty $ dropCommas $ dropBalancedBraces 1 rest
+          pure (AssumedWildcardImportList, remaining)
+        rest                                                              ->
+          throwErrorWithCallStack $ "Unrecognised shape of import list:" ## ppTokens rest
+      where
+        importList :: ImportList
+        importList = ImportList
+          { ilEntries    = acc
+          , ilImportType = importType
           }
 
-    -- Analyze comma-separated list of entries, starting at _|_:
-    -- - Foo_|_
-    -- - Foo_|_(Bar, Baz)
-    -- - Foo_|_ hiding (Bar, Baz)
-    -- - Quux_|_(..)
-    analyzeImportList :: [Pos ServerToken] -> m (ImportListSpec ImportList, [Pos ServerToken])
-    analyzeImportList toks = do
-      -- logDebug $ "[analyzeImpotrList] toks =" <+> ppTokens toks
-      case lastNL toks of
-        PNewline 0 : _ -> pure (NoImportList, toks)
-        toks'          ->  case dropNLs toks' of
-          []                                    -> pure (NoImportList, toks)
-          PHiding : (dropNLs -> PLParen : rest) -> findImportListEntries Hidden mempty (dropNLs rest)
-          PLParen : rest                        -> findImportListEntries Imported mempty (dropNLs rest)
-          _                                     -> pure (NoImportList, toks)
+        entryWithChildren
+          :: Doc Void
+          -> Text
+          -> [Pos ServerToken]
+          -> m (ImportListSpec ImportList, [Pos ServerToken])
+        entryWithChildren descr name rest = do
+          (children, rest') <- snd $ analyzeChildren descr filename $ dropNLs rest
+          name'             <- mkUnqualName name
+          let newEntry = EntryWithChildren name' $ (() <$) <$> children
+          go' (KM.insert newEntry acc) $ dropCommas rest'
 
-    findImportListEntries
-      :: ImportType
-      -> KeyMap Set (EntryWithChildren () UnqualifiedSymbolName)
-      -> [Pos ServerToken]
-      -> m (ImportListSpec ImportList, [Pos ServerToken])
-    findImportListEntries importType = go
-      where
-        go acc toks' = do
-          -- logDebug $ "[findImportListEntries] toks =" <+> ppTokens toks
-          case dropNLs toks' of
-            []                                                                ->
-              pure (SpecificImports importList, [])
-            -- Reaching here means tricks with preprocessor which we cannot
-            -- reasonably handle. E.g.
-            --
-            -- > import Foo
-            -- > #ifdef FOO
-            -- >   ( foo
-            -- >   , bar
-            -- > #else
-            -- >   ( baz
-            -- >   , quux
-            -- > #endif
-            -- >   , fizz
-            -- >   )
-            rest@(PImport : _)                                                ->
-              pure (SpecificImports importList, rest)
-            PRParen : rest                                                    ->
-              pure (SpecificImports importList, rest)
-            -- Type import
-            PType : PName name : rest                                         ->
-              entryWithoutChildren name rest
-            PType : PLParen : PAnyName name : PRParen : rest                  ->
-              entryWithoutChildren name rest
-            -- Pattern import
-            PPattern : restWithName@(PName name : rest)
-              | isVanillaTypeName name
-              , not $ isChildrenList filename rest ->
-                entryWithoutChildren name rest
-              | otherwise                          ->
-                entryWithoutChildren "pattern" restWithName
-            PPattern : restWithName@(PLParen : PAnyName name : PRParen : rest)
-              | isOpTypeName name
-              , not $ isChildrenList filename rest ->
-                entryWithoutChildren name rest
-              | otherwise                          ->
-                entryWithoutChildren "pattern" restWithName
-            -- Vanilla function/operator/consturtor/type import
-            PLParen : PAnyName name : PRParen : rest                          ->
-              entryWithChildren "operator in import list" name rest
-            PLParen : PName name : PRParen : rest                             ->
-              entryWithChildren "operator in import list" name rest
-            PName name : rest                                                 ->
-              entryWithChildren "name in import list" name rest
-            PLParen : rest                                                    ->
-              go acc rest
-            Pos _ HSCDirective : rest                                         -> do
-              -- We cannot run hsc2hs here so we'll conservatively
-              -- assume that everything is imported from a module.
-              (_, remaining) <- go mempty $ dropCommas rest
-              pure (AssumedWildcardImportList, remaining)
-            Pos _ HSCDirectiveBraced : rest                                   -> do
-              -- We cannot run hsc2hs here so we'll conservatively
-              -- assume that everything is imported from a module.
-              (_, remaining) <- go mempty $ dropCommas $ dropBalancedBraces 1 rest
-              pure (AssumedWildcardImportList, remaining)
-            rest                                                              ->
-              throwErrorWithCallStack $ "Unrecognised shape of import list:" ## ppTokens rest
-          where
-            importList :: ImportList
-            importList = ImportList
-              { ilEntries    = acc
-              , ilImportType = importType
-              }
-
-            entryWithChildren
-              :: Doc Void
-              -> Text
-              -> [Pos ServerToken]
-              -> m (ImportListSpec ImportList, [Pos ServerToken])
-            entryWithChildren descr name rest = do
-              (children, rest') <- snd $ analyzeChildren descr filename $ dropNLs rest
-              name'             <- mkUnqualName name
-              let newEntry = EntryWithChildren name' $ (() <$) <$> children
-              go (KM.insert newEntry acc) $ dropCommas rest'
-
-            entryWithoutChildren :: Text -> [Pos ServerToken] -> m (ImportListSpec ImportList, [Pos ServerToken])
-            entryWithoutChildren name rest = do
-              name' <- mkUnqualName name
-              let newEntry = mkEntryWithoutChildren name'
-              go (KM.insert newEntry acc) $ dropCommas rest
+        entryWithoutChildren :: Text -> [Pos ServerToken] -> m (ImportListSpec ImportList, [Pos ServerToken])
+        entryWithoutChildren name rest = do
+          name' <- mkUnqualName name
+          let newEntry = mkEntryWithoutChildren name'
+          go' (KM.insert newEntry acc) $ dropCommas rest
 
 mkUnqualName :: (WithCallStack, MonadError ErrorMessage m) => Text -> m UnqualifiedSymbolName
 mkUnqualName name =
