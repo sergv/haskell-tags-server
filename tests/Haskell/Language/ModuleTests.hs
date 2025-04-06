@@ -121,6 +121,46 @@ simpleModuleTest = TestCase
     }
   }
 
+preprocessorInImportListsIsNotLost :: Test
+preprocessorInImportListsIsNotLost = TestCase
+  { testName       = "Preprocessor in import list is not lost"
+  , input          =
+      """
+      module Foo where
+
+      import Bar
+        ( xyz1
+      #define FOO
+        , xyz2
+        )
+
+      foo :: Int -> Int
+      foo = id
+      """
+  , expectedResult = defaltMod
+    { modHeader     = defaultModHeader
+      { mhModName = mkModuleName "Foo"
+      , mhExports = NoExports
+      , mhImports = SubkeyMap.fromList
+        [ let key = ImportKey VanillaModule (mkModuleName "Bar") in
+          ( key
+          , NE.singleton $ ImportSpec key Unqualified $ SpecificImports $ ImportList
+              { ilImportType = Imported
+              , ilEntries    = KeyMap.fromList
+                [ EntryWithChildren (mkSymName "xyz1") Nothing
+                , EntryWithChildren (mkSymName "xyz2") Nothing
+                ]
+              }
+          )
+        ]
+      }
+    , modAllSymbols = SymbolMap.fromList
+        [ mkResolvedSymbolFromParts filename (Line 5) (mkSymName "FOO") Define Nothing
+        , mkResolvedSymbolFromParts filename (Line 9) (mkSymName "foo") Function Nothing
+        ]
+    }
+  }
+
 mkSymName
   :: HasCallStack
   => Text
@@ -134,6 +174,7 @@ tests :: TestTree
 tests = testGroup "Whole module tests"
   [ doTest emptyModuleTest
   , doTest simpleModuleTest
+  , doTest preprocessorInImportListsIsNotLost
   ]
 
 instance Pretty UTCTime where

@@ -14,6 +14,7 @@ module Haskell.Language.Lexer.Tokenisation (tests) where
 import GHC.Stack.Types (HasCallStack)
 import Test.Tasty
 
+import Data.Foldable (toList)
 import Data.List qualified as L
 import Data.Maybe (mapMaybe)
 import Data.Text qualified as T
@@ -817,7 +818,7 @@ testBreakBlocks = testGroup "Break blocks"
     (|=>) = makeTest (f LitOutside)
     f :: LitMode Void -> T.Text -> [[ServerToken]]
     f mode
-      = map (map valOf)
+      = map (map valOf . toList)
       . breakBlocks ProcessVanilla
       . tokenize' mode
 
