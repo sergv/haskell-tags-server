@@ -82,7 +82,7 @@ aesonHeaderTest = TestCase
           [ (mkImportQualifier (mkModuleName short), mkModuleName <$> long)
           | (short, long) <-
               [ ("A",   neSingleton "Data.Aeson")
-              , ("E",   "Data.Aeson.Encode.Functions" :| ["Data.Aeson.Encode.Builder"])
+              , ("E",   "Data.Aeson.Encode.Builder" :| ["Data.Aeson.Encode.Functions"])
               , ("H",   neSingleton "Data.HashMap.Strict")
               , ("Set", neSingleton "Data.Set")
               , ("T",   neSingleton "Data.Text")
