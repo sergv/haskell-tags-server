@@ -50,6 +50,9 @@ import Prettyprinter.MetaDoc
 
 import Data.KeyMap (KeyMap)
 import Data.KeyMap qualified as KM
+import Data.SubkeyMap (SubkeyMap)
+import Data.SubkeyMap qualified as SM
+import Data.SymbolMap (SymbolMap)
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
 
@@ -177,42 +180,9 @@ instance (Eq a, Pretty a, GenericDiff a, Typeable a) => GenericDiff (Module a)
 instance GenericDiff ModuleHeader
 instance GenericDiff ModuleExports
 instance (Eq a, Pretty a, GenericDiff a, Typeable a) => GenericDiff (ModuleExportSpec a)
+instance GenericDiff SymbolMap
 
 instance (Eq a, Pretty a, GenericDiff a, Typeable a, Eq b, Pretty b, GenericDiff b, Typeable b) => GenericDiff (EntryWithChildren a b)
-
-instance (GenericDiff (KM.Key a), KM.HasKey a, GenericDiff (f a), Eq (f a), Typeable f, Typeable a, PPGenericOverride (f a), PPGenericOverride (KM.Key a), PPGenericOverride a) => GenericDiff (KeyMap f a) where
-  genericDiff ae@(ActualExpected actual expected)
-    | actual == expected = DL.empty
-    | otherwise          =
-      DL.singleton $ Difference (NE.singleton loc) $ DifferentMaps md $ ppGenericOverrideDoc <$> ae
-    where
-      loc = InType (typeOf actual)
-
-      md :: MapDifference
-      md = MapDifference
-        { extraInActual   = map (bimap ppGenericOverrideDoc ppGenericOverrideDoc) $ M.toList extra
-        , missingInActual = map (bimap ppGenericOverrideDoc ppGenericOverrideDoc) $ M.toList missing
-        , differentValues = diff
-        }
-
-      actual'   = KM.toMap actual
-      expected' = KM.toMap expected
-
-      extra :: Map (KM.Key a) (f a)
-      extra = M.difference actual' expected'
-
-      missing :: Map (KM.Key a) (f a)
-      missing = M.difference expected' actual'
-
-      diff :: [(Doc Void, NonEmpty Difference)]
-      diff
-        = mapMaybe
-            (\(key, diffs) -> case toList diffs of
-              []     -> Nothing
-              x : xs -> Just $ (key, x :| xs))
-        $ map (bimap ppGenericOverrideDoc genericDiff)
-        $ M.toList
-        $ M.intersectionWith ActualExpected actual' expected'
 
 neZipWith3 :: (a -> b -> c -> d) -> NonEmpty a -> NonEmpty b -> NonEmpty c -> NonEmpty d
 neZipWith3 f as bs cs = NE.zipWith ($) (NE.zipWith f as bs) cs
@@ -234,4 +204,47 @@ instance (Eq a, Pretty a, GenericDiff a, Typeable a) => GenericDiff (NonEmpty a)
       f n actual expected = case toList $ genericDiff (ActualExpected actual expected) of
         []     -> Nothing
         x : xs -> Just (n, x :| xs)
+
+instance (GenericDiff (KM.Key a), KM.HasKey a, GenericDiff (f a), Eq (f a), Typeable f, Typeable a, PPGenericOverride (f a), PPGenericOverride (KM.Key a), PPGenericOverride a) => GenericDiff (KeyMap f a) where
+  genericDiff ae@(ActualExpected actual _) = genericDiffMaps (InType (typeOf actual)) (KM.toMap <$> ae)
+
+instance (Ord k, GenericDiff k, GenericDiff (SM.Subkey k), GenericDiff v, Eq k, Eq (SM.Subkey k), Eq v, PPGenericOverride k, PPGenericOverride (SM.Subkey k), PPGenericOverride v, Typeable k, Typeable v) => GenericDiff (SubkeyMap k v) where
+  genericDiff ae@(ActualExpected actual _) = genericDiffMaps (InType (typeOf actual)) (SM.toMap <$> ae)
+
+instance (Ord k, GenericDiff k, GenericDiff v, Eq v, Typeable k, Typeable v, PPGenericOverride k, PPGenericOverride v) => GenericDiff (Map k v) where
+  genericDiff ae@(ActualExpected actual _) = genericDiffMaps (InType (typeOf actual)) ae
+
+genericDiffMaps
+  :: forall k v. (Ord k, GenericDiff k, GenericDiff v, Eq v, PPGenericOverride k, PPGenericOverride v)
+  => Location
+  -> ActualExpected (Map k v)
+  -> DList Difference
+genericDiffMaps loc ae@(ActualExpected actual expected)
+    | actual == expected = DL.empty
+    | otherwise          =
+      DL.singleton $ Difference (NE.singleton loc) $ DifferentMaps md $ ppGenericOverrideDoc <$> ae
+    where
+
+      md :: MapDifference
+      md = MapDifference
+        { extraInActual   = map (bimap ppGenericOverrideDoc ppGenericOverrideDoc) $ M.toList extra
+        , missingInActual = map (bimap ppGenericOverrideDoc ppGenericOverrideDoc) $ M.toList missing
+        , differentValues = diff
+        }
+
+      extra :: Map k v
+      extra = M.difference actual expected
+
+      missing :: Map k v
+      missing = M.difference expected actual
+
+      diff :: [(Doc Void, NonEmpty Difference)]
+      diff
+        = mapMaybe
+            (\(key, diffs) -> case toList diffs of
+              []     -> Nothing
+              x : xs -> Just $ (key, x :| xs))
+        $ map (bimap ppGenericOverrideDoc genericDiff)
+        $ M.toList
+        $ M.intersectionWith ActualExpected actual expected
 
