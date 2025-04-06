@@ -8,13 +8,14 @@ module Haskell.Language.Blocks
   ( breakBlocks
   ) where
 
+import Data.List.NonEmpty (NonEmpty(..))
+
 import Haskell.Language.Lexer.Types
 
 -- | Break the input up into blocks based on indentation.
-breakBlocks :: ProcessMode -> [Pos ServerToken] -> [[Pos ServerToken]]
+breakBlocks :: ProcessMode -> [Pos ServerToken] -> [NonEmpty (Pos ServerToken)]
 breakBlocks mode
-  = filter (not . null)
-  . go
+  = go
   . stripSemicolonsNotInBraces
   . (case mode of
       ProcessVanilla   -> id
@@ -22,9 +23,11 @@ breakBlocks mode
   . stripToplevelHscDirectives
   . filterBlank
   where
-    go :: [Pos ServerToken] -> [[Pos ServerToken]]
+    go :: [Pos ServerToken] -> [NonEmpty (Pos ServerToken)]
     go []     = []
-    go tokens = pre : go post
+    go tokens = case pre of
+      []     -> go post
+      x : xs -> (x :| xs) : go post
       where
         (pre, post) = breakBlock tokens
     -- Blank lines mess up the indentation.
