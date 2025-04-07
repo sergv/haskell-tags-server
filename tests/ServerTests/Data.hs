@@ -37,14 +37,14 @@ known sym file line typ = Known (s sym) file line typ
 type SymbolType = Text
 
 -- | Type that encodes all possible BERT responses.
-data ServerResponse =
-    Known UnqualifiedSymbolName PathFragment Int SymbolType
+data ServerResponse
+  = Known UnqualifiedSymbolName PathFragment Int SymbolType
   | Ambiguous [(UnqualifiedSymbolName, PathFragment, Int, SymbolType)]
   | NotFound
   deriving (Eq, Ord, Show)
 
-data WorkingDirectory =
-    ShallowDir PathFragment
+data WorkingDirectory
+  = ShallowDir PathFragment
   | RecursiveDir PathFragment
   | RecursiveWithIgnored PathFragment [Text]
   deriving (Eq, Ord, Show)
@@ -1337,7 +1337,7 @@ testData = GroupTest "server tests"
       group "Recursive dir with ignored glob that matches all files"
         [ (T.unpack sym, sym, response)
         | (sym, response) <-
-          [ ("foo",       NotFound)
+          [ ("foo",       known "foo" "Dependency1.hs" 14 "Function")
           , ("bar",       known "bar" "Dependency1.hs" 19 "Function")
           , ("test",      known "test" "Dependency1.hs" 22 "Function")
           , ("baz",       known "baz" "Dependency1.hs" 24 "Function")

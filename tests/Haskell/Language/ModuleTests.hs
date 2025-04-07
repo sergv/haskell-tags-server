@@ -121,6 +121,36 @@ simpleModuleTest = TestCase
     }
   }
 
+recordFieldsTest :: Test
+recordFieldsTest = TestCase
+  { testName       = "Record fields"
+  , input          =
+      """
+      module Foo where
+
+      foo :: Int -> Int
+      foo = id
+
+      data Foo = Foo
+        { bar :: Int
+        , baz :: Double
+        }
+      """
+  , expectedResult = defaltMod
+    { modHeader     = defaultModHeader
+      { mhModName = mkModuleName "Foo"
+      , mhExports = NoExports
+      }
+    , modAllSymbols = SymbolMap.fromList
+        [ mkResolvedSymbolFromParts filename (Line 3) (mkSymName "foo") Function Nothing
+        , mkResolvedSymbolFromParts filename (Line 6) (mkSymName "Foo") Constructor (Just (ParentTag "Foo" Type))
+        , mkResolvedSymbolFromParts filename (Line 6) (mkSymName "Foo") Type Nothing
+        , mkResolvedSymbolFromParts filename (Line 7) (mkSymName "bar") Function (Just (ParentTag "Foo" Type))
+        , mkResolvedSymbolFromParts filename (Line 8) (mkSymName "baz") Function (Just (ParentTag "Foo" Type))
+        ]
+    }
+  }
+
 preprocessorInImportListsIsNotLost :: Test
 preprocessorInImportListsIsNotLost = TestCase
   { testName       = "Preprocessor in import list is not lost"
@@ -174,6 +204,7 @@ tests :: TestTree
 tests = testGroup "Whole module tests"
   [ doTest emptyModuleTest
   , doTest simpleModuleTest
+  , doTest recordFieldsTest
   , doTest preprocessorInImportListsIsNotLost
   ]
 

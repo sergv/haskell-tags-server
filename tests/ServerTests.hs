@@ -88,7 +88,7 @@ tests =
     (const (pure ()))
     (\pool -> makeTestTree pool testData)
   where
-    makeTestTree :: IO PortPool -> TestSet ServerTest -> TestTree
+    makeTestTree :: HasCallStack => IO PortPool -> TestSet ServerTest -> TestTree
     makeTestTree pool = go
       where
         go (GroupTest name xs)     = testGroup name $ map go xs

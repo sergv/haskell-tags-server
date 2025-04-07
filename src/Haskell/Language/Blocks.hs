@@ -7,6 +7,7 @@
 module Haskell.Language.Blocks
   ( breakBlocks
   , DirectivesMode(..)
+  , filterBlank
   ) where
 
 import Data.List.NonEmpty (NonEmpty(..))
@@ -35,12 +36,13 @@ breakBlocks mode dirMode
       x : xs -> (x :| xs) : go post
       where
         (pre, post) = breakBlock tokens
-    -- Blank lines mess up the indentation.
-    filterBlank :: [Pos ServerToken] -> [Pos ServerToken]
-    filterBlank = \case
-      []                                             -> []
-      Pos _ (Newline _) : xs@(Pos _ (Newline _) : _) -> filterBlank xs
-      x : xs                                         -> x : filterBlank xs
+
+-- Blank lines mess up the indentation.
+filterBlank :: [Pos ServerToken] -> [Pos ServerToken]
+filterBlank = \case
+  []                                             -> []
+  Pos _ (Newline _) : xs@(Pos _ (Newline _) : _) -> filterBlank xs
+  x : xs                                         -> x : filterBlank xs
 
 -- | Collect tokens between toplevel braces. Motivated by Alex/Happy
 -- file format that uses braced blocks to separate Haskell source from
