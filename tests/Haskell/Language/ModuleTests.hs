@@ -191,6 +191,49 @@ preprocessorInImportListsIsNotLost = TestCase
     }
   }
 
+preprocessorOverExportList :: Test
+preprocessorOverExportList = TestCase
+  { testName       = "Preprocessor over export list"
+  , input          =
+      """
+      module Foo
+      #if !defined(FOO)
+        ( xyz1
+        , xyz2
+        ) where
+
+      import Bar
+      #else
+        ( ) where
+      #endif
+
+      foo :: Int -> Int
+      foo = id
+      """
+  , expectedResult = defaltMod
+    { modHeader     = defaultModHeader
+      { mhModName = mkModuleName "Foo"
+      , mhExports = SpecificExports $ ModuleExports
+        { meReexports          = mempty
+        , meHasWildcardExports = False
+        , meExportedEntries    = KeyMap.fromList
+            [ EntryWithChildren (mkSymbolName "xyz1", PosAndType filename (Line 3) Function) Nothing
+            , EntryWithChildren (mkSymbolName "xyz2", PosAndType filename (Line 4) Function) Nothing
+            ]
+        }
+      , mhImports = SubkeyMap.fromList
+        [ let key = ImportKey VanillaModule (mkModuleName "Bar") in
+          ( key
+          , NE.singleton $ ImportSpec key Unqualified AssumedWildcardImportList
+          )
+        ]
+      }
+    , modAllSymbols = SymbolMap.fromList
+        [ mkResolvedSymbolFromParts filename (Line 12) (mkSymName "foo") Function Nothing
+        ]
+    }
+  }
+
 mkSymName
   :: HasCallStack
   => Text
@@ -206,6 +249,7 @@ tests = testGroup "Whole module tests"
   , doTest simpleModuleTest
   , doTest recordFieldsTest
   , doTest preprocessorInImportListsIsNotLost
+  , doTest preprocessorOverExportList
   ]
 
 instance Pretty UTCTime where

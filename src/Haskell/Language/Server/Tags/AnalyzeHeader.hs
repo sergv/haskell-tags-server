@@ -26,6 +26,7 @@ import Data.Char
 import Data.Foldable.Ext (toList, foldFor)
 import Data.List qualified as L
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Data.Monoid (Ap(..))
@@ -231,18 +232,20 @@ analyzeImports filename = getAp . foldMap (Ap . go . dropAllNLs . toList)
           let spec    = mkNewSpec importList
               imports = SubkeyMap.singleton
                           (ImportKey importTarget modName)
-                          (spec :| [])
+                          (NE.singleton spec)
           case toks' of
-            [] -> pure (imports, qualifiers)
-            _  ->
-              throwErrorWithCallStack $ "Trailing tokens after import list:" ## ppTokens toks'
+            []                -> pure (imports, qualifiers)
+            Pos _ KWWhere : _ -> pure (fmap (\x -> x { ispecImportList = AssumedWildcardImportList }) <$> imports, qualifiers)
+            _                 -> throwErrorWithCallStack $
+              "Trailing tokens after import list in" <+> pretty filename <> ":" ## ppTokens toks'
           where
             modName :: ModuleName
             modName = mkModuleName name
             qualifiers :: MonoidalMap ImportQualifier (NonEmpty ModuleName)
-            qualifiers = case getQualifier qual of
-              Just q  -> MonoidalMap.singleton q (modName :| [])
-              Nothing -> mempty
+            qualifiers =
+              case getQualifier qual of
+                Just q  -> MonoidalMap.singleton q (NE.singleton modName)
+                Nothing -> mempty
             mkNewSpec :: ImportListSpec ImportList -> ImportSpec
             mkNewSpec importList = ImportSpec
               { ispecImportKey     = ImportKey
@@ -433,7 +436,7 @@ analyzeExports filename importQualifiers ts = do
             newReexports
               = S.fromList
               $ toList
-              $ M.findWithDefault (modName :| []) (mkImportQualifier modName) importQualifiers
+              $ M.findWithDefault (NE.singleton modName) (mkImportQualifier modName) importQualifiers
         -- Vanilla function/operator/consturtor/type export
         PLParen : PName' line name : PRParen : rest ->
           entryWithChildren "operator in export list" name line (typeForName Types.Type name) rest
