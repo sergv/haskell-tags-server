@@ -7,6 +7,7 @@
 -- Created     :  Thursday,  3 November 2016
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DerivingVia       #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -33,7 +34,6 @@ module Haskell.Language.Lexer.Types
   , embedServerToken
   , removeDuplicatePatterns
 
-
   , forallServerToken
   , patternServerToken
 
@@ -42,9 +42,8 @@ module Haskell.Language.Lexer.Types
   , module FastTags.Tag
   ) where
 
-import Control.Arrow (second)
 import Control.DeepSeq
-
+import Data.Bifunctor
 import Data.Either
 import Data.Hashable
 import Data.IgnoreEqOrdHashNFData
@@ -70,6 +69,8 @@ import FastTags.Tag
   )
 import FastTags.Token (Line(..), Offset(..), SrcPos(..), increaseLine, posLine, unLine)
 import FastTags.Tag (ProcessMode(..))
+
+import Haskell.Language.Lexer.CppTypes qualified as Cpp
 
 {-# INLINE mkSrcPos #-}
 mkSrcPos :: Line -> SrcPos
@@ -131,7 +132,6 @@ instance NFData   PragmaType
 instance Pretty PragmaType where
   pretty = ppGeneric
 
-
 data ServerToken
   = KWCase
   | KWClass
@@ -188,7 +188,7 @@ data ServerToken
   | SpliceStart -- \$(, ends with RParen
   | ToplevelSplice -- e.g. \$foo
   | LambdaBackslash -- \
-  | CppDefine {-# UNPACK #-} !Text
+  | Cpp !Cpp.Directive
   | HSCEnum      -- #{enum...}
   | HSCDirective -- e.g. #define foo bar...
   | HSCDirectiveBraced -- ^ e.g. #{define foo...\nbar}, #{\ndefine foo...\nbar}, ends with RBrace
@@ -201,13 +201,10 @@ data ServerToken
 
   | EOF
   deriving (Eq, Ord, Show, Generic)
+  deriving Pretty via PPGeneric ServerToken
 
 instance Hashable ServerToken
-
-instance NFData ServerToken where
-
-instance Pretty ServerToken where
-  pretty = ppGeneric
+instance NFData ServerToken
 
 instance Hashable FastTags.TokenVal
 
@@ -306,7 +303,6 @@ stripServerTokens = second catMaybes . partitionEithers . map f
       ToplevelSplice     -> Left $ Pos p FastTags.ToplevelSplice
       LambdaBackslash    -> Left $ Pos p FastTags.LambdaBackslash
 
-      CppDefine x        -> Left $ Pos p $ FastTags.CppDefine x
       HSCEnum            -> Left $ Pos p $ FastTags.HSCEnum
       HSCDirective       -> Left $ Pos p $ FastTags.HSCDirective
       HSCDirectiveBraced -> Left $ Pos p $ FastTags.HSCDirectiveBraced
@@ -317,6 +313,19 @@ stripServerTokens = second catMaybes . partitionEithers . map f
 
       Pragma _           -> Right Nothing
 
+      Cpp cpp            -> case cpp of
+        Cpp.Include _ -> Right Nothing
+        Cpp.Define  x -> Left $ Pos p $ FastTags.CppDefine x
+        Cpp.Undef   _ -> Right Nothing
+        Cpp.If      _ -> Right Nothing
+        Cpp.Ifdef   _ -> Right Nothing
+        Cpp.Ifndef  _ -> Right Nothing
+        Cpp.Elif    _ -> Right Nothing
+        Cpp.Else      -> Right Nothing
+        Cpp.Endif     -> Right Nothing
+        Cpp.Line    _ -> Right Nothing
+        Cpp.Error   _ -> Right Nothing
+        Cpp.Warning _ -> Right Nothing
       EOF                -> Left $ Pos p FastTags.EOF
 
 embedServerToken :: FastTags.TokenVal -> Maybe ServerToken
@@ -374,7 +383,7 @@ embedServerToken = \case
   FastTags.EOF                -> Just EOF
 
   FastTags.ToplevelSplice     -> Just ToplevelSplice
-  FastTags.CppDefine x        -> Just $ CppDefine x
+  FastTags.CppDefine x        -> Just $ Cpp $ Cpp.Define x
   FastTags.HSCEnum            -> Just HSCEnum
   FastTags.HSCDirective       -> Just HSCDirective
 

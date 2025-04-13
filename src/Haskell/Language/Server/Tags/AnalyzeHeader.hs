@@ -88,8 +88,8 @@ dummyNewline = Pos (SrcPos 0 0 mempty mempty) (Newline 0)
 
 isCpp :: Pos ServerToken -> Bool
 isCpp = \case
-  Pos _ CppDefine{} -> True
-  _                 -> False
+  Pos _ Cpp{} -> True
+  _           -> False
 
 analyzeHeader
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
@@ -105,7 +105,7 @@ analyzeHeader filename ts =
       let (imports, rest) = extractImportBlocks body
       (importSpecs, importQualifiers) <- analyzeImports filename imports
       let importQualifiers' = MonoidalMap.unMonoidalMap importQualifiers
-      exports                         <- analyzeExports filename importQualifiers' $ dropAllCppDefines exportList
+      exports                         <- analyzeExports filename importQualifiers' $ dropAllCpp exportList
       let header = ModuleHeader
             { mhModName          = mkModuleName modName
             , mhImports          = importSpecs
@@ -690,15 +690,7 @@ dropBalancedBraces n (Pos _ LBrace       : ts)       = dropBalancedBraces (n + 1
 dropBalancedBraces n (Pos _ RBrace       : ts)       = dropBalancedBraces (n - 1) ts
 dropBalancedBraces n (_                  : ts)       = dropBalancedBraces n ts
 
-dropAllCppDefines :: [Pos ServerToken] -> [Pos ServerToken]
-dropAllCppDefines = filter $ \case
-  Pos _ CppDefine{} -> False
-  _                 -> True
-
--- dropCppDefinesInBalancedParens :: Int -> [Pos ServerToken] -> [Pos ServerToken]
--- dropCppDefinesInBalancedParens _ []                              = []
--- dropCppDefinesInBalancedParens 0 ts                              = ts
--- dropCppDefinesInBalancedParens n (Pos _ HSCDirectiveBraced : ts) = dropBalancedBraces (n + 1) ts
--- dropCppDefinesInBalancedParens n (Pos _ LBrace       : ts)       = dropBalancedBraces (n + 1) ts
--- dropCppDefinesInBalancedParens n (Pos _ RBrace       : ts)       = dropBalancedBraces (n - 1) ts
--- dropCppDefinesInBalancedParens n (_                  : ts)       = dropBalancedBraces n ts
+dropAllCpp :: [Pos ServerToken] -> [Pos ServerToken]
+dropAllCpp = filter $ \case
+  Pos _ Cpp{} -> False
+  _           -> True

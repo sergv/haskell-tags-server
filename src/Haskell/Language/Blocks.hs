@@ -109,7 +109,7 @@ breakBlock = go []
             _ -> (reverse $ t : acc', [])
           t : ts@(t2 : ts') -> case t of
             Pos _ (Newline n)
-              | Pos _ CppDefine{} <- t2
+              | Pos _ (Cpp _) <- t2
               -> goIndented (t2 : t : acc') ts'
               | n <= indent
               -> (reverse acc', toks)

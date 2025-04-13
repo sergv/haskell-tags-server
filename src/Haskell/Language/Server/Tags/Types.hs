@@ -135,8 +135,8 @@ isPathWithinNamespace Namespace{nsShallowDirs, nsRecursiveDirs} path =
   where
     path' = unFullPath path
 
-data NameResolutionScope =
-    ScopeCurrentModule
+data NameResolutionScope
+  = ScopeCurrentModule
   | ScopeAllModules
   deriving (Eq, Ord, Show, Enum, Bounded, Generic)
 
@@ -144,8 +144,8 @@ instance Pretty NameResolutionScope where
   pretty = ppGeneric
 
 -- | Query server for some information.
-data QueryRequest =
-    -- | Request to find vanilla name in current module and all its imports.
+data QueryRequest
+  = -- | Request to find vanilla name in current module and all its imports.
     FindSymbol !NameResolutionScope !SymbolName
     -- | Request to find all names that match a gived regex starting from
     -- current module.
@@ -155,8 +155,8 @@ data QueryRequest =
 instance Pretty QueryRequest where
   pretty = ppGeneric
 
-data FSNotifyEvent =
-    FSAdded    !(FullPath 'File)
+data FSNotifyEvent
+  = FSAdded    !(FullPath 'File)
   | FSRemoved  !(FullPath 'File)
   | FSModified !(FullPath 'File)
   deriving (Eq, Ord, Show, Generic)
@@ -164,8 +164,8 @@ data FSNotifyEvent =
 instance Pretty FSNotifyEvent where
   pretty = ppGeneric
 
-data QueryResponse =
-    Found !(NonEmpty ResolvedSymbol)
+data QueryResponse
+  = Found !(NonEmpty ResolvedSymbol)
   | NotFound
   deriving (Eq, Ord, Show, Generic)
 
@@ -175,8 +175,8 @@ instance Pretty QueryResponse where
 type RequestHandler = forall resp. UserRequest resp -> IO (Promise (Either ErrorMessage resp))
 
 -- | Whether to ignore some issues when resolving names.
-data NameResolutionStrictness =
-    -- | Default: use for day-to-day lookups, ignores some errors but
+data NameResolutionStrictness
+  = -- | Default: use for day-to-day lookups, ignores some errors but
     -- this allows to analyse more modules e.g. the ones that define
     -- names with preprocessor/Tempate Haskell.
     NameResolutionLax
