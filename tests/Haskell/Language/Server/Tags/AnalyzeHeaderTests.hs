@@ -825,7 +825,7 @@ moduleWithMultilinePreprocessor = TestCase
       module Test where
       import Foo
         ( foo
-      #ifdef FOO \\
+      #if defined(FOO) \\
         && !BAR
         , bar
       #else

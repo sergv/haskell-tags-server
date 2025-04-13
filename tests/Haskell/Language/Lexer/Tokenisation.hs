@@ -283,6 +283,7 @@ testTokenise = testGroup "Tokenise"
     ==>
     [ KWType, T "Foo", Equals, HSCDirectiveBraced, T "int64_t", RBrace, Newline 0
     ]
+  , tokenizePreprocessor
   ]
   where
     (==>) = makeTest f
@@ -367,6 +368,115 @@ testTokenise = testGroup "Tokenise"
         ]
       ]
 
+    tokenizePreprocessor = testGroup "tokenize preprocessor"
+      [ """
+        #define FOO 1
+        """
+        ==>
+        [ Cpp $ Cpp.Define "FOO", Newline 0
+        ]
+      , """
+        #include "foo.h"
+        """
+        ==>
+        [ Cpp $ Cpp.Include "foo.h", Newline 0
+        ]
+      , """
+        #include <foo.h>
+        """
+        ==>
+        [ Cpp $ Cpp.Include "foo.h", Newline 0
+        ]
+      , """
+        #include <bar/foo.h>
+        """
+        ==>
+        [ Cpp $ Cpp.Include "bar/foo.h", Newline 0
+        ]
+      , """
+        #undef FOO
+        """
+        ==>
+        [ Cpp $ Cpp.Undef "FOO" , Newline 0
+        ]
+      , """
+        #ifdef FOO
+        """
+        ==>
+        [ Cpp $ Cpp.Ifdef "FOO" , Newline 0
+        ]
+      , """
+        #ifndef FOO
+        """
+        ==>
+        [ Cpp $ Cpp.Ifndef "FOO" , Newline 0
+        ]
+      , """
+        #if defined(FOO)
+        """
+        ==>
+        [ Cpp $ Cpp.If "defined(FOO)", Newline 0
+        ]
+      , """
+        #if defined(FOO) && \\
+          defined(BAR)
+        """
+        ==>
+        [ Cpp $ Cpp.If "defined(FOO) && \\\n  defined(BAR)", Newline 0
+        ]
+      , """
+        #if 0
+        foobar
+        #endif
+        """
+        ==>
+        [ Cpp $ Cpp.If "0", Newline 0
+        , T "foobar", Newline 0
+        , Cpp $ Cpp.Endif, Newline 0
+        ]
+      , """
+        #elif defined(FROB)
+        """
+        ==>
+        [ Cpp $ Cpp.Elif, Newline 0
+        ]
+      , """
+        #elif defined(FROB)
+        """
+        ==>
+        [ Cpp $ Cpp.Elif, Newline 0
+        ]
+      , """
+        #else
+        """
+        ==>
+        [ Cpp $ Cpp.Else, Newline 0
+        ]
+      , """
+        #endif
+        """
+        ==>
+        [ Cpp $ Cpp.Endif, Newline 0
+        ]
+      , """
+        #line 100
+        """
+        ==>
+        [ Newline 0
+        ]
+      , """
+        #warning "OK"
+        """
+        ==>
+        [ Newline 0
+        ]
+      , """
+        #error "OK"
+        """
+        ==>
+        [ Newline 0
+        ]
+      ]
 
 testTokeniseWithNewlines :: TestTree
 testTokeniseWithNewlines = testGroup "Tokenise with newlines"

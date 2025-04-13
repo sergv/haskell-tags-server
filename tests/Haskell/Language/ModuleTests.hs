@@ -275,6 +275,58 @@ preprocessorOverExportList = TestCase
     }
   }
 
+preprocessorOverWholeModule :: Test
+preprocessorOverWholeModule = TestCase
+  { testName       = "Preprocessor over whole module"
+  , input          =
+      """
+      module Foo
+      #if defined(FOO)
+        where
+
+      import Bar ()
+      #else
+        ( xyz1
+        , xyz2
+        ) where
+
+      import Baz
+
+      foo :: Int -> Int
+      foo = id
+      #endif
+      """
+  , expectedResult = defaltMod
+    { modHeader     = defaultModHeader
+      { mhModName = mkModuleName "Foo"
+      , mhExports = SpecificExports $ ModuleExports
+        { meReexports          = mempty
+        , meHasWildcardExports = False
+        , meExportedEntries    = KeyMap.fromList
+            [ EntryWithChildren (mkSymbolName "xyz1", PosAndType filename (Line 7) Function) Nothing
+            , EntryWithChildren (mkSymbolName "xyz2", PosAndType filename (Line 8) Function) Nothing
+            ]
+        }
+      , mhImports = SubkeyMap.fromList
+        [ let key = ImportKey VanillaModule (mkModuleName "Bar") in
+          ( key
+          , NE.singleton $ ImportSpec key Unqualified $ SpecificImports $ ImportList
+              { ilImportType = Imported
+              , ilEntries    = mempty
+              }
+          )
+        , let key = ImportKey VanillaModule (mkModuleName "Baz") in
+          ( key
+          , NE.singleton $ ImportSpec key Unqualified NoImportList
+          )
+        ]
+      }
+    , modAllSymbols = SymbolMap.fromList
+        [ mkResolvedSymbolFromParts filename (Line 13) (mkSymName "foo") Function Nothing
+        ]
+    }
+  }
+
 mkSymName
   :: HasCallStack
   => Text
@@ -292,6 +344,7 @@ tests = testGroup "Whole module tests"
   , doTest recordFieldsTest
   , doTest preprocessorInImportListsIsNotLost
   , doTest preprocessorOverExportList
+  , doTest preprocessorOverWholeModule
   ]
 
 instance Pretty UTCTime where

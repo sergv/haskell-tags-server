@@ -105,14 +105,17 @@ $hexdigit   = [0-9a-fA-F]
 @define_name     = [$ascident $ascdigit _ ']+
 @define_body     = ( [^ \\ $nl]+ | [\\] ( @nl | . ) )+ @nl
 
--- Except "define"
-@cppdirective = ( "if" | "ifdef" | "ifndef" | "endif" | "elif" | "else" | "undef" | "line" | "error" | "warning" | "include" )
+@filename        = [^$nl]+
+@include_name    = ("<" @filename ">" | [\"] @filename [\"])
+
+-- -- Except "define"
+-- @cppdirective = ( "if" | "ifdef" | "ifndef" | "endif" | "elif" | "else" | "undef" | "line" | "error" | "warning" | "include" )
 
 -- Except cpp directives, "let", and "enum".
 @hscdirective = ( "def" | "const" | "const_str" | "type" | "peek" | "poke" | "ptr" | "offset" | "size" | "alignment" )
 
 -- Except "enum"
-@all_cpp_and_hsc_directives = ( "define" | "let" | @cppdirective | @hscdirective )
+@all_hsc_directives = ( "define" | "let" | @hscdirective )
 
 :-
 
@@ -137,24 +140,45 @@ $hexdigit   = [0-9a-fA-F]
 
 <0> {
 
--- Analyse "#if 0" constructs used in e.g. GHC.Base
-^ @cpp_dir_start "if" @cpp_opt_ws "0" ( @cpp_nonempty_ws .* )?
-  { \_ _ -> startPreprocessorStripping }
+^ @cpp_dir_start "include" @cpp_ws+ @include_name
+  { \input len -> pure $! Cpp $! Cpp.Include $! extractIncludeName input len }
 
--- Named defines, implicitly drops: '( @cpp_ws+ | "(" ) @define_body'
+-- Named defines, implicitly drops: '( @cpp_ws+ | "(" ) @define_body
 ^ @cpp_dir_start ("define" | "let") @cpp_ws+ @define_name
   { \input len -> do
-    modify $ \s -> s { asInput = dropUntilUnescapedNL $ asInput s }
+    _ <- dropUntilCppDirectiveEnd
     pure $! Cpp $! Cpp.Define $! extractDefineOrLetName input len
   }
 
-^ @cpp_dir_start @cppdirective .* ( [\\] @nl .* )* ;
+^ @cpp_dir_start "undef" @cpp_ws+ @define_name
+  { \input len -> pure $! Cpp $! Cpp.Undef $! extractDefineOrLetName input len }
+
+^ @cpp_dir_start "ifdef" @cpp_ws+ @define_name
+  { \input len -> pure $! Cpp $! Cpp.Ifdef $! extractDefineOrLetName input len }
+
+^ @cpp_dir_start "ifndef" @cpp_ws+ @define_name
+  { \input len -> pure $! Cpp $! Cpp.Ifndef $! extractDefineOrLetName input len }
+
+
+-- Implicitly drops: @define_body
+^ @cpp_dir_start "if"
+  { \_ _ -> Cpp . Cpp.If <$> dropUntilCppDirectiveEnd }
+^ @cpp_dir_start "elif"
+  { \_ _ -> Cpp Cpp.Elif <$ dropUntilCppDirectiveEnd }
+^ @cpp_dir_start "else"
+  { \_ _ -> Cpp Cpp.Else <$ dropUntilCppDirectiveEnd }
+^ @cpp_dir_start "endif"
+  { \_ _ -> Cpp Cpp.Endif <$ dropUntilCppDirectiveEnd }
+
+^ @cpp_dir_start ("line" | "error" | "warning") .* ( [\\] @nl .* )* ;
+
+-- ^ @cpp_dir_start @cppdirective .* ( [\\] @nl .* )* ;
 
 ^ @cpp_dir_start ("{" (@cpp_ws | @nl)*)? "enum"
   { \_ _ -> pure HSCEnum }
-^ @cpp_dir_start @all_cpp_and_hsc_directives
+^ @cpp_dir_start @all_hsc_directives
   { \_ _ -> pure HSCDirective }
-@cpp_dir_start "{" (@cpp_ws | @nl)* @all_cpp_and_hsc_directives
+@cpp_dir_start "{" (@cpp_ws | @nl)* @all_hsc_directives
   { \_ _ -> pure HSCDirectiveBraced }
 
 -- Drop everything else that starts with #, e.g.
@@ -164,19 +188,6 @@ $hexdigit   = [0-9a-fA-F]
 ^ "#" $ascspace* "{"? @define_name+
   { \_ _ -> dropUntilNL' }
 
-}
-
-<stripCpp> {
-@cpp_dir_start @cpp_opt_ws ( "ifdef" | "if" ) .*
-  { \_ _ -> startPreprocessorStripping }
-@cpp_dir_start @cpp_opt_ws ("else" | "elif" | "endif") .*
-  { \_ _ -> endPreprocessorStripping }
-@cpp_dir_start @cpp_opt_ws ( "define" | "undef" | "line" | "error" | "warning" | "include"  | "let" )
-  { \_ _ -> dropUntilNL' }
-$nl ;
-.
-  { \_ _ -> dropUntilNLOr' 35 -- '#'
-  }
 }
 
 -- Newlines and comments.
@@ -426,19 +437,6 @@ startIndentComment = do
   alexSetNextCode indentCommentCode
   continueScanning
 
-startPreprocessorStripping :: AlexM ServerToken
-startPreprocessorStripping = do
-  void $ modifyPreprocessorDepth (+ 1)
-  alexSetNextCode stripCppCode
-  continueScanning
-
-endPreprocessorStripping :: AlexM ServerToken
-endPreprocessorStripping = do
-  newDepth <- modifyPreprocessorDepth (\x -> x - 1)
-  when (newDepth == 0) $
-    alexSetNextCode startCode
-  continueScanning
-
 startComment :: AlexM ServerToken
 startComment = do
   void $ modifyCommentDepth (+ 1)
@@ -565,14 +563,12 @@ countBackslashCR AlexInput{aiPtr} = case unsafeTextHeadAscii aiPtr of
 {-# INLINE indentCommentCode #-}
 {-# INLINE indentCountCode   #-}
 {-# INLINE literateCode      #-}
-{-# INLINE stripCppCode      #-}
-startCode, qqCode, commentCode, indentCommentCode, indentCountCode, literateCode, stripCppCode :: AlexCode
+startCode, qqCode, commentCode, indentCommentCode, indentCountCode, literateCode :: AlexCode
 startCode          = AlexCode 0
 qqCode             = AlexCode qq
 commentCode        = AlexCode comment
 indentCommentCode  = AlexCode indentComment
 indentCountCode    = AlexCode indentCount
 literateCode       = AlexCode literate
-stripCppCode       = AlexCode stripCpp
 
 }
