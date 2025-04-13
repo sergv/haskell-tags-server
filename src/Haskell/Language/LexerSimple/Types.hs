@@ -29,8 +29,10 @@ module Haskell.Language.LexerSimple.Types
   , aiLineL
   , takeText
   , countInputSpace
+  , extractIncludeName
   , extractDefineOrLetName
   , dropUntilNL
+  , dropUntilCppDirectiveEnd
   , dropUntilUnescapedNL
   , dropUntilNLOr
   , dropUntilNLOrEither
@@ -55,12 +57,12 @@ module Haskell.Language.LexerSimple.Types
 import Control.Exception
 import Control.Monad.State.Strict
 import Control.Monad.Writer.Strict
-
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as C8
 import Data.ByteString.Internal qualified as BSI
 import Data.Char
 import Data.Int
+import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Foreign.ForeignPtr
@@ -295,7 +297,7 @@ aiLineL       = aiIntStoreL . int32L 0  . lineInt32L
 aiLineLengthL = aiIntStoreL . int32L 32 . int2Int32L
 
 {-# INLINE takeText #-}
-takeText :: AlexInput -> Int -> T.Text
+takeText :: AlexInput -> Int -> Text
 takeText AlexInput{aiPtr} len =
   TE.decodeUtf8 $! utf8BS len aiPtr
 
@@ -315,7 +317,7 @@ performIO = BSI.accursedUnutterablePerformIO
 
 {-# INLINE withAlexInput #-}
 withAlexInput :: C8.ByteString -> (AlexInput -> Int -> IO a) -> IO a
-withAlexInput s f =
+withAlexInput !s f =
   case s' of
     BSI.PS ptr offset len ->
       withForeignPtr ptr $ \ptr' -> do
@@ -334,7 +336,7 @@ withAlexInput s f =
 
     -- Add '\0' at the end so that we'll find the end of stream (just
     -- as in the old C days...)
-    s' = C8.cons '\n' $ C8.snoc (C8.snoc (stripBOM s) '\n') '\0'
+    !s' = C8.cons '\n' $ C8.snoc (C8.snoc (stripBOM s) '\n') '\0'
     stripBOM :: C8.ByteString -> C8.ByteString
     stripBOM xs
         | "\xEF\xBB\xBF" `C8.isPrefixOf` xs
@@ -342,19 +344,51 @@ withAlexInput s f =
         | otherwise
         = xs
 
-{-# INLINE extractDefineOrLetName #-}
-extractDefineOrLetName :: AlexInput -> Int -> T.Text
-extractDefineOrLetName AlexInput{aiPtr} n =
-  TE.decodeUtf8 $ regionToUtf8BS (Ptr start#) end
+{-# INLINE extractIncludeName #-}
+extractIncludeName :: AlexInput -> Int -> Text
+extractIncludeName !AlexInput{aiPtr} !n =
+  textFromUtf8Region (Ptr nameStart#) (Ptr nameEnd#)
   where
-    !end        = aiPtr `plusPtr` n
+    !(Ptr inputEnd#) = aiPtr `plusPtr` (n - 1)
+
+    nameStart#, nameEnd# :: Addr#
+    !(# nameStart#, nameEnd# #) = goBack# inputEnd#
+
+    goBack# :: Addr# -> (# Addr#, Addr# #)
+    goBack# ptr# = case indexWord8OffAddr# ptr# 0# of
+      0#Word8  -> (# ptr#, ptr# #)
+      34#Word8 -> takeBack# 34#Word8 ptr# -- '"'
+      62#Word8 -> takeBack# 60#Word8 ptr# -- 60 - '<', 62 - '>'
+      _        -> goBack# (ptr# `plusAddr#` -1#)
+
+    takeBack# :: Word8# -> Addr# -> (# Addr#, Addr# #)
+    takeBack# w' start# = go (start# `plusAddr#` -1#)
+      where
+        go :: Addr# -> (# Addr#, Addr# #)
+        go ptr# = case indexWord8OffAddr# ptr# 0# of
+          0#Word8  -> (# ptr# `plusAddr#` 1#, start# #)
+          w
+            | isTrue# (w `eqWord8#` w')
+            -> (# ptr# `plusAddr#` 1#, start# #)
+            | otherwise
+            -> go (ptr# `plusAddr#` -1#)
+
+{-# INLINE extractDefineOrLetName #-}
+extractDefineOrLetName :: AlexInput -> Int -> Text
+extractDefineOrLetName !AlexInput{aiPtr} !n =
+  textFromUtf8Region (Ptr start#) end
+  where
+    end :: Ptr b
+    !end = aiPtr `plusPtr` n
+
+    end#, start# :: Addr#
     !(Ptr end#) = end
     start#      = (goBack# (end# `plusAddr#` -1#)) `plusAddr#` 1#
 
     goBack# :: Addr# -> Addr#
     goBack# ptr# = case indexWord8OffAddr# ptr# 0# of
       0#Word8  -> ptr#
-      9#Word8  -> ptr# -- '\n'
+      9#Word8  -> ptr# -- '\t'
       10#Word8 -> ptr# -- '\n'
       13#Word8 -> ptr# -- '\r'
       32#Word8 -> ptr# -- ' '
@@ -363,12 +397,20 @@ extractDefineOrLetName AlexInput{aiPtr} n =
 
 {-# INLINE dropUntilNL #-}
 dropUntilNL :: AlexInput -> AlexInput
-dropUntilNL input@AlexInput{aiPtr} =
+dropUntilNL !input@AlexInput{aiPtr} =
   input { aiPtr = dropUntilNL# aiPtr }
+
+{-# INLINE dropUntilCppDirectiveEnd #-}
+dropUntilCppDirectiveEnd :: AlexM Text
+dropUntilCppDirectiveEnd = do
+  old@AlexState{asInput} <- get
+  let input' = dropUntilUnescapedNL asInput
+  put $ old { asInput = input' }
+  pure $ T.strip $ textFromUtf8Region (aiPtr asInput) (aiPtr input')
 
 {-# INLINE dropUntilUnescapedNL #-}
 dropUntilUnescapedNL :: AlexInput -> AlexInput
-dropUntilUnescapedNL input@AlexInput{aiPtr = start} =
+dropUntilUnescapedNL !input@AlexInput{aiPtr = start} =
   case dropUntilUnescapedNL# start of
     (# seenNewlines, end #) ->
       over aiLineL (\(Line n) -> Line (n + seenNewlines)) $
@@ -376,13 +418,13 @@ dropUntilUnescapedNL input@AlexInput{aiPtr = start} =
 
 {-# INLINE dropUntilNLOr #-}
 dropUntilNLOr :: Word8 -> AlexInput -> AlexInput
-dropUntilNLOr w input@AlexInput{aiPtr} =
+dropUntilNLOr !w !input@AlexInput{aiPtr} =
   input { aiPtr = dropUntilNLOr# w aiPtr }
 
 {-# INLINE dropUntilNLOrEither #-}
 -- | Drop until either of two bytes.
 dropUntilNLOrEither :: Word8 -> Word8 -> AlexInput -> AlexInput
-dropUntilNLOrEither w1 w2 input@AlexInput{aiPtr} =
+dropUntilNLOrEither !w1 !w2 !input@AlexInput{aiPtr} =
   input { aiPtr = dropUntilNLOrEither# w1 w2 aiPtr }
 
 -- Alex interface
@@ -617,10 +659,10 @@ utf8BS (I# nChars#) (Ptr start#) =
         0#      -> bytes#
         nBytes# -> go (k# -# 1#) (bytes# +# nBytes#)
 
-{-# INLINE regionToUtf8BS #-}
-regionToUtf8BS :: Ptr Word8 -> Ptr Word8 -> BS.ByteString
-regionToUtf8BS start end =
-  BSI.PS (performIO (newForeignPtr_ start)) 0 (minusPtr end start)
+{-# INLINE textFromUtf8Region #-}
+textFromUtf8Region :: Ptr Word8 -> Ptr Word8 -> Text
+textFromUtf8Region start end =
+  TE.decodeUtf8 $ BSI.PS (performIO (newForeignPtr_ start)) 0 (minusPtr end start)
 
 {-# INLINE utf8DecodeChar# #-}
 utf8DecodeChar# :: Addr# -> (# Char#, Int# #)

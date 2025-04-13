@@ -19,15 +19,15 @@ data Directive
   = Include {-# UNPACK #-} !Text
   | Define  {-# UNPACK #-} !Text
   | Undef   {-# UNPACK #-} !Text
-  | If      {-# UNPACK #-} !Text
   | Ifdef   {-# UNPACK #-} !Text
   | Ifndef  {-# UNPACK #-} !Text
-  | Elif    {-# UNPACK #-} !Text
+  | If      {-# UNPACK #-} !Text
+  | Elif    -- {-# UNPACK #-} !Text
   | Else
   | Endif
-  | Line    {-# UNPACK #-} !Text
-  | Error   {-# UNPACK #-} !Text
-  | Warning {-# UNPACK #-} !Text
+  -- | Line    -- {-# UNPACK #-} !Text
+  -- | Error   -- {-# UNPACK #-} !Text
+  -- | Warning -- {-# UNPACK #-} !Text
   deriving (Eq, Ord, Show, Generic)
   deriving Pretty via PPGeneric Directive
 
