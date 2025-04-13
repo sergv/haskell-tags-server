@@ -73,8 +73,8 @@ instance Pretty FunctionMacroDef where
       , pretty fmdBody
       ]
 
-data PreprocessorMacro =
-    PreprocessorConstant ConstantMacroDef
+data PreprocessorMacro
+  = PreprocessorConstant ConstantMacroDef
   | PreprocessorFunction FunctionMacroDef
   deriving (Eq, Ord, Show)
 

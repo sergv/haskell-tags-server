@@ -21,6 +21,7 @@ import Data.Text qualified as T
 import Data.Void (Void)
 
 import Haskell.Language.Blocks
+import Haskell.Language.Lexer.CppTypes qualified as Cpp
 import Haskell.Language.Lexer.TokenisationUtils
 import Haskell.Language.Lexer.Types
 import TestUtils (makeTest)
@@ -683,7 +684,7 @@ testBreakBlocks = testGroup "Break blocks"
       b
       """
       ==>
-      [ [T "a", Newline 1, T "a", Newline 0, CppDefine "FOO", Newline 1, T "a"]
+      [ [T "a", Newline 1, T "a", Newline 0, Cpp $ Cpp.Define "FOO", Newline 1, T "a"]
       , [T "b"]
       ]
       -- intervening blank lines are ignored

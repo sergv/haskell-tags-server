@@ -27,6 +27,7 @@ import Foreign.Ptr (plusPtr)
 import GHC.Stack.Ext
 import Prettyprinter hiding (line)
 
+import Haskell.Language.Lexer.CppTypes qualified as Cpp
 import Haskell.Language.Lexer.Types
 import Haskell.Language.LexerSimple.LensBlaze
 import Haskell.Language.LexerSimple.Types
@@ -144,7 +145,7 @@ $hexdigit   = [0-9a-fA-F]
 ^ @cpp_dir_start ("define" | "let") @cpp_ws+ @define_name
   { \input len -> do
     modify $ \s -> s { asInput = dropUntilUnescapedNL $ asInput s }
-    pure $! CppDefine $! extractDefineOrLetName input len
+    pure $! Cpp $! Cpp.Define $! extractDefineOrLetName input len
   }
 
 ^ @cpp_dir_start @cppdirective .* ( [\\] @nl .* )* ;
