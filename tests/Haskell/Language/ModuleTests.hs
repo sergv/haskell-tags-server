@@ -121,6 +121,47 @@ simpleModuleTest = TestCase
     }
   }
 
+simpleModuleWithIf0Test :: Test
+simpleModuleWithIf0Test = TestCase
+  { testName       = "Simple regular module with #if 0"
+  , input          =
+      """
+      module Foo where
+
+      import Bar (xyz)
+
+      #if 0
+      import Baz (xyz2)
+
+      foo :: Int -> Int
+      foo = id
+      #endif
+
+      bar :: Int -> Int
+      bar = id
+      """
+  , expectedResult = defaltMod
+    { modHeader     = defaultModHeader
+      { mhModName = mkModuleName "Foo"
+      , mhExports = NoExports
+      , mhImports = SubkeyMap.fromList
+        [ let key = ImportKey VanillaModule (mkModuleName "Bar") in
+          ( key
+          , NE.singleton $ ImportSpec key Unqualified $ SpecificImports $ ImportList
+              { ilImportType = Imported
+              , ilEntries    = KeyMap.fromList
+                [ EntryWithChildren (mkSymName "xyz") Nothing
+                ]
+              }
+          )
+        ]
+      }
+    , modAllSymbols = SymbolMap.fromList
+        [ mkResolvedSymbolFromParts filename (Line 12) (mkSymName "bar") Function Nothing
+        ]
+    }
+  }
+
 recordFieldsTest :: Test
 recordFieldsTest = TestCase
   { testName       = "Record fields"
@@ -247,6 +288,7 @@ tests :: TestTree
 tests = testGroup "Whole module tests"
   [ doTest emptyModuleTest
   , doTest simpleModuleTest
+  , doTest simpleModuleWithIf0Test
   , doTest recordFieldsTest
   , doTest preprocessorInImportListsIsNotLost
   , doTest preprocessorOverExportList
