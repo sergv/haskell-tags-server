@@ -352,14 +352,14 @@ extractDefineOrLetName AlexInput{aiPtr} n =
     start#      = (goBack# (end# `plusAddr#` -1#)) `plusAddr#` 1#
 
     goBack# :: Addr# -> Addr#
-    goBack# ptr# = case word8ToWord# (indexWord8OffAddr# ptr# 0#) of
-      0##  -> ptr#
-      9##  -> ptr# -- '\n'
-      10## -> ptr# -- '\n'
-      13## -> ptr# -- '\r'
-      32## -> ptr# -- ' '
-      92## -> ptr# -- '\\'
-      _    -> goBack# (ptr# `plusAddr#` -1#)
+    goBack# ptr# = case indexWord8OffAddr# ptr# 0# of
+      0#Word8  -> ptr#
+      9#Word8  -> ptr# -- '\n'
+      10#Word8 -> ptr# -- '\n'
+      13#Word8 -> ptr# -- '\r'
+      32#Word8 -> ptr# -- ' '
+      92#Word8 -> ptr# -- '\\'
+      _        -> goBack# (ptr# `plusAddr#` -1#)
 
 {-# INLINE dropUntilNL #-}
 dropUntilNL :: AlexInput -> AlexInput
@@ -530,54 +530,56 @@ dropUntilNL# :: Ptr Word8 -> Ptr Word8
 dropUntilNL# (Ptr start#) = Ptr (go start#)
   where
     go :: Addr# -> Addr#
-    go ptr# = case word8ToWord# (indexWord8OffAddr# ptr# 0#) of
-      0##  -> ptr#
-      10## -> ptr# -- '\n'
-      _    -> go (ptr# `plusAddr#` 1#)
+    go ptr# = case indexWord8OffAddr# ptr# 0# of
+      0#Word8  -> ptr#
+      10#Word8 -> ptr# -- '\n'
+      _        -> go (ptr# `plusAddr#` 1#)
 
 {-# INLINE dropUntilUnescapedNL# #-}
 dropUntilUnescapedNL# :: Ptr Word8 -> (# Int, Ptr Word8 #)
 dropUntilUnescapedNL# (Ptr start#) = go 0 start#
   where
     go :: Int -> Addr# -> (# Int, Ptr Word8 #)
-    go !n ptr# = case word8ToWord# (indexWord8OffAddr# ptr# 0#) of
-      0##  -> (# n, Ptr ptr# #)
+    go !n ptr# = case indexWord8OffAddr# ptr# 0# of
+      0#Word8  -> (# n, Ptr ptr# #)
       -- '\n'
-      10## -> (# n, Ptr ptr# #)
+      10#Word8 -> (# n, Ptr ptr# #)
       -- '\\'
-      92## ->
-        case word8ToWord# (indexWord8OffAddr# ptr# 1#) of
-          0##  -> (# n, Ptr (ptr# `plusAddr#` 1#) #)
+      92#Word8 ->
+        case indexWord8OffAddr# ptr# 1# of
+          0#Word8  -> (# n, Ptr (ptr# `plusAddr#` 1#) #)
           -- '\n'
-          10## -> go (n + 1) (ptr# `plusAddr#` 2#)
-          _    -> go n (ptr# `plusAddr#` 2#)
-      _    -> go n (ptr# `plusAddr#` 1#)
+          10#Word8 -> go (n + 1) (ptr# `plusAddr#` 2#)
+          _        -> go n (ptr# `plusAddr#` 2#)
+      _        -> go n (ptr# `plusAddr#` 1#)
 
 {-# INLINE dropUntilNLOr# #-}
 dropUntilNLOr# :: Word8 -> Ptr Word8 -> Ptr Word8
 dropUntilNLOr# (W8# w#) (Ptr start#) = Ptr (go start#)
   where
     go :: Addr# -> Addr#
-    go ptr# = case word8ToWord# (indexWord8OffAddr# ptr# 0#) of
-      0##  -> ptr#
+    go ptr# = case indexWord8OffAddr# ptr# 0# of
+      0#Word8  -> ptr#
       -- '\n'
-      10## -> ptr#
-      c# | isTrue# (c# `eqWord#` word8ToWord# w#) -> ptr#
-           | otherwise                 -> go (ptr# `plusAddr#` 1#)
+      10#Word8 -> ptr#
+      c#
+        | isTrue# (c# `eqWord8#` w#) -> ptr#
+        | otherwise                  -> go (ptr# `plusAddr#` 1#)
 
 {-# INLINE dropUntilNLOrEither# #-}
 dropUntilNLOrEither# :: Word8 -> Word8 -> Ptr Word8 -> Ptr Word8
 dropUntilNLOrEither# (W8# w1#) (W8# w2#) (Ptr start#) = Ptr (go start#)
   where
     go :: Addr# -> Addr#
-    go ptr# = case word8ToWord# (indexWord8OffAddr# ptr# 0#) of
-      0##  -> ptr#
+    go ptr# = case indexWord8OffAddr# ptr# 0# of
+      0#Word8  -> ptr#
       -- '\n'
-      10## -> ptr#
-      c# | isTrue# ((c# `eqWord#` word8ToWord# w1#) `orI#` (c# `eqWord#` word8ToWord# w2#))
-         -> ptr#
-           | otherwise
-           -> go (ptr# `plusAddr#` 1#)
+      10#Word8 -> ptr#
+      c#
+        | isTrue# ((c# `eqWord8#` w1#) `orI#` (c# `eqWord8#` w2#))
+        -> ptr#
+        | otherwise
+        -> go (ptr# `plusAddr#` 1#)
 
 {-# INLINE utf8Foldl' #-}
 utf8Foldl' :: forall a. (a -> Char# -> a) -> a -> Ptr Word8 -> a
@@ -623,10 +625,10 @@ regionToUtf8BS start end =
 {-# INLINE utf8DecodeChar# #-}
 utf8DecodeChar# :: Addr# -> (# Char#, Int# #)
 utf8DecodeChar# a# =
-  case word8ToWord# (indexWord8OffAddr# a# 0#) of
-    0## -> (# '\0'#, 0# #)
-    x#  ->
-      let !ch0 = word2Int# x# in
+  case indexWord8OffAddr# a# 0# of
+    0#Word8 -> (# '\0'#, 0# #)
+    x#      ->
+      let !ch0 = word2Int# (word8ToWord# x#) in
       if  | startsWith0# ch0     -> (# chr# ch0, 1# #)
           | startsWith110# ch0   -> readChar1# a# ch0
           | startsWith1110# ch0  -> readChar2# a# ch0
@@ -638,10 +640,10 @@ utf8DecodeChar# a# =
 invalid# :: Int# -> (# Char#, Int# #)
 invalid# nBytes# = (# '\8'#, nBytes# #)
 -- TODO: check whether following note from ghc applies to server's lexer:
-   -- '\xFFFD' would be the usual replacement character, but
-      -- that's a valid symbol in Haskell, so will result in a
-         -- confusing parse error later on.  Instead we use '\0' which
-            -- will signal a lexer error immediately.
+-- '\xFFFD' would be the usual replacement character, but
+-- that's a valid symbol in Haskell, so will result in a
+-- confusing parse error later on.  Instead we use '\0' which
+-- will signal a lexer error immediately.
 
 {-# INLINE readChar1# #-}
 readChar1# :: Addr# -> Int# -> (# Char#, Int# #)
@@ -706,10 +708,10 @@ startsWith11110# x = isTrue# ((x `andI#` 0xF8#) ==# 0xF0#)
 {-# INLINE utf8SizeChar# #-}
 utf8SizeChar# :: Addr# -> Int#
 utf8SizeChar# a# =
-  case word8ToWord# (indexWord8OffAddr# a# 0#) of
-    0## -> 0#
-    x#  ->
-      let !ch0 = word2Int# x# in
+  case indexWord8OffAddr# a# 0# of
+    0#Word8 -> 0#
+    x#      ->
+      let !ch0 = word2Int# (word8ToWord# x#) in
       if  | startsWith0# ch0     -> 1#
           | startsWith110# ch0   -> 2#
           | startsWith1110# ch0  -> 3#
