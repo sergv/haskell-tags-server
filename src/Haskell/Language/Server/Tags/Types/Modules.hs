@@ -75,6 +75,10 @@ instance Store  a => Store  (Module a)
 type UnresolvedModule = Module ()
 type ResolvedModule   = Module SymbolMap
 
+instance Semigroup a => Semigroup (Module a) where
+  Module mh mas mf mlm maen mid <> Module mh' mas' _mf' mlm' maen' mid' =
+    Module (mh <> mh') (mas <> mas') mf (max mlm mlm') (maen <> maen') (mid || mid')
+
 moduleNeedsReloading :: MonadFS m => Module a -> m (Bool, UTCTime)
 moduleNeedsReloading Module{modFile, modIsDirty, modLastModified} = do
   modifTime <- MonadFS.getModificationTime modFile
@@ -110,6 +114,14 @@ data ModuleHeader = ModuleHeader
 
 instance NFData ModuleHeader
 instance Store  ModuleHeader
+
+instance Semigroup ModuleHeader where
+  ModuleHeader a b c d <> ModuleHeader a' b' c' d'
+    | a == a'
+    = ModuleHeader a (b <> b') (c <> c') (d <> d')
+    | otherwise
+    = error $ renderString $
+      "Attempting to combine ModuleHeader's with different names:" <+> pretty @ModuleName a <> ", and" <+> pretty a'
 
 instance Pretty ModuleHeader where
   pretty ModuleHeader{mhModName, mhExports, mhImportQualifiers, mhImports} =
@@ -152,13 +164,26 @@ resolveQualifier qual ModuleHeader{mhImports, mhImportQualifiers} =
     qualifiedModName = getImportQualifier qual
 
 data ModuleExportSpec a
-  = NoExports          -- ^ Export list completely absent.
-  | EmptyExports       -- ^ Export list specifies no entries.
-  | SpecificExports !a -- ^ Exprort list specifies entries.
+  = NoExports                      -- ^ Export list completely absent.
+  | EmptyExports                   -- ^ Export list specifies no entries.
+  | SpecificExports !a             -- ^ Exprort list specifies entries.
+  | NoExportsWithSomeGuaranteed !a -- ^ No export list in some versions of the module but with listed entries in others.
   deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
 
 instance NFData a => NFData (ModuleExportSpec a)
 instance Store  a => Store  (ModuleExportSpec a)
+
+instance Semigroup a => Semigroup (ModuleExportSpec a) where
+  (<>) NoExports                       (SpecificExports y)             = NoExportsWithSomeGuaranteed y
+  (<>) (SpecificExports x)             NoExports                       = NoExportsWithSomeGuaranteed x
+  (<>) NoExports                       _                               = NoExports
+  (<>) _                               NoExports                       = NoExports
+  (<>) EmptyExports                    y                               = y
+  (<>) x                               EmptyExports                    = x
+  (<>) (SpecificExports x)             (SpecificExports y)             = SpecificExports $ x <> y
+  (<>) (NoExportsWithSomeGuaranteed x) (NoExportsWithSomeGuaranteed y) = NoExportsWithSomeGuaranteed $ x <> y
+  (<>) (SpecificExports x)             (NoExportsWithSomeGuaranteed y) = NoExportsWithSomeGuaranteed $ x <> y
+  (<>) (NoExportsWithSomeGuaranteed x) (SpecificExports y)             = NoExportsWithSomeGuaranteed $ x <> y
 
 instance Pretty a => Pretty (ModuleExportSpec a) where
   pretty = ppGeneric

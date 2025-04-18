@@ -33,15 +33,16 @@ import Control.Monad.Writer (MonadWriter(..))
 import Control.Monad.Writer qualified as Lazy
 import Control.Monad.Writer.Strict qualified as Strict
 import Control.Parallel.Strategies.Ext
-
 import Data.ByteString qualified as BS
 import Data.Either
 import Data.Foldable.Ext
+import Data.Foldable1 (foldMap1)
 import Data.Functor.Product (Product(..))
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Data.Maybe hiding (Maybe(Just))
+import Data.Monoid (Ap(..))
 import Data.Monoid qualified as Monoid
 import Data.Semigroup as Semigroup
 import Data.Set (Set)
@@ -52,10 +53,6 @@ import Data.Traversable (for)
 import Data.Void (Void)
 import Prettyprinter qualified as PP
 import Prettyprinter.Ext
-
-import Haskell.Language.Lexer (tokenize, modeFromFilename)
-import Haskell.Language.Lexer.Types (Pos, ServerToken, processTokens)
-import Haskell.Language.Lexer.Types qualified as Types
 
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Filesystem qualified as MonadFS
@@ -73,6 +70,10 @@ import Data.SubkeyMap qualified as SubkeyMap
 import Data.SymbolMap (SymbolMap)
 import Data.SymbolMap qualified as SM
 import Data.Symbols
+import Haskell.Language.Lexer (tokenize, modeFromFilename)
+import Haskell.Language.Lexer.Types (Pos, ServerToken, processTokens)
+import Haskell.Language.Lexer.Types qualified as Types
+import Haskell.Language.Preprocessor.ResolvePreprocessor
 import Haskell.Language.Server.Tags.AnalyzeHeader
 import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports
@@ -254,7 +255,81 @@ makeModule
   -> FullPath 'File
   -> [Pos ServerToken]
   -> m UnresolvedModule
-makeModule suggestedModuleName modifTime filename tokens = do
+makeModule suggestedModuleName modifTime filename tokens =
+  case checkSingleToplevelAlt blocks of
+    Nothing                     -> error "Cannot analyze more than one alternative yet"
+    Just (prefix, alts, suffix) ->
+      getAp $
+        foldMap1
+          (\xs -> Ap $ makeSingleModule suggestedModuleName modifTime filename $ prefix ++ xs ++ suffix)
+          alts
+  where
+    blocks :: Tree [Pos ServerToken]
+    blocks = preprocessorBlocks tokens
+
+    hasAlt :: Tree [a] -> Bool
+    hasAlt = \case
+      Leaf{}  -> False
+      Alt{}   -> True
+      Seq x y -> hasAlt x || hasAlt y
+
+    checkSingleToplevelAlt :: Tree [a] -> Maybe ([a], NonEmpty [a], [a])
+    checkSingleToplevelAlt = go1 []
+      where
+        go1 :: [[a]] -> Tree [a] -> Maybe ([a], NonEmpty [a], [a])
+        go1 acc t = case t of
+          Leaf xs   -> Just (concat $ reverse (xs : acc), [] :| [], [])
+          Alt xs
+            | all (not . hasAlt) xs -> go3 acc (concat . toList <$> xs) (Leaf [])
+            | otherwise             -> Nothing
+          Seq xs ys -> go2 acc xs ys
+
+        go2 :: [[a]] -> Tree [a] -> Tree [a] -> Maybe ([a], NonEmpty [a], [a])
+        go2 acc t rest = case t of
+          Leaf xs   -> go1 (xs : acc) rest
+          Alt xs
+            | all (not . hasAlt) xs -> go3 acc (concat . toList <$> xs) rest
+            | otherwise             -> Nothing
+          Seq xs ys -> go2 acc xs (Seq ys rest)
+
+        go3 :: [[a]] -> NonEmpty [a] -> Tree [a] -> Maybe ([a], NonEmpty [a], [a])
+        go3 prefix alts t = do
+          suffix <- sequentializeNoAlt t
+          pure (concat (reverse prefix), alts, concat suffix)
+
+        sequentializeNoAlt :: Tree a -> Maybe [a]
+        sequentializeNoAlt = go []
+          where
+            go :: [a] -> Tree a -> Maybe [a]
+            go acc = \case
+              Leaf x    -> Just $ reverse $ x : acc
+              Alt{}     -> Nothing
+              Seq xs ys -> go acc xs >>= \acc' -> go acc' ys
+
+    -- countAlt :: Tree [a] -> Int
+    -- countAlt = \case
+    --   Leaf{}  -> 0
+    --   Alt xs  -> 1 + getSum (foldMap (Sum . countAlt) xs)
+    --   Seq x y -> countAlt x + countAlt y
+    --
+    -- checkSingleToplevelAlt :: Tree [a] -> Maybe ([a], NonEmpty [a], [a])
+    -- checkSingleToplevelAlt t
+    --   | countAlt t == 1 = Just $ go [] t
+    --   | otherwise       = Nothing
+    --   where
+    --     go :: [a] -> Tree [a] -> Maybe ([a], NonEmpty [a], [a])
+    --     go acc = \case
+    --       Leaf xs ->
+
+
+makeSingleModule
+  :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
+  => Maybe ModuleName -- ^ Suggested module name, will be used if source does not define it's own name.
+  -> UTCTime
+  -> FullPath 'File
+  -> [Pos ServerToken]
+  -> m UnresolvedModule
+makeSingleModule suggestedModuleName modifTime filename tokens = do
   (header, tokens') <- analyzeHeader filename tokens
   let syms           :: [ResolvedSymbol]
       errors         :: [Doc Void]
@@ -290,7 +365,7 @@ makeModule suggestedModuleName modifTime filename tokens = do
         , modAllExportedNames = ()
         , modIsDirty          = False
         }
-  -- logVerboseDebug $ "[makeModule] created module" <+> pretty mod
+  -- logVerboseDebug $ "[makeSingleModule] created module" <+> pretty mod
   pure mod
   where
     defaultHeader :: ModuleHeader
@@ -407,6 +482,8 @@ resolveModule nameResolution checkIfModuleIsAlreadyBeingLoaded readAndLoad mod =
         NoExports
           -> pure modAllSymbols
         EmptyExports
+          -> pure modAllSymbols
+        NoExportsWithSomeGuaranteed ModuleExports{}
           -> pure modAllSymbols
         SpecificExports ModuleExports{meExportedEntries, meReexports}
           | S.null meReexports
@@ -598,8 +675,12 @@ quasiResolveImportSpecWithLoadsInProgress
     processImports wantedNames =
       foldForA modulesAlreadyLoading $ \Module{modHeader = ModuleHeader{mhExports, mhModName = importedModName, mhImports}, modFile = importedModFile, modAllSymbols} ->
         case mhExports of
-          NoExports    -> pure modAllSymbols
-          EmptyExports -> pure modAllSymbols
+          NoExports
+            -> pure modAllSymbols
+          EmptyExports
+            -> pure modAllSymbols
+          NoExportsWithSomeGuaranteed ModuleExports{}
+            -> pure modAllSymbols
           SpecificExports ModuleExports{meReexports, meExportedEntries}
             | S.null meReexports || allWantedNamesDefinedLocally
             , S.size unqualifiedExports == S.size exportedNames ->

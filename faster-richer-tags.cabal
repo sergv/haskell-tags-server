@@ -158,6 +158,7 @@ library
     Haskell.Language.Lexer
     Haskell.Language.Lexer.CppTypes
     Haskell.Language.Lexer.Types
+    Haskell.Language.Preprocessor.ResolvePreprocessor
 
     Haskell.Language.Lexer.Env
     Haskell.Language.Lexer.InputStack

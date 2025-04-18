@@ -40,6 +40,9 @@ module Haskell.Language.Lexer.Types
   , FastTags.TokenVal
   , module FastTags.Token
   , module FastTags.Tag
+
+  , PPTokens(..)
+  , ppTokens
   ) where
 
 import Control.DeepSeq
@@ -53,6 +56,7 @@ import Data.Maybe
 import Data.Store (Store)
 import Data.Text (Text)
 import Data.Void (Void)
+import Prettyprinter qualified as PP
 import Prettyprinter.Ext
 import System.FilePath (takeExtension)
 
@@ -431,3 +435,17 @@ forallServerToken = T "forall"
 patternServerToken :: ServerToken
 patternServerToken = T "pattern"
 
+newtype PPTokens = PPTokens [Pos ServerToken]
+
+instance Pretty PPTokens where
+  pretty (PPTokens ts) =
+    ppDictHeader "Tokens"
+      [ "tokens" :-> ppListWith ppTokenVal ts
+      ]
+    where
+      ppTokenVal :: Pos ServerToken -> Doc ann
+      ppTokenVal (Pos SrcPos{posLine} tok) =
+        pretty (unLine posLine) <> PP.colon <> pretty tok
+
+ppTokens :: [Pos ServerToken] -> Doc ann
+ppTokens = pretty . PPTokens . take 16

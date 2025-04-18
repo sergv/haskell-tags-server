@@ -42,7 +42,7 @@ import Prettyprinter.Combinators
 import Prettyprinter.Ext
 
 import Haskell.Language.Lexer.Types
-  (stripNewlines, tokToName, Pos(..), Line, SrcPos(..), Type, posLine, unLine, PragmaType(..), ServerToken(..), Type(..), ProcessMode(..))
+  (stripNewlines, tokToName, Pos(..), Line, SrcPos(..), Type, posLine, PragmaType(..), ServerToken(..), Type(..), ProcessMode(..), ppTokens)
 import Haskell.Language.Lexer.Types qualified as Types
 
 import Control.Monad.Logging
@@ -234,10 +234,9 @@ analyzeImports filename = getAp . foldMap (Ap . go . dropAllNLs . toList)
                           (ImportKey importTarget modName)
                           (NE.singleton spec)
           case toks' of
-            []                -> pure (imports, qualifiers)
-            Pos _ KWWhere : _ -> pure (fmap (\x -> x { ispecImportList = AssumedWildcardImportList }) <$> imports, qualifiers)
-            _                 -> throwErrorWithCallStack $
-              "Trailing tokens after import list in" <+> pretty filename <> ":" ## ppTokens toks'
+            [] -> pure (imports, qualifiers)
+            _  -> throwErrorWithCallStack $
+              "Trailing tokens after import list:" ## ppTokens toks'
           where
             modName :: ModuleName
             modName = mkModuleName name
@@ -641,21 +640,6 @@ isNonOperatorName =
     check '#'  = True
     check '.'  = True
     check c    = isAlphaNum c
-
-newtype Tokens = Tokens [Pos ServerToken]
-
-instance Pretty Tokens where
-  pretty (Tokens ts) =
-    ppDictHeader "Tokens"
-      [ "tokens" :-> ppListWith ppTokenVal ts
-      ]
-    where
-      ppTokenVal :: Pos ServerToken -> Doc ann
-      ppTokenVal (Pos SrcPos{posLine} tok) =
-        pretty (unLine posLine) <> PP.colon <> pretty tok
-
-ppTokens :: [Pos ServerToken] -> Doc ann
-ppTokens = pretty . Tokens . take 16
 
 -- | Drop prefix of newlines.
 dropNLs :: [Pos ServerToken] -> [Pos ServerToken]
