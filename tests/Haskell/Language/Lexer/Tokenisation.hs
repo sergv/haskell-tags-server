@@ -286,6 +286,7 @@ testTokenise = testGroup "Tokenise"
   , tokenizePreprocessor
   ]
   where
+    (==>) :: HasCallStack => T.Text -> [ServerToken] -> TestTree
     (==>) = makeTest f
     f :: T.Text -> [ServerToken]
     f = L.drop 1 -- strip uninteresting initial newline
@@ -422,7 +423,7 @@ testTokenise = testGroup "Tokenise"
           defined(BAR)
         """
         ==>
-        [ Cpp $ Cpp.If "defined(FOO) && \\\n  defined(BAR)", Newline 0
+        [ Cpp $ Cpp.If "defined(FOO) &&    defined(BAR)", Newline 0
         ]
       , """
         #if 0
@@ -438,13 +439,14 @@ testTokenise = testGroup "Tokenise"
         #elif defined(FROB)
         """
         ==>
-        [ Cpp $ Cpp.Elif, Newline 0
+        [ Cpp $ Cpp.Elif "defined(FROB)", Newline 0
         ]
       , """
-        #elif defined(FROB)
+        #elif defined(FOO) && \\
+          defined(BAR)
         """
         ==>
-        [ Cpp $ Cpp.Elif, Newline 0
+        [ Cpp $ Cpp.Elif "defined(FOO) &&    defined(BAR)", Newline 0
         ]
       , """
         #else

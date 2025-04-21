@@ -22,7 +22,7 @@ data Directive
   | Ifdef   {-# UNPACK #-} !Text
   | Ifndef  {-# UNPACK #-} !Text
   | If      {-# UNPACK #-} !Text
-  | Elif    -- {-# UNPACK #-} !Text
+  | Elif    {-# UNPACK #-} !Text
   | Else
   | Endif
   -- | Line    -- {-# UNPACK #-} !Text

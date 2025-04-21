@@ -324,7 +324,7 @@ stripServerTokens = second catMaybes . partitionEithers . map f
         Cpp.If      _ -> Right Nothing
         Cpp.Ifdef   _ -> Right Nothing
         Cpp.Ifndef  _ -> Right Nothing
-        Cpp.Elif      -> Right Nothing
+        Cpp.Elif    _ -> Right Nothing
         Cpp.Else      -> Right Nothing
         Cpp.Endif     -> Right Nothing
         -- Cpp.Line    _ -> Right Nothing

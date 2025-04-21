@@ -406,7 +406,7 @@ dropUntilCppDirectiveEnd = do
   old@AlexState{asInput} <- get
   let input' = dropUntilUnescapedNL asInput
   put $ old { asInput = input' }
-  pure $ T.strip $ textFromUtf8Region (aiPtr asInput) (aiPtr input')
+  pure $ T.strip $ T.replace "\\\n" " " $ T.replace "\r" "" $ textFromUtf8Region (aiPtr asInput) (aiPtr input')
 
 {-# INLINE dropUntilUnescapedNL #-}
 dropUntilUnescapedNL :: AlexInput -> AlexInput
