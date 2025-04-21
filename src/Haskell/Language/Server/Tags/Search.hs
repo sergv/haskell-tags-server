@@ -69,7 +69,7 @@ findSymbol scope filename sym = do
   case scope of
     ScopeCurrentModule -> findInModule sym currMod
     ScopeAllModules    ->
-      foldMapPar (foldMap (S.fromList . toList) . SM.lookup sym') <$> gets (scopeFromAllModules currMod)
+      foldMapPar (SM.lookup sym') <$> gets (scopeFromAllModules currMod)
       where
         (_, sym') = splitQualifiedPart sym
 
@@ -205,24 +205,23 @@ lookUpInImportedModules names currModName name imports = do
     -- traverse (loadModule' . ispecImportKey) specs
 
 lookUpInSymbolMap :: UnqualifiedSymbolName -> SymbolMap -> [ResolvedSymbol]
-lookUpInSymbolMap sym sm =
-  case SM.lookup sym sm of
-    Nothing -> []
-    -- Just syms -> toList syms
-    -- If a name refers to both constructor and type and construcutor constructs
-    -- values for the type in question then
-    Just syms
-      | (redundant@(_ : _), other) <- L.partition isRedundantConstructor syms'
-      , (_reallyRedundant, haveNoCorrespondingParents) <-
-          let otherFiles = S.fromList $ map resolvedSymbolFile other in
-          L.partition ((`S.member` otherFiles) . resolvedSymbolFile) redundant
-      -> haveNoCorrespondingParents ++ other
-      | otherwise
-      -> syms'
-      where
-        syms' = toList syms
-        isRedundantConstructor :: ResolvedSymbol -> Bool
-        isRedundantConstructor x =
-          case (resolvedSymbolType x, resolvedSymbolParentName x) of
-            (Types.Constructor, Just p) -> p == resolvedSymbolName x
-            _                           -> False
+lookUpInSymbolMap sym sm
+  -- Just syms -> toList syms
+  -- If a name refers to both constructor and type and construcutor constructs
+  -- values for the type in question then
+  | (redundant@(_ : _), other) <- L.partition isRedundantConstructor syms'
+  , (_reallyRedundant, haveNoCorrespondingParents) <-
+      let otherFiles = S.fromList $ map resolvedSymbolFile other in
+      L.partition ((`S.member` otherFiles) . resolvedSymbolFile) redundant
+  = haveNoCorrespondingParents ++ other
+  | otherwise
+  = syms'
+  where
+    syms = SM.lookup sym sm
+
+    syms' = toList syms
+    isRedundantConstructor :: ResolvedSymbol -> Bool
+    isRedundantConstructor x =
+      case (resolvedSymbolType x, resolvedSymbolParentName x) of
+        (Types.Constructor, Just p) -> p == resolvedSymbolName x
+        _                           -> False

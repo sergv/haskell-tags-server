@@ -30,12 +30,10 @@ module Data.SymbolMap
 
 import Prelude hiding (lookup, null)
 
-import Control.Arrow ((&&&), second)
+import Control.Arrow ((&&&))
 import Control.DeepSeq
-
+import Data.Bifunctor
 import Data.Foldable qualified
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Data.Maybe
@@ -60,7 +58,7 @@ data SymbolMap = SymbolMap
     smParentMap   :: !(Map UnqualifiedSymbolName (Set UnqualifiedSymbolName))
     -- | Map from parents to children.
   , smChildrenMap :: !(Map UnqualifiedSymbolName (Set UnqualifiedSymbolName))
-  , smAllSymbols  :: !(Map UnqualifiedSymbolName (NonEmpty ResolvedSymbol))
+  , smAllSymbols  :: !(Map UnqualifiedSymbolName (Set ResolvedSymbol))
   } deriving (Eq, Ord, Show, Generic)
 
 instance Store SymbolMap
@@ -84,7 +82,7 @@ instance Pretty SymbolMap where
   pretty SymbolMap{smParentMap, smChildrenMap, smAllSymbols} = ppDictHeader "SymbolMap"
     [ "ParentMap"   :-> ppMapWith pretty ppSet smParentMap
     , "ChildrenMap" :-> ppMapWith pretty ppSet smChildrenMap
-    , "AllSymbols"  :-> ppMapWith pretty ppNE  smAllSymbols
+    , "AllSymbols"  :-> ppMapWith pretty ppSet smAllSymbols
     ]
 
 {-# INLINE null #-}
@@ -96,7 +94,7 @@ insert :: ResolvedSymbol -> SymbolMap -> SymbolMap
 insert sym m = SymbolMap
   { smParentMap   = parentMap
   , smChildrenMap = childrenMap
-  , smAllSymbols  = M.alter (addToNE sym) name $ smAllSymbols m
+  , smAllSymbols  = M.alter (addToSet sym) name $ smAllSymbols m
   }
   where
     name :: UnqualifiedSymbolName
@@ -107,10 +105,6 @@ insert sym m = SymbolMap
         ( M.alter (addToSet p)    name $ smParentMap m
         , M.alter (addToSet name) p    $ smChildrenMap m
         )
-    addToNE :: a -> Maybe (NonEmpty a) -> Maybe (NonEmpty a)
-    addToNE x = \case
-      Nothing -> Just $ x :| []
-      Just xs -> Just $ NE.cons x xs
     addToSet :: Ord a => a -> Maybe (Set a) -> Maybe (Set a)
     addToSet x = \case
       Nothing -> Just $ S.singleton x
@@ -139,8 +133,8 @@ registerChildren extraChildrenMap SymbolMap{smParentMap, smChildrenMap, smAllSym
     smAllSymbolsKeys = M.keysSet smAllSymbols
 
 {-# INLINE lookup #-}
-lookup :: UnqualifiedSymbolName -> SymbolMap -> Maybe (NonEmpty ResolvedSymbol)
-lookup sym = M.lookup sym . smAllSymbols
+lookup :: UnqualifiedSymbolName -> SymbolMap -> Set ResolvedSymbol
+lookup sym = M.findWithDefault S.empty sym . smAllSymbols
 
 {-# INLINE _lookupParent #-}
 -- Noone uses it yet, so it's hidden here in case it will be needed later.
@@ -166,7 +160,7 @@ fromList syms = SymbolMap
   , smChildrenMap = M.fromListWith (<>) $
       map (\(child, parent) -> (parent, S.singleton child)) symbolsWithParents
   , smAllSymbols  = M.fromListWith (<>) $
-      map (resolvedSymbolName &&& (:| [])) syms
+      map (resolvedSymbolName &&& S.singleton) syms
   }
   where
     symbolsWithParents :: [(UnqualifiedSymbolName, UnqualifiedSymbolName)]

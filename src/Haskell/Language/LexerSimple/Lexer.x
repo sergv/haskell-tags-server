@@ -162,13 +162,13 @@ $hexdigit   = [0-9a-fA-F]
 
 -- Implicitly drops: @define_body
 ^ @cpp_dir_start "if"
-  { \_ _ -> Cpp . Cpp.If <$> dropUntilCppDirectiveEnd }
+  { \_ _ -> Cpp . Cpp.If   <$> dropUntilCppDirectiveEnd }
 ^ @cpp_dir_start "elif"
-  { \_ _ -> Cpp Cpp.Elif <$ dropUntilCppDirectiveEnd }
+  { \_ _ -> Cpp . Cpp.Elif <$> dropUntilCppDirectiveEnd }
 ^ @cpp_dir_start "else"
-  { \_ _ -> Cpp Cpp.Else <$ dropUntilCppDirectiveEnd }
+  { \_ _ -> Cpp Cpp.Else   <$  dropUntilCppDirectiveEnd }
 ^ @cpp_dir_start "endif"
-  { \_ _ -> Cpp Cpp.Endif <$ dropUntilCppDirectiveEnd }
+  { \_ _ -> Cpp Cpp.Endif  <$  dropUntilCppDirectiveEnd }
 
 ^ @cpp_dir_start ("line" | "error" | "warning") .* ( [\\] @nl .* )* ;
 
