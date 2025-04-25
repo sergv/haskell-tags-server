@@ -10,10 +10,13 @@
 
 module Haskell.Language.Preprocessor.ResolvePreprocessor
   ( preprocessorBlocks
+  , resolveAlternativesLinearly
   , Tree(..)
   ) where
 
+import Data.List qualified as L
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty qualified as NE
 import Prettyprinter.Generics
 
 import Haskell.Language.Lexer.CppTypes qualified as Cpp
@@ -129,3 +132,33 @@ preprocessorBlocks = goTop []
 prepend :: Maybe a -> [a] -> [a]
 prepend Nothing  xs = xs
 prepend (Just x) xs = x : xs
+
+resolveAlternativesLinearly :: Tree [Pos ServerToken] -> NonEmpty [Pos ServerToken]
+resolveAlternativesLinearly = go
+  where
+    go :: Tree [Pos ServerToken] -> NonEmpty [Pos ServerToken]
+    go = \case
+      Leaf x  -> NE.singleton x
+      Alt xs  -> diag $ go <$> xs
+      Seq x y -> zipAlts (++) (go x) (go y)
+
+diag :: forall a. NonEmpty (NonEmpty a) -> NonEmpty a
+diag (xs :| xss) = NE.head xs :|
+  case L.unsnoc xss of
+    Nothing -> []
+    Just (yss, ys) -> map NE.head yss ++ [NE.last ys]
+
+-- Zip first alternative with all but last in bs. Last in bs gets zipped with last in as.
+zipAlts :: forall a b c. (a -> b -> c) -> NonEmpty a -> NonEmpty b -> NonEmpty c
+zipAlts f (x :| []) (y :| []) = f x y :| []
+zipAlts f xs        (y :| []) = (`f` y) <$> xs
+zipAlts f (x :| []) ys        = f x <$> ys
+zipAlts f xs        ys'       = go ys'
+  where
+    fstX :: a
+    fstX = NE.head xs
+
+    go :: NonEmpty b -> NonEmpty c
+    go (y :| [])      = f (NE.last xs) y :| []
+    go (y :| y' : ys) = NE.cons (f fstX y) $ go (y' :| ys)
+

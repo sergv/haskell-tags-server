@@ -256,71 +256,10 @@ makeModule
   -> [Pos ServerToken]
   -> m UnresolvedModule
 makeModule suggestedModuleName modifTime filename tokens =
-  case checkSingleToplevelAlt blocks of
-    Nothing                     -> error "Cannot analyze more than one alternative yet"
-    Just (prefix, alts, suffix) ->
-      getAp $
-        foldMap1
-          (\xs -> Ap $ makeSingleModule suggestedModuleName modifTime filename $ prefix ++ xs ++ suffix)
-          alts
-  where
-    blocks :: Tree [Pos ServerToken]
-    blocks = preprocessorBlocks tokens
-
-    hasAlt :: Tree [a] -> Bool
-    hasAlt = \case
-      Leaf{}  -> False
-      Alt{}   -> True
-      Seq x y -> hasAlt x || hasAlt y
-
-    checkSingleToplevelAlt :: Tree [a] -> Maybe ([a], NonEmpty [a], [a])
-    checkSingleToplevelAlt = go1 []
-      where
-        go1 :: [[a]] -> Tree [a] -> Maybe ([a], NonEmpty [a], [a])
-        go1 acc t = case t of
-          Leaf xs   -> Just (concat $ reverse (xs : acc), [] :| [], [])
-          Alt xs
-            | all (not . hasAlt) xs -> go3 acc (concat . toList <$> xs) (Leaf [])
-            | otherwise             -> Nothing
-          Seq xs ys -> go2 acc xs ys
-
-        go2 :: [[a]] -> Tree [a] -> Tree [a] -> Maybe ([a], NonEmpty [a], [a])
-        go2 acc t rest = case t of
-          Leaf xs   -> go1 (xs : acc) rest
-          Alt xs
-            | all (not . hasAlt) xs -> go3 acc (concat . toList <$> xs) rest
-            | otherwise             -> Nothing
-          Seq xs ys -> go2 acc xs (Seq ys rest)
-
-        go3 :: [[a]] -> NonEmpty [a] -> Tree [a] -> Maybe ([a], NonEmpty [a], [a])
-        go3 prefix alts t = do
-          suffix <- sequentializeNoAlt t
-          pure (concat (reverse prefix), alts, concat suffix)
-
-        sequentializeNoAlt :: Tree a -> Maybe [a]
-        sequentializeNoAlt = go []
-          where
-            go :: [a] -> Tree a -> Maybe [a]
-            go acc = \case
-              Leaf x    -> Just $ reverse $ x : acc
-              Alt{}     -> Nothing
-              Seq xs ys -> go acc xs >>= \acc' -> go acc' ys
-
-    -- countAlt :: Tree [a] -> Int
-    -- countAlt = \case
-    --   Leaf{}  -> 0
-    --   Alt xs  -> 1 + getSum (foldMap (Sum . countAlt) xs)
-    --   Seq x y -> countAlt x + countAlt y
-    --
-    -- checkSingleToplevelAlt :: Tree [a] -> Maybe ([a], NonEmpty [a], [a])
-    -- checkSingleToplevelAlt t
-    --   | countAlt t == 1 = Just $ go [] t
-    --   | otherwise       = Nothing
-    --   where
-    --     go :: [a] -> Tree [a] -> Maybe ([a], NonEmpty [a], [a])
-    --     go acc = \case
-    --       Leaf xs ->
-
+  getAp $
+    foldMap1
+      (Ap . makeSingleModule suggestedModuleName modifTime filename)
+      (resolveAlternativesLinearly (preprocessorBlocks tokens))
 
 makeSingleModule
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
