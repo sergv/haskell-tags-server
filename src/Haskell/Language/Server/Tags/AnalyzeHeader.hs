@@ -236,7 +236,8 @@ analyzeImports filename = getAp . foldMap (Ap . go . dropAllNLs . toList)
           case toks' of
             [] -> pure (imports, qualifiers)
             _  -> throwErrorWithCallStack $
-              "Trailing tokens after import list:" ## ppTokens toks'
+              "Failed to analyze imports in" <+> pretty filename <> ": trailing tokens after import list:" ##
+                ppTokens toks'
           where
             modName :: ModuleName
             modName = mkModuleName name

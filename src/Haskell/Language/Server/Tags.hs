@@ -26,6 +26,7 @@ module Haskell.Language.Server.Tags
   , emptyTagsServerState
 
   , loadMod
+  , classifyPath
   ) where
 
 import Prelude hiding (mod)
@@ -289,7 +290,7 @@ loadMod conf filename =
     Just importType -> do
       modTime       <- MonadFS.getModificationTime filename
       suggestedName <- fileNameToModuleName filename
-      unresolvedMod@Module{modHeader = ModuleHeader{mhModName}} <-
+      !unresolvedMod@Module{modHeader = ModuleHeader{mhModName}} <-
         readFileAndLoad (Just suggestedName) modTime filename
-      unresolvedMod `seq` pure (Just (ImportKey importType mhModName, unresolvedMod))
+      pure (Just (ImportKey importType mhModName, unresolvedMod))
 
