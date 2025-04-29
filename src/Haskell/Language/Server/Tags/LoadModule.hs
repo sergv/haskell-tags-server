@@ -71,7 +71,7 @@ import Data.SymbolMap (SymbolMap)
 import Data.SymbolMap qualified as SM
 import Data.Symbols
 import Haskell.Language.Lexer (tokenize, modeFromFilename)
-import Haskell.Language.Lexer.Types (Pos, ServerToken, processTokens)
+import Haskell.Language.Lexer.Types (LitMode, Pos, ServerToken, processTokens)
 import Haskell.Language.Lexer.Types qualified as Types
 import Haskell.Language.Preprocessor.ResolvePreprocessor
 import Haskell.Language.Server.Tags.AnalyzeHeader
@@ -180,8 +180,8 @@ reloadIfNecessary key@ImportKey{ikModuleName} m@Module{modFile, modHeader} = do
     if needsReloading
     then do
       logInfo $ "[reloadIfNecessary] reloading module" <+> pretty (mhModName modHeader)
-      m' <- registerAndResolve key =<< readFileAndLoad (Just ikModuleName) modifTime modFile
-      pure $ Reloaded m'
+      fmap Reloaded $
+        registerAndResolve key =<< readFileAndLoad (Just ikModuleName) modifTime modFile
     else pure AlreadyUpToDate
   else pure Gone
 
@@ -213,7 +213,12 @@ readFileAndLoad
 readFileAndLoad suggestedModName modTime filename = do
   source <- MonadFS.readFile filename
   logInfo $ "[readFileAndLoad] Loading" <+> PP.dquotes (pretty filename)
-  loadModuleFromSource suggestedModName modTime filename source
+  mods <- loadModuleFromSource suggestedModName modTime filename source
+  case NEMap.elemsNE mods of
+    mod :| [] -> pure mod
+    _ ->
+      throwErrorWithCallStack $
+        "File" <+> pretty filename <+> "produced multiple modules"
 
 checkLoadingModules
   :: forall m. MonadState LoadState m
@@ -236,17 +241,29 @@ loadModuleFromSource
   -> UTCTime
   -> FullPath 'File
   -> BS.ByteString
-  -> m UnresolvedModule
-loadModuleFromSource suggestedModuleName modifTime filename source = do
+  -> m (NonEmptyMap ModuleName UnresolvedModule)
+loadModuleFromSource suggestedModuleName modifTime filename source =
+  tokenizeModule (modeFromFilename filename) source
+    `catchError`
+      (\(err :: ErrorMessage) ->
+        CME.throwError $ err { errorMessageBody = "Failed to get tokens from" <+> pretty filename <> ":" ## errorMessageBody err })
+       >>= makeModule suggestedModuleName modifTime filename
+
+tokenizeModule
+  :: (WithCallStack, MonadError ErrorMessage m)
+  => LitMode Void
+  -> BS.ByteString
+  -> m [Pos ServerToken]
+tokenizeModule mode contents =
   case tokens of
     Left  err     ->
       throwErrorWithCallStack $
-        "Failed to get tokens from" <+> pretty filename <> ":" ## pretty err
+        "Error while tokenizing:" ## pretty err
     Right tokens' ->
-      makeModule suggestedModuleName modifTime filename tokens'
+      pure tokens'
   where
     tokens :: Either ErrorMessage [Pos ServerToken]
-    tokens = tokenize (modeFromFilename filename) source
+    tokens = tokenize mode contents
 
 makeModule
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
@@ -254,12 +271,16 @@ makeModule
   -> UTCTime
   -> FullPath 'File
   -> [Pos ServerToken]
-  -> m UnresolvedModule
-makeModule suggestedModuleName modifTime filename tokens =
+  -> m (NonEmptyMap ModuleName UnresolvedModule)
+makeModule suggestedModuleName modifTime filename tokens = do
   getAp $
     foldMap1
-      (Ap . makeSingleModule suggestedModuleName modifTime filename)
+      (Ap . fmap mkMap . makeSingleModule suggestedModuleName modifTime filename)
       (resolveAlternativesLinearly (preprocessorBlocks tokens))
+  where
+    mkMap :: UnresolvedModule -> NonEmptyMap ModuleName UnresolvedModule
+    mkMap m@Module{modHeader = ModuleHeader{mhModName}} =
+      NEMap.singleton mhModName m
 
 makeSingleModule
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)

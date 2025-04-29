@@ -33,6 +33,8 @@ import Control.Monad.Logging.Simple
 import Data.ErrorMessage
 import Data.GenericDiff
 import Data.KeyMap qualified as KeyMap
+import Data.Map.NonEmpty (NonEmptyMap)
+import Data.Map.NonEmpty qualified as NEMap
 import Data.Path
 import Data.SubkeyMap qualified as SubkeyMap
 import Data.SymbolMap qualified as SymbolMap
@@ -46,7 +48,7 @@ import Haskell.Language.Server.Tags.Types.Modules as Mods
 
 import TestUtils
 
-type Test = TestCase Text UnresolvedModule
+type Test = TestCase Text (NonEmptyMap ModuleName UnresolvedModule)
 
 filename :: FullPath 'File
 filename = "/foo/bar/test.hs"
@@ -56,6 +58,9 @@ instance Pretty UTCTime where
 
 pt :: Int -> Type -> PosAndType
 pt n = PosAndType filename (Line n)
+
+mkSingleton :: UnresolvedModule -> NonEmptyMap ModuleName UnresolvedModule
+mkSingleton mod = NEMap.singleton (mhModName (modHeader mod)) mod
 
 defaultModHeader :: ModuleHeader
 defaultModHeader = ModuleHeader
@@ -86,7 +91,7 @@ emptyModuleTest = TestCase
   { testName       = "Empty module"
   , input          =
       "module Foo where"
-  , expectedResult = defaltMod
+  , expectedResult = mkSingleton $ defaltMod
     { modHeader = defaultModHeader
       { mhModName          = mkModuleName "Foo"
       , mhExports          = NoExports
@@ -106,7 +111,7 @@ simpleModuleTest = TestCase
       foo :: Int -> Int
       foo = id
       """
-  , expectedResult = defaltMod
+  , expectedResult = mkSingleton $ defaltMod
     { modHeader     = defaultModHeader
       { mhModName = mkModuleName "Foo"
       , mhExports = NoExports
@@ -147,7 +152,7 @@ simpleModuleWithIf0Test1 = TestCase
       bar :: Int -> Int
       bar = id
       """
-  , expectedResult = defaltMod
+  , expectedResult = mkSingleton $ defaltMod
     { modHeader     = defaultModHeader
       { mhModName = mkModuleName "Foo"
       , mhExports = NoExports
@@ -193,7 +198,7 @@ simpleModuleWithIf0Test2 = TestCase
       bar :: Int -> Int
       bar = id
       """
-  , expectedResult = defaltMod
+  , expectedResult = mkSingleton $ defaltMod
     { modHeader     = defaultModHeader
       { mhModName = mkModuleName "Foo"
       , mhExports = NoExports
@@ -231,7 +236,7 @@ recordFieldsTest = TestCase
         , baz :: Double
         }
       """
-  , expectedResult = defaltMod
+  , expectedResult = mkSingleton $ defaltMod
     { modHeader     = defaultModHeader
       { mhModName = mkModuleName "Foo"
       , mhExports = NoExports
@@ -262,7 +267,7 @@ preprocessorInImportListsIsNotLost = TestCase
       foo :: Int -> Int
       foo = id
       """
-  , expectedResult = defaltMod
+  , expectedResult = mkSingleton $ defaltMod
     { modHeader     = defaultModHeader
       { mhModName = mkModuleName "Foo"
       , mhExports = NoExports
@@ -305,7 +310,7 @@ preprocessorOverExportList = TestCase
       foo :: Int -> Int
       foo = id
       """
-  , expectedResult = defaltMod
+  , expectedResult = mkSingleton $ defaltMod
     { modHeader     = defaultModHeader
       { mhModName = mkModuleName "Foo"
       , mhExports = SpecificExports $ ModuleExports
@@ -350,7 +355,7 @@ preprocessorOverWholeModule = TestCase
       foo = id
       #endif
       """
-  , expectedResult = defaltMod
+  , expectedResult = mkSingleton $ defaltMod
     { modHeader     = defaultModHeader
       { mhModName = mkModuleName "Foo"
       , mhExports = NoExportsWithSomeGuaranteed $ ModuleExports
@@ -395,7 +400,7 @@ moduleWithDisabledSectionTest1 = TestCase
         , Baz
         ) where
       """
-  , expectedResult = defaltMod
+  , expectedResult = mkSingleton $ defaltMod
     { modHeader =
         ModuleHeader
           { mhModName          = mkModuleName "Test"
@@ -438,7 +443,7 @@ moduleWithDisabledSectionTest2 = TestCase
         , Baz
         ) where
       """
-  , expectedResult = defaltMod
+  , expectedResult = mkSingleton $ defaltMod
       { modHeader = ModuleHeader
         { mhModName          = mkModuleName "Test"
         , mhExports          = SpecificExports ModuleExports
@@ -488,7 +493,7 @@ moduleWithDisabledAndEnabledSectionsTest = TestCase
       #endif
         ) where
       """
-  , expectedResult = defaltMod
+  , expectedResult = mkSingleton $ defaltMod
     { modHeader = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = SpecificExports ModuleExports
@@ -554,9 +559,9 @@ tests = testGroup "Whole module tests"
   ]
 
 doTest :: HasCallStack => Test -> TestTree
-doTest TestCase{testName, input, expectedResult = expectedResult :: UnresolvedModule} =
+doTest TestCase{testName, input, expectedResult = expectedResult :: NonEmptyMap ModuleName UnresolvedModule} =
   testCase testName $ do
-    (res :: Either ErrorMessage UnresolvedModule, logs) <-
+    (res :: Either ErrorMessage (NonEmptyMap ModuleName UnresolvedModule), logs) <-
       runWriterT $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runErrorExceptT $
         loadModuleFromSource Nothing zeroTime filename $ TE.encodeUtf8 input
     let logsDoc = "Logs, size " <> pretty (length logs) <> ":" ## PP.indent 2 (PP.vcat logs)

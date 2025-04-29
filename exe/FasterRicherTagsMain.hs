@@ -5,6 +5,7 @@
 -- Maintainer: serg.foo@gmail.com
 
 {-# LANGUAGE ApplicativeDo     #-}
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
@@ -15,6 +16,7 @@ module FasterRicherTagsMain (main) where
 
 import Control.Concurrent
 import Control.Monad
+import Control.Monad.Error.Class (MonadError)
 import Control.Monad.ErrorExcept
 import Control.Monad.State
 import Control.Monad.Writer
@@ -25,6 +27,7 @@ import Data.List qualified as L
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.NonEmpty qualified as NE
 import Data.Map.NonEmpty (NonEmptyMap)
+import Data.Map.NonEmpty qualified as NEMap
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Data.Maybe (catMaybes)
@@ -41,20 +44,27 @@ import Prettyprinter ((<+>))
 import Prettyprinter.Combinators
 import Prettyprinter.Show (ppShow)
 import System.Directory.OsPath
-import System.Directory.OsPath.Types
+import System.Directory.OsPath.Types ()
 import System.Exit
 import System.File.OsPath
 import System.IO (stderr, stdout)
 import System.OsPath
 import System.OsPath.Ext
 
+import Control.Monad.Filesystem (MonadFS)
+import Control.Monad.Filesystem qualified as MonadFS
+import Control.Monad.Logging
 import Control.Monad.Logging.Simple
+import Data.ErrorMessage
 import Data.Filesystem.Find
 import Data.Ignores
+import Data.MonoidalMap (MonoidalMap(..))
+import Data.Path (FullPath, FileType(..))
 import Data.Path qualified as Path
 import Data.Symbols
 import Haskell.Language.Server.Tags
 import Haskell.Language.Server.Tags.LoadFiles
+import Haskell.Language.Server.Tags.LoadModule
 import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
@@ -100,6 +110,21 @@ progInfo = info
 -- shouldCollectHaskellFile :: AbsDir -> AbsFile -> Basename OsPath -> IO (Maybe OsPath)
 -- shouldCollectHaskellFile absDir absFile (Basename basePath) = undefined
 
+loadMany
+  :: (MonadFS m, MonadError ErrorMessage m, MonadLog m)
+  => TagsServerConf
+  -> FullPath 'File
+  -> m (Map ImportKey UnresolvedModule)
+loadMany conf filename = do
+  case classifyPath conf filename of
+    Nothing         -> pure M.empty
+    Just importType -> do
+      modTime       <- MonadFS.getModificationTime filename
+      suggestedName <- fileNameToModuleName filename
+      source        <- MonadFS.readFile filename
+      mods          <- NEMap.toMap <$> loadModuleFromSource (Just suggestedName) modTime filename source
+      pure $ M.mapKeys (ImportKey importType) mods
+
 main :: IO ()
 main = do
   Config{cfgNullSeparated} <-
@@ -120,12 +145,12 @@ main = do
   res <-
     runSimpleLoggerT (Nothing @(Destination IO)) Debug $
       runErrorExceptT $ do
-        mods <- fmap catMaybes $ for files $ \path -> do
+        mods <- fmap (M.assocs . unMonoidalMap . foldMap MonoidalMap) $ for files $ \path -> do
           path'  <- liftIO $ Path.fromFileOsPath path
           isFile <- liftIO $ doesFileExist $ Path.toOsPath path'
           unless isFile $
             liftIO $ die $ "Input path does not point to file: " ++ show path'
-          loadMod conf path'
+          loadMany conf path'
 
         let mods' :: [(ImportKey, UnresolvedModule)]
             mods' = L.sortBy (comparing fst) $ filter (not . T.null . getModuleName . ikModuleName . fst) mods

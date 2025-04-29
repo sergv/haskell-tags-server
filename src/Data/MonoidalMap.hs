@@ -8,9 +8,8 @@
 ----------------------------------------------------------------------------
 
 module Data.MonoidalMap
-  ( MonoidalMap
+  ( MonoidalMap(..)
   , singleton
-  , unMonoidalMap
   , lookup
   , findWithDefault
   ) where
