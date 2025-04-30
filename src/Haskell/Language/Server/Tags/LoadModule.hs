@@ -79,9 +79,6 @@ import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
 
-defaultModuleName :: ModuleName
-defaultModuleName = mkModuleName "Main"
-
 loadModule'
   :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => ImportKey
@@ -290,7 +287,7 @@ makeSingleModule
   -> [Pos ServerToken]
   -> m UnresolvedModule
 makeSingleModule suggestedModuleName modifTime filename tokens = do
-  (header, tokens') <- analyzeHeader filename tokens
+  (header, tokens') <- analyzeHeader suggestedModuleName filename tokens
   let syms           :: [ResolvedSymbol]
       errors         :: [Doc Void]
       (syms, errors) = first (fmap (mkResolvedSymbol filename) . Types.removeDuplicatePatterns)
@@ -314,11 +311,9 @@ makeSingleModule suggestedModuleName modifTime filename tokens = do
   --           , "expected module name" --> name
   --           ]
   --   _ -> pure ()
-  let moduleHeader :: ModuleHeader
-      moduleHeader = fromMaybe defaultHeader header
-      mod :: UnresolvedModule
+  let mod :: UnresolvedModule
       mod = Module
-        { modHeader           = moduleHeader
+        { modHeader           = header
         , modAllSymbols       = allSymbols
         , modFile             = filename
         , modLastModified     = modifTime
@@ -327,14 +322,6 @@ makeSingleModule suggestedModuleName modifTime filename tokens = do
         }
   -- logVerboseDebug $ "[makeSingleModule] created module" <+> pretty mod
   pure mod
-  where
-    defaultHeader :: ModuleHeader
-    defaultHeader = ModuleHeader
-      { mhModName          = fromMaybe defaultModuleName suggestedModuleName
-      , mhImports          = mempty
-      , mhImportQualifiers = mempty
-      , mhExports          = NoExports
-      }
 
 resolveModule
   :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadLog m)

@@ -29,6 +29,7 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
+import Data.Maybe (fromMaybe)
 import Data.Monoid (Ap(..))
 import Data.Semigroup
 import Data.Set (Set)
@@ -93,28 +94,30 @@ isCpp = \case
 
 analyzeHeader
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
-  => FullPath 'File
+  => Maybe ModuleName
+  -> FullPath 'File
   -> [Pos ServerToken]
-  -> m (Maybe ModuleHeader, [Pos ServerToken])
-analyzeHeader filename ts =
+  -> m (ModuleHeader, [Pos ServerToken])
+analyzeHeader suggestedModName filename ts = do
   -- logDebug $ "[analyzeHeader] ts =" <+> ppTokens ts
-  case dropWhile ((/= KWModule) . valOf) ts of
+  (modName, exportList, body) <- case dropWhile ((/= KWModule) . valOf) ts of
     Pos _ KWModule :
       (dropNLs -> Pos _ (T modName) :
-        (break ((== KWWhere) . valOf) . dropNLs -> (exportList, Pos _ KWWhere : body))) -> do
-      let (imports, rest) = extractImportBlocks body
-      (importSpecs, importQualifiers) <- analyzeImports filename imports
-      let importQualifiers' = MonoidalMap.unMonoidalMap importQualifiers
-      exports                         <- analyzeExports filename importQualifiers' $ dropAllCpp exportList
-      let header = ModuleHeader
-            { mhModName          = mkModuleName modName
-            , mhImports          = importSpecs
-            , mhImportQualifiers = importQualifiers'
-            , mhExports          = exports
-            }
-      pure (Just header, rest)
+        (break ((== KWWhere) . valOf) . dropNLs -> (exportList, Pos _ KWWhere : body))) ->
+      pure (mkModuleName modName, Just exportList, body)
       -- No header present.
-    _ -> pure (Nothing, ts)
+    _ -> pure (fromMaybe (mkModuleName "Main") suggestedModName, Nothing, ts)
+  let (importBlocks, rest) = extractImportBlocks body
+  (imports, importQuals) <- analyzeImports filename importBlocks
+  let importQualifiers' = MonoidalMap.unMonoidalMap importQuals
+  exports                <- maybe (pure NoExports) (analyzeExports filename importQualifiers' . dropAllCpp) exportList
+  let header = ModuleHeader
+        { mhModName          = modName
+        , mhImports          = imports
+        , mhImportQualifiers = importQualifiers'
+        , mhExports          = exports
+        }
+  pure (header, rest)
 
 pattern PAs           :: Pos ServerToken
 pattern PAs           <- Pos _ (T "as")
