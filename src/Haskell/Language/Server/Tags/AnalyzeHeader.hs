@@ -197,22 +197,28 @@ analyzeImports filename = getAp . foldMap (Ap . go . dropAllNLs . toList)
               PQualified : rest -> (rest, True)
               rest              -> (rest, False)
 
-            ts3    :: [Pos ServerToken]
-            isQual :: Bool
-            (ts3, isQual)
+            ts3       :: [Pos ServerToken]
+            isQualPre :: Bool
+            (ts3, isQualPre)
               = first dropPackageImport
               . extractQualified
               . dropSafeImport
               $ ts2
+
         -- Extract import name and renaming alias, if any
         (ts4, name, qualName, isQualPost) <- case ts3 of
           PName name : PQualified : PAs : PName qualName : rest -> pure (rest, name, Just qualName, True)
           PName name              : PAs : PName qualName : rest -> pure (rest, name, Just qualName, False)
+          PName name : PQualified :                        rest -> pure (rest, name, Nothing, True)
           PName name :                                     rest -> pure (rest, name, Nothing, False)
           _                                                     ->
             throwErrorWithCallStack $ "Cannot extract import name and renaming alias from import block:" ## ppTokens ts3
+
         -- Make sense of the data collected before
-        let qualType = case (isQual || isQualPost, qualName) of
+        let isQual :: Bool
+            isQual = isQualPre || isQualPost
+            qualType :: ImportQualification
+            qualType = case (isQual || isQualPost, qualName) of
               (True,  Nothing)        -> Qualified $ mkQual name
               (True,  Just qualName') -> Qualified $ mkQual qualName'
               (False, Nothing)        -> Unqualified
