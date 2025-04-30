@@ -2640,13 +2640,11 @@ doTest TestCase{testName, input, expectedResult} =
         case tokenize (modeFromFilename filename) $ TE.encodeUtf8 input of
           Left err -> liftIO $ assertFailure $ renderStringWide $ "Failed to get tokens:" ## pretty err
           Right xs -> pure xs
-      analyzeHeader filename tokens
+      analyzeHeader Nothing filename tokens
     let logsDoc = "Logs, size " <> pretty (length logs) <> ":" ## PP.indent 2 (PP.vcat logs)
     case res of
-      Left msg               -> assertFailure $ renderStringWide $ pretty msg ## logsDoc
-      Right (Nothing, _)     -> assertFailure $ renderStringWide $
-        "No header detected, but was expecting header" ## pretty expectedResult ## logsDoc
-      Right (Just header, _) -> do
+      Left msg          -> assertFailure $ renderStringWide $ pretty msg ## logsDoc
+      Right (header, _) -> do
         let header'         = normalizeHeader $ normalizeHeader header
             expectedResult' = normalizeHeader expectedResult
             msg             = ppDictHeader "Headers are different" $

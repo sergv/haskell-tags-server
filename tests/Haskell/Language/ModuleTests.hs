@@ -64,7 +64,7 @@ mkSingleton mod = NEMap.singleton (mhModName (modHeader mod)) mod
 
 defaultModHeader :: ModuleHeader
 defaultModHeader = ModuleHeader
-  { mhModName          = mkModuleName "Foo"
+  { mhModName          = mkModuleName "Main"
   , mhExports          = NoExports
   , mhImportQualifiers = mempty
   , mhImports          = mempty
@@ -116,16 +116,16 @@ simpleModuleTest = TestCase
       { mhModName = mkModuleName "Foo"
       , mhExports = NoExports
       , mhImports = SubkeyMap.fromList
-        [ let key = ImportKey VanillaModule (mkModuleName "Bar") in
-          ( key
-          , NE.singleton $ ImportSpec key Unqualified $ SpecificImports $ ImportList
-              { ilImportType = Imported
-              , ilEntries    = KeyMap.fromList
-                [ EntryWithChildren (mkSymName "xyz") Nothing
-                ]
-              }
-          )
-        ]
+          [ let key = ImportKey VanillaModule (mkModuleName "Bar") in
+            ( key
+            , NE.singleton $ ImportSpec key Unqualified $ SpecificImports $ ImportList
+                { ilImportType = Imported
+                , ilEntries    = KeyMap.fromList
+                    [ EntryWithChildren (mkSymName "xyz") Nothing
+                    ]
+                }
+            )
+          ]
       }
     , modAllSymbols = SymbolMap.fromList
         [ mkResolvedSymbolFromParts filename (Line 5) (mkSymName "foo") Function Nothing
@@ -386,6 +386,34 @@ preprocessorOverWholeModule = TestCase
     }
   }
 
+includeWithCStyleComment :: Test
+includeWithCStyleComment = TestCase
+  { testName       = "#include with trailing C-style comment"
+  , input          =
+      """
+      import Foo
+      #include <foo.h> /* just for testing */
+      import Bar
+
+      foo :: Int -> Int
+      foo x = x
+      """
+  , expectedResult = mkSingleton $ defaltMod
+    { modHeader = defaultModHeader
+      { mhImports = SubkeyMap.fromList
+          [ let key = ImportKey VanillaModule (mkModuleName name) in
+            ( key
+            , NE.singleton $ ImportSpec key Unqualified NoImportList
+            )
+          | name <- ["Foo", "Bar"]
+          ]
+      }
+    , modAllSymbols = SymbolMap.fromList
+        [ mkResolvedSymbolFromParts filename (Line 5) (mkSymName "foo") Function Nothing
+        ]
+    }
+  }
+
 moduleWithDisabledSectionTest1 :: Test
 moduleWithDisabledSectionTest1 = TestCase
   { testName       = "Module header with a part guarded by #if 0"
@@ -551,6 +579,7 @@ tests = testGroup "Whole module tests"
   , doTest preprocessorInImportListsIsNotLost
   , doTest preprocessorOverExportList
   , doTest preprocessorOverWholeModule
+  , doTest includeWithCStyleComment
   , testGroup "exports"
     [ doTest moduleWithDisabledSectionTest1
     , doTest moduleWithDisabledSectionTest2

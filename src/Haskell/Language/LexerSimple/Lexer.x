@@ -141,7 +141,9 @@ $hexdigit   = [0-9a-fA-F]
 <0> {
 
 ^ @cpp_dir_start "include" @cpp_ws+ @include_name
-  { \input len -> pure $! Cpp $! Cpp.Include $! extractIncludeName input len }
+  { \input len -> do
+    _ <- dropUntilCppDirectiveEnd
+    pure $! Cpp $! Cpp.Include $! extractIncludeName input len }
 
 -- Named defines, implicitly drops: '( @cpp_ws+ | "(" ) @define_body
 ^ @cpp_dir_start ("define" | "let") @cpp_ws+ @define_name
@@ -151,13 +153,19 @@ $hexdigit   = [0-9a-fA-F]
   }
 
 ^ @cpp_dir_start "undef" @cpp_ws+ @define_name
-  { \input len -> pure $! Cpp $! Cpp.Undef $! extractDefineOrLetName input len }
+  { \input len -> do
+    _ <- dropUntilCppDirectiveEnd
+    pure $! Cpp $! Cpp.Undef $! extractDefineOrLetName input len }
 
 ^ @cpp_dir_start "ifdef" @cpp_ws+ @define_name
-  { \input len -> pure $! Cpp $! Cpp.Ifdef $! extractDefineOrLetName input len }
+  { \input len -> do
+    _ <- dropUntilCppDirectiveEnd
+    pure $! Cpp $! Cpp.Ifdef $! extractDefineOrLetName input len }
 
 ^ @cpp_dir_start "ifndef" @cpp_ws+ @define_name
-  { \input len -> pure $! Cpp $! Cpp.Ifndef $! extractDefineOrLetName input len }
+  { \input len -> do
+    _ <- dropUntilCppDirectiveEnd
+    pure $! Cpp $! Cpp.Ifndef $! extractDefineOrLetName input len }
 
 
 -- Implicitly drops: @define_body
