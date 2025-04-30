@@ -384,9 +384,9 @@ moduleWithUnqualifiedImportAndNonemptyImportListWithDifferentVisibilitiesTest = 
       }
   }
 
-moduleWithQualifiedImportTest :: Test
-moduleWithQualifiedImportTest = TestCase
-  { testName       = "Qualified import"
+moduleWithPreQualifiedImportTest :: Test
+moduleWithPreQualifiedImportTest = TestCase
+  { testName       = "Qualified import prefix"
   , input          =
       """
       module ModuleWithQualifiedImport where
@@ -414,6 +414,35 @@ moduleWithQualifiedImportTest = TestCase
       }
   }
 
+moduleWithPostQualifiedImportTest :: Test
+moduleWithPostQualifiedImportTest = TestCase
+  { testName       = "Qualified import postfix"
+  , input          =
+      """
+      module ModuleWithQualifiedImport where
+      import Imported1 qualified
+      """
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "ModuleWithQualifiedImport"
+      , mhExports          = NoExports
+      , mhImportQualifiers = M.fromList
+          [ ( mkImportQualifier $ mkModuleName "Imported1"
+            , neSingleton $ mkModuleName "Imported1"
+            )
+          ]
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Imported1"
+                  }
+              , ispecQualification =
+                  Qualified $ mkImportQualifier $ mkModuleName "Imported1"
+              , ispecImportList    = NoImportList
+              }
+          ]
+      }
+  }
 
 moduleWithQualifiedSafeAndPackageImportTest :: Test
 moduleWithQualifiedSafeAndPackageImportTest = TestCase
@@ -445,13 +474,43 @@ moduleWithQualifiedSafeAndPackageImportTest = TestCase
       }
   }
 
-moduleWithQualifiedImportAndAliasTest :: Test
-moduleWithQualifiedImportAndAliasTest = TestCase
-  { testName       = "Qualified import and alias"
+moduleWithPreQualifiedImportAndAliasTest :: Test
+moduleWithPreQualifiedImportAndAliasTest = TestCase
+  { testName       = "Prefix qualified import and alias"
   , input          =
       """
       module ModuleWithQualifiedImportAndAlias where
       import qualified Imported1 as Imp
+      """
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "ModuleWithQualifiedImportAndAlias"
+      , mhExports          = NoExports
+      , mhImportQualifiers = M.fromList
+          [ ( mkImportQualifier $ mkModuleName "Imp"
+            , neSingleton $ mkModuleName "Imported1"
+            )
+          ]
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Imported1"
+                  }
+              , ispecQualification =
+                  Qualified $ mkImportQualifier $ mkModuleName "Imp"
+              , ispecImportList    = NoImportList
+              }
+          ]
+      }
+  }
+
+moduleWithPostQualifiedImportAndAliasTest :: Test
+moduleWithPostQualifiedImportAndAliasTest = TestCase
+  { testName       = "Postfix qualified import and alias"
+  , input          =
+      """
+      module ModuleWithQualifiedImportAndAlias where
+      import Imported1 qualified as Imp
       """
   , expectedResult = ModuleHeader
       { mhModName          = mkModuleName "ModuleWithQualifiedImportAndAlias"
@@ -2566,9 +2625,11 @@ tests = testGroup "Header analysis tests"
     , doTest moduleWithUnqualifiedImportAndSingletonImportListTest
     , doTest moduleWithUnqualifiedImportAndNonemptyImportListTest
     , doTest moduleWithUnqualifiedImportAndNonemptyImportListWithDifferentVisibilitiesTest
-    , doTest moduleWithQualifiedImportTest
+    , doTest moduleWithPreQualifiedImportTest
+    , doTest moduleWithPostQualifiedImportTest
     , doTest moduleWithQualifiedSafeAndPackageImportTest
-    , doTest moduleWithQualifiedImportAndAliasTest
+    , doTest moduleWithPreQualifiedImportAndAliasTest
+    , doTest moduleWithPostQualifiedImportAndAliasTest
     , doTest moduleWithImportAndAliasTest
     , doTest moduleWithImportAndAliasAndHidingImportListTest
     , doTest moduleWithImportOfSpeciallyNamedOperatorsTest
