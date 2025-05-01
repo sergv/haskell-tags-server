@@ -145,23 +145,21 @@ main = do
   res <-
     runSimpleLoggerT (Nothing @(Destination IO)) Debug $
       runErrorExceptT $ do
-        mods <- fmap (M.assocs . unMonoidalMap . foldMap MonoidalMap) $ for files $ \path -> do
-          path'  <- liftIO $ Path.fromFileOsPath path
-          isFile <- liftIO $ doesFileExist $ Path.toOsPath path'
-          unless isFile $
-            liftIO $ die $ "Input path does not point to file: " ++ show path'
-          loadMany conf path'
+        (unresolvedMods :: Map ImportKey (NonEmpty UnresolvedModule)) <-
+          fmap (M.unionsWith (<>) . fmap (M.map NE.singleton)) $ for files $ \path -> do
+            path'  <- liftIO $ Path.fromFileOsPath path
+            isFile <- liftIO $ doesFileExist $ Path.toOsPath path'
+            unless isFile $
+              liftIO $ die $ "Input path does not point to file: " ++ show path'
+            loadMany conf path'
 
-        let mods' :: [(ImportKey, UnresolvedModule)]
-            mods' = L.sortBy (comparing fst) $ filter (not . T.null . getModuleName . ikModuleName . fst) mods
-            unresolvedMods :: Map ImportKey (NonEmpty UnresolvedModule)
-            unresolvedMods =
-              M.fromListWith (<>) (map (second (:| [])) mods')
-            ls    = LoadState
+        let ls = LoadState
               { lsLoadedModules   = mempty
               , lsLoadsInProgress = mempty
               , lsUnloadedFiles   = mempty
               }
+
+            unresolvedMods' = M.filterWithKey (\k _ -> not $ T.null $ getModuleName $ ikModuleName k) unresolvedMods
         -- hPutDocLn stderr $ "Import keys:" ## pretty mods'
 
         -- TODO: T.null . getModuleName . ikModuleName
@@ -172,13 +170,13 @@ main = do
 
         (resolvedMods, ls') <-
           (`runStateT` ls) $
-            loadAllFilesIntoState unresolvedMods conf
+            loadAllFilesIntoState unresolvedMods' conf
 
-        pure (resolvedMods, ls', unresolvedMods)
+        pure (resolvedMods, ls', unresolvedMods')
 
   -- putStrLn $ "logs = " ++ show logs
 
-  (resolvedMods, _ls, _unresolvedMods) <- case res of
+  (resolvedMods :: Map ImportKey (NonEmpty ResolvedModule), _ls, _unresolvedMods) <- case res of
     Left err -> die $ renderString $ "Error during load:" ## pretty err
     Right x  -> pure x
 
