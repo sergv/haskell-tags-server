@@ -73,10 +73,8 @@ instance Semigroup SymbolMap where
     }
 
 instance Monoid SymbolMap where
-  {-# INLINE mempty  #-}
-  {-# INLINE mappend #-}
+  {-# INLINE mempty #-}
   mempty  = SymbolMap mempty mempty mempty
-  mappend = (<>)
 
 instance Pretty SymbolMap where
   pretty SymbolMap{smParentMap, smChildrenMap, smAllSymbols} = ppDictHeader "SymbolMap"
