@@ -10,17 +10,9 @@ module FasterRicherTags.CompactFormat
   ( writeTo
   ) where
 
--- import Control.Monad.IO.Class (MonadIO(..))
--- import Data.ByteString.Char8 (ByteString)
--- import Data.ByteString.Internal qualified as BSI
--- import Foreign.ForeignPtr (touchForeignPtr)
--- import Foreign.ForeignPtr.Unsafe (unsafeForeignPtrToPtr)
--- import Foreign.Storable
--- import System.OsPath
--- import System.OsPath.Ext
-
 import Data.Bifunctor (second)
 import Data.ByteString.Char8 qualified as C8
+import Data.Containers.ListUtils qualified as L
 import Data.Foldable (for_)
 import Data.List qualified as L
 import Data.Ord (comparing)
@@ -38,10 +30,19 @@ import Data.Symbols
 
 import FasterRicherTags.Types
 
+getUniqKey :: ResolvedSymbol -> (UnqualifiedSymbolName, Type, Maybe ParentTag)
+getUniqKey x =
+  ( resolvedSymbolName x
+  , resolvedSymbolType x
+  -- Take parent into account so that e.g. accessors in different records
+  -- will not get deduplicated.
+  , resolvedSymbolParent x
+  )
+
 writeTo :: Handle -> [(Text, [ResolvedSymbol])] -> IO ()
 writeTo dest xs = do
   list $
-    for_ (map (second (L.sortBy (comparing (\x -> (resolvedSymbolName x, resolvedSymbolType x, resolvedSymbolLine x))))) $ L.sortBy (comparing fst) xs) $ \(fn, tags) -> list $ do
+    for_ (map (second (L.nubOrdOn getUniqKey . L.sortBy (comparing (\x -> (resolvedSymbolName x, resolvedSymbolType x, resolvedSymbolLine x))))) $ L.sortBy (comparing fst) xs) $ \(fn, tags) -> list $ do
       txt fn
       for_ tags $ \sym ->
         list $ do
