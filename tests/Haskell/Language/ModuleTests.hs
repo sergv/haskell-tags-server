@@ -638,6 +638,29 @@ doubleDefineInImportList = TestCase
     }
   }
 
+defineBeforeModuleHeader :: Test
+defineBeforeModuleHeader = TestCase
+  { testName       = "Define before module header"
+  , input          =
+      """
+      #define FOO 1
+
+      module Foo where
+
+      foo :: a -> a
+      foo x = x
+      """
+  , expectedResult = mkSingleton $ defaltMod
+    { modHeader = defaultModHeader
+      { mhModName = mkModuleName "Foo"
+      }
+    , modAllSymbols = SymbolMap.fromList
+        [ mkResolvedSymbolFromParts filename (Line 1) (mkSymName "FOO") Define Nothing
+        , mkResolvedSymbolFromParts filename (Line 5) (mkSymName "foo") Function Nothing
+        ]
+    }
+  }
+
 mkSymName
   :: HasCallStack
   => Text
@@ -661,6 +684,7 @@ tests = testGroup "Whole module tests"
   , doTest doubleDefine1
   , doTest doubleDefine2
   , doTest doubleDefineInImportList
+  , doTest defineBeforeModuleHeader
   , testGroup "exports"
     [ doTest moduleWithDisabledSectionTest1
     , doTest moduleWithDisabledSectionTest2
