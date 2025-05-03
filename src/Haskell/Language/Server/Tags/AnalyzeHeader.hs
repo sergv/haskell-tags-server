@@ -76,7 +76,7 @@ extractImportBlocks = go [] [] . breakBlocks ProcessVanilla KeepDirectives
       (kw@(Pos _ KWImport{}) :| block) : tss ->
         go ((kw :| block') : imports) ((cpp ++ [dummyNewline]) : other) tss
         where
-          (cpp, block') = L.partition isCpp block
+          (cpp, block') = extractCpp block
       ts : tss                               ->
         go imports (toList ts : other) tss
       []                                     ->
@@ -84,13 +84,25 @@ extractImportBlocks = go [] [] . breakBlocks ProcessVanilla KeepDirectives
         , foldMap ((dummyNewline :) . toList) $ reverse other
         )
 
+extractCpp :: [Pos ServerToken] -> ([Pos ServerToken], [Pos ServerToken])
+extractCpp = go [] []
+  where
+    go :: [Pos ServerToken] -> [Pos ServerToken] -> [Pos ServerToken] -> ([Pos ServerToken], [Pos ServerToken])
+    go accCpp accVanilla = \case
+      []                   -> (reverse accCpp, reverse accVanilla)
+      t@(Pos _ Cpp{}) : ts -> go (reverse cpp ++ t : accCpp) accVanilla ts'
+        where
+          (cpp, ts') = L.span isCppOrNewline ts
+      t               : ts -> go accCpp (t : accVanilla) ts
+
 dummyNewline :: Pos ServerToken
 dummyNewline = Pos (SrcPos 0 0 mempty mempty) (Newline 0)
 
-isCpp :: Pos ServerToken -> Bool
-isCpp = \case
-  Pos _ Cpp{} -> True
-  _           -> False
+isCppOrNewline :: Pos ServerToken -> Bool
+isCppOrNewline = \case
+  Pos _ Cpp{}     -> True
+  Pos _ Newline{} -> True
+  _               -> False
 
 analyzeHeader
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
@@ -150,9 +162,6 @@ pattern PType         <- Pos _ KWType
 
 pattern PAnyName      :: Text -> Pos ServerToken
 pattern PAnyName name <- Pos _ (tokToName -> Just name)
-
--- pattern PCppDefine     :: Text -> Pos ServerToken
--- pattern PCppDefine str <- Pos _ (CppDefine str)
 
 pattern PName'              :: Line -> Text -> Pos ServerToken
 pattern PName' line name    <- Pos SrcPos{posLine = line} (T name)
