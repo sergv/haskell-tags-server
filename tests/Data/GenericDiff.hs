@@ -50,6 +50,8 @@ import Prettyprinter.MetaDoc
 
 import Data.KeyMap (KeyMap)
 import Data.KeyMap qualified as KM
+import Data.Map.NonEmpty (NonEmptyMap)
+import Data.Map.NonEmpty qualified as NEMap
 import Data.SubkeyMap (SubkeyMap)
 import Data.SubkeyMap qualified as SM
 import Data.SymbolMap (SymbolMap)
@@ -208,11 +210,20 @@ instance (Eq a, Pretty a, GenericDiff a, Typeable a) => GenericDiff (NonEmpty a)
 instance (GenericDiff (KM.Key a), KM.HasKey a, GenericDiff (f a), Eq (f a), Typeable f, Typeable a, PPGenericOverride (f a), PPGenericOverride (KM.Key a), PPGenericOverride a) => GenericDiff (KeyMap f a) where
   genericDiff ae@(ActualExpected actual _) = genericDiffMaps (InType (typeOf actual)) (KM.toMap <$> ae)
 
-instance (Ord k, GenericDiff k, GenericDiff (SM.Subkey k), GenericDiff v, Eq k, Eq (SM.Subkey k), Eq v, PPGenericOverride k, PPGenericOverride (SM.Subkey k), PPGenericOverride v, Typeable k, Typeable v) => GenericDiff (SubkeyMap k v) where
+instance
+  (Ord k, GenericDiff k, GenericDiff (SM.Subkey k), GenericDiff v, Eq k, Eq (SM.Subkey k), Eq v, PPGenericOverride k, PPGenericOverride (SM.Subkey k), PPGenericOverride v, Typeable k, Typeable v)
+  => GenericDiff (SubkeyMap k v) where
   genericDiff ae@(ActualExpected actual _) = genericDiffMaps (InType (typeOf actual)) (SM.toMap <$> ae)
 
-instance (Ord k, GenericDiff k, GenericDiff v, Eq v, Typeable k, Typeable v, PPGenericOverride k, PPGenericOverride v) => GenericDiff (Map k v) where
+instance
+  (Ord k, GenericDiff k, GenericDiff v, Eq v, Typeable k, Typeable v, PPGenericOverride k, PPGenericOverride v)
+  => GenericDiff (Map k v) where
   genericDiff ae@(ActualExpected actual _) = genericDiffMaps (InType (typeOf actual)) ae
+
+instance
+  (Ord k, GenericDiff k, GenericDiff v, Eq v, Typeable k, Typeable v, PPGenericOverride k, PPGenericOverride v)
+  => GenericDiff (NonEmptyMap k v) where
+  genericDiff ae@(ActualExpected actual _) = genericDiffMaps (InType (typeOf actual)) (NEMap.toMap <$> ae)
 
 genericDiffMaps
   :: forall k v. (Ord k, GenericDiff k, GenericDiff v, Eq v, PPGenericOverride k, PPGenericOverride v)
