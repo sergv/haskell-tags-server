@@ -182,19 +182,12 @@ instance Hashable ResolvedSymbol
 instance NFData   ResolvedSymbol
 instance Store    ResolvedSymbol
 
-instance Store    ParentTag
-
-deriving via PPGeneric ParentTag instance Pretty ParentTag
-
 instance HasKey ResolvedSymbol where
   type Key ResolvedSymbol = UnqualifiedSymbolName
   {-# INLINE getKey #-}
   getKey = resolvedSymbolName
 
-
-
-instance Pretty ResolvedSymbol where
-  pretty = ppGeneric
+deriving via PPGeneric ResolvedSymbol instance Pretty ResolvedSymbol
 
 {-# INLINE mkResolvedSymbol #-}
 mkResolvedSymbol :: WithCallStack => FullPath 'File -> Pos TagVal -> ResolvedSymbol

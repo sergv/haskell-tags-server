@@ -269,7 +269,7 @@ makeModule
   -> FullPath 'File
   -> [Pos ServerToken]
   -> m (NonEmptyMap ModuleName UnresolvedModule)
-makeModule suggestedModuleName modifTime filename tokens = do
+makeModule suggestedModuleName modifTime filename tokens =
   getAp $
     foldMap1
       (Ap . fmap mkMap . makeSingleModule suggestedModuleName modifTime filename)
@@ -294,6 +294,7 @@ makeSingleModule suggestedModuleName modifTime filename tokens = do
                      $ processTokens (T.unpack $ unFullPath filename) tokens'
       allSymbols     :: SymbolMap
       allSymbols     = SM.fromList syms
+
   unless (null errors) $
     logError $ ppFoldableHeaderWith id
       ("fast-tags errors while loading" <+> pretty filename)

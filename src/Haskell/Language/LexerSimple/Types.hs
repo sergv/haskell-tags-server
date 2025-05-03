@@ -412,8 +412,8 @@ dropUntilCppDirectiveEnd = do
 dropUntilUnescapedNL :: AlexInput -> AlexInput
 dropUntilUnescapedNL !input@AlexInput{aiPtr = start} =
   case dropUntilUnescapedNL# start of
-    (# seenNewlines, end #) ->
-      over aiLineL (\(Line n) -> Line (n + seenNewlines)) $
+    (# seenEscapedNewlines, end #) ->
+      over aiLineL (\(Line n) -> Line (n + seenEscapedNewlines)) $
         input { aiPtr = end }
 
 {-# INLINE dropUntilNLOr #-}
