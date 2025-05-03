@@ -560,6 +560,84 @@ moduleWithDisabledAndEnabledSectionsTest = TestCase
     }
   }
 
+doubleDefine1 :: Test
+doubleDefine1 = TestCase
+  { testName       = "Double define 1"
+  , input          =
+      """
+      #define FOO 1
+      #define BAR 2
+
+      foo :: a -> a
+      foo x = x
+      """
+  , expectedResult = mkSingleton $ defaltMod
+    { modHeader = defaultModHeader
+    , modAllSymbols = SymbolMap.fromList
+        [ mkResolvedSymbolFromParts filename (Line 1) (mkSymName "FOO") Define Nothing
+        , mkResolvedSymbolFromParts filename (Line 2) (mkSymName "BAR") Define Nothing
+        , mkResolvedSymbolFromParts filename (Line 4) (mkSymName "foo") Function Nothing
+        ]
+    }
+  }
+
+doubleDefine2 :: Test
+doubleDefine2 = TestCase
+  { testName       = "Double define 2"
+  , input          =
+      """
+      #ifdef QUUX
+      #define FOO 1
+      #define BAR 2
+      #endif
+
+      foo :: a -> a
+      foo x = x
+      """
+  , expectedResult = mkSingleton $ defaltMod
+    { modHeader = defaultModHeader
+    , modAllSymbols = SymbolMap.fromList
+        [ mkResolvedSymbolFromParts filename (Line 2) (mkSymName "FOO") Define Nothing
+        , mkResolvedSymbolFromParts filename (Line 3) (mkSymName "BAR") Define Nothing
+        , mkResolvedSymbolFromParts filename (Line 6) (mkSymName "foo") Function Nothing
+        ]
+    }
+  }
+
+doubleDefineInImportList :: Test
+doubleDefineInImportList = TestCase
+  { testName       = "Double define in import list"
+  , input          =
+      """
+      import Foo
+      #ifdef QUUX
+      #define FOO 1
+      #define BAR 2
+      import Quux
+      #endif
+      import Bar
+
+      foo :: a -> a
+      foo x = x
+      """
+  , expectedResult = mkSingleton $ defaltMod
+    { modHeader = defaultModHeader
+      { mhImports = SubkeyMap.fromList
+          [ let key = ImportKey VanillaModule (mkModuleName name) in
+            ( key
+            , NE.singleton $ ImportSpec key Unqualified NoImportList
+            )
+          | name <- ["Foo", "Bar", "Quux"]
+          ]
+      }
+    , modAllSymbols = SymbolMap.fromList
+        [ mkResolvedSymbolFromParts filename (Line 3) (mkSymName "FOO") Define Nothing
+        , mkResolvedSymbolFromParts filename (Line 4) (mkSymName "BAR") Define Nothing
+        , mkResolvedSymbolFromParts filename (Line 9) (mkSymName "foo") Function Nothing
+        ]
+    }
+  }
+
 mkSymName
   :: HasCallStack
   => Text
@@ -580,6 +658,9 @@ tests = testGroup "Whole module tests"
   , doTest preprocessorOverExportList
   , doTest preprocessorOverWholeModule
   , doTest includeWithCStyleComment
+  , doTest doubleDefine1
+  , doTest doubleDefine2
+  , doTest doubleDefineInImportList
   , testGroup "exports"
     [ doTest moduleWithDisabledSectionTest1
     , doTest moduleWithDisabledSectionTest2
