@@ -221,20 +221,26 @@ deriving instance Pretty   Line
 deriving instance Store    Line
 
 instance Pretty SrcPos where
-  pretty SrcPos{posLine} = pretty (unLine posLine)
+  pretty = pretty . unLine . posLine
 
 deriving instance Generic Type
 instance Hashable Type
 instance Store    Type
 
-instance Pretty Type where
-  pretty = ppGeneric
+deriving via PPGeneric Type instance Pretty Type
 
 deriving instance Generic FastTags.TagVal
 instance Hashable FastTags.TagVal
 
 deriving instance Generic FastTags.ParentTag
+deriving via PPGeneric ParentTag instance Pretty FastTags.ParentTag
 instance Hashable FastTags.ParentTag
+instance Store FastTags.ParentTag
+
+deriving via PPGeneric FastTags.TagVal instance Pretty FastTags.TagVal
+deriving instance Generic (Pos a)
+
+instance Pretty a => Pretty (Pos a) where pretty = ppGeneric
 
 tokToName :: ServerToken -> Maybe Text
 tokToName ExclamationMark = Just "!"
