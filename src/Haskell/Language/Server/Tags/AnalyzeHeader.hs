@@ -74,9 +74,12 @@ extractImportBlocks = go [] [] . breakBlocks ProcessVanilla KeepDirectives
       -> ([NonEmpty (Pos ServerToken)], [Pos ServerToken])
     go imports other = \case
       (kw@(Pos _ KWImport{}) :| block) : tss ->
-        go ((kw :| block') : imports) ((cpp ++ [dummyNewline]) : other) tss
+        go ((kw :| block') : imports) (cpp : other) tss
         where
-          (cpp, block') = extractCpp block
+          cpp    = extractCpp block
+          -- Imports don’t wan’t to consider any CPP directives which will be processed
+          -- together with other tags.
+          block' = filter (not . isCpp) block
       ts : tss                               ->
         go imports (toList ts : other) tss
       []                                     ->
@@ -84,19 +87,17 @@ extractImportBlocks = go [] [] . breakBlocks ProcessVanilla KeepDirectives
         , foldMap ((dummyNewline :) . toList) $ reverse other
         )
 
-extractCpp :: [Pos ServerToken] -> ([Pos ServerToken], [Pos ServerToken])
-extractCpp = go [] []
-  where
-    go :: [Pos ServerToken] -> [Pos ServerToken] -> [Pos ServerToken] -> ([Pos ServerToken], [Pos ServerToken])
-    go accCpp accVanilla = \case
-      []                   -> (reverse accCpp, reverse accVanilla)
-      t@(Pos _ Cpp{}) : ts -> go (reverse cpp ++ t : accCpp) accVanilla ts'
-        where
-          (cpp, ts') = L.span isCppOrNewline ts
-      t               : ts -> go accCpp (t : accVanilla) ts
+-- CPP needs all the surrounding newlines for proper analysis later
+extractCpp :: [Pos ServerToken] -> [Pos ServerToken]
+extractCpp = filter isCppOrNewline
 
 dummyNewline :: Pos ServerToken
 dummyNewline = Pos (SrcPos 0 0 mempty mempty) (Newline 0)
+
+isCpp :: Pos ServerToken -> Bool
+isCpp = \case
+  Pos _ Cpp{}     -> True
+  _               -> False
 
 isCppOrNewline :: Pos ServerToken -> Bool
 isCppOrNewline = \case
@@ -112,13 +113,18 @@ analyzeHeader
   -> m (ModuleHeader, [Pos ServerToken])
 analyzeHeader suggestedModName filename ts = do
   -- logDebug $ "[analyzeHeader] ts =" <+> ppTokens ts
-  (modName, exportList, body) <- case dropWhile ((/= KWModule) . valOf) ts of
+
+  let preModule :: [Pos ServerToken]
+      (preModule, modStart) = L.span ((/= KWModule) . valOf) ts
+
+  (modName, preCpp, exportList, body) <- case modStart of
     Pos _ KWModule :
       (dropNLs -> Pos _ (T modName) :
         (break ((== KWWhere) . valOf) . dropNLs -> (exportList, Pos _ KWWhere : body))) ->
-      pure (mkModuleName modName, Just exportList, body)
+      pure (mkModuleName modName, extractCpp preModule, Just exportList, body)
       -- No header present.
-    _ -> pure (fromMaybe (mkModuleName "Main") suggestedModName, Nothing, ts)
+    _ -> pure (fromMaybe (mkModuleName "Main") suggestedModName, [], Nothing, ts)
+
   let (importBlocks, rest) = extractImportBlocks body
   (imports, importQuals) <- analyzeImports filename importBlocks
   let importQualifiers' = MonoidalMap.unMonoidalMap importQuals
@@ -129,7 +135,7 @@ analyzeHeader suggestedModName filename ts = do
         , mhImportQualifiers = importQualifiers'
         , mhExports          = exports
         }
-  pure (header, rest)
+  pure (header, preCpp ++ rest)
 
 pattern PAs           :: Pos ServerToken
 pattern PAs           <- Pos _ (T "as")
