@@ -140,6 +140,7 @@ library
     Data.MonoidalMap
     Data.Path
     Data.Promise
+    Data.SizedList
     Data.SubkeyMap
     Data.SymbolMap
     Data.Symbols
