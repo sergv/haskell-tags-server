@@ -24,6 +24,7 @@ import Data.Map.Strict qualified as M
 import Data.Maybe
 import Data.Text (Text)
 import Data.Text.Encoding qualified as TE
+import Data.Void (Void)
 import Prettyprinter qualified as PP
 import Prettyprinter.Ext
 import Test.Tasty
@@ -42,13 +43,14 @@ import Data.Symbols
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDate)
 import Data.Time.Clock
 import FasterRicherTags.Types
+import Haskell.Language.Lexer.Types (LitMode(..))
 import Haskell.Language.Server.Tags.LoadModule (loadModuleFromSource)
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules as Mods
 
 import TestUtils
 
-type Test = TestCase Text (NonEmptyMap ModuleName UnresolvedModule)
+type Test = TestCase (Text, LitMode Void) (NonEmptyMap ModuleName UnresolvedModule)
 
 filename :: FullPath 'File
 filename = "/foo/bar/test.hs"
@@ -76,8 +78,8 @@ zeroTime = UTCTime
   , utctDayTime = 0
   }
 
-defaltMod :: UnresolvedModule
-defaltMod = Mods.Module
+defaultMod :: UnresolvedModule
+defaultMod = Mods.Module
   { modHeader           = defaultModHeader
   , modAllSymbols       = mempty
   , modFile             = filename
@@ -89,12 +91,11 @@ defaltMod = Mods.Module
 emptyModuleTest :: Test
 emptyModuleTest = TestCase
   { testName       = "Empty module"
-  , input          =
+  , input          = (, LitVanilla) $
       "module Foo where"
-  , expectedResult = mkSingleton $ defaltMod
+  , expectedResult = mkSingleton $ defaultMod
     { modHeader = defaultModHeader
-      { mhModName          = mkModuleName "Foo"
-      , mhExports          = NoExports
+      { mhModName = mkModuleName "Foo"
       }
     }
   }
@@ -102,7 +103,7 @@ emptyModuleTest = TestCase
 simpleModuleTest :: Test
 simpleModuleTest = TestCase
   { testName       = "Simple regular module 1"
-  , input          =
+  , input          = (, LitVanilla) $
       """
       module Foo where
 
@@ -111,10 +112,9 @@ simpleModuleTest = TestCase
       foo :: Int -> Int
       foo = id
       """
-  , expectedResult = mkSingleton $ defaltMod
+  , expectedResult = mkSingleton $ defaultMod
     { modHeader     = defaultModHeader
       { mhModName = mkModuleName "Foo"
-      , mhExports = NoExports
       , mhImports = SubkeyMap.fromList
           [ let key = ImportKey VanillaModule (mkModuleName "Bar") in
             ( key
@@ -136,7 +136,7 @@ simpleModuleTest = TestCase
 simpleModuleWithIf0Test1 :: Test
 simpleModuleWithIf0Test1 = TestCase
   { testName       = "Simple regular module with ‘#if 0’ 1"
-  , input          =
+  , input          = (, LitVanilla) $
       """
       module Foo where
 
@@ -152,10 +152,9 @@ simpleModuleWithIf0Test1 = TestCase
       bar :: Int -> Int
       bar = id
       """
-  , expectedResult = mkSingleton $ defaltMod
+  , expectedResult = mkSingleton $ defaultMod
     { modHeader     = defaultModHeader
       { mhModName = mkModuleName "Foo"
-      , mhExports = NoExports
       , mhImports = SubkeyMap.fromList
         [ let key = ImportKey VanillaModule (mkModuleName "Bar") in
           ( key
@@ -177,7 +176,7 @@ simpleModuleWithIf0Test1 = TestCase
 simpleModuleWithIf0Test2 :: Test
 simpleModuleWithIf0Test2 = TestCase
   { testName       = "Simple regular module with ‘#if 0’ 2"
-  , input          =
+  , input          = (, LitVanilla) $
       """
       module Foo where
 
@@ -198,10 +197,9 @@ simpleModuleWithIf0Test2 = TestCase
       bar :: Int -> Int
       bar = id
       """
-  , expectedResult = mkSingleton $ defaltMod
+  , expectedResult = mkSingleton $ defaultMod
     { modHeader     = defaultModHeader
       { mhModName = mkModuleName "Foo"
-      , mhExports = NoExports
       , mhImports = SubkeyMap.fromList
         [ let key = ImportKey VanillaModule (mkModuleName "Bar") in
           ( key
@@ -224,7 +222,7 @@ simpleModuleWithIf0Test2 = TestCase
 recordFieldsTest :: Test
 recordFieldsTest = TestCase
   { testName       = "Record fields"
-  , input          =
+  , input          = (, LitVanilla) $
       """
       module Foo where
 
@@ -236,10 +234,9 @@ recordFieldsTest = TestCase
         , baz :: Double
         }
       """
-  , expectedResult = mkSingleton $ defaltMod
+  , expectedResult = mkSingleton $ defaultMod
     { modHeader     = defaultModHeader
       { mhModName = mkModuleName "Foo"
-      , mhExports = NoExports
       }
     , modAllSymbols = SymbolMap.fromList
         [ mkResolvedSymbolFromParts filename (Line 3) (mkSymName "foo") Function Nothing
@@ -254,7 +251,7 @@ recordFieldsTest = TestCase
 preprocessorInImportListsIsNotLost :: Test
 preprocessorInImportListsIsNotLost = TestCase
   { testName       = "Preprocessor in import list is not lost"
-  , input          =
+  , input          = (, LitVanilla) $
       """
       module Foo where
 
@@ -267,10 +264,9 @@ preprocessorInImportListsIsNotLost = TestCase
       foo :: Int -> Int
       foo = id
       """
-  , expectedResult = mkSingleton $ defaltMod
+  , expectedResult = mkSingleton $ defaultMod
     { modHeader     = defaultModHeader
       { mhModName = mkModuleName "Foo"
-      , mhExports = NoExports
       , mhImports = SubkeyMap.fromList
         [ let key = ImportKey VanillaModule (mkModuleName "Bar") in
           ( key
@@ -294,7 +290,7 @@ preprocessorInImportListsIsNotLost = TestCase
 preprocessorOverExportList :: Test
 preprocessorOverExportList = TestCase
   { testName       = "Preprocessor over export list"
-  , input          =
+  , input          = (, LitVanilla) $
       """
       module Foo
       #if !defined(FOO)
@@ -310,7 +306,7 @@ preprocessorOverExportList = TestCase
       foo :: Int -> Int
       foo = id
       """
-  , expectedResult = mkSingleton $ defaltMod
+  , expectedResult = mkSingleton $ defaultMod
     { modHeader     = defaultModHeader
       { mhModName = mkModuleName "Foo"
       , mhExports = SpecificExports $ ModuleExports
@@ -337,7 +333,7 @@ preprocessorOverExportList = TestCase
 preprocessorOverWholeModule :: Test
 preprocessorOverWholeModule = TestCase
   { testName       = "Preprocessor over whole module"
-  , input          =
+  , input          = (, LitVanilla) $
       """
       module Foo
       #if defined(FOO)
@@ -355,7 +351,7 @@ preprocessorOverWholeModule = TestCase
       foo = id
       #endif
       """
-  , expectedResult = mkSingleton $ defaltMod
+  , expectedResult = mkSingleton $ defaultMod
     { modHeader     = defaultModHeader
       { mhModName = mkModuleName "Foo"
       , mhExports = NoExportsWithSomeGuaranteed $ ModuleExports
@@ -389,7 +385,7 @@ preprocessorOverWholeModule = TestCase
 includeWithCStyleComment :: Test
 includeWithCStyleComment = TestCase
   { testName       = "#include with trailing C-style comment"
-  , input          =
+  , input          = (, LitVanilla) $
       """
       import Foo
       #include <foo.h> /* just for testing */
@@ -398,7 +394,7 @@ includeWithCStyleComment = TestCase
       foo :: Int -> Int
       foo x = x
       """
-  , expectedResult = mkSingleton $ defaltMod
+  , expectedResult = mkSingleton $ defaultMod
     { modHeader = defaultModHeader
       { mhImports = SubkeyMap.fromList
           [ let key = ImportKey VanillaModule (mkModuleName name) in
@@ -417,7 +413,7 @@ includeWithCStyleComment = TestCase
 moduleWithDisabledSectionTest1 :: Test
 moduleWithDisabledSectionTest1 = TestCase
   { testName       = "Module header with a part guarded by #if 0"
-  , input          =
+  , input          = (, LitVanilla) $
       """
       module Test
         (
@@ -428,7 +424,7 @@ moduleWithDisabledSectionTest1 = TestCase
         , Baz
         ) where
       """
-  , expectedResult = mkSingleton $ defaltMod
+  , expectedResult = mkSingleton $ defaultMod
     { modHeader =
         ModuleHeader
           { mhModName          = mkModuleName "Test"
@@ -459,7 +455,7 @@ moduleWithDisabledSectionTest1 = TestCase
 moduleWithDisabledSectionTest2 :: Test
 moduleWithDisabledSectionTest2 = TestCase
   { testName       = "Module header with a part guarded by a multiline #if 0"
-  , input          =
+  , input          = (, LitVanilla) $
       """
       module Test
         (
@@ -471,7 +467,7 @@ moduleWithDisabledSectionTest2 = TestCase
         , Baz
         ) where
       """
-  , expectedResult = mkSingleton $ defaltMod
+  , expectedResult = mkSingleton $ defaultMod
       { modHeader = ModuleHeader
         { mhModName          = mkModuleName "Test"
         , mhExports          = SpecificExports ModuleExports
@@ -501,7 +497,7 @@ moduleWithDisabledSectionTest2 = TestCase
 moduleWithDisabledAndEnabledSectionsTest :: Test
 moduleWithDisabledAndEnabledSectionsTest = TestCase
   { testName       = "Module header with a part guarded by #if 0 and some parts guarded by #if <nonzero>"
-  , input          =
+  , input          = (, LitVanilla) $
       """
       module Test
         (
@@ -521,7 +517,7 @@ moduleWithDisabledAndEnabledSectionsTest = TestCase
       #endif
         ) where
       """
-  , expectedResult = mkSingleton $ defaltMod
+  , expectedResult = mkSingleton $ defaultMod
     { modHeader = ModuleHeader
       { mhModName          = mkModuleName "Test"
       , mhExports          = SpecificExports ModuleExports
@@ -563,7 +559,7 @@ moduleWithDisabledAndEnabledSectionsTest = TestCase
 doubleDefine1 :: Test
 doubleDefine1 = TestCase
   { testName       = "Double define 1"
-  , input          =
+  , input          = (, LitVanilla) $
       """
       #define FOO 1
       #define BAR 2
@@ -571,7 +567,7 @@ doubleDefine1 = TestCase
       foo :: a -> a
       foo x = x
       """
-  , expectedResult = mkSingleton $ defaltMod
+  , expectedResult = mkSingleton $ defaultMod
     { modHeader = defaultModHeader
     , modAllSymbols = SymbolMap.fromList
         [ mkResolvedSymbolFromParts filename (Line 1) (mkSymName "FOO") Define Nothing
@@ -584,7 +580,7 @@ doubleDefine1 = TestCase
 doubleDefine2 :: Test
 doubleDefine2 = TestCase
   { testName       = "Double define 2"
-  , input          =
+  , input          = (, LitVanilla) $
       """
       #ifdef QUUX
       #define FOO 1
@@ -594,7 +590,7 @@ doubleDefine2 = TestCase
       foo :: a -> a
       foo x = x
       """
-  , expectedResult = mkSingleton $ defaltMod
+  , expectedResult = mkSingleton $ defaultMod
     { modHeader = defaultModHeader
     , modAllSymbols = SymbolMap.fromList
         [ mkResolvedSymbolFromParts filename (Line 2) (mkSymName "FOO") Define Nothing
@@ -607,7 +603,7 @@ doubleDefine2 = TestCase
 doubleDefineInImportList :: Test
 doubleDefineInImportList = TestCase
   { testName       = "Double define in import list"
-  , input          =
+  , input          = (, LitVanilla) $
       """
       import Foo
       #ifdef QUUX
@@ -620,7 +616,7 @@ doubleDefineInImportList = TestCase
       foo :: a -> a
       foo x = x
       """
-  , expectedResult = mkSingleton $ defaltMod
+  , expectedResult = mkSingleton $ defaultMod
     { modHeader = defaultModHeader
       { mhImports = SubkeyMap.fromList
           [ let key = ImportKey VanillaModule (mkModuleName name) in
@@ -641,7 +637,7 @@ doubleDefineInImportList = TestCase
 defineBeforeModuleHeader :: Test
 defineBeforeModuleHeader = TestCase
   { testName       = "Define before module header"
-  , input          =
+  , input          = (, LitVanilla) $
       """
       #define FOO 1
 
@@ -650,7 +646,7 @@ defineBeforeModuleHeader = TestCase
       foo :: a -> a
       foo x = x
       """
-  , expectedResult = mkSingleton $ defaltMod
+  , expectedResult = mkSingleton $ defaultMod
     { modHeader = defaultModHeader
       { mhModName = mkModuleName "Foo"
       }
@@ -660,6 +656,677 @@ defineBeforeModuleHeader = TestCase
         ]
     }
   }
+
+alexPreprocessing :: Test
+alexPreprocessing = TestCase
+  { testName       = "Alex preprocessing"
+  , input          = (, LitVanilla) $
+      """
+      {
+      module Foo where
+
+      import Bar
+
+      }
+
+      $asclarge = [A-Z]
+      $ascsmall = [a-z]
+      $dot      = [\\.]
+
+      $ascident = [$ascsmall $asclarge]
+
+      $ascsymbol = [\\!\\#\\$\\%\\&\\*\\+\\.\\/\\<\\=\\>\\?\\@\\\\\\^\\|\\-\\~\\:]
+
+      $large = [$asclarge]
+      $ident = [$ascident] # [$ascsymbol]
+
+      @qualificationPrefix = ( $large $ident* $dot )*
+
+      -- Vanilla tokens
+      <0> {
+
+      -- Newlines and comments (unfinished).
+      <0> {
+
+      @nl ">" $space*
+        / { isLiterateEnabled' }
+        { \\input len -> pure $! Newline $! countInputSpace input len }
+      @nl
+        / { shouldEndLiterateBird }
+        { \\_ _   -> Newline 0 <$ endLiterate }
+      @nl "\\end{code}"
+        / { shouldEndLiterateLatex }
+        { \\_ _   -> endLiterate' }
+
+      [\\\\]? @nl $space*       { \\input len -> pure $! Newline $! len - countBackslashCR input - 1 }
+      [\\-][\\-]+ ~[$symbol $nl] { \\_ _ -> dropUntilNL' }
+      [\\-][\\-]+ / @nl         ;
+
+      }
+
+      @qualificationPrefix $ident+
+        { \\input len -> pure $! T $! takeText input len }
+
+      }
+
+      {
+      foo :: a -> a
+      foo x = x
+      }
+      """
+  , expectedResult = mkSingleton $ defaultMod
+    { modHeader = defaultModHeader
+      { mhModName = mkModuleName "Foo"
+      , mhImports = SubkeyMap.fromList
+        [ let key = ImportKey VanillaModule (mkModuleName name) in
+          ( key
+          , NE.singleton $ ImportSpec key Unqualified NoImportList
+          )
+        | name <- ["Bar"]
+        ]
+      }
+    , modAllSymbols = SymbolMap.fromList
+        [ mkResolvedSymbolFromParts filename (Line 49) (mkSymName "foo") Function Nothing
+        ]
+    }
+  }
+
+alexTests :: TestTree
+alexTests = testGroup "Alex"
+  [ testGroup "vanilla"
+    [ doTest $ TestCase
+      { testName = "1"
+      , input = (, LitVanilla) $
+          """
+          {
+          module AlexTest where
+
+          import FooBar
+
+          foobar :: Int -> Int
+          foobar = (+ 1)
+
+          }
+
+
+          -- Can skip whitespace everywhere since it does not affect meaning in any
+          -- state.
+          <0, comment, qq, literate> $ws+ ;
+
+          -- Literate Haskell support. 'literate' code handles all text except actual
+          -- Haskell program text. It aims to strip all non-Haskell text.
+          <literate> {
+          $nl ">" $ws*
+            { \\_ len -> (Newline $! len - 2) <$ startLiterateBird }
+          $nl "\\begin{code}" @nl $space*
+            { \\input len -> (Newline $! countInputSpace input len) <$ startLiterateLatex }
+          $nl ;
+          .
+            { \\_ _ -> dropUntilNL' }
+          }
+
+          -- Vanilla tokens
+          <0> {
+
+          "#" @cpp_opt_ws ("{" (@cpp_ws | @nl)*)? "enum"
+            { \\_ _ -> pure HSCEnum }
+          "#" @cpp_opt_ws
+            ( ($ascident # [e]) $ascident*
+            | $ascident ($ascident # [n]) $ascident*
+            | $ascident $ascident ($ascident # [u]) $ascident*
+            | $ascident $ascident $ascident ($ascident # [m]) $ascident*
+            | $ascident $ascident $ascident $ascident $ascident+
+            )
+            { \\_ _ -> pure HSCDirective }
+          "#" @cpp_opt_ws "{" (@cpp_ws | @nl)*
+            ( ($ascident # [e]) $ascident*
+            | $ascident ($ascident # [n]) $ascident*
+            | $ascident $ascident ($ascident # [u]) $ascident*
+            | $ascident $ascident $ascident ($ascident # [m]) $ascident*
+            | $ascident $ascident $ascident $ascident $ascident+
+            )
+            { \\_ _ -> pure HSCDirectiveBraced }
+          }
+
+
+
+
+          {
+          foo :: Int -> Int
+          foo x = x + x
+          }
+          """
+      , expectedResult = mkSingleton $ defaultMod
+        { modHeader     = defaultModHeader
+          { mhModName = mkModuleName "AlexTest"
+          , mhImports = SubkeyMap.fromList
+            [ let key = ImportKey VanillaModule (mkModuleName "FooBar") in
+              ( key
+              , NE.singleton $ ImportSpec key Unqualified NoImportList
+              )
+            ]
+          }
+        , modAllSymbols = SymbolMap.fromList
+            [ mkResolvedSymbolFromParts filename (Line 6) (mkSymName "foobar") Function Nothing
+            , mkResolvedSymbolFromParts filename (Line 55) (mkSymName "foo") Function Nothing
+            ]
+        }
+      }
+    ]
+  , testGroup "literate"
+    [ doTest $ TestCase
+      { testName = "1"
+      , input = (, LitOutside) $
+          """
+          Very useful description 1
+          Very useful description 2
+          > {
+          > module AlexTest where
+          >
+          > import FooBar
+          >
+          > foobar :: Int -> Int
+          > foobar = (+ 1)
+          >
+          > }
+
+          Useful description 1
+          Useful description 2
+          Useful description 3
+          Useful description 4
+
+          > -- Can skip whitespace everywhere since it does not affect meaning in any
+          > -- state.
+          > <0, comment, qq, literate> $ws+ ;
+          >
+          > -- Literate Haskell support. 'literate' code handles all text except actual
+          > -- Haskell program text. It aims to strip all non-Haskell text.
+          > <literate> {
+          > $nl ">" $ws*
+          >   { \\_ len -> (Newline $! len - 2) <$ startLiterateBird }
+          > $nl "\\begin{code}" @nl $space*
+          >   { \\input len -> (Newline $! countInputSpace input len) <$ startLiterateLatex }
+          > $nl ;
+          > .
+          >   { \\_ _ -> dropUntilNL' }
+          > }
+          >
+          Useful description 1
+          Useful description 2
+          Useful description 3
+          Useful description 4
+          > -- Vanilla tokens
+          > <0> {
+          >
+          > "#" @cpp_opt_ws ("{" (@cpp_ws | @nl)*)? "enum"
+          >   { \\_ _ -> pure HSCEnum }
+          > "#" @cpp_opt_ws
+          >   ( ($ascident # [e]) $ascident*
+          >   | $ascident ($ascident # [n]) $ascident*
+          >   | $ascident $ascident ($ascident # [u]) $ascident*
+          >   | $ascident $ascident $ascident ($ascident # [m]) $ascident*
+          >   | $ascident $ascident $ascident $ascident $ascident+
+          >   )
+          >   { \\_ _ -> pure HSCDirective }
+          > "#" @cpp_opt_ws "{" (@cpp_ws | @nl)*
+          >   ( ($ascident # [e]) $ascident*
+          >   | $ascident ($ascident # [n]) $ascident*
+          >   | $ascident $ascident ($ascident # [u]) $ascident*
+          >   | $ascident $ascident $ascident ($ascident # [m]) $ascident*
+          >   | $ascident $ascident $ascident $ascident $ascident+
+          >   )
+          >   { \\_ _ -> pure HSCDirectiveBraced }
+          > }
+          >
+          >
+          > {
+          > foo :: Int -> Int
+          > foo x = x + x
+          > }
+          >
+          """
+      , expectedResult = mkSingleton $ defaultMod
+        { modHeader     = defaultModHeader
+          { mhModName = mkModuleName "AlexTest"
+          , mhImports = SubkeyMap.fromList
+            [ let key = ImportKey VanillaModule (mkModuleName "FooBar") in
+              ( key
+              , NE.singleton $ ImportSpec key Unqualified NoImportList
+              )
+            ]
+          }
+        , modAllSymbols = SymbolMap.fromList
+            [ mkResolvedSymbolFromParts filename (Line 8) (mkSymName "foobar") Function Nothing
+            , mkResolvedSymbolFromParts filename (Line 63) (mkSymName "foo") Function Nothing
+            ]
+        }
+      }
+    , doTest $ TestCase
+      { testName = "2"
+      , input = (, LitOutside) $
+          """
+          Very useful description 1
+          Very useful description 2
+          \\begin{code}
+          {
+          module AlexTest where
+
+          import FooBar
+
+          foobar :: Int -> Int
+          foobar = (+ 1)
+
+          }
+          \\end{code}
+
+          Useful description 1
+          Useful description 2
+          Useful description 3
+          Useful description 4
+
+          \\begin{code}
+          -- Can skip whitespace everywhere since it does not affect meaning in any
+          -- state.
+          <0, comment, qq, literate> $ws+ ;
+
+          -- Literate Haskell support. 'literate' code handles all text except actual
+          -- Haskell program text. It aims to strip all non-Haskell text.
+          <literate> {
+          $nl ">" $ws*
+            { \\_ len -> (Newline $! len - 2) <$ startLiterateBird }
+          $nl "\\begin{code}" @nl $space*
+            { \\input len -> (Newline $! countInputSpace input len) <$ startLiterateLatex }
+          $nl ;
+          .
+            { \\_ _ -> dropUntilNL' }
+          }
+
+          \\end{code}
+
+          Useful description 1
+          Useful description 2
+          Useful description 3
+          Useful description 4
+
+          \\begin{code}
+          -- Vanilla tokens
+          <0> {
+
+          "#" @cpp_opt_ws ("{" (@cpp_ws | @nl)*)? "enum"
+            { \\_ _ -> pure HSCEnum }
+          "#" @cpp_opt_ws
+            ( ($ascident # [e]) $ascident*
+            | $ascident ($ascident # [n]) $ascident*
+            | $ascident $ascident ($ascident # [u]) $ascident*
+            | $ascident $ascident $ascident ($ascident # [m]) $ascident*
+            | $ascident $ascident $ascident $ascident $ascident+
+            )
+            { \\_ _ -> pure HSCDirective }
+          "#" @cpp_opt_ws "{" (@cpp_ws | @nl)*
+            ( ($ascident # [e]) $ascident*
+            | $ascident ($ascident # [n]) $ascident*
+            | $ascident $ascident ($ascident # [u]) $ascident*
+            | $ascident $ascident $ascident ($ascident # [m]) $ascident*
+            | $ascident $ascident $ascident $ascident $ascident+
+            )
+            { \\_ _ -> pure HSCDirectiveBraced }
+          }
+
+
+          {
+          foo :: Int -> Int
+          foo x = x + x
+          }
+
+          \\end{code}
+
+          """
+      , expectedResult = mkSingleton $ defaultMod
+        { modHeader     = defaultModHeader
+          { mhModName = mkModuleName "AlexTest"
+          , mhImports = SubkeyMap.fromList
+            [ let key = ImportKey VanillaModule (mkModuleName "FooBar") in
+              ( key
+              , NE.singleton $ ImportSpec key Unqualified NoImportList
+              )
+            ]
+          }
+        , modAllSymbols = SymbolMap.fromList
+            [ mkResolvedSymbolFromParts filename (Line 9) (mkSymName "foobar") Function Nothing
+            , mkResolvedSymbolFromParts filename (Line 70) (mkSymName "foo") Function Nothing
+            ]
+        }
+      }
+    ]
+  ]
+
+happyTests :: TestTree
+happyTests = testGroup "Happy"
+  [ testGroup "vanilla"
+    [ doTest $ TestCase
+      { testName = "1"
+      , input = (, LitVanilla) $
+          """
+          {
+          {-# OPTIONS_GHC -w #-}
+          module AttrGrammarParser (agParser) where
+          import ParseMonad
+          import AttrGrammar
+          }
+
+          %name agParser
+          %tokentype { AgToken }
+          %token
+            "{"     { AgTok_LBrace }
+            "}"     { AgTok_RBrace }
+            ";"     { AgTok_Semicolon }
+            '{'       { AgTok_LBrace }
+            '}'       { AgTok_RBrace }
+            '::'      { AgTok_Semicolon }
+            "="     { AgTok_Eq }
+            where     { AgTok_Where }
+            selfRef   { AgTok_SelfRef _ }
+            subRef    { AgTok_SubRef _ }
+            rightRef  { AgTok_RightmostRef _ }
+            unknown   { AgTok_Unknown _ }
+
+          %monad { P }
+          %lexer { agLexer } { AgTok_EOF }
+
+          %%
+
+          agParser :: { [AgRule] }
+            : rules                                      { $1 }
+
+          rules :: { [AgRule] }
+            : rule '::' rules                            { $1 : $3 }
+            | rule                                       { $1 : [] }
+            |                                            { [] }
+
+          rule :: { AgRule }
+            : selfRef  "=" code                        { SelfAssign (selfRefVal $1) $3 }
+            | subRef   "=" code                        { SubAssign (subRefVal $1) $3 }
+            | rightRef "=" code                        { RightmostAssign (rightRefVal $1) $3 }
+            | where code                                 { Conditional $2 }
+
+          code :: { [AgToken] }
+            : '{' code0 '}' code                         { [$1] ++ $2 ++ [$3] ++ $4 }
+            | "=" code                                 { $1 : $2 }
+            | selfRef code                               { $1 : $2 }
+            | subRef code                                { $1 : $2 }
+            | rightRef code                              { $1 : $2 }
+            | unknown code                               { $1 : $2 }
+            |                                            { [] }
+
+          code0 :: { [AgToken] }
+            : "{" code0 "}" code0                    { [$1] ++ $2 ++ [$3] ++ $4 }
+            | "=" code0                                { $1 : $2 }
+            | '::' code0                                 { $1 : $2 }
+            | selfRef code0                              { $1 : $2 }
+            | subRef code0                               { $1 : $2 }
+            | rightRef code                              { $1 : $2 }
+            | unknown code0                              { $1 : $2 }
+            |                                            { [] }
+
+          {
+          happyError :: P a
+          happyError = fail ("Parse error\\n")
+
+          test :: a -> a
+          test x = x
+          }
+
+          """
+      , expectedResult = mkSingleton $ defaultMod
+        { modHeader     = defaultModHeader
+          { mhModName = mkModuleName "AttrGrammarParser"
+          , mhExports = SpecificExports $ ModuleExports
+            { meReexports          = mempty
+            , meHasWildcardExports = False
+            , meExportedEntries    = KeyMap.fromList
+                [ EntryWithChildren (mkSymbolName "agParser", PosAndType filename (Line 3) Function) Nothing
+                ]
+            }
+          , mhImports = SubkeyMap.fromList
+            [ let key = ImportKey VanillaModule (mkModuleName name) in
+              ( key
+              , NE.singleton $ ImportSpec key Unqualified NoImportList
+              )
+            | name <- ["ParseMonad", "AttrGrammar"]
+            ]
+          }
+        , modAllSymbols = SymbolMap.fromList
+            [ mkResolvedSymbolFromParts filename (Line 63) (mkSymName "happyError") Function Nothing
+            , mkResolvedSymbolFromParts filename (Line 66) (mkSymName "test") Function Nothing
+            ]
+        }
+      }
+    ]
+  , testGroup "literate"
+    [ doTest $ TestCase
+      { testName = "1"
+      , input = (, LitOutside) $
+          """
+          This parser parses the contents of the attribute grammar
+          into a list of rules.  A rule can either be an assignment
+          to an attribute of the LHS (synthesized attribute), and
+          assignment to an attribute of the RHS (an inherited attribute),
+          or a conditional statement.
+
+          > {
+          > {-# OPTIONS_GHC -w #-}
+          > module AttrGrammarParser (agParser) where
+          > import ParseMonad
+          > import AttrGrammar
+          > }
+
+          > %name agParser
+          > %tokentype { AgToken }
+          > %token
+          >   "{"     { AgTok_LBrace }
+          >   "}"     { AgTok_RBrace }
+          >   ";"     { AgTok_Semicolon }
+          >   "="     { AgTok_Eq }
+          >   where     { AgTok_Where }
+          >   selfRef   { AgTok_SelfRef _ }
+          >   subRef    { AgTok_SubRef _ }
+          >   rightRef  { AgTok_RightmostRef _ }
+          >   unknown   { AgTok_Unknown _ }
+          >
+          > %monad { P }
+          > %lexer { agLexer } { AgTok_EOF }
+
+          > %%
+
+          > agParser :: { [AgRule] }
+          >   : rules                                      { $1 }
+
+          > rules :: { [AgRule] }
+          >   : rule ";" rules                           { $1 : $3 }
+          >   | rule                                       { $1 : [] }
+          >   |                                            { [] }
+
+          > rule :: { AgRule }
+          >   : selfRef  "=" code                        { SelfAssign (selfRefVal $1) $3 }
+          >   | subRef   "=" code                        { SubAssign (subRefVal $1) $3 }
+          >   | rightRef "=" code                        { RightmostAssign (rightRefVal $1) $3 }
+          >   | where code                                 { Conditional $2 }
+
+          > code :: { [AgToken] }
+          >   : "{" code0 "}" code                     { [$1] ++ $2 ++ [$3] ++ $4 }
+          >   | "=" code                                 { $1 : $2 }
+          >   | selfRef code                               { $1 : $2 }
+          >   | subRef code                                { $1 : $2 }
+          >   | rightRef code                              { $1 : $2 }
+          >   | unknown code                               { $1 : $2 }
+          >   |                                            { [] }
+
+          > code0 :: { [AgToken] }
+          >   : "{" code0 "}" code0                    { [$1] ++ $2 ++ [$3] ++ $4 }
+          >   | "=" code0                                { $1 : $2 }
+          >   | ";" code0                                { $1 : $2 }
+          >   | selfRef code0                              { $1 : $2 }
+          >   | subRef code0                               { $1 : $2 }
+          >   | rightRef code                              { $1 : $2 }
+          >   | unknown code0                              { $1 : $2 }
+          >   |                                            { [] }
+
+          > {
+          > happyError :: P a
+          > happyError = fail ("Parse error\\n")
+          >
+          > test :: a -> a
+          > test x = x
+          > }
+
+          """
+      , expectedResult = mkSingleton $ defaultMod
+        { modHeader     = defaultModHeader
+          { mhModName = mkModuleName "AttrGrammarParser"
+          , mhExports = SpecificExports $ ModuleExports
+            { meReexports          = mempty
+            , meHasWildcardExports = False
+            , meExportedEntries    = KeyMap.fromList
+                [ EntryWithChildren (mkSymbolName "agParser", PosAndType filename (Line 9) Function) Nothing
+                ]
+            }
+          , mhImports = SubkeyMap.fromList
+            [ let key = ImportKey VanillaModule (mkModuleName name) in
+              ( key
+              , NE.singleton $ ImportSpec key Unqualified NoImportList
+              )
+            | name <- ["ParseMonad", "AttrGrammar"]
+            ]
+          }
+        , modAllSymbols = SymbolMap.fromList
+            [ mkResolvedSymbolFromParts filename (Line 66) (mkSymName "happyError") Function Nothing
+            , mkResolvedSymbolFromParts filename (Line 69) (mkSymName "test") Function Nothing
+            ]
+        }
+      }
+    , doTest $ TestCase
+      { testName = "2"
+      , input = (, LitOutside) $
+          """
+          This parser parses the contents of the attribute grammar
+          into a list of rules.  A rule can either be an assignment
+          to an attribute of the LHS (synthesized attribute), and
+          assignment to an attribute of the RHS (an inherited attribute),
+          or a conditional statement.
+
+          \\begin{code}
+
+          {
+          {-# OPTIONS_GHC -w #-}
+          module AttrGrammarParser (agParser) where
+          import ParseMonad
+          import AttrGrammar
+          }
+
+          \\end{code}
+
+          \\begin{code}
+          %name agParser
+          %tokentype { AgToken }
+          %token
+            "{"     { AgTok_LBrace }
+            "}"     { AgTok_RBrace }
+            ";"     { AgTok_Semicolon }
+            "="     { AgTok_Eq }
+            where     { AgTok_Where }
+            selfRef   { AgTok_SelfRef _ }
+            subRef    { AgTok_SubRef _ }
+            rightRef  { AgTok_RightmostRef _ }
+            unknown   { AgTok_Unknown _ }
+
+          %monad { P }
+          %lexer { agLexer } { AgTok_EOF }
+          \\end{code}
+
+          \\begin{code}
+          %%
+          \\end{code}
+
+          \\begin{code}
+          agParser :: { [AgRule] }
+            : rules                                      { $1 }
+          \\end{code}
+
+          \\begin{code}
+          rules :: { [AgRule] }
+            : rule ";" rules                           { $1 : $3 }
+            | rule                                       { $1 : [] }
+            |                                            { [] }
+          \\end{code}
+
+          \\begin{code}
+          rule :: { AgRule }
+            : selfRef  "=" code                        { SelfAssign (selfRefVal $1) $3 }
+            | subRef   "=" code                        { SubAssign (subRefVal $1) $3 }
+            | rightRef "=" code                        { RightmostAssign (rightRefVal $1) $3 }
+            | where code                                 { Conditional $2 }
+          \\end{code}
+
+          \\begin{code}
+          code :: { [AgToken] }
+            : "{" code0 "}" code                     { [$1] ++ $2 ++ [$3] ++ $4 }
+            | "=" code                                 { $1 : $2 }
+            | selfRef code                               { $1 : $2 }
+            | subRef code                                { $1 : $2 }
+            | rightRef code                              { $1 : $2 }
+            | unknown code                               { $1 : $2 }
+            |                                            { [] }
+          \\end{code}
+
+          \\begin{code}
+          code0 :: { [AgToken] }
+            : "{" code0 "}" code0                    { [$1] ++ $2 ++ [$3] ++ $4 }
+            | "=" code0                                { $1 : $2 }
+            | ";" code0                                { $1 : $2 }
+            | selfRef code0                              { $1 : $2 }
+            | subRef code0                               { $1 : $2 }
+            | rightRef code                              { $1 : $2 }
+            | unknown code0                              { $1 : $2 }
+            |                                            { [] }
+          \\end{code}
+
+          \\begin{code}
+          {
+          happyError :: P a
+          happyError = fail ("Parse error\\n")
+
+          test :: a -> a
+          test x = x
+          }
+          \\end{code}
+
+          """
+      , expectedResult = mkSingleton $ defaultMod
+        { modHeader     = defaultModHeader
+          { mhModName = mkModuleName "AttrGrammarParser"
+          , mhExports = SpecificExports $ ModuleExports
+            { meReexports          = mempty
+            , meHasWildcardExports = False
+            , meExportedEntries    = KeyMap.fromList
+                [ EntryWithChildren (mkSymbolName "agParser", PosAndType filename (Line 11) Function) Nothing
+                ]
+            }
+          , mhImports = SubkeyMap.fromList
+            [ let key = ImportKey VanillaModule (mkModuleName name) in
+              ( key
+              , NE.singleton $ ImportSpec key Unqualified NoImportList
+              )
+            | name <- ["ParseMonad", "AttrGrammar"]
+            ]
+          }
+        , modAllSymbols = SymbolMap.fromList
+            [ mkResolvedSymbolFromParts filename (Line 85) (mkSymName "happyError") Function Nothing
+            , mkResolvedSymbolFromParts filename (Line 88) (mkSymName "test") Function Nothing
+            ]
+        }
+      }
+    ]
+  ]
 
 mkSymName
   :: HasCallStack
@@ -685,25 +1352,29 @@ tests = testGroup "Whole module tests"
   , doTest doubleDefine2
   , doTest doubleDefineInImportList
   , doTest defineBeforeModuleHeader
+  , doTest alexPreprocessing
   , testGroup "exports"
     [ doTest moduleWithDisabledSectionTest1
     , doTest moduleWithDisabledSectionTest2
     , doTest moduleWithDisabledAndEnabledSectionsTest
     ]
+  , alexTests
+  , happyTests
   ]
 
 doTest :: HasCallStack => Test -> TestTree
-doTest TestCase{testName, input, expectedResult = expectedResult :: NonEmptyMap ModuleName UnresolvedModule} =
+doTest TestCase{testName, input = (src, mode), expectedResult = expectedResult :: NonEmptyMap ModuleName UnresolvedModule} =
   testCase testName $ do
     (res :: Either ErrorMessage (NonEmptyMap ModuleName UnresolvedModule), logs) <-
       runWriterT $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runErrorExceptT $
-        loadModuleFromSource Nothing zeroTime filename $ TE.encodeUtf8 input
+        loadModuleFromSource Nothing mode zeroTime filename $ TE.encodeUtf8 src
     let logsDoc = "Logs, size " <> pretty (length logs) <> ":" ## PP.indent 2 (PP.vcat logs)
     case res of
       Left  msg -> assertFailure $ renderStringWide $ pretty msg ## logsDoc
       Right mod -> do
         let msg = ppDictHeader "Modules are different" $
-              ("Input" :-> PP.dquotes (pretty input)) :
+              -- ("Input" :-> PP.dquotes (pretty src)) :
+              ("Mode"  :-> pretty mode) :
               [ ppDifference diff
               | diff <- toList $ genericDiff $ ActualExpected mod expectedResult
               ]

@@ -62,6 +62,7 @@ import Data.MonoidalMap (MonoidalMap(..))
 import Data.Path (FullPath, FileType(..))
 import Data.Path qualified as Path
 import Data.Symbols
+import Haskell.Language.Lexer (modeFromFilename)
 import Haskell.Language.Server.Tags
 import Haskell.Language.Server.Tags.LoadFiles
 import Haskell.Language.Server.Tags.LoadModule
@@ -117,7 +118,7 @@ loadMany conf filename = do
       modTime       <- MonadFS.getModificationTime filename
       suggestedName <- fileNameToModuleName filename
       source        <- MonadFS.readFile filename
-      mods          <- NEMap.toMap <$> loadModuleFromSource (Just suggestedName) modTime filename source
+      mods          <- NEMap.toMap <$> loadModuleFromSource (Just suggestedName) (modeFromFilename filename) modTime filename source
       pure $ M.mapKeys (ImportKey importType) mods
 
 main :: IO ()

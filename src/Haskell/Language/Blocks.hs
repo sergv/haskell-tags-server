@@ -8,8 +8,10 @@ module Haskell.Language.Blocks
   ( breakBlocks
   , DirectivesMode(..)
   , filterBlank
+  , resolveAlexHappyBlocks
   ) where
 
+import Data.List qualified as L
 import Data.List.NonEmpty (NonEmpty(..))
 
 import Haskell.Language.Lexer.Types
@@ -17,13 +19,10 @@ import Haskell.Language.Lexer.Types
 data DirectivesMode = KeepDirectives | StripDirectives
 
 -- | Break the input up into blocks based on indentation.
-breakBlocks :: ProcessMode -> DirectivesMode -> [Pos ServerToken] -> [NonEmpty (Pos ServerToken)]
-breakBlocks mode dirMode
+breakBlocks :: DirectivesMode -> [Pos ServerToken] -> [NonEmpty (Pos ServerToken)]
+breakBlocks dirMode
   = go
   . stripSemicolonsNotInBraces
-  . (case mode of
-      ProcessVanilla   -> id
-      ProcessAlexHappy -> uncurry (++) . firstLastBracedBlock)
   . (case dirMode of
       KeepDirectives  -> id
       StripDirectives -> stripToplevelHscDirectives)
@@ -44,25 +43,38 @@ filterBlank = \case
   Pos _ (Newline _) : xs@(Pos _ (Newline _) : _) -> filterBlank xs
   x : xs                                         -> x : filterBlank xs
 
+resolveAlexHappyBlocks :: [Pos ServerToken] -> [Pos ServerToken]
+resolveAlexHappyBlocks xs =
+  case L.dropWhile (isNewline . valOf) xs of
+    Pos _ LBrace : restFront ->
+      case L.dropWhile (isNewline . valOf) $ reverse restFront of
+        Pos _ RBrace : restBack -> firstBracedBlock restFront ++ lastBracedBlockRev restBack
+        _                       -> xs
+    _                   -> xs
+
+isNewline :: ServerToken -> Bool
+isNewline Newline{} = True
+isNewline _         = False
+
 -- | Collect tokens between toplevel braces. Motivated by Alex/Happy
 -- file format that uses braced blocks to separate Haskell source from
 -- other directives.
-firstLastBracedBlock :: [Pos ServerToken] -> ([Pos ServerToken], [Pos ServerToken])
-firstLastBracedBlock tokens =
-  (first, last')
+firstBracedBlock :: [Pos ServerToken] -> [Pos ServerToken]
+firstBracedBlock = forward 1
   where
-    (first, rest) = forward 0 [] tokens
-    last'         = backward 0 [] $ reverse rest
-    forward :: Int -> [Pos ServerToken] -> [Pos ServerToken] -> ([Pos ServerToken], [Pos ServerToken])
-    forward !_ acc []                       = (reverse acc, [])
-    forward  0 acc (Pos _ LBrace      : ts) = forward 1 acc ts
-    forward  0 acc (_                 : ts) = forward 0 acc ts
-    forward  1 acc (Pos _ RBrace      : ts) = (reverse acc, ts)
-    forward  n acc (t@(Pos _ LBrace)  : ts) = forward (n + 1) (t : acc) ts
-    forward  n acc (t@(Pos _ HSCEnum) : ts) = forward (n + 1) (t : acc) ts
-    forward  n acc (t@(Pos _ RBrace)  : ts) = forward (n - 1) (t : acc) ts
-    forward  n acc (t                 : ts) = forward n (t : acc) ts
+    forward :: Int -> [Pos ServerToken] -> [Pos ServerToken]
+    forward !_ []                       = []
+    forward  0 (Pos _ LBrace      : ts) = forward 1 ts
+    forward  0 (_                 : ts) = forward 0 ts
+    forward  1 (Pos _ RBrace      : _)  = []
+    forward  n (t@(Pos _ LBrace)  : ts) = t : forward (n + 1) ts
+    forward  n (t@(Pos _ HSCEnum) : ts) = t : forward (n + 1) ts
+    forward  n (t@(Pos _ RBrace)  : ts) = t : forward (n - 1) ts
+    forward  n (t                 : ts) = t : forward n ts
 
+lastBracedBlockRev :: [Pos ServerToken] -> [Pos ServerToken]
+lastBracedBlockRev = backward 1 []
+  where
     backward :: Int -> [Pos ServerToken] -> [Pos ServerToken] -> [Pos ServerToken]
     backward !_ acc []                       = acc
     backward  0 acc (Pos _ RBrace      : ts) = backward 1 acc ts

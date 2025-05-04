@@ -54,17 +54,17 @@ filename = "/foo/bar/fn.hs"
 
 testFullTagsWithoutPrefixes
   :: WithCallStack
-  => FilePath -> LitMode Void -> T.Text -> [Pos TagVal] -> TestTree
-testFullTagsWithoutPrefixes fn mode = \source tags ->
-  makeTest ((sort *** map PP.renderStringWide) . processTokens fn . tokenize' mode) source (tags, warnings)
+  => LitMode Void -> T.Text -> [Pos TagVal] -> TestTree
+testFullTagsWithoutPrefixes mode = \source tags ->
+  makeTest ((sort *** map PP.renderStringWide) . processTokens . tokenize' mode) source (tags, warnings)
   where
     warnings :: [String]
     warnings = []
 
 testTagNames
   :: WithCallStack
-  => FilePath -> LitMode Void -> T.Text -> [String] -> TestTree
-testTagNames fn mode source tags =
+  => LitMode Void -> T.Text -> [String] -> TestTree
+testTagNames mode source tags =
   makeTest process source (tags, warnings)
   where
     warnings :: [String]
@@ -72,7 +72,7 @@ testTagNames fn mode source tags =
 
     process :: T.Text -> ([String], [String])
     process =
-      (sort . map untag *** map PP.renderStringWide) . processTokens fn . tokenize' mode
+      (sort . map untag *** map PP.renderStringWide) . processTokens . tokenize' mode
 
 untag :: Pos TagVal -> String
 untag (Pos _ (TagVal name _ _)) = T.unpack name

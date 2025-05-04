@@ -13,6 +13,7 @@
 module Haskell.Language.Lexer.Tests (tests) where
 
 import Data.List (sort)
+import Data.Text (Text)
 import Data.Text qualified as T
 import Test.Tasty
 import Test.Tasty.HUnit (testCase)
@@ -940,9 +941,9 @@ testFullPipeline = testGroup "Full processing pipeline"
   ]
   where
     (==>) = makeTest f'
+    f' :: [Text] -> [Pos TagVal]
     f' = sort
-       . concatMap (\(i, t) -> fst $ processTokens ("fn" ++ show i ++ ".hs") $ tokenize' LitVanilla t)
-       . zip [(0 :: Int)..]
+       . concatMap (fst . processTokens . tokenize' LitVanilla)
 
 textShowSource :: T.Text
 textShowSource =
