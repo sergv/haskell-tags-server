@@ -47,7 +47,6 @@ import Data.Monoid qualified as Monoid
 import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import Data.Set qualified as S
-import Data.Text qualified as T
 import Data.Time.Clock (UTCTime)
 import Data.Traversable (for)
 import Data.Void (Void)
@@ -70,6 +69,7 @@ import Data.SubkeyMap qualified as SubkeyMap
 import Data.SymbolMap (SymbolMap)
 import Data.SymbolMap qualified as SM
 import Data.Symbols
+import Haskell.Language.Blocks (resolveAlexHappyBlocks)
 import Haskell.Language.Lexer (tokenize, modeFromFilename)
 import Haskell.Language.Lexer.Types (LitMode, Pos, ServerToken, processTokens)
 import Haskell.Language.Lexer.Types qualified as Types
@@ -210,7 +210,7 @@ readFileAndLoad
 readFileAndLoad suggestedModName modTime filename = do
   source <- MonadFS.readFile filename
   logInfo $ "[readFileAndLoad] Loading" <+> PP.dquotes (pretty filename)
-  mods <- loadModuleFromSource suggestedModName modTime filename source
+  mods <- loadModuleFromSource suggestedModName (modeFromFilename filename) modTime filename source
   case NEMap.elemsNE mods of
     mod :| [] -> pure mod
     _ ->
@@ -235,12 +235,13 @@ checkLoadingModules key = do
 loadModuleFromSource
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => Maybe ModuleName
+  -> LitMode Void
   -> UTCTime
   -> FullPath 'File
   -> BS.ByteString
   -> m (NonEmptyMap ModuleName UnresolvedModule)
-loadModuleFromSource suggestedModuleName modifTime filename source =
-  tokenizeModule (modeFromFilename filename) source
+loadModuleFromSource suggestedModuleName mode modifTime filename source =
+  tokenizeModule mode source
     `catchError`
       (\(err :: ErrorMessage) ->
         CME.throwError $ err { errorMessageBody = "Failed to get tokens from" <+> pretty filename <> ":" ## errorMessageBody err })
@@ -287,11 +288,12 @@ makeSingleModule
   -> [Pos ServerToken]
   -> m UnresolvedModule
 makeSingleModule suggestedModuleName modifTime filename tokens = do
-  (header, tokens') <- analyzeHeader suggestedModuleName filename tokens
+  let tokens' = resolveAlexHappyBlocks tokens
+  (header, tokens'') <- analyzeHeader suggestedModuleName filename tokens'
   let syms           :: [ResolvedSymbol]
       errors         :: [Doc Void]
       (syms, errors) = first (fmap (mkResolvedSymbol filename) . Types.removeDuplicatePatterns)
-                     $ processTokens (T.unpack $ unFullPath filename) tokens'
+                     $ processTokens tokens''
       allSymbols     :: SymbolMap
       allSymbols     = SM.fromList syms
 

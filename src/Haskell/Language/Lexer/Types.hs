@@ -58,7 +58,6 @@ import Data.Text (Text)
 import Data.Void (Void)
 import Prettyprinter qualified as PP
 import Prettyprinter.Ext
-import System.FilePath (takeExtension)
 
 import FastTags.Tag qualified as FastTags
 import FastTags.Token qualified as FastTags
@@ -101,7 +100,8 @@ data LitMode a
   = LitInside !a -- ^ Inside literal code block
   | LitOutside -- ^ Outside literal code block
   | LitVanilla -- ^ Processing regular file without literate parts
-  deriving (Eq, Ord, Show, Functor)
+  deriving (Eq, Ord, Show, Functor, Generic)
+  deriving Pretty via PPGeneric (LitMode a)
 
 {-# INLINE isLiterateEnabled #-}
 isLiterateEnabled :: LitMode a -> Bool
@@ -404,18 +404,12 @@ embedServerToken = \case
 
   FastTags.DQuote             -> Just DQuote
 
-processTokens :: FilePath -> [Pos ServerToken] -> ([Pos FastTags.TagVal], [Doc Void])
-processTokens filename toks
+processTokens :: [Pos ServerToken] -> ([Pos FastTags.TagVal], [Doc Void])
+processTokens toks
   = second ((errs ++) . map docFromString)
-  $ FastTags.processTokens mode toks'
+  $ FastTags.processTokens FastTags.ProcessVanilla toks'
   where
     (toks', errs) = stripServerTokens toks
-    mode :: FastTags.ProcessMode
-    mode
-      | takeExtension filename `elem` [".x", ".lx", ".y", ".ly"]
-      = FastTags.ProcessAlexHappy
-      | otherwise
-      = FastTags.ProcessVanilla
 
 -- | Keep only one Pattern tag for each unique name.
 removeDuplicatePatterns :: [Pos FastTags.TagVal] -> [Pos FastTags.TagVal]

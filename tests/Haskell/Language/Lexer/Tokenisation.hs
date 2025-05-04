@@ -932,7 +932,7 @@ testBreakBlocks = testGroup "Break blocks"
     f :: LitMode Void -> T.Text -> [[ServerToken]]
     f mode
       = map (map valOf . toList)
-      . breakBlocks ProcessVanilla StripDirectives
+      . breakBlocks StripDirectives
       . tokenize' mode
 
 testWhereBlock :: TestTree
@@ -987,8 +987,6 @@ testProcess = testGroup "Process"
   , testFFI
   , testDefine
   , testHSC2HS
-  , testAlex
-  , testHappy
   , testUnicode
   ]
 
@@ -1067,7 +1065,7 @@ testMeta = testGroup "prefix, suffix and offset tracking"
     ]
   ]
   where
-    (==>) = testFullTagsWithoutPrefixes "fn.hs" LitVanilla
+    (==>) = testFullTagsWithoutPrefixes LitVanilla
 
 testData :: TestTree
 testData = testGroup "data"
@@ -1419,7 +1417,7 @@ testData = testGroup "data"
     ==> ["(,,)", "(,,)"]
   ]
   where
-    (==>) = testTagNames filename LitVanilla
+    (==>) = testTagNames LitVanilla
 
 testGADT :: TestTree
 testGADT = testGroup "gadt"
@@ -1506,7 +1504,7 @@ testGADT = testGroup "gadt"
     ==> []
   ]
   where
-    (==>) = testTagNames filename LitVanilla
+    (==>) = testTagNames LitVanilla
 
 testFamilies :: TestTree
 testFamilies = testGroup "families"
@@ -1543,7 +1541,7 @@ testFamilies = testGroup "families"
   , "class C where\n\tdata X y ∷ *\n"  ==> ["C", "X"]
   ]
   where
-    (==>) = testTagNames filename LitVanilla
+    (==>) = testTagNames LitVanilla
 
 testFunctions :: TestTree
 testFunctions = testGroup "functions"
@@ -1887,8 +1885,8 @@ testFunctions = testGroup "functions"
 
   ]
   where
-    (==>) = testTagNames filename LitVanilla
-    (|=>) = testTagNames "/foo/bar/fn.lhs" LitOutside
+    (==>) = testTagNames LitVanilla
+    (|=>) = testTagNames LitOutside
     toplevelFunctionsWithoutSignatures =
       testGroup "toplevel functions without signatures"
         [ "$(return . map sumDeclaration $ [0..15])" ==> []
@@ -2239,7 +2237,7 @@ testClass = testGroup "class"
     ["A", "F", "getF", "mkF"]
   ]
   where
-    (==>) = testTagNames filename LitVanilla
+    (==>) = testTagNames LitVanilla
 
 testInstance :: TestTree
 testInstance = testGroup "instance"
@@ -2309,7 +2307,7 @@ testInstance = testGroup "instance"
     ["StMJournal", "unStMJournal"]
   ]
   where
-    (==>) = testTagNames filename LitVanilla
+    (==>) = testTagNames LitVanilla
 
 testLiterate :: TestTree
 testLiterate = testGroup "Literate"
@@ -2383,7 +2381,7 @@ testLiterate = testGroup "Literate"
     ]
   ]
   where
-    (==>) = testTagNames "fn.lhs" LitOutside
+    (==>) = testTagNames LitOutside
 
 testPatterns :: TestTree
 testPatterns = testGroup "patterns"
@@ -2443,7 +2441,7 @@ testPatterns = testGroup "patterns"
     ["Bar", "Foo", "Foo_", "_bar", "_foo", "bar", "foo"]
   ]
   where
-    (==>) = testTagNames filename LitVanilla
+    (==>) = testTagNames LitVanilla
 
 testFFI :: TestTree
 testFFI = testGroup "ffi"
@@ -2453,7 +2451,7 @@ testFFI = testGroup "ffi"
   , "foreign import safe stdcall pattern :: Double -> IO Double" ==> ["pattern"]
   ]
   where
-    (==>) = testTagNames filename LitVanilla
+    (==>) = testTagNames LitVanilla
 
 testDefine :: TestTree
 testDefine = testGroup "preprocessor defines"
@@ -2499,7 +2497,7 @@ testDefine = testGroup "preprocessor defines"
     ["BAR"]
   ]
   where
-    (==>) = testTagNames filename LitVanilla
+    (==>) = testTagNames LitVanilla
 
 testHSC2HS :: TestTree
 testHSC2HS = testGroup "hsc2hs"
@@ -2602,486 +2600,7 @@ testHSC2HS = testGroup "hsc2hs"
     ]
   ]
   where
-    (==>) = testTagNames "Test.hsc" LitVanilla
-
-testAlex :: TestTree
-testAlex = testGroup "alex"
-  [ testGroup "vanilla"
-    [ """
-      {
-      module AlexTest where
-
-      import FooBar
-
-      foobar :: Int -> Int
-      foobar = (+ 1)
-
-      }
-
-
-      -- Can skip whitespace everywhere since it does not affect meaning in any
-      -- state.
-      <0, comment, qq, literate> $ws+ ;
-
-      -- Literate Haskell support. 'literate' code handles all text except actual
-      -- Haskell program text. It aims to strip all non-Haskell text.
-      <literate> {
-      $nl ">" $ws*
-        { \\_ len -> (Newline $! len - 2) <$ startLiterateBird }
-      $nl "\\begin{code}" @nl $space*
-        { \\input len -> (Newline $! countInputSpace input len) <$ startLiterateLatex }
-      $nl ;
-      .
-        { \\_ _ -> dropUntilNL' }
-      }
-
-      -- Vanilla tokens
-      <0> {
-
-      "#" @cpp_opt_ws ("{" (@cpp_ws | @nl)*)? "enum"
-        { \\_ _ -> pure HSCEnum }
-      "#" @cpp_opt_ws
-        ( ($ascident # [e]) $ascident*
-        | $ascident ($ascident # [n]) $ascident*
-        | $ascident $ascident ($ascident # [u]) $ascident*
-        | $ascident $ascident $ascident ($ascident # [m]) $ascident*
-        | $ascident $ascident $ascident $ascident $ascident+
-        )
-        { \\_ _ -> pure HSCDirective }
-      "#" @cpp_opt_ws "{" (@cpp_ws | @nl)*
-        ( ($ascident # [e]) $ascident*
-        | $ascident ($ascident # [n]) $ascident*
-        | $ascident $ascident ($ascident # [u]) $ascident*
-        | $ascident $ascident $ascident ($ascident # [m]) $ascident*
-        | $ascident $ascident $ascident $ascident $ascident+
-        )
-        { \\_ _ -> pure HSCDirectiveBraced }
-      }
-
-
-
-
-      {
-      foo :: Int -> Int
-      foo x = x + x
-      }
-
-      """
-      ==>
-      ["AlexTest", "foo", "foobar"]
-    ]
-  , testGroup "literate"
-    [ """
-      Very useful description 1
-      Very useful description 2
-      > {
-      > module AlexTest where
-      >
-      > import FooBar
-      >
-      > foobar :: Int -> Int
-      > foobar = (+ 1)
-      >
-      > }
-
-      Useful description 1
-      Useful description 2
-      Useful description 3
-      Useful description 4
-
-      > -- Can skip whitespace everywhere since it does not affect meaning in any
-      > -- state.
-      > <0, comment, qq, literate> $ws+ ;
-      >
-      > -- Literate Haskell support. 'literate' code handles all text except actual
-      > -- Haskell program text. It aims to strip all non-Haskell text.
-      > <literate> {
-      > $nl ">" $ws*
-      >   { \\_ len -> (Newline $! len - 2) <$ startLiterateBird }
-      > $nl "\\begin{code}" @nl $space*
-      >   { \\input len -> (Newline $! countInputSpace input len) <$ startLiterateLatex }
-      > $nl ;
-      > .
-      >   { \\_ _ -> dropUntilNL' }
-      > }
-      >
-      Useful description 1
-      Useful description 2
-      Useful description 3
-      Useful description 4
-      > -- Vanilla tokens
-      > <0> {
-      >
-      > "#" @cpp_opt_ws ("{" (@cpp_ws | @nl)*)? "enum"
-      >   { \\_ _ -> pure HSCEnum }
-      > "#" @cpp_opt_ws
-      >   ( ($ascident # [e]) $ascident*
-      >   | $ascident ($ascident # [n]) $ascident*
-      >   | $ascident $ascident ($ascident # [u]) $ascident*
-      >   | $ascident $ascident $ascident ($ascident # [m]) $ascident*
-      >   | $ascident $ascident $ascident $ascident $ascident+
-      >   )
-      >   { \\_ _ -> pure HSCDirective }
-      > "#" @cpp_opt_ws "{" (@cpp_ws | @nl)*
-      >   ( ($ascident # [e]) $ascident*
-      >   | $ascident ($ascident # [n]) $ascident*
-      >   | $ascident $ascident ($ascident # [u]) $ascident*
-      >   | $ascident $ascident $ascident ($ascident # [m]) $ascident*
-      >   | $ascident $ascident $ascident $ascident $ascident+
-      >   )
-      >   { \\_ _ -> pure HSCDirectiveBraced }
-      > }
-      >
-      >
-      > {
-      > foo :: Int -> Int
-      > foo x = x + x
-      > }
-      >
-
-      """
-      |=>
-      ["AlexTest", "foo", "foobar"]
-    , """
-      Very useful description 1
-      Very useful description 2
-      \\begin{code}
-      {
-      module AlexTest where
-
-      import FooBar
-
-      foobar :: Int -> Int
-      foobar = (+ 1)
-
-      }
-      \\end{code}
-
-      Useful description 1
-      Useful description 2
-      Useful description 3
-      Useful description 4
-
-      \\begin{code}
-      -- Can skip whitespace everywhere since it does not affect meaning in any
-      -- state.
-      <0, comment, qq, literate> $ws+ ;
-
-      -- Literate Haskell support. 'literate' code handles all text except actual
-      -- Haskell program text. It aims to strip all non-Haskell text.
-      <literate> {
-      $nl ">" $ws*
-        { \\_ len -> (Newline $! len - 2) <$ startLiterateBird }
-      $nl "\\begin{code}" @nl $space*
-        { \\input len -> (Newline $! countInputSpace input len) <$ startLiterateLatex }
-      $nl ;
-      .
-        { \\_ _ -> dropUntilNL' }
-      }
-
-      \\end{code}
-
-      Useful description 1
-      Useful description 2
-      Useful description 3
-      Useful description 4
-
-      \\begin{code}
-      -- Vanilla tokens
-      <0> {
-
-      "#" @cpp_opt_ws ("{" (@cpp_ws | @nl)*)? "enum"
-        { \\_ _ -> pure HSCEnum }
-      "#" @cpp_opt_ws
-        ( ($ascident # [e]) $ascident*
-        | $ascident ($ascident # [n]) $ascident*
-        | $ascident $ascident ($ascident # [u]) $ascident*
-        | $ascident $ascident $ascident ($ascident # [m]) $ascident*
-        | $ascident $ascident $ascident $ascident $ascident+
-        )
-        { \\_ _ -> pure HSCDirective }
-      "#" @cpp_opt_ws "{" (@cpp_ws | @nl)*
-        ( ($ascident # [e]) $ascident*
-        | $ascident ($ascident # [n]) $ascident*
-        | $ascident $ascident ($ascident # [u]) $ascident*
-        | $ascident $ascident $ascident ($ascident # [m]) $ascident*
-        | $ascident $ascident $ascident $ascident $ascident+
-        )
-        { \\_ _ -> pure HSCDirectiveBraced }
-      }
-
-
-      {
-      foo :: Int -> Int
-      foo x = x + x
-      }
-
-      \\end{code}
-
-      """
-      |=>
-      ["AlexTest", "foo", "foobar"]
-    ]
-  ]
-  where
-    (==>) = testTagNames "Test.x" LitVanilla
-    (|=>) = testTagNames "Test.lx" LitOutside
-
-testHappy :: TestTree
-testHappy = testGroup "happy"
-  [ testGroup "vanilla"
-    [ """
-      {
-      {-# OPTIONS_GHC -w #-}
-      module AttrGrammarParser (agParser) where
-      import ParseMonad
-      import AttrGrammar
-      }
-
-      %name agParser
-      %tokentype { AgToken }
-      %token
-        "{"     { AgTok_LBrace }
-        "}"     { AgTok_RBrace }
-        ";"     { AgTok_Semicolon }
-        '{'       { AgTok_LBrace }
-        '}'       { AgTok_RBrace }
-        '::'      { AgTok_Semicolon }
-        "="     { AgTok_Eq }
-        where     { AgTok_Where }
-        selfRef   { AgTok_SelfRef _ }
-        subRef    { AgTok_SubRef _ }
-        rightRef  { AgTok_RightmostRef _ }
-        unknown   { AgTok_Unknown _ }
-
-      %monad { P }
-      %lexer { agLexer } { AgTok_EOF }
-
-      %%
-
-      agParser :: { [AgRule] }
-        : rules                                      { $1 }
-
-      rules :: { [AgRule] }
-        : rule '::' rules                            { $1 : $3 }
-        | rule                                       { $1 : [] }
-        |                                            { [] }
-
-      rule :: { AgRule }
-        : selfRef  "=" code                        { SelfAssign (selfRefVal $1) $3 }
-        | subRef   "=" code                        { SubAssign (subRefVal $1) $3 }
-        | rightRef "=" code                        { RightmostAssign (rightRefVal $1) $3 }
-        | where code                                 { Conditional $2 }
-
-      code :: { [AgToken] }
-        : '{' code0 '}' code                         { [$1] ++ $2 ++ [$3] ++ $4 }
-        | "=" code                                 { $1 : $2 }
-        | selfRef code                               { $1 : $2 }
-        | subRef code                                { $1 : $2 }
-        | rightRef code                              { $1 : $2 }
-        | unknown code                               { $1 : $2 }
-        |                                            { [] }
-
-      code0 :: { [AgToken] }
-        : "{" code0 "}" code0                    { [$1] ++ $2 ++ [$3] ++ $4 }
-        | "=" code0                                { $1 : $2 }
-        | '::' code0                                 { $1 : $2 }
-        | selfRef code0                              { $1 : $2 }
-        | subRef code0                               { $1 : $2 }
-        | rightRef code                              { $1 : $2 }
-        | unknown code0                              { $1 : $2 }
-        |                                            { [] }
-
-      {
-      happyError :: P a
-      happyError = fail ("Parse error\\n")
-
-      test :: a -> a
-      test x = x
-      }
-
-      """
-      ==>
-      ["AttrGrammarParser", "happyError", "test"]
-    ]
-  , testGroup "literate"
-    [ """
-      This parser parses the contents of the attribute grammar
-      into a list of rules.  A rule can either be an assignment
-      to an attribute of the LHS (synthesized attribute), and
-      assignment to an attribute of the RHS (an inherited attribute),
-      or a conditional statement.
-
-      > {
-      > {-# OPTIONS_GHC -w #-}
-      > module AttrGrammarParser (agParser) where
-      > import ParseMonad
-      > import AttrGrammar
-      > }
-
-      > %name agParser
-      > %tokentype { AgToken }
-      > %token
-      >   "{"     { AgTok_LBrace }
-      >   "}"     { AgTok_RBrace }
-      >   ";"     { AgTok_Semicolon }
-      >   "="     { AgTok_Eq }
-      >   where     { AgTok_Where }
-      >   selfRef   { AgTok_SelfRef _ }
-      >   subRef    { AgTok_SubRef _ }
-      >   rightRef  { AgTok_RightmostRef _ }
-      >   unknown   { AgTok_Unknown _ }
-      >
-      > %monad { P }
-      > %lexer { agLexer } { AgTok_EOF }
-
-      > %%
-
-      > agParser :: { [AgRule] }
-      >   : rules                                      { $1 }
-
-      > rules :: { [AgRule] }
-      >   : rule ";" rules                           { $1 : $3 }
-      >   | rule                                       { $1 : [] }
-      >   |                                            { [] }
-
-      > rule :: { AgRule }
-      >   : selfRef  "=" code                        { SelfAssign (selfRefVal $1) $3 }
-      >   | subRef   "=" code                        { SubAssign (subRefVal $1) $3 }
-      >   | rightRef "=" code                        { RightmostAssign (rightRefVal $1) $3 }
-      >   | where code                                 { Conditional $2 }
-
-      > code :: { [AgToken] }
-      >   : "{" code0 "}" code                     { [$1] ++ $2 ++ [$3] ++ $4 }
-      >   | "=" code                                 { $1 : $2 }
-      >   | selfRef code                               { $1 : $2 }
-      >   | subRef code                                { $1 : $2 }
-      >   | rightRef code                              { $1 : $2 }
-      >   | unknown code                               { $1 : $2 }
-      >   |                                            { [] }
-
-      > code0 :: { [AgToken] }
-      >   : "{" code0 "}" code0                    { [$1] ++ $2 ++ [$3] ++ $4 }
-      >   | "=" code0                                { $1 : $2 }
-      >   | ";" code0                                { $1 : $2 }
-      >   | selfRef code0                              { $1 : $2 }
-      >   | subRef code0                               { $1 : $2 }
-      >   | rightRef code                              { $1 : $2 }
-      >   | unknown code0                              { $1 : $2 }
-      >   |                                            { [] }
-
-      > {
-      > happyError :: P a
-      > happyError = fail ("Parse error\\n")
-      >
-      > test :: a -> a
-      > test x = x
-      > }
-
-      """
-      |=>
-      ["AttrGrammarParser", "happyError", "test"]
-    , """
-      This parser parses the contents of the attribute grammar
-      into a list of rules.  A rule can either be an assignment
-      to an attribute of the LHS (synthesized attribute), and
-      assignment to an attribute of the RHS (an inherited attribute),
-      or a conditional statement.
-
-      \\begin{code}
-
-      {
-      {-# OPTIONS_GHC -w #-}
-      module AttrGrammarParser (agParser) where
-      import ParseMonad
-      import AttrGrammar
-      }
-
-      \\end{code}
-
-      \\begin{code}
-      %name agParser
-      %tokentype { AgToken }
-      %token
-        "{"     { AgTok_LBrace }
-        "}"     { AgTok_RBrace }
-        ";"     { AgTok_Semicolon }
-        "="     { AgTok_Eq }
-        where     { AgTok_Where }
-        selfRef   { AgTok_SelfRef _ }
-        subRef    { AgTok_SubRef _ }
-        rightRef  { AgTok_RightmostRef _ }
-        unknown   { AgTok_Unknown _ }
-
-      %monad { P }
-      %lexer { agLexer } { AgTok_EOF }
-      \\end{code}
-
-      \\begin{code}
-      %%
-      \\end{code}
-
-      \\begin{code}
-      agParser :: { [AgRule] }
-        : rules                                      { $1 }
-      \\end{code}
-
-      \\begin{code}
-      rules :: { [AgRule] }
-        : rule ";" rules                           { $1 : $3 }
-        | rule                                       { $1 : [] }
-        |                                            { [] }
-      \\end{code}
-
-      \\begin{code}
-      rule :: { AgRule }
-        : selfRef  "=" code                        { SelfAssign (selfRefVal $1) $3 }
-        | subRef   "=" code                        { SubAssign (subRefVal $1) $3 }
-        | rightRef "=" code                        { RightmostAssign (rightRefVal $1) $3 }
-        | where code                                 { Conditional $2 }
-      \\end{code}
-
-      \\begin{code}
-      code :: { [AgToken] }
-        : "{" code0 "}" code                     { [$1] ++ $2 ++ [$3] ++ $4 }
-        | "=" code                                 { $1 : $2 }
-        | selfRef code                               { $1 : $2 }
-        | subRef code                                { $1 : $2 }
-        | rightRef code                              { $1 : $2 }
-        | unknown code                               { $1 : $2 }
-        |                                            { [] }
-      \\end{code}
-
-      \\begin{code}
-      code0 :: { [AgToken] }
-        : "{" code0 "}" code0                    { [$1] ++ $2 ++ [$3] ++ $4 }
-        | "=" code0                                { $1 : $2 }
-        | ";" code0                                { $1 : $2 }
-        | selfRef code0                              { $1 : $2 }
-        | subRef code0                               { $1 : $2 }
-        | rightRef code                              { $1 : $2 }
-        | unknown code0                              { $1 : $2 }
-        |                                            { [] }
-      \\end{code}
-
-      \\begin{code}
-      {
-      happyError :: P a
-      happyError = fail ("Parse error\\n")
-
-      test :: a -> a
-      test x = x
-      }
-      \\end{code}
-
-      """
-      |=>
-      ["AttrGrammarParser", "happyError", "test"]
-    ]
-  ]
-  where
-    (==>) = testTagNames "Test.y" LitVanilla
-    (|=>) = testTagNames "Test.ly" LitOutside
+    (==>) = testTagNames LitVanilla
 
 testUnicode :: TestTree
 testUnicode = testGroup "Unicode"
@@ -3093,4 +2612,4 @@ testUnicode = testGroup "Unicode"
   , "自乗 x = x * x" ==> ["自乗"]
   ]
   where
-    (==>) = testTagNames filename LitVanilla
+    (==>) = testTagNames LitVanilla

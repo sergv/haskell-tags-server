@@ -43,7 +43,7 @@ import Prettyprinter.Combinators
 import Prettyprinter.Ext
 
 import Haskell.Language.Lexer.Types
-  (stripNewlines, tokToName, Pos(..), Line, SrcPos(..), Type, posLine, PragmaType(..), ServerToken(..), Type(..), ProcessMode(..), ppTokens)
+  (stripNewlines, tokToName, Pos(..), Line, SrcPos(..), Type, posLine, PragmaType(..), ServerToken(..), Type(..), ppTokens)
 import Haskell.Language.Lexer.Types qualified as Types
 
 import Control.Monad.Logging
@@ -65,7 +65,7 @@ extractImportBlocks
   -> ( [NonEmpty (Pos ServerToken)] -- each import in its own block
      , [Pos ServerToken]            -- remaining tokens
      )
-extractImportBlocks = go [] [] . breakBlocks ProcessVanilla KeepDirectives
+extractImportBlocks = go [] [] . breakBlocks KeepDirectives
   where
     go
       :: [NonEmpty (Pos ServerToken)]
