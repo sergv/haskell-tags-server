@@ -14,6 +14,8 @@
 
 module FasterRicherTagsMain (main) where
 
+import Debug.Trace qualified
+
 import Control.Concurrent
 import Control.Monad
 import Control.Monad.Error.Class (MonadError)
@@ -66,41 +68,73 @@ import Haskell.Language.Lexer (modeFromFilename)
 import Haskell.Language.Server.Tags
 import Haskell.Language.Server.Tags.LoadFiles
 import Haskell.Language.Server.Tags.LoadModule
+import Haskell.Language.Server.Tags.Search (findSymbol)
+import Haskell.Language.Server.Tags.SearchM
 import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
 
 import FasterRicherTags.CompactFormat
 
-data Config = Config
-  { cfgNullSeparated :: Bool
+headerWithDesc :: String -> InfoMod a
+headerWithDesc x = header x <> progDesc x
+
+data Command
+  = Generate GenConfig
+  | Search SearchConfig
+
+data GenConfig = GenConfig
+  { gcfgNullSeparated :: Bool
   }
 
-optsParser :: Parser Config
-optsParser = do
-  -- cfgExcludedDirBasenameGlobs <- many $ fmap (Basename . T.pack) $ strOption $
-  --   long "input" <>
-  --   metavar "DIR-BASENAME-GLOB" <>
-  --   help "Glob pattern matching directory basename to not descend into"
-  --
-  -- cfgExcludedDirAbsPaths <- many $ fmap T.pack $ strOption $
-  --   long "input" <>
-  --   metavar "ABS-DIR" <>
-  --   help "Glob pattern matching directory basename to not descend into"
-  --
-  -- cfgDirsToAnalyze <- many $ argument (eitherReader (bimap show id . encodeUtf)) $
-  --   metavar "FILE" <>
-  --   help "An input directory to descend into"
+flagNullSep :: Parser Bool
+flagNullSep = switch $
+  long "null" <>
+  help "Input files on stdin are null-separated"
 
-  cfgNullSeparated <- switch $
-    long "null" <>
-    help "Input files on stdin are null-separated"
+genParser :: Parser GenConfig
+genParser = do
+  gcfgNullSeparated <- flagNullSep
+  pure GenConfig{..}
 
-  pure Config{..}
+generateInfo :: ParserInfo GenConfig
+generateInfo =
+  info
+    (helper <*> genParser)
+    (fullDesc <> headerWithDesc "Generate tags in compact sexp-based format from files specified on stdin")
 
-progInfo :: ParserInfo Config
+data SearchConfig = SearchConfig
+  { scfgSymbol        :: !Text
+  , scfgFile          :: !Text
+  , scfgNullSeparated :: !Bool
+  }
+
+searchParser :: Parser SearchConfig
+searchParser = do
+  scfgNullSeparated <- flagNullSep
+  scfgSymbol        <- fmap T.pack $ strArgument $
+    metavar "SYMBOL" <>
+    help "Symbol to search for, literal string."
+  scfgFile          <- fmap T.pack $ strArgument $
+    metavar "FILE" <>
+    help "Resolve searched symbols against imports in this file."
+  pure SearchConfig{..}
+
+searchInfo :: ParserInfo SearchConfig
+searchInfo =
+  info
+    (helper <*> searchParser)
+    (fullDesc <> headerWithDesc "Generate tags in compact sexp-based format from files specified on stdin")
+
+commandParser :: Parser Command
+commandParser =
+  hsubparser $
+    command "generate" (Generate    <$> generateInfo)  <>
+    command "search"   (Search      <$> searchInfo)
+
+progInfo :: ParserInfo Command
 progInfo = info
-  (helper <*> optsParser)
+  (helper <*> commandParser)
   (fullDesc <> header "Like ‘fast-tags’ but produces extra info about where names can be imported from (both which modules and which packages) by tracking name reexports.")
 
 -- shouldCollectHaskellFile :: AbsDir -> AbsFile -> Basename OsPath -> IO (Maybe OsPath)
@@ -123,12 +157,41 @@ loadMany conf filename = do
 
 main :: IO ()
 main = do
-  Config{cfgNullSeparated} <-
+  cmd <-
     customExecParser (prefs (showHelpOnEmpty <> noBacktrack <> multiSuffix "*")) progInfo
 
+  case cmd of
+    Generate cfg -> generate cfg
+    Search   cfg -> search cfg
+
+  -- GenConfig{cfgExcludedDirBasenameGlobs, cfgExcludedDirAbsPaths, cfgDirsToAnalyze} <-
+  --   customExecParser (prefs (showHelpOnEmpty <> noBacktrack <> multiSuffix "*")) progInfo
+  --
+  -- cfgDirsToAnalyze' <- for cfgDirsToAnalyze $ \dir -> do
+  --   exists <- doesDirectoryExist dir
+  --   unless exists $
+  --     die $ renderString $ "Directory" <+> squotes (ppShow dir) <+> "does not exist"
+  --   pure $ AbsDir dir
+  --
+  -- dirIgnores <- Data.Ignores.mkIgnores cfgExcludedDirAbsPaths cfgExcludedDirBasenameGlobs
+  --
+  -- jobs <- getNumCapabilities
+  --
+  -- findRec FollowSymlinks jobs
+  --   (\x y -> not $ isIgnored dirIgnores x y)
+  --   shouldCollectHaskellFile
+  --   cfgDirsToAnalyze'
+  --
+  -- -- _ <- T.decodeUtf8 <$> readFile' cfgInputFile
+
+  pure ()
+
+generate :: GenConfig -> IO ()
+generate GenConfig{gcfgNullSeparated} = do
+
   let !sep
-        | cfgNullSeparated = '0'
-        | otherwise        = '\n'
+        | gcfgNullSeparated = '\0'
+        | otherwise         = '\n'
 
   files <- map (pathFromText . TL.toStrict) . filter (not . TL.null) . TL.split (== sep) <$> TL.getContents
 
@@ -166,6 +229,8 @@ main = do
 
         (resolvedMods, ls') <-
           (`runStateT` ls) $
+            -- (`M.traverseMaybeWithKey` unresolvedMods) $ \importKey _ ->
+            --   doResolve unresolvedMods tsconfNameResolution importKey
             loadAllFilesIntoState unresolvedMods' conf
 
         pure (resolvedMods, ls', unresolvedMods')
@@ -189,8 +254,20 @@ main = do
   -- hPutDocLn stderr $ "Unloaded modules:" ## ppMap (lsUnloadedFiles ls)
 
   -- die $ renderString $ "Resolved module keys:" ## pretty (M.keys resolvedMods)
-  --
+
   -- putDocLn $ "Resolved modules:" ## ppMap resolvedMods
+
+
+
+  -- putDocLn $ pretty $ M.lookup (ImportKey VanillaModule (mkModuleName "Happy.Frontend.Parser")) resolvedMods
+
+  -- putDocLn $ pretty $ filter ((== "/home/sergey/projects/haskell/packages/all-packages/happy-lib-2.1.3/frontend/src/Happy/Frontend/Parser.hs") . fst) $ (`M.foldMapWithKey` resolvedMods) $ \importKey (resolvedMod :: NonEmpty ResolvedModule) ->
+  --   case ikImportTarget importKey of
+  --     VanillaModule ->
+  --       map
+  --         (\m -> (Path.unFullPath (modFile m), SM.toList (modAllSymbols m)))
+  --         (toList resolvedMod)
+  --     HsBootModule  -> mempty
 
   writeTo stdout $ (`M.foldMapWithKey` resolvedMods) $ \importKey (resolvedMod :: NonEmpty ResolvedModule) ->
     case ikImportTarget importKey of
@@ -200,31 +277,52 @@ main = do
           (toList resolvedMod)
       HsBootModule  -> mempty
 
-  -- writeTo stdout $ (`foldMap` resolvedModules) $ \
+-- writeTo stdout $ (`foldMap` resolvedModules) $ \
 
-  -- hPutDocLn stderr $ "res = " ## pretty ls
+-- hPutDocLn stderr $ "res = " ## pretty ls
 
-  -- contents <- map (BSS.toShort . BSL.toStrict) . BSL.split sep <$> BSL.getContents
+-- contents <- map (BSS.toShort . BSL.toStrict) . BSL.split sep <$> BSL.getContents
 
+search :: SearchConfig -> IO ()
+search SearchConfig{scfgNullSeparated, scfgSymbol, scfgFile} = do
 
-  -- Config{cfgExcludedDirBasenameGlobs, cfgExcludedDirAbsPaths, cfgDirsToAnalyze} <-
-  --   customExecParser (prefs (showHelpOnEmpty <> noBacktrack <> multiSuffix "*")) progInfo
-  --
-  -- cfgDirsToAnalyze' <- for cfgDirsToAnalyze $ \dir -> do
-  --   exists <- doesDirectoryExist dir
-  --   unless exists $
-  --     die $ renderString $ "Directory" <+> squotes (ppShow dir) <+> "does not exist"
-  --   pure $ AbsDir dir
-  --
-  -- dirIgnores <- Data.Ignores.mkIgnores cfgExcludedDirAbsPaths cfgExcludedDirBasenameGlobs
-  --
-  -- jobs <- getNumCapabilities
-  --
-  -- findRec FollowSymlinks jobs
-  --   (\x y -> not $ isIgnored dirIgnores x y)
-  --   shouldCollectHaskellFile
-  --   cfgDirsToAnalyze'
-  --
-  -- -- _ <- T.decodeUtf8 <$> readFile' cfgInputFile
+  let !sep
+        | scfgNullSeparated = '\0'
+        | otherwise         = '\n'
 
-  pure ()
+  files <- map (pathFromText . TL.toStrict) . filter (not . TL.null) . TL.split (== sep) <$> TL.getContents
+
+  let conf = defaultTagsServerConf
+
+  res <-
+    runSimpleLoggerT (Nothing @(Destination IO)) Debug $
+      runErrorExceptT $ do
+
+        path <- Path.mkFullPath scfgFile
+
+        (unresolvedMods :: Map ImportKey (NonEmpty UnresolvedModule)) <-
+          fmap (M.unionsWith (<>) . fmap (M.map NE.singleton)) $ for files $ \modPath -> do
+            modPath' <- liftIO $ Path.fromFileOsPath modPath
+            isFile   <- liftIO $ doesFileExist $ Path.toOsPath modPath'
+            unless isFile $
+              liftIO $ die $ "Input path does not point to file: " ++ show modPath'
+            loadMany conf modPath'
+
+        let ls = LoadState
+              { lsLoadedModules   = mempty
+              , lsLoadsInProgress = mempty
+              , lsUnloadedFiles   = unresolvedMods
+              }
+
+        (symbols, _) <- runSearchT conf ls $
+          findSymbol ScopeCurrentModule path $ mkSymbolName scfgSymbol
+
+        Debug.Trace.traceM $ renderString $ ppDictHeader "search"
+          [ "symbols" :-> either pretty ppSet symbols
+          ]
+
+        pure ()
+
+  case res of
+    Left err -> die $ renderString $ "Error during search:" ## pretty err
+    Right x  -> pure x

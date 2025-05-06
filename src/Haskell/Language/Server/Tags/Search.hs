@@ -127,7 +127,7 @@ findInModule
   -> m (Set ResolvedSymbol)
 findInModule sym mod = do
   logVerboseDebug $
-    "[findSymbol] qualifier for" <+> pretty sym <> ":" <+> pretty qualifier
+    "[findInModule] qualifier for" <+> pretty sym <> ":" <+> pretty qualifier
   case qualifier of
     -- Unqualified name
     Nothing -> do
@@ -156,7 +156,7 @@ findInModule sym mod = do
             ppMapWith pretty ppNE (mhImportQualifiers header)
         Just specs -> do
           logVerboseDebug $
-            "[lookUpInImportedModules] resolved qualifier" <+> pretty qualifier' <+> "to modules:" ## pretty specs
+            "[findInModule] resolved qualifier" <+> pretty qualifier' <+> "to modules:" ## pretty specs
           lookUpInImportedModules AllNames currModName sym' (toList specs)
   where
     qualifier :: Maybe ImportQualifier
@@ -179,7 +179,9 @@ visibleNamesFromImports namesToConsider currMod imports = do
   TagsServerConf{tsconfNameResolution} <- ask
   foldForA imports $ \(impKey, impSpecs) -> do
     mods <- loadModule' impKey
-    let combinedNames = foldMap modAllExportedNames mods
+    let combinedNames :: SymbolMap
+        combinedNames = foldMap modAllExportedNames mods
+        impSpecs' :: [(ImportSpec, SymbolMap)]
         impSpecs'     = case namesToConsider of
           AllNames             -> (, combinedNames) <$> toList impSpecs
           OnlyUnqualifiedNames ->
