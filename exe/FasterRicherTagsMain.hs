@@ -296,6 +296,7 @@ search SearchConfig{scfgNullSeparated, scfgSymbol, scfgFile} = do
 
   res <-
     runSimpleLoggerT (Nothing @(Destination IO)) Debug $
+    -- runSimpleLoggerT (Just Stderr) Debug $
       runErrorExceptT $ do
 
         path <- Path.mkFullPath scfgFile

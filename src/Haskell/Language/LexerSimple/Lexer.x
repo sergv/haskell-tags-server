@@ -1,7 +1,9 @@
 {
 {-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE MagicHash         #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE UnboxedTuples     #-}
 
 -- Very important to have this one as it enables GHC to infer proper type of
 -- Alex 3.2.1 actions.
@@ -10,13 +12,13 @@
 -- monomorphism restriction breaks its inference.
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
+{-# OPTIONS_GHC -Wno-prepositive-qualified-module #-}
+
 module Haskell.Language.LexerSimple.Lexer (tokenize) where
 
 import Control.Applicative as A
 import Control.Monad
-import Control.Monad.Writer.Strict
-import Control.Monad.State.Strict
-
+import Control.Monad.State
 import Data.ByteString qualified as BS
 import Data.Char
 import Data.ErrorMessage
@@ -222,19 +224,19 @@ $hexdigit   = [0-9a-fA-F]
 <0> "{-#" $ws* @source_pragma $ws* "#-}" { \_ _ -> pure $ Pragma SourcePragma }
 
 -- Nested comments
-<0, comment>
-  "{-"                  { \_ _ -> startComment }
-<comment> "-}"          { \_ _ -> endComment startCode }
+<0, comment> "{-"       { \_ _ -> startComment }
+<comment>    "-}"       { \_ _ -> endComment startCode }
 -- 45  - '-'
 -- 123 - '{'
 <comment> @nl ;
 <comment> ($other | .)  { \_ _ -> dropUntilNLOrEither' 45 123 }
 <0> "-}"                { \_ _ -> errorAtLine "Unmatched -}" }
 
-<indentComment>
-  "{-"                  { \_ _ -> startIndentComment }
-<indentComment> "-}"    { \_ _ -> endComment indentCountCode }
-<indentComment> (. | @nl) ;
+<indentComment> {
+"{-"    { \_ _ -> startIndentComment }
+"-}"    { \_ _ -> endComment indentCountCode }
+(. | @nl) ;
+}
 
 <indentCount> {
 $space* "{-"            { \input len -> addIndentationSize (fromIntegral (countInputSpace input len)) *> startIndentComment }
@@ -269,6 +271,7 @@ $space*                 { \_ len -> endIndentationCounting len }
 "$("                    { \_ _ -> startSplice CtxQuasiquoter }
 "|]"                    { \_ _ -> endQuasiquoter }
 $reserved_symbol        { \input _len -> reservedSymbolQQ (unsafeTextHead (aiPtr input)) }
+-- ([^\|] | @nl)+          ;
 (. | @nl)               ;
 }
 
@@ -375,31 +378,32 @@ tokenize litLoc input =
       LitVanilla -> startCode
       LitOutside -> literateCode
 
-scanTokens :: WithCallStack => AlexM (Maybe ErrorMessage)
-scanTokens = go
+scanTokens :: WithCallStack => AlexM (Maybe ErrorMessage, [(AlexInput, ServerToken)])
+scanTokens = go []
   where
-    go = do
+    go acc = do
       !nextTok <- continueScanning
       case nextTok of
-        EOF       -> pure Nothing
-        Error err -> pure $ Just $ ErrorMessage (unIgnoreEqOrdHashNFData err) callStack
+        EOF       -> pure (Nothing, reverse acc)
+        Error err -> pure (Just $ ErrorMessage (unIgnoreEqOrdHashNFData err) callStack, reverse acc)
         _         -> do
           -- Use input after reading token to get proper prefix that includes
           -- token we currently read.
           AlexState{asInput} <- get
-          tell [(asInput, nextTok)]
-          go
+          go ((asInput, nextTok) : acc)
 
+-- {-# INLINE continueScanning #-}
 continueScanning :: AlexM ServerToken
 continueScanning = do
-  s@AlexState{asInput} <- get
+  !s@AlexState{asInput} <- get
   go (view asCodeL s) (view asLiterateLocL s) asInput
   where
     go :: AlexCode -> LitMode LitStyle -> AlexInput -> AlexM ServerToken
     go !code !litLoc = go'
       where
-        go' input = do
-          case alexScanUser litLoc input (unAlexCode code) :: AlexReturn AlexAction of
+        go' :: AlexInput -> AlexM ServerToken
+        go' !input =
+          case alexScanUser' litLoc input (unAlexCode code) :: AlexReturn AlexAction of
             AlexEOF                        ->
               pure EOF
             AlexError input'               -> do
@@ -407,9 +411,73 @@ continueScanning = do
               pure $ Error $ IgnoreEqOrdHashNFData $ "Lexical error while in state" <+> pretty (show code') <+>
                 "at line" <+> pretty (view aiLineL input') <> ":" <+> squotes (pretty (takeText input' 40))
             AlexSkip input' _              ->
-              go' input'
+              {-# SCC "continueScanning/AlexSkip" #-} go' input'
             AlexToken input' tokLen action ->
-              alexSetInput input' *> action input tokLen
+              {-# SCC "continueScanning/AlexToken" #-} (alexSetInput input' *> action input tokLen)
+              -- runState (alexSetInput input' *> action input tokLen) s
+
+alexScanUser' :: LitMode LitStyle -> AlexInput -> Int -> AlexReturn (AlexInput -> Int -> AlexM ServerToken)
+alexScanUser' user__ !input__ !(I# sc)
+  = case alex_scan_tkn' user__ input__ 0# input__ sc AlexNone of
+  (AlexNone, !input__') ->
+    case alexGetByte input__ of
+      Nothing -> AlexEOF
+      Just _  -> AlexError input__'
+
+  (AlexLastSkip input__'' len, _) ->
+    AlexSkip input__'' len
+
+  (AlexLastAcc k input__''' len, _) ->
+    AlexToken input__''' len (alex_actions `quickIndex` k)
+
+-- Push the input through the DFA, remembering the most recent accepting
+-- state it encountered.
+
+alex_scan_tkn' :: LitMode LitStyle -> AlexInput -> Int# -> AlexInput -> Int# -> AlexLastAcc -> (AlexLastAcc, AlexInput)
+alex_scan_tkn' !user__ !orig_input len !input__ s !last_acc =
+  let !new_acc = check_accs (alex_accept `quickIndex` (I# s)) in
+  case alexGetByte input__ of
+     Nothing             -> (new_acc, input__)
+     Just (c, new_input) ->
+       case fromIntegral c of
+         I# ord_c ->
+           let base   = alexIndexInt32OffAddr alex_base s
+               offset = base +# ord_c
+               new_s  = if isTrue# (offset >=# 0#) && isTrue# (alexIndexInt16OffAddr alex_check offset ==# ord_c)
+                        then alexIndexInt16OffAddr alex_table offset
+                        else alexIndexInt16OffAddr alex_deflt s
+           in
+             case new_s of
+               -1# -> (new_acc, input__)
+                   -- on an error, we want to keep the input *before* the
+                   -- character that failed, not after.
+               _   ->
+                 alex_scan_tkn'
+                   user__
+                   orig_input
+                   (if c < 0x80 || c >= 0xC0 then len +# 1# else len)
+                   -- note that the length is increased ONLY if this is the 1st byte in a char encoding)
+                   new_input
+                   new_s
+                   new_acc
+  where
+    check_accs (AlexAccNone) = last_acc
+    check_accs (AlexAcc a  ) = AlexLastAcc a input__ (I# len)
+    check_accs (AlexAccSkip) = AlexLastSkip  input__ (I# len)
+
+-- #ifndef ALEX_NOPRED
+    check_accs (AlexAccPred a predx rest)
+       | predx user__ orig_input (I# len) input__
+       = AlexLastAcc a input__ (I# len)
+       | otherwise
+       = check_accs rest
+    check_accs (AlexAccSkipPred predx rest)
+       | predx user__ orig_input (I# len) input__
+       = AlexLastSkip input__ (I# len)
+       | otherwise
+       = check_accs rest
+-- #endif
+
 
 dropUntilNL_ :: AlexM ()
 dropUntilNL_ =
