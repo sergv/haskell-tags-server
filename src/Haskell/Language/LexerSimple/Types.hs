@@ -21,6 +21,7 @@ module Haskell.Language.LexerSimple.Types
   , checkQuasiQuoteEndPresent
 
   , AlexM
+  , unAlexM
   , runAlexM
   , alexSetInput
   , alexSetNextCode
@@ -55,8 +56,7 @@ module Haskell.Language.LexerSimple.Types
   ) where
 
 import Control.Exception
-import Control.Monad.State.Strict
-import Control.Monad.Writer.Strict
+import Control.Monad.State
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as C8
 import Data.ByteString.Internal qualified as BSI
@@ -145,7 +145,7 @@ intToLitLoc = \case
   x -> error $ "Invalid literate location representation: " ++ show x
 
 mkAlexState :: LitMode Void -> AlexCode -> AlexInput -> AlexState
-mkAlexState litLoc startCode input =
+mkAlexState !litLoc !startCode !input =
   set asCodeL startCode $
     set asLiterateLocL (vacuous litLoc) AlexState
       { asInput        = input
@@ -199,15 +199,15 @@ modifyPreprocessorDepth f = do
 
 {-# INLINE alexSetInput #-}
 alexSetInput :: MonadState AlexState m => AlexInput -> m ()
-alexSetInput input = modify $ \s -> s { asInput = input }
+alexSetInput !input = modify $ \s -> s { asInput = input }
 
 {-# INLINE alexSetNextCode #-}
 alexSetNextCode :: MonadState AlexState m => AlexCode -> m ()
-alexSetNextCode code = modify $ set asCodeL code
+alexSetNextCode !code = modify $ set asCodeL code
 
 {-# INLINE addIndentationSize #-}
 addIndentationSize :: MonadState AlexState m => Int16 -> m ()
-addIndentationSize x =
+addIndentationSize !x =
   modify (over asIndentationSizeL (+ x))
 
 data QQEndsState = QQEndsState
@@ -231,20 +231,43 @@ checkQuasiQuoteEndPresent
       , qqessPrevChar = c#
       }
 
-type AlexM = WriterT [(AlexInput, ServerToken)] (State AlexState)
+newtype AlexM a = AlexM { unAlexM :: AlexState -> (# a, AlexState #) }
+  deriving (Functor)
+
+instance Applicative AlexM where
+  pure x = AlexM $ \ !s -> (# x, s #)
+  AlexM f <*> AlexM x = AlexM $ \ !s1 ->
+    let (# f', s2 #) = f s1
+        (# x', s3 #) = x s2
+    in (# f' x', s3 #)
+
+instance Monad AlexM where
+  AlexM x >>= f = AlexM $ \ !s1 ->
+    let (# x', s2 #) = x s1
+    in unAlexM (f x') s2
+
+instance MonadState AlexState AlexM where
+  -- {-# INLINE get #-}
+  -- {-# INLINE put #-}
+  get = AlexM $ \x -> (# x, x #)
+  put x = AlexM $ \_ -> (# (), x #)
+
+-- type AlexM = State AlexState
 
 {-# INLINE runAlexM #-}
 runAlexM
-  :: LitMode Void
+  :: forall a. LitMode Void
   -> AlexCode
   -> C8.ByteString
-  -> AlexM a
+  -> AlexM (a, [(AlexInput, ServerToken)])
   -> (a, [Pos ServerToken])
 runAlexM litLoc startCode input action =
   performIO $
     withAlexInput input $ \input' _ -> do
-      let (a, xs) = evalState (runWriterT action)
-                  $ mkAlexState litLoc startCode input'
+      let a  :: a
+          xs :: [(AlexInput, ServerToken)]
+          (# (a, xs), _ #) = unAlexM action
+                           $ mkAlexState litLoc startCode input'
       -- Contents of 'xs' has been seq'ed so TokenVals in there should
       -- have been forced and thus should not contain any references to the
       -- original input bytestring. However, in GHC 9.0 it seems that
@@ -431,7 +454,7 @@ dropUntilNLOrEither !w1 !w2 !input@AlexInput{aiPtr} =
 
 {-# INLINE alexInputPrevChar #-}
 alexInputPrevChar :: AlexInput -> Char
-alexInputPrevChar AlexInput{ aiPtr = Ptr ptr# } =
+alexInputPrevChar !AlexInput{ aiPtr = Ptr ptr# } =
   case base# `minusAddr#` start# of
     0# -> C# (chr# ch0)
     1# -> let !(# x, _ #) = readChar1# start# ch0 in C# x
@@ -457,7 +480,7 @@ alexInputPrevChar AlexInput{ aiPtr = Ptr ptr# } =
 
 {-# INLINE alexGetByte #-}
 alexGetByte :: AlexInput -> Maybe (Word8, AlexInput)
-alexGetByte input@AlexInput{aiPtr} =
+alexGetByte !input@AlexInput{aiPtr} =
   case nextChar aiPtr of
     (# c#, n, cs #) ->
       case fixChar c# of
@@ -549,27 +572,27 @@ fixChar = \case
 
 {-# INLINE unsafeTextHeadAscii #-}
 unsafeTextHeadAscii :: Ptr Word8 -> Word8
-unsafeTextHeadAscii (Ptr ptr#) = W8# (indexWord8OffAddr# ptr# 0#)
+unsafeTextHeadAscii !(Ptr ptr#) = W8# (indexWord8OffAddr# ptr# 0#)
 
 {-# INLINE unsafeTextHeadOfTailAscii #-}
 unsafeTextHeadOfTailAscii :: Ptr Word8 -> Word8
-unsafeTextHeadOfTailAscii (Ptr ptr#) = W8# (indexWord8OffAddr# ptr# 1#)
+unsafeTextHeadOfTailAscii !(Ptr ptr#) = W8# (indexWord8OffAddr# ptr# 1#)
 
 {-# INLINE unsafeTextHead #-}
 unsafeTextHead :: Ptr Word8 -> Char
-unsafeTextHead x =
+unsafeTextHead !x =
   case nextChar x of
     (# c#, _, _ #) -> C# c#
 
 {-# INLINE nextChar #-}
 nextChar :: Ptr Word8 -> (# Char#, Int#, Ptr Word8 #)
-nextChar (Ptr ptr#) =
+nextChar !(Ptr ptr#) =
   case utf8DecodeChar# ptr# of
     (# c#, nBytes# #) -> (# c#, nBytes#, Ptr (ptr# `plusAddr#` nBytes#) #)
 
 {-# INLINE dropUntilNL# #-}
 dropUntilNL# :: Ptr Word8 -> Ptr Word8
-dropUntilNL# (Ptr start#) = Ptr (go start#)
+dropUntilNL# !(Ptr start#) = Ptr (go start#)
   where
     go :: Addr# -> Addr#
     go ptr# = case indexWord8OffAddr# ptr# 0# of
@@ -579,7 +602,7 @@ dropUntilNL# (Ptr start#) = Ptr (go start#)
 
 {-# INLINE dropUntilUnescapedNL# #-}
 dropUntilUnescapedNL# :: Ptr Word8 -> (# Int, Ptr Word8 #)
-dropUntilUnescapedNL# (Ptr start#) = go 0 start#
+dropUntilUnescapedNL# !(Ptr start#) = go 0 start#
   where
     go :: Int -> Addr# -> (# Int, Ptr Word8 #)
     go !n ptr# = case indexWord8OffAddr# ptr# 0# of
@@ -597,7 +620,7 @@ dropUntilUnescapedNL# (Ptr start#) = go 0 start#
 
 {-# INLINE dropUntilNLOr# #-}
 dropUntilNLOr# :: Word8 -> Ptr Word8 -> Ptr Word8
-dropUntilNLOr# (W8# w#) (Ptr start#) = Ptr (go start#)
+dropUntilNLOr# !(W8# w#) !(Ptr start#) = Ptr (go start#)
   where
     go :: Addr# -> Addr#
     go ptr# = case indexWord8OffAddr# ptr# 0# of
@@ -610,7 +633,7 @@ dropUntilNLOr# (W8# w#) (Ptr start#) = Ptr (go start#)
 
 {-# INLINE dropUntilNLOrEither# #-}
 dropUntilNLOrEither# :: Word8 -> Word8 -> Ptr Word8 -> Ptr Word8
-dropUntilNLOrEither# (W8# w1#) (W8# w2#) (Ptr start#) = Ptr (go start#)
+dropUntilNLOrEither# !(W8# w1#) !(W8# w2#) !(Ptr start#) = Ptr (go start#)
   where
     go :: Addr# -> Addr#
     go ptr# = case indexWord8OffAddr# ptr# 0# of
@@ -625,7 +648,7 @@ dropUntilNLOrEither# (W8# w1#) (W8# w2#) (Ptr start#) = Ptr (go start#)
 
 {-# INLINE utf8Foldl' #-}
 utf8Foldl' :: forall a. (a -> Char# -> a) -> a -> Ptr Word8 -> a
-utf8Foldl' f x0 (Ptr ptr#) =
+utf8Foldl' f !x0 !(Ptr ptr#) =
   go x0 ptr#
   where
     go :: a -> Addr# -> a
@@ -636,7 +659,7 @@ utf8Foldl' f x0 (Ptr ptr#) =
 
 {-# INLINE utf8FoldlBounded #-}
 utf8FoldlBounded :: forall a. Int -> (a -> Char# -> a) -> a -> Ptr Word8 -> a
-utf8FoldlBounded (I# len#) f x0 (Ptr ptr#) =
+utf8FoldlBounded !(I# len#) f !x0 !(Ptr ptr#) =
   go len# x0 ptr#
   where
     go :: Int#-> a -> Addr# -> a
@@ -649,7 +672,7 @@ utf8FoldlBounded (I# len#) f x0 (Ptr ptr#) =
 
 {-# INLINE utf8BS #-}
 utf8BS :: Int -> Ptr Word8 -> BS.ByteString
-utf8BS (I# nChars#) (Ptr start#) =
+utf8BS !(I# nChars#) !(Ptr start#) =
   BSI.PS (performIO (newForeignPtr_ (Ptr start#))) 0 (I# (go nChars# 0#))
   where
     go :: Int# -> Int# -> Int#
@@ -661,7 +684,7 @@ utf8BS (I# nChars#) (Ptr start#) =
 
 {-# INLINE textFromUtf8Region #-}
 textFromUtf8Region :: Ptr Word8 -> Ptr Word8 -> Text
-textFromUtf8Region start end =
+textFromUtf8Region !start !end =
   TE.decodeUtf8 $ BSI.PS (performIO (newForeignPtr_ start)) 0 (minusPtr end start)
 
 {-# INLINE utf8DecodeChar# #-}
