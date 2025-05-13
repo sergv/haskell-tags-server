@@ -410,74 +410,73 @@ continueScanning = do
               code' <- gets (view asCodeL)
               pure $ Error $ IgnoreEqOrdHashNFData $ "Lexical error while in state" <+> pretty (show code') <+>
                 "at line" <+> pretty (view aiLineL input') <> ":" <+> squotes (pretty (takeText input' 40))
-            AlexSkip input' _              ->
-              {-# SCC "continueScanning/AlexSkip" #-} go' input'
-            AlexToken input' tokLen action ->
-              {-# SCC "continueScanning/AlexToken" #-} (alexSetInput input' *> action input tokLen)
+            AlexSkip input' _              -> go' input'
+            AlexToken input' tokLen action -> alexSetInput input' *> action input tokLen
               -- runState (alexSetInput input' *> action input tokLen) s
 
 alexScanUser' :: LitMode LitStyle -> AlexInput -> Int -> AlexReturn (AlexInput -> Int -> AlexM ServerToken)
-alexScanUser' user__ !input__ !(I# sc)
-  = case alex_scan_tkn' user__ input__ 0# input__ sc AlexNone of
-  (AlexNone, !input__') ->
-    case alexGetByte input__ of
-      Nothing -> AlexEOF
-      Just _  -> AlexError input__'
+alexScanUser' user__ !input__ !(I# sc) =
+  case alex_scan_tkn' user__ input__ 0# input__ sc AlexNone of
+    (AlexNone, !input__') ->
+      case alexGetByte input__ of
+        Nothing -> AlexEOF
+        Just _  -> AlexError input__'
 
-  (AlexLastSkip input__'' len, _) ->
-    AlexSkip input__'' len
+    (AlexLastSkip input__'' len, _) ->
+      AlexSkip input__'' len
 
-  (AlexLastAcc k input__''' len, _) ->
-    AlexToken input__''' len (alex_actions `quickIndex` k)
+    (AlexLastAcc k input__''' len, _) ->
+      AlexToken input__''' len ({-# SCC "alexScanUser/quickIndex" #-} alex_actions `quickIndex` k)
 
 -- Push the input through the DFA, remembering the most recent accepting
 -- state it encountered.
 
 alex_scan_tkn' :: LitMode LitStyle -> AlexInput -> Int# -> AlexInput -> Int# -> AlexLastAcc -> (AlexLastAcc, AlexInput)
-alex_scan_tkn' !user__ !orig_input len !input__ s !last_acc =
-  let !new_acc = check_accs (alex_accept `quickIndex` (I# s)) in
-  case alexGetByte input__ of
-     Nothing             -> (new_acc, input__)
-     Just (c, new_input) ->
-       case fromIntegral c of
-         I# ord_c ->
-           let base   = alexIndexInt32OffAddr alex_base s
-               offset = base +# ord_c
-               new_s  = if isTrue# (offset >=# 0#) && isTrue# (alexIndexInt16OffAddr alex_check offset ==# ord_c)
-                        then alexIndexInt16OffAddr alex_table offset
-                        else alexIndexInt16OffAddr alex_deflt s
-           in
-             case new_s of
-               -1# -> (new_acc, input__)
-                   -- on an error, we want to keep the input *before* the
-                   -- character that failed, not after.
-               _   ->
-                 alex_scan_tkn'
-                   user__
-                   orig_input
-                   (if c < 0x80 || c >= 0xC0 then len +# 1# else len)
-                   -- note that the length is increased ONLY if this is the 1st byte in a char encoding)
-                   new_input
-                   new_s
-                   new_acc
+alex_scan_tkn' !user__ !orig_input = go
   where
-    check_accs (AlexAccNone) = last_acc
-    check_accs (AlexAcc a  ) = AlexLastAcc a input__ (I# len)
-    check_accs (AlexAccSkip) = AlexLastSkip  input__ (I# len)
+    go len !input__ s !last_acc =
+      let !new_acc = check_accs (alex_accept `quickIndex` (I# s)) in
+      case alexGetByte input__ of
+         Nothing             -> (new_acc, input__)
+         Just (c, new_input) ->
+           case fromIntegral c of
+             I# ord_c ->
+               let base   = alexIndexInt32OffAddr alex_base s
+                   offset = base +# ord_c
+                   new_s  = if isTrue# (offset >=# 0#) && isTrue# (alexIndexInt16OffAddr alex_check offset ==# ord_c)
+                            then alexIndexInt16OffAddr alex_table offset
+                            else alexIndexInt16OffAddr alex_deflt s
+               in
+                 case new_s of
+                   -1# -> (new_acc, input__)
+                       -- on an error, we want to keep the input *before* the
+                       -- character that failed, not after.
+                   _   ->
+                     alex_scan_tkn'
+                       user__
+                       orig_input
+                       (if c < 0x80 || c >= 0xC0 then len +# 1# else len)
+                       -- note that the length is increased ONLY if this is the 1st byte in a char encoding)
+                       new_input
+                       new_s
+                       new_acc
+      where
+        check_accs (AlexAccNone) = last_acc
+        check_accs (AlexAcc a  ) = AlexLastAcc a input__ (I# len)
+        check_accs (AlexAccSkip) = AlexLastSkip  input__ (I# len)
 
 -- #ifndef ALEX_NOPRED
-    check_accs (AlexAccPred a predx rest)
-       | predx user__ orig_input (I# len) input__
-       = AlexLastAcc a input__ (I# len)
-       | otherwise
-       = check_accs rest
-    check_accs (AlexAccSkipPred predx rest)
-       | predx user__ orig_input (I# len) input__
-       = AlexLastSkip input__ (I# len)
-       | otherwise
-       = check_accs rest
+        check_accs (AlexAccPred a predx rest)
+           | predx user__ orig_input (I# len) input__
+           = AlexLastAcc a input__ (I# len)
+           | otherwise
+           = check_accs rest
+        check_accs (AlexAccSkipPred predx rest)
+           | predx user__ orig_input (I# len) input__
+           = AlexLastSkip input__ (I# len)
+           | otherwise
+           = check_accs rest
 -- #endif
-
 
 dropUntilNL_ :: AlexM ()
 dropUntilNL_ =
