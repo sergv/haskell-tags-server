@@ -16,11 +16,12 @@ module Haskell.Language.LexerSimple.LensBlaze
   , int16L
   , int32L
   , intL
+  , coerceL
   ) where
 
 import Control.Applicative
-
 import Data.Bits
+import Data.Coerce
 import Data.Functor.Identity
 import Data.Int
 
@@ -60,3 +61,11 @@ intL !offset !mask = \f x ->
     reverseMask :: b
     !reverseMask = complement $ mask `unsafeShiftL` offset
 
+{-# INLINE coerceL #-}
+coerceL :: forall s t a b. (Coercible s a, Coercible t b) => Lens s t a b
+coerceL = \f x -> bt <$> f (sa x)
+  where
+    sa :: s -> a
+    sa = coerce
+    bt :: b -> t
+    bt = coerce

@@ -40,7 +40,6 @@ module Haskell.Language.LexerSimple.Types
   , unsafeTextHeadAscii
   , unsafeTextHeadOfTailAscii
   , unsafeTextHead
-  , utf8BS
 
   , asCodeL
   , asCommentDepthL
@@ -279,16 +278,16 @@ runAlexM litLoc startCode input action =
       pure (a, map (\(x, y) -> Pos (mkSrcPosNoPrefix x) y) xs)
 
 mkSrcPosNoPrefix :: AlexInput -> SrcPos
-mkSrcPosNoPrefix input =
-  SrcPos { posLine   = view aiLineL input
-         , posOffset = Offset 0
-         , posPrefix = mempty
-         , posSuffix = mempty
-         }
+mkSrcPosNoPrefix input = SrcPos
+  { posLine   = view aiLineL input
+  , posOffset = Offset 0
+  , posPrefix = mempty
+  , posSuffix = mempty
+  }
 
 data AlexInput = AlexInput
   { aiPtr      :: {-# UNPACK #-} !(Ptr Word8)
-  , aiIntStore :: {-# UNPACK #-} !Word64
+  , aiIntStore :: {-# UNPACK #-} !Int
     -- ^ Integer field that stores all the other useful fields for lexing.
   } deriving (Eq, Ord)
 
@@ -300,31 +299,23 @@ instance Show AlexInput where
       ptr = fromIntegral $ ptrToWordPtr aiPtr
 
 {-# INLINE aiIntStoreL #-}
-aiIntStoreL :: Lens' AlexInput Word64
+aiIntStoreL :: Lens' AlexInput Int
 aiIntStoreL = lens aiIntStore (\b s -> s { aiIntStore = b })
 
-lineInt32L :: Lens' Int32 Line
-lineInt32L = lens (Line . fromIntegral) (\(Line x) _ -> fromIntegral x)
+lineInt32L :: Lens' Int Line
+lineInt32L = coerceL
 
-int2Int32L :: Lens' Int32 Int
-int2Int32L = lens fromIntegral (\x _ -> fromIntegral x)
-
-{-# INLINE aiLineL       #-}
-{-# INLINE aiLineLengthL #-}
+{-# INLINE aiLineL #-}
 -- | Current line in input stream.
-aiLineL       :: Lens' AlexInput Line
--- | Length of current line.
-aiLineLengthL :: Lens' AlexInput Int
-
-aiLineL       = aiIntStoreL . int32L 0  . lineInt32L
-aiLineLengthL = aiIntStoreL . int32L 32 . int2Int32L
+aiLineL :: Lens' AlexInput Line
+aiLineL = aiIntStoreL . lineInt32L
 
 {-# INLINE takeText #-}
-takeText :: AlexInput -> Int -> Text
+takeText :: AlexInput -> Int# -> Text
 takeText AlexInput{aiPtr} len =
   TE.decodeUtf8 $! utf8BS len aiPtr
 
-countInputSpace :: AlexInput -> Int -> Int
+countInputSpace :: AlexInput -> Int# -> Int
 countInputSpace AlexInput{aiPtr} len =
   utf8FoldlBounded len inc 0 aiPtr
   where
@@ -368,11 +359,11 @@ withAlexInput !s f =
         = xs
 
 {-# INLINE extractIncludeName #-}
-extractIncludeName :: AlexInput -> Int -> Text
-extractIncludeName !AlexInput{aiPtr} !n =
+extractIncludeName :: AlexInput -> Int# -> Text
+extractIncludeName !AlexInput{aiPtr} n =
   textFromUtf8Region (Ptr nameStart#) (Ptr nameEnd#)
   where
-    !(Ptr inputEnd#) = aiPtr `plusPtr` (n - 1)
+    !(Ptr inputEnd#) = aiPtr `plusPtr` (I# (n -# 1#))
 
     nameStart#, nameEnd# :: Addr#
     !(# nameStart#, nameEnd# #) = goBack# inputEnd#
@@ -397,12 +388,12 @@ extractIncludeName !AlexInput{aiPtr} !n =
             -> go (ptr# `plusAddr#` -1#)
 
 {-# INLINE extractDefineOrLetName #-}
-extractDefineOrLetName :: AlexInput -> Int -> Text
-extractDefineOrLetName !AlexInput{aiPtr} !n =
+extractDefineOrLetName :: AlexInput -> Int# -> Text
+extractDefineOrLetName !AlexInput{aiPtr} n =
   textFromUtf8Region (Ptr start#) end
   where
     end :: Ptr b
-    !end = aiPtr `plusPtr` n
+    !end = aiPtr `plusPtr` I# n
 
     end#, start# :: Addr#
     !(Ptr end#) = end
@@ -482,22 +473,17 @@ alexInputPrevChar !AlexInput{ aiPtr = Ptr ptr# } =
 alexGetByte :: AlexInput -> Maybe (Word8, AlexInput)
 alexGetByte !input@AlexInput{aiPtr} =
   case nextChar aiPtr of
-    (# c#, n, cs #) ->
+    (# c#, cs #) ->
       case fixChar c# of
         0##  -> Nothing -- Abort on an unknown character
         -- '\n'
         10## -> Just (10, input')
           where
-            !input' =
-              over aiLineL increaseLine $
-                set aiLineLengthL 0 $
-                  input { aiPtr = cs }
+            !input' = over aiLineL increaseLine $ input { aiPtr = cs }
         c    -> Just (b, input')
           where
-            !b     = W8# (wordToWord8# c)
-            !input' =
-              over aiLineLengthL (+ I# n) $
-                input { aiPtr = cs }
+            !b      = W8# (wordToWord8# c)
+            !input' = input { aiPtr = cs }
 
 -- Translate unicode character into special symbol we teached Alex to recognize.
 {-# INLINE fixChar #-}
@@ -582,13 +568,13 @@ unsafeTextHeadOfTailAscii !(Ptr ptr#) = W8# (indexWord8OffAddr# ptr# 1#)
 unsafeTextHead :: Ptr Word8 -> Char
 unsafeTextHead !x =
   case nextChar x of
-    (# c#, _, _ #) -> C# c#
+    (# c#, _ #) -> C# c#
 
 {-# INLINE nextChar #-}
-nextChar :: Ptr Word8 -> (# Char#, Int#, Ptr Word8 #)
+nextChar :: Ptr Word8 -> (# Char#, Ptr Word8 #)
 nextChar !(Ptr ptr#) =
   case utf8DecodeChar# ptr# of
-    (# c#, nBytes# #) -> (# c#, nBytes#, Ptr (ptr# `plusAddr#` nBytes#) #)
+    (# c#, nBytes# #) -> (# c#, Ptr (ptr# `plusAddr#` nBytes#) #)
 
 {-# INLINE dropUntilNL# #-}
 dropUntilNL# :: Ptr Word8 -> Ptr Word8
@@ -658,8 +644,8 @@ utf8Foldl' f !x0 !(Ptr ptr#) =
         (# c#, nBytes# #) -> go (acc `f` c#) (addr# `plusAddr#` nBytes#)
 
 {-# INLINE utf8FoldlBounded #-}
-utf8FoldlBounded :: forall a. Int -> (a -> Char# -> a) -> a -> Ptr Word8 -> a
-utf8FoldlBounded !(I# len#) f !x0 !(Ptr ptr#) =
+utf8FoldlBounded :: forall a. Int# -> (a -> Char# -> a) -> a -> Ptr Word8 -> a
+utf8FoldlBounded len# f !x0 !(Ptr ptr#) =
   go len# x0 ptr#
   where
     go :: Int#-> a -> Addr# -> a
@@ -671,8 +657,8 @@ utf8FoldlBounded !(I# len#) f !x0 !(Ptr ptr#) =
           go (n# -# 1#) (acc `f` c#) (addr# `plusAddr#` nBytes#)
 
 {-# INLINE utf8BS #-}
-utf8BS :: Int -> Ptr Word8 -> BS.ByteString
-utf8BS !(I# nChars#) !(Ptr start#) =
+utf8BS :: Int# -> Ptr Word8 -> BS.ByteString
+utf8BS nChars# !(Ptr start#) =
   BSI.PS (performIO (newForeignPtr_ (Ptr start#))) 0 (I# (go nChars# 0#))
   where
     go :: Int# -> Int# -> Int#
