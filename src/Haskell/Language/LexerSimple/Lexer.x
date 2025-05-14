@@ -214,7 +214,7 @@ $hexdigit   = [0-9a-fA-F]
   { \_ _   -> endLiterate' }
 
 [\\]? @nl $space* "{-"  { \input len -> startIndentationCounting (countInputSpace input len) }
-[\\]? @nl $space*       { \input len -> pure $! Newline $! len - countBackslashCR input - 1 }
+[\\]? @nl $space*       { \input len -> pure $! Newline $! I# len - countBackslashCR input - 1 }
 [\-][\-]+ ~[$symbol $nl] { \_ _ -> dropUntilNL' }
 [\-][\-]+ / @nl         ;
 
@@ -342,8 +342,50 @@ $reserved_symbol        { \input _len -> reservedSymbol (unsafeTextHead (aiPtr i
 
 {
 
-type AlexAction = AlexInput -> Int -> AlexM ServerToken
+type AlexAction = AlexInput -> Int# -> AlexM ServerToken
 type AlexPred a = a -> AlexInput -> Int -> AlexInput -> Bool
+
+alex_actions :: Array Int AlexAction
+alex_action_3 :: AlexAction
+alex_action_6 :: AlexAction
+alex_action_7 :: AlexAction
+alex_action_8 :: AlexAction
+alex_action_9 :: AlexAction
+alex_action_10 :: AlexAction
+alex_action_11 :: AlexAction
+alex_action_12 :: AlexAction
+alex_action_13 :: AlexAction
+alex_action_14 :: AlexAction
+alex_action_16 :: AlexAction
+alex_action_17 :: AlexAction
+alex_action_18 :: AlexAction
+alex_action_19 :: AlexAction
+alex_action_21 :: AlexAction
+alex_action_22 :: AlexAction
+alex_action_24 :: AlexAction
+alex_action_25 :: AlexAction
+alex_action_27 :: AlexAction
+alex_action_28 :: AlexAction
+alex_action_29 :: AlexAction
+alex_action_31 :: AlexAction
+alex_action_32 :: AlexAction
+alex_action_33 :: AlexAction
+alex_action_34 :: AlexAction
+alex_action_38 :: AlexAction
+alex_action_39 :: AlexAction
+alex_action_41 :: AlexAction
+alex_action_42 :: AlexAction
+alex_action_43 :: AlexAction
+alex_action_44 :: AlexAction
+alex_action_45 :: AlexAction
+alex_action_46 :: AlexAction
+alex_action_47 :: AlexAction
+alex_action_57 :: AlexAction
+alex_action_70 :: AlexAction
+alex_action_96 :: AlexAction
+alex_action_97 :: AlexAction
+alex_action_98 :: AlexAction
+
 
 {-# INLINE kw #-}
 kw :: ServerToken -> AlexAction
@@ -404,17 +446,16 @@ continueScanning = do
         go' :: AlexInput -> AlexM ServerToken
         go' !input =
           case alexScanUser' litLoc input (unAlexCode code) :: AlexReturn AlexAction of
-            AlexEOF                        ->
-              pure EOF
-            AlexError input'               -> do
+            AlexEOF                             -> pure EOF
+            AlexError input'                    -> do
               code' <- gets (view asCodeL)
               pure $ Error $ IgnoreEqOrdHashNFData $ "Lexical error while in state" <+> pretty (show code') <+>
-                "at line" <+> pretty (view aiLineL input') <> ":" <+> squotes (pretty (takeText input' 40))
-            AlexSkip input' _              -> go' input'
-            AlexToken input' tokLen action -> alexSetInput input' *> action input tokLen
+                "at line" <+> pretty (view aiLineL input') <> ":" <+> squotes (pretty (takeText input' 40#))
+            AlexSkip input' _                   -> go' input'
+            AlexToken input' (I# tokLen) action -> alexSetInput input' *> action input tokLen
               -- runState (alexSetInput input' *> action input tokLen) s
 
-alexScanUser' :: LitMode LitStyle -> AlexInput -> Int -> AlexReturn (AlexInput -> Int -> AlexM ServerToken)
+alexScanUser' :: LitMode LitStyle -> AlexInput -> Int -> AlexReturn AlexAction
 alexScanUser' user__ !input__ !(I# sc) =
   case alex_scan_tkn' user__ input__ 0# input__ sc AlexNone of
     (AlexNone, !input__') ->
@@ -432,50 +473,49 @@ alexScanUser' user__ !input__ !(I# sc) =
 -- state it encountered.
 
 alex_scan_tkn' :: LitMode LitStyle -> AlexInput -> Int# -> AlexInput -> Int# -> AlexLastAcc -> (AlexLastAcc, AlexInput)
-alex_scan_tkn' !user__ !orig_input = go
+alex_scan_tkn' !user__ !orig_input len !input__ s !last_acc =
+  let !new_acc = check_accs (alex_accept `quickIndex` (I# s)) in
+  case alexGetByte input__ of
+     Nothing             -> (new_acc, input__)
+     Just (c, new_input) ->
+       case fromIntegral c of
+         I# ord_c ->
+           let base :: Int#
+               base   = alexIndexInt32OffAddr alex_base s
+               offset = base +# ord_c
+               new_s  = if isTrue# (offset >=# 0#) && isTrue# (alexIndexInt16OffAddr alex_check offset ==# ord_c)
+                        then alexIndexInt16OffAddr alex_table offset
+                        else alexIndexInt16OffAddr alex_deflt s
+           in
+             case new_s of
+               -1# -> (new_acc, input__)
+                   -- on an error, we want to keep the input *before* the
+                   -- character that failed, not after.
+               _   ->
+                 alex_scan_tkn'
+                   user__
+                   orig_input
+                   (if c < 0x80 || c >= 0xC0 then len +# 1# else len)
+                   -- note that the length is increased ONLY if this is the 1st byte in a char encoding)
+                   new_input
+                   new_s
+                   new_acc
   where
-    go len !input__ s !last_acc =
-      let !new_acc = check_accs (alex_accept `quickIndex` (I# s)) in
-      case alexGetByte input__ of
-         Nothing             -> (new_acc, input__)
-         Just (c, new_input) ->
-           case fromIntegral c of
-             I# ord_c ->
-               let base   = alexIndexInt32OffAddr alex_base s
-                   offset = base +# ord_c
-                   new_s  = if isTrue# (offset >=# 0#) && isTrue# (alexIndexInt16OffAddr alex_check offset ==# ord_c)
-                            then alexIndexInt16OffAddr alex_table offset
-                            else alexIndexInt16OffAddr alex_deflt s
-               in
-                 case new_s of
-                   -1# -> (new_acc, input__)
-                       -- on an error, we want to keep the input *before* the
-                       -- character that failed, not after.
-                   _   ->
-                     alex_scan_tkn'
-                       user__
-                       orig_input
-                       (if c < 0x80 || c >= 0xC0 then len +# 1# else len)
-                       -- note that the length is increased ONLY if this is the 1st byte in a char encoding)
-                       new_input
-                       new_s
-                       new_acc
-      where
-        check_accs (AlexAccNone) = last_acc
-        check_accs (AlexAcc a  ) = AlexLastAcc a input__ (I# len)
-        check_accs (AlexAccSkip) = AlexLastSkip  input__ (I# len)
+    check_accs (AlexAccNone) = last_acc
+    check_accs (AlexAcc a  ) = AlexLastAcc a input__ (I# len)
+    check_accs (AlexAccSkip) = AlexLastSkip  input__ (I# len)
 
 -- #ifndef ALEX_NOPRED
-        check_accs (AlexAccPred a predx rest)
-           | predx user__ orig_input (I# len) input__
-           = AlexLastAcc a input__ (I# len)
-           | otherwise
-           = check_accs rest
-        check_accs (AlexAccSkipPred predx rest)
-           | predx user__ orig_input (I# len) input__
-           = AlexLastSkip input__ (I# len)
-           | otherwise
-           = check_accs rest
+    check_accs (AlexAccPred a predx rest)
+       | predx user__ orig_input (I# len) input__
+       = AlexLastAcc a input__ (I# len)
+       | otherwise
+       = check_accs rest
+    check_accs (AlexAccSkipPred predx rest)
+       | predx user__ orig_input (I# len) input__
+       = AlexLastSkip input__ (I# len)
+       | otherwise
+       = check_accs rest
 -- #endif
 
 dropUntilNL_ :: AlexM ()
@@ -501,10 +541,10 @@ startIndentationCounting !n = do
   alexSetNextCode indentCommentCode
   continueScanning
 
-endIndentationCounting :: Int -> AlexM ServerToken
-endIndentationCounting !n = do
+endIndentationCounting :: Int# -> AlexM ServerToken
+endIndentationCounting n = do
   alexSetNextCode startCode
-  Newline . (+ n) . fromIntegral <$> gets (view asIndentationSizeL)
+  Newline . (+ (I# n)) . fromIntegral <$> gets (view asIndentationSizeL)
 
 startIndentComment :: AlexM ServerToken
 startIndentComment = do
