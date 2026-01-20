@@ -16,7 +16,6 @@ module Haskell.Language.LexerSimple.Types
   , pushContext
   , modifyCommentDepth
   , modifyQuasiquoterDepth
-  , modifyPreprocessorDepth
   , addIndentationSize
   , checkQuasiQuoteEndPresent
 
@@ -45,7 +44,6 @@ module Haskell.Language.LexerSimple.Types
   , asCommentDepthL
   , asQuasiquoterDepthL
   , asIndentationSizeL
-  , asPreprocessorDepthL
   , asLiterateLocL
   , asHaveQQEndL
 
@@ -106,15 +104,13 @@ intToMaybeBool = \case
 {-# INLINE asCommentDepthL      #-}
 {-# INLINE asQuasiquoterDepthL  #-}
 {-# INLINE asIndentationSizeL   #-}
-{-# INLINE asPreprocessorDepthL #-}
 {-# INLINE asLiterateLocL       #-}
 {-# INLINE asHaveQQEndL         #-}
 -- | Current Alex state the lexer is in. E.g. comments, string, TH quasiquoter
      -- or vanilla toplevel mode.
 asCodeL :: Lens' AlexState AlexCode
 asCommentDepthL, asQuasiquoterDepthL, asIndentationSizeL :: Lens' AlexState Int16
--- | How many directives deep are we.
-asPreprocessorDepthL :: Lens' AlexState Int16
+
 -- | Whether we're in bird-style or latex-style literate environment
 asLiterateLocL :: Lens' AlexState (LitMode LitStyle)
 asHaveQQEndL   :: Lens' AlexState (Maybe Bool)
@@ -122,7 +118,6 @@ asCodeL              = asIntStoreL . intL 0  0x000f
 asCommentDepthL      = asIntStoreL . intL 4  0x03ff
 asQuasiquoterDepthL  = asIntStoreL . intL 14 0x03ff
 asIndentationSizeL   = asIntStoreL . int16L  24
-asPreprocessorDepthL = asIntStoreL . int16L  40
 asLiterateLocL       = \f -> asIntStoreL (intL 56 0x0003 (fmap litLocToInt    . f . intToLitLoc))
 asHaveQQEndL         = \f -> asIntStoreL (intL 58 0x0003 (fmap maybeBoolToInt . f . intToMaybeBool))
 
@@ -186,14 +181,6 @@ modifyQuasiquoterDepth f = do
   depth <- gets (view asQuasiquoterDepthL)
   let !depth' = f depth
   modify $ \s -> set asQuasiquoterDepthL depth' s
-  return depth'
-
-{-# INLINE modifyPreprocessorDepth #-}
-modifyPreprocessorDepth :: MonadState AlexState m => (Int16 -> Int16) -> m Int16
-modifyPreprocessorDepth f = do
-  depth <- gets (view asPreprocessorDepthL)
-  let !depth' = f depth
-  modify $ \s -> set asPreprocessorDepthL depth' s
   return depth'
 
 {-# INLINE alexSetInput #-}
