@@ -9,6 +9,8 @@
 -- monomorphism restriction breaks its inference.
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
+{-# OPTIONS_GHC -Wno-prepositive-qualified-module #-}
+
 {-# OPTIONS_GHC -Wwarn #-}
 
 module Haskell.Language.Lexer.Lexer (tokenizeM) where
@@ -17,6 +19,7 @@ import Control.Monad
 import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
+import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.NonEmpty qualified as NE
 import Data.Maybe (mapMaybe)
