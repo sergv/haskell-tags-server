@@ -40,13 +40,6 @@ tests = testGroup "Data.Map.NonEmpty"
       (NEMap.unionWith (curry (applyFun f)) ===== M.unionWith (curry (applyFun f))) xs
   ]
 
-instance Arbitrary a => Arbitrary (NonEmpty a) where
-  arbitrary = (:|) <$> arbitrary <*> arbitrary
-  shrink xs =
-    [ y :| ys
-    | (y:ys) <- shrink $ toList xs
-    ]
-
 instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (NonEmptyMap k v) where
   arbitrary = NEMap.fromNonEmpty <$> arbitrary
   shrink    = map NEMap.fromNonEmpty . shrink . NEMap.toNonEmpty

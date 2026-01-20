@@ -19,6 +19,7 @@ module Haskell.Language.LexerSimple.Lexer (tokenize) where
 import Control.Applicative as A
 import Control.Monad
 import Control.Monad.State
+import Data.Array
 import Data.ByteString qualified as BS
 import Data.Char
 import Data.ErrorMessage
@@ -26,6 +27,7 @@ import Data.IgnoreEqOrdHashNFData
 import Data.Void (Void)
 import Data.Word
 import Foreign.Ptr (plusPtr)
+import GHC.Exts (isTrue#)
 import GHC.Stack.Ext
 import Prettyprinter hiding (line)
 

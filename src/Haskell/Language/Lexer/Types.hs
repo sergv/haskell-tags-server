@@ -129,12 +129,10 @@ isLiterateLatexInside = \case
 
 data PragmaType = SourcePragma
   deriving (Show, Eq, Ord, Generic)
+  deriving Pretty via PPGeneric (PragmaType)
 
 instance Hashable PragmaType
 instance NFData   PragmaType
-
-instance Pretty PragmaType where
-  pretty = ppGeneric
 
 data ServerToken
   = KWCase
