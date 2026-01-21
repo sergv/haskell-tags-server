@@ -438,13 +438,13 @@ analyzeExports filename importQualifiers ts = do
           | isVanillaTypeName name
           , not $ isChildrenList filename rest ->
             entryWithoutChildren name line Types.Pattern rest
-          | otherwise                 ->
+          | otherwise                          ->
             entryWithoutChildren "pattern" line Types.Function restWithName
         PPattern : restWithName@(PLParen : PAnyName' line name : PRParen : rest)
           | isOpTypeName name
           , not $ isChildrenList filename rest ->
             entryWithoutChildren name line Types.Pattern rest
-          | otherwise                 ->
+          | otherwise                          ->
             entryWithoutChildren "pattern" line Types.Function restWithName
         -- Type export
         PType : PName' line name : rest ->
