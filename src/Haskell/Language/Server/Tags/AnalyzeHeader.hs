@@ -471,7 +471,7 @@ analyzeExports filename importQualifiers ts = do
         PLParen : rest ->
           go entries reexports rest
         toks' ->
-          throwErrorWithCallStack $ "Unrecognised export list structure:" <+> ppTokens toks'
+          throwErrorWithCallStack $ "Unrecognised export list structure in file" <+> pretty filename <> ":" <+> ppTokens toks'
       where
         exports :: ModuleExports
         exports = ModuleExports
