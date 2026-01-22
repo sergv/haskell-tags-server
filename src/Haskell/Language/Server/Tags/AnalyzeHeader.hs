@@ -127,12 +127,12 @@ analyzeHeader suggestedModName filename ts = do
 
   let (importBlocks, rest) = extractImportBlocks body
   (imports, importQuals) <- analyzeImports filename importBlocks
-  let importQualifiers' = MonoidalMap.unMonoidalMap importQuals
-  exports                <- maybe (pure NoExports) (analyzeExports filename importQualifiers' . dropAllCpp) exportList
+  let importQuals' = MonoidalMap.unMonoidalMap importQuals
+  exports                <- maybe (pure NoExports) (analyzeExports filename importQuals' . dropAllCpp) exportList
   let header = ModuleHeader
         { mhModName          = modName
         , mhImports          = imports
-        , mhImportQualifiers = importQualifiers'
+        , mhImportQualifiers = importQuals'
         , mhExports          = exports
         }
   pure (header, preCpp ++ rest)
