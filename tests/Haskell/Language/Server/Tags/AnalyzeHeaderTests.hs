@@ -996,6 +996,68 @@ moduleWithDefineInImportList = TestCase
       }
   }
 
+moduleImportNamespaces :: Test
+moduleImportNamespaces = TestCase
+  { testName       = "Import with explicit namespaces"
+  , input          =
+      """
+      module ModuleWithImport where
+      import Foo
+        ( foo
+        , type Typ
+        , type (++)
+        , data Typ2
+        , data (:**)
+        , C(type (#))
+        )
+      """
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "ModuleWithImport"
+      , mhExports          = NoExports
+      , mhImportQualifiers = mempty
+      , mhImports          = SubkeyMap.fromList $ map (ispecImportKey . NE.head &&& id)
+          [ neSingleton ImportSpec
+              { ispecImportKey     = ImportKey
+                  { ikImportTarget = VanillaModule
+                  , ikModuleName   = mkModuleName "Foo"
+                  }
+              , ispecQualification = Unqualified
+              , ispecImportList    = SpecificImports ImportList
+                  { ilEntries    = KM.fromList
+                      [ EntryWithChildren
+                          { entryName               = mkUnqualSymName "foo"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName "Typ"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName "++"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName "Typ2"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName ":**"
+                          , entryChildrenVisibility = Nothing
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName "C"
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
+                              [ mkUnqualSymName "#"
+                              ]
+                          }
+                      ]
+                  , ilImportType = Imported
+                  }
+              }
+          ]
+      }
+  }
+
 moduleWithImportOfPatternFuncTest :: Test
 moduleWithImportOfPatternFuncTest = TestCase
   { testName       = "Import of \"pattern\" function"
@@ -2700,6 +2762,7 @@ tests = testGroup "Header analysis tests"
     , doTest moduleWithParensInImportList2
     , doTest moduleWithMultilinePreprocessor
     , doTest moduleWithDefineInImportList
+    , doTest moduleImportNamespaces
     , testGroup "pattern as a function name"
         [ doTest moduleWithImportOfPatternFuncTest
         , doTest moduleWithImportOfManyFuncsAndPatternFuncTest

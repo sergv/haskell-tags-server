@@ -289,7 +289,7 @@ analyzeImports filename = getAp . foldMap (Ap . go . dropAllNLs . toList)
 -- - Foo_|_ hiding (Bar, Baz)
 -- - Quux_|_(..)
 analyzeImportList
-  :: (Applicative m, MonadError ErrorMessage m)
+  :: (WithCallStack, Applicative m, MonadError ErrorMessage m)
   => FullPath 'File
   -> [Pos ServerToken]
   -> m (ImportListSpec ImportList, [Pos ServerToken])
@@ -302,7 +302,7 @@ analyzeImportList filename toks = do
     _                        -> pure (NoImportList, toks)
 
 findImportListEntries
-  :: forall m. (Applicative m, MonadError ErrorMessage m)
+  :: forall m. (WithCallStack, Applicative m, MonadError ErrorMessage m)
   => FullPath 'File
   -> ImportType
   -> KeyMap Set (EntryWithChildren () UnqualifiedSymbolName)
@@ -333,9 +333,9 @@ findImportListEntries filename importType = go'
         PRParen : rest                                                    ->
           pure (SpecificImports importList, rest)
         -- Type import
-        PType : PName name : rest                                         ->
+        (PType; PData) : PName name : rest                                ->
           entryWithoutChildren name rest
-        PType : PLParen : PAnyName name : PRParen : rest                  ->
+        (PType; PData) : PLParen : PAnyName name : PRParen : rest         ->
           entryWithoutChildren name rest
         -- Pattern import
         PPattern : restWithName@(PName name : rest)
