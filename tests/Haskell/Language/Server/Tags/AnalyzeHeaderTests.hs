@@ -1959,9 +1959,9 @@ moduleWithTypeExportsTest1 = TestCase
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = (mkSymbolName "Bar", pt 3 Family)
+                  { entryName               = (mkSymbolName "Bar", pt 3 Type)
                   , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
-                      [ (mkUnqualSymName "Baz", pt 3 Type)
+                      [ (mkUnqualSymName "Baz", pt 3 Family)
                       ]
                   }
               ]
@@ -1981,6 +1981,7 @@ moduleWithTypeExportsTest2 = TestCase
       module ModuleWithTypeOpExports
         ( (+)
         , (**)(type (!!))
+        , (##)(type (###))
         )
         where
       """
@@ -1993,9 +1994,15 @@ moduleWithTypeExportsTest2 = TestCase
                   , entryChildrenVisibility = Nothing
                   }
               , EntryWithChildren
-                  { entryName               = (mkSymbolName "**", pt 3 Family)
+                  { entryName               = (mkSymbolName "**", pt 3 Type)
                   , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
-                      [ (mkUnqualSymName "!!", pt 3 Type)
+                      [ (mkUnqualSymName "!!", pt 3 Family)
+                      ]
+                  }
+              , EntryWithChildren
+                  { entryName               = (mkSymbolName "##", pt 4 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName "###", pt 4 Family)
                       ]
                   }
               ]
@@ -2135,7 +2142,58 @@ moduleWithDefineInExportList = TestCase
       }
   }
 
-
+moduleExportNamespaces :: Test
+moduleExportNamespaces = TestCase
+  { testName       = "Export with explicit namespaces"
+  , input          =
+      """
+      module ModuleWithExport
+        ( foo
+        , type Typ
+        , type (++)
+        , data Typ2
+        , data (:**)
+        , C(type (#))
+        ) where
+      """
+  , expectedResult = ModuleHeader
+      { mhModName          = mkModuleName "ModuleWithExport"
+      , mhExports          = SpecificExports ModuleExports
+          { meExportedEntries    = KM.fromList
+              [ EntryWithChildren
+                  { entryName               = (mkSymbolName "foo", pt 2 Function)
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = (mkSymbolName "Typ", pt 3 Family)
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = (mkSymbolName "++", pt 4 Family)
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = (mkSymbolName "Typ2", pt 5 Constructor)
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = (mkSymbolName ":**", pt 6 Constructor)
+                  , entryChildrenVisibility = Nothing
+                  }
+              , EntryWithChildren
+                  { entryName               = (mkSymbolName "C", pt 7 Type)
+                  , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromList
+                      [ (mkUnqualSymName "#", pt 7 Family)
+                      ]
+                  }
+              ]
+          , meReexports          = mempty
+          , meHasWildcardExports = False
+          }
+      , mhImportQualifiers = mempty
+      , mhImports          = mempty
+      }
+  }
 
 moduleWithExportOfPatternFuncTest :: Test
 moduleWithExportOfPatternFuncTest = TestCase
@@ -2674,6 +2732,7 @@ tests = testGroup "Header analysis tests"
     , doTest moduleWithTypeExportsTest2
     , doTest moduleWithQualifiedOperatorChildrenExportTest
     , doTest moduleWithDefineInExportList
+    , doTest moduleExportNamespaces
     , testGroup "pattern as a function name"
         [ doTest moduleWithExportOfPatternFuncTest
         , doTest moduleWithExportOfManyFuncsAndPatternFuncTest

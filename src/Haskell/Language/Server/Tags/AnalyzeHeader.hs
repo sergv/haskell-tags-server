@@ -8,6 +8,7 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE DerivingVia       #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OrPatterns        #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -165,6 +166,8 @@ pattern PString       :: Pos ServerToken
 pattern PString       <- Pos _ String
 pattern PType         :: Pos ServerToken
 pattern PType         <- Pos _ KWType
+pattern PData         :: Pos ServerToken
+pattern PData         <- Pos _ KWData
 
 pattern PAnyName      :: Text -> Pos ServerToken
 pattern PAnyName name <- Pos _ (tokToName -> Just name)
@@ -451,6 +454,11 @@ analyzeExports filename importQualifiers ts = do
           entryWithoutChildren name line Types.Family rest
         PType : PLParen : PAnyName' line name : PRParen : rest ->
           entryWithoutChildren name line Types.Family rest
+        -- Data export
+        PData : PName' line name : rest ->
+          entryWithoutChildren name line Types.Constructor rest
+        PData : PLParen : PAnyName' line name : PRParen : rest ->
+          entryWithoutChildren name line Types.Constructor rest
         -- Module reexport
         PModule : PName name : rest ->
           consumeComma entries (newReexports <> reexports) rest
@@ -551,6 +559,8 @@ isChildrenList filename toks =
     res = analyzeChildren mempty filename toks
 
 data ChildrenPresence = ChildrenPresent | ChildrenAbsent
+  deriving (Generic)
+  deriving Pretty via PPGeneric ChildrenPresence
 
 data WildcardPresence = WildcardPresent | WildcardAbsent
 
@@ -571,28 +581,28 @@ analyzeChildren
   -> (ChildrenPresence, m (Maybe (ChildrenVisibility PosAndType), [Pos ServerToken]))
 analyzeChildren listType filename toks =
   case toks of
-    []                                               -> (ChildrenAbsent, pure (Nothing, []))
-    toks'@(PComma : _)                               -> (ChildrenAbsent, pure (Nothing, toks'))
-    toks'@(PRParen : _)                              -> (ChildrenAbsent, pure (Nothing, toks'))
-    toks'@(PName _ : _)                              -> (ChildrenAbsent, pure (Nothing, toks'))
-    toks'@(PModule : _)                              -> (ChildrenAbsent, pure (Nothing, toks'))
-    toks'@(PPattern : _)                             -> (ChildrenAbsent, pure (Nothing, toks'))
-    toks'@(PType : _)                                -> (ChildrenAbsent, pure (Nothing, toks'))
-    -- PLParen : PName ".." : PRParen : rest            -> (ChildrenPresent, pure (Just VisibleAllChildren, rest))
-    PLParen : PRParen : rest                         -> (ChildrenAbsent, pure (Nothing, rest))
+    []                                    -> (ChildrenAbsent, pure (Nothing, []))
+    toks'@(PComma : _)                    -> (ChildrenAbsent, pure (Nothing, toks'))
+    toks'@(PRParen : _)                   -> (ChildrenAbsent, pure (Nothing, toks'))
+    toks'@(PName _ : _)                   -> (ChildrenAbsent, pure (Nothing, toks'))
+    toks'@(PModule : _)                   -> (ChildrenAbsent, pure (Nothing, toks'))
+    toks'@(PPattern : _)                  -> (ChildrenAbsent, pure (Nothing, toks'))
+    toks'@(PType : _)                     -> (ChildrenAbsent, pure (Nothing, toks'))
+    -- PLParen : PName ".." : PRParen : rest -> (ChildrenPresent, pure (Just VisibleAllChildren, rest))
+    PLParen : PRParen : rest              -> (ChildrenAbsent, pure (Nothing, rest))
     PLParen : rest@(PAnyName name : _)
-      | isNonOperatorName name       -> analyzeList rest
-      | otherwise                    -> (ChildrenAbsent, pure (Nothing, toks))
-    PLParen : rest@(PType : PAnyName name : _)
-      | isNonOperatorName name       -> analyzeList rest
-      | otherwise                    -> (ChildrenAbsent, pure (Nothing, toks))
+      | isNonOperatorName name            -> analyzeList rest
+      | otherwise                         -> (ChildrenAbsent, pure (Nothing, toks))
+    PLParen : rest@((PType; PData) : PAnyName name : _)
+      | isNonOperatorName name            -> analyzeList rest
+      | otherwise                         -> (ChildrenAbsent, pure (Nothing, toks))
     PLParen : rest@(PLParen : PAnyName name : PRParen : _)
-      | not $ isNonOperatorName name -> analyzeList rest
-      | otherwise                    -> (ChildrenAbsent, pure (Nothing, toks))
-    PLParen : rest@(PType : PLParen : PAnyName name : PRParen : _)
-      | not $ isNonOperatorName name -> analyzeList rest
-      | otherwise                    -> (ChildrenAbsent, pure (Nothing, toks))
-    toks'                                            ->
+      | not $ isNonOperatorName name      -> analyzeList rest
+      | otherwise                         -> (ChildrenAbsent, pure (Nothing, toks))
+    PLParen : rest@((PType; PData) : PLParen : PAnyName name : PRParen : _)
+      | not $ isNonOperatorName name      -> analyzeList rest
+      | otherwise                         -> (ChildrenAbsent, pure (Nothing, toks))
+    toks'                                 ->
       ( ChildrenAbsent
       , throwErrorWithCallStack $
           "While analyzing" <+> PP.squotes (pretty filename) <> ": cannot handle children of" <+> listType <> ":" ## ppTokens toks'
@@ -631,9 +641,13 @@ analyzeChildren listType filename toks =
       PRParen : rest                                         ->
         (childrenPresence, pure (names, wildcardPresence, rest))
       PType : PName' line name : rest                        ->
-        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType filename line Type) names) $ dropCommas rest
+        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType filename line Family) names) $ dropCommas rest
       PType : PLParen : PAnyName' line name : PRParen : rest ->
-        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType filename line Type) names) $ dropCommas rest
+        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType filename line Family) names) $ dropCommas rest
+      PData : PName' line name : rest                        ->
+        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType filename line Constructor) names) $ dropCommas rest
+      PData : PLParen : PAnyName' line name : PRParen : rest ->
+        extractChildren wildcardPresence (M.insert (stripQualifiedPart name) (PosAndType filename line Constructor) names) $ dropCommas rest
       PName ".." : rest                                      ->
         extractChildren (wildcardPresence <> WildcardPresent) names $ dropCommas rest
       PAnyName' line name : rest                             ->
@@ -656,9 +670,10 @@ stripQualifiedPart :: Text -> UnqualifiedSymbolName
 stripQualifiedPart = snd . splitQualifiedPart . mkSymbolName
 
 isNonOperatorName :: Text -> Bool
-isNonOperatorName =
-  T.all check . unqualSymNameText . snd . splitQualifiedPart . mkSymbolName
+isNonOperatorName str = T.all check str' && T.any (/= '#') str'
   where
+    str' = unqualSymNameText $ snd $ splitQualifiedPart $ mkSymbolName str
+
     check :: Char -> Bool
     check '\'' = True
     check '_'  = True
