@@ -149,7 +149,8 @@ mkUnqualifiedSymbolName name =
       | otherwise                      -> Just $ UnqualifiedSymbolName name
 
 -- | Split qualified symbol name (e.g. Foo.Bar.baz) into
--- qualified module part (Foo.Bar) and name part (baz). Return Nothing
+-- qualified module part (Foo.Bar) and name part (baz). Return Nothing for import
+-- qualifier if there’s no qualified part.
 splitQualifiedPart
   :: SymbolName
   -> (Maybe ImportQualifier, UnqualifiedSymbolName)
