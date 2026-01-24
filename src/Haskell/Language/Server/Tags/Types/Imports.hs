@@ -6,6 +6,7 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
+{-# LANGUAGE DerivingVia       #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
@@ -67,13 +68,11 @@ instance Pretty ImportKey where
 
 data ImportTarget = VanillaModule | HsBootModule
   deriving (Eq, Ord, Show, Enum, Bounded, Generic)
+  deriving Pretty via PPGeneric ImportTarget
 
 instance Hashable ImportTarget
 instance NFData   ImportTarget
 instance Store    ImportTarget
-
-instance Pretty ImportTarget where
-  pretty = ppGeneric
 
 
 -- | Information about import statement
@@ -82,12 +81,10 @@ data ImportSpec = ImportSpec
   , ispecQualification :: !ImportQualification
   , ispecImportList    :: !(ImportListSpec ImportList)
   } deriving (Eq, Ord, Show, Generic)
+  deriving Pretty via PPGeneric ImportSpec
 
 instance NFData ImportSpec
 instance Store  ImportSpec
-
-instance Pretty ImportSpec where
-  pretty = ppGeneric
 
 
 -- NB See [Record fields visibility] why this function must not be
@@ -141,13 +138,11 @@ data ImportQualification
     -- import X as Y
   | BothQualifiedAndUnqualified !ImportQualifier
   deriving (Eq, Ord, Show, Generic)
+  deriving Pretty via PPGeneric ImportQualification
 
 instance Hashable ImportQualification
 instance NFData   ImportQualification
 instance Store    ImportQualification
-
-instance Pretty ImportQualification where
-  pretty = ppGeneric
 
 hasQualifier :: ImportQualifier -> ImportQualification -> Bool
 hasQualifier qual = maybe False (== qual) . getQualifier
@@ -170,13 +165,11 @@ data ImportType
     -- import Foo hiding ()
     Hidden
   deriving (Eq, Ord, Show, Generic)
+  deriving Pretty via PPGeneric ImportType
 
 instance Hashable ImportType
 instance NFData   ImportType
 instance Store    ImportType
-
-instance Pretty ImportType where
-  pretty = ppGeneric
 
 
 data ImportListSpec a
@@ -186,12 +179,10 @@ data ImportListSpec a
   | AssumedWildcardImportList
   | SpecificImports !a
   deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
+  deriving Pretty via PPGeneric (ImportListSpec a)
 
 instance NFData a => NFData (ImportListSpec a)
 instance Store  a => Store  (ImportListSpec a)
-
-instance Pretty a => Pretty (ImportListSpec a) where
-  pretty = ppGeneric
 
 
 -- | User-provided import/hiding list.
@@ -211,13 +202,12 @@ instance Pretty ImportList where
 data EntryWithChildren childAnn name = EntryWithChildren
   { entryName               :: !name
   , entryChildrenVisibility :: !(Maybe (ChildrenVisibility childAnn))
-  } deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
+  }
+  deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
+  deriving Pretty via PPGeneric (EntryWithChildren childAnn name)
 
 instance (NFData a, NFData b) => NFData (EntryWithChildren a b)
 instance (Store  a, Store  b) => Store  (EntryWithChildren a b)
-
-instance (Pretty ann, Pretty name) => Pretty (EntryWithChildren ann name) where
-  pretty = ppGeneric
 
 mkEntryWithoutChildren :: a -> EntryWithChildren ann a
 mkEntryWithoutChildren name = EntryWithChildren name Nothing
@@ -243,9 +233,7 @@ data ChildrenVisibility ann
     -- ErrorCall(.., ErrorCall)
   | VisibleAllChildrenPlusSome !(Map UnqualifiedSymbolName ann)
   deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
+  deriving Pretty via PPGeneric (ChildrenVisibility ann)
 
 instance NFData a => NFData (ChildrenVisibility a)
 instance Store  a => Store  (ChildrenVisibility a)
-
-instance Pretty a => Pretty (ChildrenVisibility a) where
-  pretty = ppGeneric
