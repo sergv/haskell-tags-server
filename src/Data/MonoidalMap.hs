@@ -29,9 +29,7 @@ instance (Ord k, Semigroup v) => Semigroup (MonoidalMap k v) where
 
 instance (Ord k, Semigroup v) => Monoid (MonoidalMap k v) where
   {-# INLINE mempty  #-}
-  {-# INLINE mappend #-}
   mempty = MonoidalMap mempty
-  mappend = (<>)
 
 {-# INLINE singleton #-}
 singleton :: forall k v. k -> v -> MonoidalMap k v

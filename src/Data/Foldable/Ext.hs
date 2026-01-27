@@ -24,9 +24,7 @@ instance (Applicative f, Semigroup a) => Semigroup (MonoidalLift f a) where
 
 instance (Applicative f, Monoid a) => Monoid (MonoidalLift f a) where
   {-# INLINE mempty  #-}
-  {-# INLINE mappend #-}
   mempty = MonoidalLift $ pure mempty
-  mappend = (<>)
 
 {-# INLINE foldMapA #-}
 foldMapA :: (Applicative f, Monoid a, Foldable t) => (b -> f a) -> t b -> f a

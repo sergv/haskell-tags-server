@@ -77,9 +77,7 @@ instance (Ord (Key a), Semigroup (f a)) => Semigroup (KeyMap f a) where
 
 instance (Ord (Key a), Semigroup (f a)) => Monoid (KeyMap f a) where
   {-# INLINE mempty  #-}
-  {-# INLINE mappend #-}
   mempty = KeyMap mempty
-  mappend = (<>)
 
 instance Foldable f => Foldable (KeyMap f) where
   {-# INLINE foldMap #-}

@@ -22,6 +22,7 @@ import Control.Arrow ((&&&))
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
+import Data.Semigroup
 import Data.Set qualified as S
 import Data.Text qualified as T
 
@@ -76,7 +77,7 @@ aesonHeaderTest = TestCase
                 ]
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = True
+          , meHasWildcardExports = Any True
           }
       , mhImportQualifiers = M.fromList
           [ (mkImportQualifier (mkModuleName short), mkModuleName <$> long)
@@ -422,7 +423,7 @@ unixCompatHeaderTest = TestCase
           , meReexports          = S.fromList
               [ mkModuleName "System.Posix.Types"
               ]
-          , meHasWildcardExports = False
+          , meHasWildcardExports = Any False
           }
       , mhImportQualifiers = M.fromList
           [ (mkImportQualifier (mkModuleName short), mkModuleName <$> long)

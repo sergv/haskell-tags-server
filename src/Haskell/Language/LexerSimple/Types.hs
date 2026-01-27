@@ -73,7 +73,7 @@ import Haskell.Language.Lexer.Types (Context(..), AlexCode(..), LitMode(..), Lit
 import Haskell.Language.LexerSimple.LensBlaze
 
 data AlexState = AlexState
-  { asInput        :: {-# UNPACK #-} !AlexInput
+  { asInput        :: AlexInput
   , asIntStore     :: {-# UNPACK #-} !Word64
     -- ^ Integer field that stores all the other useful fields for lexing.
   , asContextStack :: [Context]
@@ -237,8 +237,6 @@ instance MonadState AlexState AlexM where
   -- {-# INLINE put #-}
   get = AlexM $ \x -> (# x, x #)
   put x = AlexM $ \_ -> (# (), x #)
-
--- type AlexM = State AlexState
 
 {-# INLINE runAlexM #-}
 runAlexM

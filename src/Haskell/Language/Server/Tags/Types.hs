@@ -44,6 +44,7 @@ import Data.Set qualified as S
 import Data.Store (Store)
 import Data.Text (Text)
 import Data.Text qualified as T
+import GHC.Generics (Generically(..))
 import Prettyprinter.Ext
 
 import Data.CompiledRegex
@@ -110,20 +111,12 @@ data Namespace = Namespace
     -- The directory and all its subdirectories will be watched.
   , nsRecursiveDirs :: !(Set (FullPath 'Dir))
   , nsIgnoredGlobs  :: !(Set Text)
-  } deriving (Eq, Ord, Show, Generic)
+  }
+  deriving (Eq, Ord, Show, Generic)
+  deriving (Semigroup, Monoid) via Generically Namespace
+  deriving Pretty via PPGeneric Namespace
 
 instance Store Namespace
-
-instance Pretty Namespace where
-  pretty = ppGeneric
-
-instance Semigroup Namespace where
-  (<>) (Namespace a b c) (Namespace a' b' c') =
-    Namespace (a <> a') (b <> b') (c <> c')
-
-instance Monoid Namespace where
-  mempty = Namespace mempty mempty mempty
-  mappend = (<>)
 
 -- | Test whether a path lies within directories specified by a namespace.
 -- Ignored globs will not be tested - it's assumed that they were taken
@@ -139,9 +132,7 @@ data NameResolutionScope
   = ScopeCurrentModule
   | ScopeAllModules
   deriving (Eq, Ord, Show, Enum, Bounded, Generic)
-
-instance Pretty NameResolutionScope where
-  pretty = ppGeneric
+  deriving Pretty via PPGeneric NameResolutionScope
 
 -- | Query server for some information.
 data QueryRequest
@@ -151,26 +142,20 @@ data QueryRequest
     -- current module.
   | FindSymbolByRegex !NameResolutionScope !CompiledRegex
   deriving (Eq, Ord, Show, Generic)
-
-instance Pretty QueryRequest where
-  pretty = ppGeneric
+  deriving Pretty via PPGeneric QueryRequest
 
 data FSNotifyEvent
   = FSAdded    !(FullPath 'File)
   | FSRemoved  !(FullPath 'File)
   | FSModified !(FullPath 'File)
   deriving (Eq, Ord, Show, Generic)
-
-instance Pretty FSNotifyEvent where
-  pretty = ppGeneric
+  deriving Pretty via PPGeneric FSNotifyEvent
 
 data QueryResponse
   = Found !(NonEmpty ResolvedSymbol)
   | NotFound
   deriving (Eq, Ord, Show, Generic)
-
-instance Pretty QueryResponse where
-  pretty = ppGeneric
+  deriving Pretty via PPGeneric QueryResponse
 
 type RequestHandler = forall resp. UserRequest resp -> IO (Promise (Either ErrorMessage resp))
 
@@ -186,9 +171,7 @@ data NameResolutionStrictness
     -- 3. A module file is not found - default to no names in lax mode.
     NameResolutionStrict
   deriving (Eq, Ord, Show, Bounded, Enum, Generic)
-
-instance Pretty NameResolutionStrictness where
-  pretty = ppGeneric
+  deriving Pretty via PPGeneric NameResolutionStrictness
 
 data TagsServerConf = TagsServerConf
   { tsconfVanillaExtensions :: !(Set Extension)

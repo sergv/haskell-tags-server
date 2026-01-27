@@ -68,7 +68,6 @@ import Data.Coerce
 import Data.ErrorMessage
 import Data.Foldable1 (foldMap1)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Semigroup as Semigroup
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
@@ -343,7 +342,7 @@ joinPath x y = x <> T.singleton FilePath.pathSeparator <> y
 
 {-# INLINE addExt #-}
 addExt :: Text -> Text -> Text
-addExt path ext = path <> extSeparator Semigroup.<> ext
+addExt path ext = path <> extSeparator <> ext
 
 {-# INLINE dropExts #-}
 dropExts :: Text -> Text
