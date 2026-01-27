@@ -37,7 +37,6 @@ import Data.Foldable qualified
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Data.Maybe
-import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import Data.Set qualified as S
 import Data.Store (Store)
@@ -69,7 +68,7 @@ instance Semigroup SymbolMap where
   SymbolMap x y z <> SymbolMap x' y' z' = SymbolMap
     { smParentMap   = M.unionWith (<>) x x'
     , smChildrenMap = M.unionWith (<>) y y'
-    , smAllSymbols  = M.unionWith (Semigroup.<>) z z'
+    , smAllSymbols  = M.unionWith (<>) z z'
     }
 
 instance Monoid SymbolMap where

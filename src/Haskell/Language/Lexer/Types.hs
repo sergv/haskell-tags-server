@@ -210,8 +210,7 @@ instance NFData ServerToken
 
 instance Hashable FastTags.TokenVal
 
-instance Pretty FastTags.TokenVal where
-  pretty = ppGeneric
+deriving via PPGeneric FastTags.TokenVal instance Pretty FastTags.TokenVal
 
 deriving instance Generic  Line
 deriving instance Hashable Line
@@ -238,7 +237,7 @@ instance Store FastTags.ParentTag
 deriving via PPGeneric FastTags.TagVal instance Pretty FastTags.TagVal
 deriving instance Generic (Pos a)
 
-instance Pretty a => Pretty (Pos a) where pretty = ppGeneric
+deriving via PPGeneric (Pos a) instance Pretty a => Pretty (Pos a)
 
 tokToName :: ServerToken -> Maybe Text
 tokToName ExclamationMark = Just "!"

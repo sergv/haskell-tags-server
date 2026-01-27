@@ -18,6 +18,4 @@ instance (Semigroup a, Semigroup b) => Semigroup (Pair a b) where
 
 instance (Monoid a, Monoid b) => Monoid (Pair a b) where
   {-# INLINE mempty  #-}
-  {-# INLINE mappend #-}
   mempty = Pair mempty mempty
-  mappend = (<>)

@@ -49,7 +49,6 @@ import Control.DeepSeq
 import Data.Kind (Type)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
-import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import Data.Set qualified as S
 import Data.Store (Store)
@@ -91,9 +90,7 @@ instance (HasSubkey k, Semigroup v) => Semigroup (SubkeyMap k v) where
 
 instance (HasSubkey k, Semigroup v) => Monoid (SubkeyMap k v) where
   {-# INLINE mempty  #-}
-  {-# INLINE mappend #-}
   mempty  = empty
-  mappend = (Semigroup.<>)
 
 {-# INLINE empty #-}
 empty :: SubkeyMap k v

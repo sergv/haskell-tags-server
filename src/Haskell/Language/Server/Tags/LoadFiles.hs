@@ -23,7 +23,6 @@ import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
-import Data.Semigroup qualified as Semigroup
 import Prettyprinter qualified as PP
 import Prettyprinter.Ext
 
@@ -86,7 +85,8 @@ doResolve allKnownModules nameResolution = go
                   NameResolutionLax -> do
                     logWarning msg
                     pure Nothing
-                  NameResolutionStrict -> throwErrorWithCallStack msg
+                  NameResolutionStrict ->
+                    throwErrorWithCallStack msg
               Just unresolved -> do
                 let unresolvedMap :: NonEmptyMap (FullPath 'File) UnresolvedModule
                     unresolvedMap = NEMap.fromNonEmpty $ (modFile &&& id) <$> unresolved
@@ -99,7 +99,7 @@ doResolve allKnownModules nameResolution = go
                   { lsLoadsInProgress =
                       M.update (`NEMap.difference` unresolvedMap) key $ lsLoadsInProgress s
                   , lsLoadedModules   =
-                      M.insertWith (Semigroup.<>) key resolved $ lsLoadedModules s
+                      M.insertWith (<>) key resolved $ lsLoadedModules s
                   }
                 logInfo $ "[loadAllFilesIntoState.doResolve] Resolved" <+> PP.dquotes (pretty (ikModuleName key))
                 pure $ Just resolved

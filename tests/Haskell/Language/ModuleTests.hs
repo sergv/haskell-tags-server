@@ -37,6 +37,7 @@ import Data.KeyMap qualified as KeyMap
 import Data.Map.NonEmpty (NonEmptyMap)
 import Data.Map.NonEmpty qualified as NEMap
 import Data.Path
+import Data.Semigroup (Any(..))
 import Data.SubkeyMap qualified as SubkeyMap
 import Data.SymbolMap qualified as SymbolMap
 import Data.Symbols
@@ -311,7 +312,7 @@ preprocessorOverExportList = TestCase
       { mhModName = mkModuleName "Foo"
       , mhExports = SpecificExports $ ModuleExports
         { meReexports          = mempty
-        , meHasWildcardExports = False
+        , meHasWildcardExports = Any False
         , meExportedEntries    = KeyMap.fromList
             [ EntryWithChildren (mkSymbolName "xyz1", PosAndType filename (Line 3) Function) Nothing
             , EntryWithChildren (mkSymbolName "xyz2", PosAndType filename (Line 4) Function) Nothing
@@ -356,7 +357,7 @@ preprocessorOverWholeModule = TestCase
       { mhModName = mkModuleName "Foo"
       , mhExports = NoExportsWithSomeGuaranteed $ ModuleExports
         { meReexports          = mempty
-        , meHasWildcardExports = False
+        , meHasWildcardExports = Any False
         , meExportedEntries    = KeyMap.fromList
             [ EntryWithChildren (mkSymbolName "xyz1", PosAndType filename (Line 7) Function) Nothing
             , EntryWithChildren (mkSymbolName "xyz2", PosAndType filename (Line 8) Function) Nothing
@@ -444,7 +445,7 @@ moduleWithDisabledSectionTest1 = TestCase
                   }
                 ]
             , meReexports          = mempty
-            , meHasWildcardExports = False
+            , meHasWildcardExports = Any False
             }
           , mhImportQualifiers = mempty
           , mhImports          = mempty
@@ -486,7 +487,7 @@ moduleWithDisabledSectionTest2 = TestCase
                 }
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = False
+          , meHasWildcardExports = Any False
           }
         , mhImportQualifiers = mempty
         , mhImports          = mempty
@@ -548,7 +549,7 @@ moduleWithDisabledAndEnabledSectionsTest = TestCase
               }
             ]
         , meReexports          = mempty
-        , meHasWildcardExports = False
+        , meHasWildcardExports = Any False
         }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -1082,7 +1083,7 @@ happyTests = testGroup "Happy"
           { mhModName = mkModuleName "AttrGrammarParser"
           , mhExports = SpecificExports $ ModuleExports
             { meReexports          = mempty
-            , meHasWildcardExports = False
+            , meHasWildcardExports = Any False
             , meExportedEntries    = KeyMap.fromList
                 [ EntryWithChildren (mkSymbolName "agParser", PosAndType filename (Line 3) Function) Nothing
                 ]
@@ -1185,7 +1186,7 @@ happyTests = testGroup "Happy"
           { mhModName = mkModuleName "AttrGrammarParser"
           , mhExports = SpecificExports $ ModuleExports
             { meReexports          = mempty
-            , meHasWildcardExports = False
+            , meHasWildcardExports = Any False
             , meExportedEntries    = KeyMap.fromList
                 [ EntryWithChildren (mkSymbolName "agParser", PosAndType filename (Line 9) Function) Nothing
                 ]
@@ -1306,7 +1307,7 @@ happyTests = testGroup "Happy"
           { mhModName = mkModuleName "AttrGrammarParser"
           , mhExports = SpecificExports $ ModuleExports
             { meReexports          = mempty
-            , meHasWildcardExports = False
+            , meHasWildcardExports = Any False
             , meExportedEntries    = KeyMap.fromList
                 [ EntryWithChildren (mkSymbolName "agParser", PosAndType filename (Line 11) Function) Nothing
                 ]

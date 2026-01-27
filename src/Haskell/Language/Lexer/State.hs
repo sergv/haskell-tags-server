@@ -50,7 +50,6 @@ import Control.Monad.Except.Ext
 import Control.Monad.State
 import Data.List.NonEmpty (NonEmpty)
 import Data.Map qualified as M
-import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import Data.Set qualified as S
 import Data.Text qualified as T
@@ -197,7 +196,7 @@ addToCurrentMacroArg argPart =
   modify $ \s -> s
     { asMacroArgs = case asMacroArgs s of
         []     -> [argPart]
-        a : as -> a Semigroup.<> argPart : as
+        a : as -> a <> argPart : as
     }
 
 {-# INLINE addNewMacroArg #-}

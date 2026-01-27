@@ -485,7 +485,7 @@ analyzeExports filename importQualifiers ts = do
         exports = ModuleExports
           { meExportedEntries    = entries
           , meReexports          = reexports
-          , meHasWildcardExports = getAny $ foldMap exportsAllChildren entries
+          , meHasWildcardExports = foldMap exportsAllChildren entries
           }
         entryWithChildren
           :: Doc Void
@@ -571,7 +571,6 @@ instance Semigroup WildcardPresence where
 
 instance Monoid WildcardPresence where
   mempty = WildcardAbsent
-  mappend = (<>)
 
 analyzeChildren
   :: forall m. (WithCallStack, MonadError ErrorMessage m)

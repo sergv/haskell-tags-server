@@ -32,7 +32,6 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Data.NBSem
 import Data.Path
-import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import Data.Set qualified as S
 import Data.Streaming.Filesystem qualified as Streaming
@@ -149,7 +148,7 @@ instance Ord a => IncrementalContainer (Set a) a where
 
 instance (Ord k, Semigroup v) => IncrementalContainer (Map k v) (k, v) where
   {-# INLINE incrementalAdd #-}
-  incrementalAdd = uncurry (M.insertWith (Semigroup.<>))
+  incrementalAdd = uncurry (M.insertWith (<>))
 
 {-# INLINABLE findRecurCollect #-}
 findRecurCollect

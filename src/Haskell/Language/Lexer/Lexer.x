@@ -24,7 +24,6 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.NonEmpty qualified as NE
 import Data.Maybe (mapMaybe)
 import Data.Profunctor (lmap)
-import Data.Semigroup as Semigroup
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
@@ -533,7 +532,7 @@ errorAtLine
   => Doc Void -> m a
 errorAtLine msg = do
   line <- gets (unLine . aiLine . asInput)
-  throwErrorWithCallStack $ pretty line Semigroup.<> ":" <+> msg
+  throwErrorWithCallStack $ pretty line <> ":" <+> msg
 
 startLiterateBird :: Monad m => AlexT m ()
 startLiterateBird = do

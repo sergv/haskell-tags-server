@@ -7,6 +7,7 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE DerivingVia       #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
@@ -30,15 +31,16 @@ import Prelude hiding (mod)
 import Control.DeepSeq
 import Control.Monad.Except.Ext
 import Control.Parallel.Strategies.Ext
-
 import Data.Hashable
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
+import Data.Semigroup
 import Data.Set (Set)
 import Data.Store (Store)
 import Data.Time.Clock (UTCTime(..))
 import Data.Traversable (for)
+import GHC.Generics (Generically(..))
 import Prettyprinter.Ext
 
 import Control.Monad.Filesystem (MonadFS)
@@ -169,6 +171,7 @@ data ModuleExportSpec a
   | SpecificExports !a             -- ^ Exprort list specifies entries.
   | NoExportsWithSomeGuaranteed !a -- ^ No export list in some versions of the module but with listed entries in others.
   deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
+  deriving Pretty via PPGeneric (ModuleExportSpec a)
 
 instance NFData a => NFData (ModuleExportSpec a)
 instance Store  a => Store  (ModuleExportSpec a)
@@ -184,9 +187,6 @@ instance Semigroup a => Semigroup (ModuleExportSpec a) where
   (<>) (NoExportsWithSomeGuaranteed x) (NoExportsWithSomeGuaranteed y) = NoExportsWithSomeGuaranteed $ x <> y
   (<>) (SpecificExports x)             (NoExportsWithSomeGuaranteed y) = NoExportsWithSomeGuaranteed $ x <> y
   (<>) (NoExportsWithSomeGuaranteed x) (SpecificExports y)             = NoExportsWithSomeGuaranteed $ x <> y
-
-instance Pretty a => Pretty (ModuleExportSpec a) where
-  pretty = ppGeneric
 
 data ModuleExports = ModuleExports
   { -- | Toplevel names exported from this particular module as specified in
@@ -206,25 +206,14 @@ data ModuleExports = ModuleExports
     -- were already resolved into @Data.Set.fromList ["Data.Array", "Data.List"]@.
   , meReexports          :: !(Set ModuleName)
     -- | Whether this module exports any entities that export all children.
-  , meHasWildcardExports :: !Bool
-  } deriving (Eq, Ord, Show, Generic)
+  , meHasWildcardExports :: !Any
+  }
+  deriving (Eq, Ord, Show, Generic)
+  deriving (Semigroup, Monoid) via Generically ModuleExports
+  deriving Pretty via PPGeneric ModuleExports
 
 instance NFData ModuleExports
 instance Store  ModuleExports
-
-instance Pretty ModuleExports where
-  pretty = ppGeneric
-
-instance Semigroup ModuleExports where
-  {-# INLINE (<>) #-}
-  (<>) (ModuleExports x y z) (ModuleExports x' y' z') =
-    ModuleExports (x <> x') (y <> y') (z || z')
-
-instance Monoid ModuleExports where
-  {-# INLINE mempty  #-}
-  {-# INLINE mappend #-}
-  mempty = ModuleExports mempty mempty False
-  mappend = (<>)
 
 instance HasKey (EntryWithChildren ann (SymbolName, PosAndType)) where
   type Key (EntryWithChildren ann (SymbolName, PosAndType)) = SymbolName
@@ -236,12 +225,11 @@ data PosAndType = PosAndType
   { patPosFile  :: !(FullPath 'File)
   , patPosLine  :: {-# UNPACK #-} !Line
   , patType     :: !Type
-  } deriving (Eq, Ord, Show, Generic)
+  }
+  deriving (Eq, Ord, Show, Generic)
+  deriving Pretty via PPGeneric PosAndType
 
 instance Hashable PosAndType
 instance NFData   PosAndType
 instance Store    PosAndType
-
-instance Pretty PosAndType where
-  pretty = ppGeneric
 

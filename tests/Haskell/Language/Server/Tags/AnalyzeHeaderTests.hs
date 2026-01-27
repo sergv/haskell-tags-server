@@ -25,6 +25,7 @@ import Control.Monad.Writer
 import Data.Foldable
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
+import Data.Semigroup (Any(..))
 import Data.Set qualified as S
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
@@ -1743,7 +1744,7 @@ moduleWithQuaifiedExportsTest = TestCase
                   }
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = True
+          , meHasWildcardExports = Any True
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -1818,7 +1819,7 @@ moduleWithExportsTest = TestCase
                   }
               ]
           , meReexports          = S.singleton $ mkModuleName "Frob"
-          , meHasWildcardExports = True
+          , meHasWildcardExports = Any True
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -1924,7 +1925,7 @@ moduleWithMultilineExportsTest = TestCase
                   }
               ]
           , meReexports          = S.singleton $ mkModuleName "Frob"
-          , meHasWildcardExports = True
+          , meHasWildcardExports = Any True
           }
       , mhImportQualifiers = mempty
       , mhImports          = SubkeyMap.empty
@@ -1964,7 +1965,7 @@ moduleWithExportsOfSpeciallyNamedOperatorsTest = TestCase
                   }
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = False
+          , meHasWildcardExports = Any False
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -1994,7 +1995,7 @@ moduleStarExports = TestCase
                 ]
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = False
+          , meHasWildcardExports = Any False
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -2028,7 +2029,7 @@ moduleWithTypeExportsTest1 = TestCase
                   }
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = False
+          , meHasWildcardExports = Any False
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -2069,7 +2070,7 @@ moduleWithTypeExportsTest2 = TestCase
                   }
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = False
+          , meHasWildcardExports = Any False
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -2103,7 +2104,7 @@ moduleWithQualifiedOperatorChildrenExportTest = TestCase
                   }
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = False
+          , meHasWildcardExports = Any False
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -2197,7 +2198,7 @@ moduleWithDefineInExportList = TestCase
                   }
               ]
           , meReexports          = S.singleton $ mkModuleName "Frob"
-          , meHasWildcardExports = True
+          , meHasWildcardExports = Any True
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -2250,7 +2251,7 @@ moduleExportNamespaces = TestCase
                   }
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = False
+          , meHasWildcardExports = Any False
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -2274,7 +2275,7 @@ moduleWithExportOfPatternFuncTest = TestCase
                   }
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = False
+          , meHasWildcardExports = Any False
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -2310,7 +2311,7 @@ moduleWithExportOfManyFuncsAndPatternFuncTest = TestCase
                   }
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = True
+          , meHasWildcardExports = Any True
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -2347,7 +2348,7 @@ moduleWithoutCommasAndPatternFuncExportBeforeOperator = TestCase
                   }
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = True
+          , meHasWildcardExports = Any True
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -2384,7 +2385,7 @@ moduleWithoutCommasAndPatternFuncExportBeforeConstructorWithChildren = TestCase
                   }
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = True
+          , meHasWildcardExports = Any True
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -2421,7 +2422,7 @@ moduleWithoutCommasAndPatternFuncExportBeforeOperatorConstructorWithChildren = T
                   }
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = True
+          , meHasWildcardExports = Any True
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -2458,7 +2459,7 @@ moduleWithoutCommasAndSeveralPatternExports = TestCase
                   }
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = True
+          , meHasWildcardExports = Any True
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -2518,7 +2519,7 @@ moduleWithExportListWithoutCommasTest = TestCase
               [ mkModuleName name
               | name <- ["Frob", "Bazzz", "Quuxxx"]
               ]
-          , meHasWildcardExports = True
+          , meHasWildcardExports = Any True
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -2554,7 +2555,7 @@ moduleWithExportListWithoutCommasAndStructuresAfterNameWithoutChildrenTest = Tes
               [ mkModuleName name
               | name <- ["Foo", "Bar", "Patterns"]
               ]
-          , meHasWildcardExports = False
+          , meHasWildcardExports = Any False
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -2596,7 +2597,7 @@ moduleWithUnbalancedParensInExportList = TestCase
                   }
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = False
+          , meHasWildcardExports = Any False
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -2638,7 +2639,7 @@ moduleWithUnbalancedParensInExportChildrenList = TestCase
                   }
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = False
+          , meHasWildcardExports = Any False
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -2677,7 +2678,7 @@ moduleWithDuplicateModuleNameTest = TestCase
                   }
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = False
+          , meHasWildcardExports = Any False
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty
@@ -2719,7 +2720,7 @@ moduleWithExportsThatHaveChildrenListWithoutCommasTest = TestCase
                   }
               ]
           , meReexports          = mempty
-          , meHasWildcardExports = True
+          , meHasWildcardExports = Any True
           }
       , mhImportQualifiers = mempty
       , mhImports          = mempty

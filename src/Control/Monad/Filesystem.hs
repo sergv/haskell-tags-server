@@ -8,6 +8,7 @@
 ----------------------------------------------------------------------------
 
 {-# LANGUAGE DataKinds            #-}
+{-# LANGUAGE DerivingVia          #-}
 {-# LANGUAGE NamedFieldPuns       #-}
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -25,16 +26,15 @@ import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.Reader
 import Control.Monad.Trans.Control
-
 import Data.ByteString qualified as BS
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
-import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import Data.Set qualified as S
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Time.Clock (UTCTime)
+import GHC.Generics (Generically(..))
 import Prettyprinter.Ext
 
 import Data.CompiledRegex
@@ -53,22 +53,10 @@ data SearchCfg = SearchCfg
   , scIgnoredDirs    :: !(Set (BaseName 'Dir))
     -- | The globs will be matched against full paths.
   , scIgnoredGlobs   :: !(Set Text)
-  } deriving (Eq, Ord, Show, Generic)
-
-instance Semigroup SearchCfg where
-  {-# INLINE (<>) #-}
-  (<>) (SearchCfg a b c d) (SearchCfg a' b' c' d') =
-    SearchCfg (a <> a') (b <> b') (c <> c') (d <> d')
-
-instance Monoid SearchCfg where
-  {-# INLINE mempty  #-}
-  {-# INLINE mappend #-}
-  mempty = SearchCfg mempty mempty mempty mempty
-  mappend = (Semigroup.<>)
-
-instance Pretty SearchCfg where
-  pretty = ppGeneric
-
+  }
+  deriving (Eq, Ord, Show, Generic)
+  deriving (Semigroup, Monoid) via Generically SearchCfg
+  deriving Pretty via PPGeneric SearchCfg
 
 -- | Monad for interaction with filesystem.
 class Monad m => MonadFS m where
