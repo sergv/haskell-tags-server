@@ -152,8 +152,13 @@ loadMany conf filename = do
       modTime       <- MonadFS.getModificationTime filename
       suggestedName <- fileNameToModuleName filename
       source        <- MonadFS.readFile filename
-      mods          <- NEMap.toMap <$> loadModuleFromSource (Just suggestedName) (modeFromFilename filename) modTime filename source
-      pure $ M.mapKeys (ImportKey importType) mods
+      M.mapKeys (ImportKey importType) . NEMap.toMap <$>
+        loadModuleFromSource
+          (Just suggestedName)
+          (modeFromFilename filename)
+          modTime
+          filename
+          source
 
 main :: IO ()
 main = do
@@ -189,7 +194,8 @@ main = do
 generate :: GenConfig -> IO ()
 generate GenConfig{gcfgNullSeparated} = do
 
-  let !sep
+  let sep :: Char
+      !sep
         | gcfgNullSeparated = '\0'
         | otherwise         = '\n'
 
@@ -286,7 +292,8 @@ generate GenConfig{gcfgNullSeparated} = do
 search :: SearchConfig -> IO ()
 search SearchConfig{scfgNullSeparated, scfgSymbol, scfgFile} = do
 
-  let !sep
+  let sep :: Char
+      !sep
         | scfgNullSeparated = '\0'
         | otherwise         = '\n'
 
@@ -318,9 +325,8 @@ search SearchConfig{scfgNullSeparated, scfgSymbol, scfgFile} = do
         (symbols, _) <- runSearchT conf ls $
           findSymbol ScopeCurrentModule path $ mkSymbolName scfgSymbol
 
-        Debug.Trace.traceM $ renderString $ ppDictHeader "search"
-          [ "symbols" :-> either pretty ppSet symbols
-          ]
+        Debug.Trace.traceM $ renderString $ "search" ##
+          either pretty ppSet symbols
 
         pure ()
 
