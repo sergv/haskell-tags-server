@@ -17,9 +17,10 @@
       in {
         devShell = pkgs.mkShell {
           nativeBuildInputs = [
+            pkgs.pkg-config
             pkgs.rure
             pkgs.rure.dev
-            pkgs.pkg-config
+            pkgs.zlib
           ];
           LD_LIBRARY_PATH = "${pkgs.rure}/lib";
           # shellHook = ''
