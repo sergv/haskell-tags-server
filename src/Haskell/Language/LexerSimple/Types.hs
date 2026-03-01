@@ -117,7 +117,7 @@ asHaveQQEndL   :: Lens' AlexState (Maybe Bool)
 asCodeL              = asIntStoreL . intL 0  0x000f
 asCommentDepthL      = asIntStoreL . intL 4  0x03ff
 asQuasiquoterDepthL  = asIntStoreL . intL 14 0x03ff
-asIndentationSizeL   = asIntStoreL . int16L  24
+asIndentationSizeL   = asIntStoreL . int16L 24
 asLiterateLocL       = \f -> asIntStoreL (intL 56 0x0003 (fmap litLocToInt    . f . intToLitLoc))
 asHaveQQEndL         = \f -> asIntStoreL (intL 58 0x0003 (fmap maybeBoolToInt . f . intToMaybeBool))
 

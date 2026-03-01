@@ -225,12 +225,16 @@ instance HasKey (EntryWithChildren ann SymbolName) where
 data ChildrenVisibility ann
   = -- | Wildcard import/export, e.g. Foo(..)
     VisibleAllChildren
-    -- | Import/export with explicit list of children, e.g. Foo(Bar, Baz), Quux(foo, bar).
-    -- Set is always non-empty.
-  | VisibleSpecificChildren !(Map UnqualifiedSymbolName ann)
-    -- | Wildcard export with some things added in, so they'll be visible on
-    -- wildcard import, e.g.
-    -- ErrorCall(.., ErrorCall)
+
+  -- | Import/export with explicit list of children, e.g. Foo(Bar, Baz), Quux(foo, bar).
+  -- Set is always non-empty.
+  | VisibleSpecificChildren
+      -- TODO: to support explicit namespaces change ‘ann’ to pair ‘(Namespace, ann)’.
+      !(Map UnqualifiedSymbolName ann)
+
+  -- | Wildcard export with some things added in, so they'll be visible on
+  -- wildcard import, e.g.
+  -- ErrorCall(.., ErrorCall)
   | VisibleAllChildrenPlusSome !(Map UnqualifiedSymbolName ann)
   deriving (Eq, Ord, Show, Generic, Functor, Foldable, Traversable)
   deriving Pretty via PPGeneric (ChildrenVisibility ann)
