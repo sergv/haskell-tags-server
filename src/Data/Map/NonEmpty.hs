@@ -20,6 +20,7 @@ module Data.Map.NonEmpty
   , toMap
   , keysNE
   , elemsNE
+  , mapKeys
   , union
   , unionWith
   , difference
@@ -114,6 +115,10 @@ keysNE (NonEmptyMap k _ m) = k :| M.keys m
 {-# INLINE elemsNE #-}
 elemsNE :: NonEmptyMap k v -> NonEmpty v
 elemsNE (NonEmptyMap _ v m) = v :| M.elems m
+
+{-# INLINE mapKeys #-}
+mapKeys :: Ord k' => (k -> k') -> NonEmptyMap k v -> NonEmptyMap k' v
+mapKeys f (NonEmptyMap k v m) = NonEmptyMap (f k) v (M.mapKeys f m)
 
 {-# INLINE union #-}
 union :: Ord k => NonEmptyMap k v -> NonEmptyMap k v -> NonEmptyMap k v
