@@ -33,7 +33,6 @@ import Data.Set (Set)
 import Data.Set qualified as S
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Time.Clock (UTCTime)
 import GHC.Generics (Generically(..))
 import Prettyprinter.Ext
 
@@ -60,7 +59,6 @@ data SearchCfg = SearchCfg
 
 -- | Monad for interaction with filesystem.
 class Monad m => MonadFS m where
-  getModificationTime  :: FullPath 'File -> m UTCTime
   readFile             :: FullPath 'File -> m BS.ByteString
   doesFileExist        :: FullPath 'File -> m Bool
   doesDirectoryExist   :: FullPath 'Dir  -> m Bool
@@ -70,13 +68,11 @@ class Monad m => MonadFS m where
     => SearchCfg -> CompiledRegex -> (FullPath 'File -> m (Maybe (k, v))) -> (FullPath 'Dir -> m (Maybe (k, v))) -> m (Map k v)
 
 instance {-# OVERLAPS #-} (Monad m, MonadBaseControl IO m, MonadMask m) => MonadFS m where
-  {-# INLINE getModificationTime  #-}
   {-# INLINE readFile             #-}
   {-# INLINE doesFileExist        #-}
   {-# INLINE doesDirectoryExist   #-}
   {-# INLINE listDirectory        #-}
   {-# INLINE findRec              #-}
-  getModificationTime  = Path.getModificationTime
   readFile             = liftBase . BS.readFile . T.unpack . Path.unFullPath
   doesFileExist        = Path.doesFileExist
   doesDirectoryExist   = Path.doesDirectoryExist
@@ -85,13 +81,11 @@ instance {-# OVERLAPS #-} (Monad m, MonadBaseControl IO m, MonadMask m) => Monad
     findRecurCollect scIgnoredDirs ignoredGlobsRE scShallowPaths scRecursivePaths M.empty
 
 instance MonadFS m => MonadFS (ReaderT r m) where
-  {-# INLINE getModificationTime  #-}
   {-# INLINE readFile             #-}
   {-# INLINE doesFileExist        #-}
   {-# INLINE doesDirectoryExist   #-}
   {-# INLINE listDirectory        #-}
   {-# INLINE findRec              #-}
-  getModificationTime  = lift . getModificationTime
   readFile             = lift . readFile
   doesFileExist        = lift . doesFileExist
   doesDirectoryExist   = lift . doesDirectoryExist

@@ -41,8 +41,6 @@ import Data.Semigroup (Any(..))
 import Data.SubkeyMap qualified as SubkeyMap
 import Data.SymbolMap qualified as SymbolMap
 import Data.Symbols
-import Data.Time.Calendar.OrdinalDate (fromOrdinalDate)
-import Data.Time.Clock
 import FasterRicherTags.Types
 import Haskell.Language.Lexer.Types (LitMode(..))
 import Haskell.Language.Server.Tags.LoadModule (loadModuleFromSource)
@@ -55,9 +53,6 @@ type Test = TestCase (Text, LitMode Void) (NonEmptyMap ModuleName UnresolvedModu
 
 filename :: FullPath 'File
 filename = "/foo/bar/test.hs"
-
-instance Pretty UTCTime where
-  pretty = ppUTCTimeISO8601
 
 pt :: Int -> Type -> PosAndType
 pt n = PosAndType filename (Line n)
@@ -73,18 +68,11 @@ defaultModHeader = ModuleHeader
   , mhImports          = mempty
   }
 
-zeroTime :: UTCTime
-zeroTime = UTCTime
-  { utctDay     = fromOrdinalDate 2000 1
-  , utctDayTime = 0
-  }
-
 defaultMod :: UnresolvedModule
 defaultMod = Mods.Module
   { modHeader           = defaultModHeader
   , modAllSymbols       = mempty
   , modFile             = filename
-  , modLastModified     = zeroTime
   , modAllExportedNames = ()
   , modIsDirty          = False
   }
@@ -1368,7 +1356,7 @@ doTest TestCase{testName, input = (src, mode), expectedResult = expectedResult :
   testCase testName $ do
     (res :: Either ErrorMessage (NonEmptyMap ModuleName UnresolvedModule), logs) <-
       runWriterT $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runErrorExceptT $
-        loadModuleFromSource Nothing mode zeroTime filename $ TE.encodeUtf8 src
+        loadModuleFromSource Nothing mode filename $ TE.encodeUtf8 src
     let logsDoc = "Logs, size " <> pretty (length logs) <> ":" ## PP.indent 2 (PP.vcat logs)
     case res of
       Left  msg -> assertFailure $ renderStringWide $ pretty msg ## logsDoc
