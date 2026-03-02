@@ -288,9 +288,8 @@ loadMod conf filename =
   case classifyPath conf filename of
     Nothing         -> pure Nothing
     Just importType -> do
-      modTime       <- MonadFS.getModificationTime filename
       suggestedName <- fileNameToModuleName filename
       !unresolvedMod@Module{modHeader = ModuleHeader{mhModName}} <-
-        readFileAndLoad (Just suggestedName) modTime filename
+        readFileAndLoad (Just suggestedName) filename
       pure (Just (ImportKey importType mhModName, unresolvedMod))
 

@@ -32,7 +32,6 @@ module Data.Path
   , doesFileExist
   , doesDirectoryExist
   , listDirectory
-  , getModificationTime
   , splitDirectories
   , PathFragment
   , mkPathFragment
@@ -71,7 +70,6 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
-import Data.Time.Clock (UTCTime)
 import Prettyprinter.Ext
 import System.Directory qualified as Directory
 import System.Directory.OsPath qualified
@@ -196,11 +194,6 @@ listDirectory (FullPath path) = do
   pure $ coerce (map T.pack files, map T.pack dirs)
   where
     path' = T.unpack path
-
-{-# INLINE getModificationTime #-}
-getModificationTime :: MonadBase IO m => FullPath 'File -> m UTCTime
-getModificationTime =
-  liftBase . Directory.getModificationTime . T.unpack . unFullPath
 
 {-# INLINE splitDirectories #-}
 splitDirectories :: FullPath 'File -> ([BaseName 'Dir], BaseName 'File)

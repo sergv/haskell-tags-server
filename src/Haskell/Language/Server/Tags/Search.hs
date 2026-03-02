@@ -36,7 +36,6 @@ import Prettyprinter qualified as PP
 import Prettyprinter.Ext
 
 import Control.Monad.Filesystem (MonadFS)
-import Control.Monad.Filesystem qualified as MonadFS
 import Control.Monad.Logging
 import Data.CompiledRegex
 import Data.ErrorMessage
@@ -61,11 +60,10 @@ findSymbol scope filename sym = do
   logVerboseDebug $
     "[findSymbol] searching for" <+> pretty sym <+> "within" <+> pretty filename
   currMod <- do
-    modifTime      <- MonadFS.getModificationTime filename
     name           <- fileNameToModuleName filename
     nameResolution <- asks tsconfNameResolution
     resolveModule nameResolution checkLoadingModules loadModule =<<
-      readFileAndLoad (Just name) modifTime filename
+      readFileAndLoad (Just name) filename
   case scope of
     ScopeCurrentModule -> findInModule sym currMod
     ScopeAllModules    ->
@@ -82,12 +80,11 @@ findSymbolByRegexp
 findSymbolByRegexp scope filename re = do
   logVerboseDebug $
     "[findSymbolByRegexp] searching for" <+> pretty re <+> "within" <+> pretty filename
-  modifTime      <- MonadFS.getModificationTime filename
   name           <- fileNameToModuleName filename
   nameResolution <- asks tsconfNameResolution
   currMod        <-
     resolveModule nameResolution checkLoadingModules loadModule =<<
-      readFileAndLoad (Just name) modifTime filename
+      readFileAndLoad (Just name) filename
   (mods :: NonEmpty SymbolMap) <-
     case scope of
       ScopeCurrentModule -> do

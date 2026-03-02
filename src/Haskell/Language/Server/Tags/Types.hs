@@ -198,6 +198,7 @@ data LoadState = LoadState
     -- | Set of modules we started loading. Mainly used for detecting
     -- import cycles.
   , lsLoadsInProgress :: !(Map ImportKey (NonEmptyMap (FullPath 'File) UnresolvedModule))
+    -- | Modules that have not been loaded yet.
   , lsUnloadedFiles   :: !(Map ImportKey (NonEmpty UnresolvedModule))
   }
   deriving (Eq, Ord, Show, Generic)

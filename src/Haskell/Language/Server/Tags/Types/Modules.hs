@@ -18,7 +18,6 @@ module Haskell.Language.Server.Tags.Types.Modules
     Module(..)
   , UnresolvedModule
   , ResolvedModule
-  , moduleNeedsReloading
   , ModuleHeader(..)
   , resolveQualifier
   , ModuleExportSpec(..)
@@ -38,13 +37,10 @@ import Data.Map.Strict qualified as M
 import Data.Semigroup
 import Data.Set (Set)
 import Data.Store (Store)
-import Data.Time.Clock (UTCTime(..))
 import Data.Traversable (for)
 import GHC.Generics (Generically(..))
 import Prettyprinter.Ext
 
-import Control.Monad.Filesystem (MonadFS)
-import Control.Monad.Filesystem qualified as MonadFS
 import Data.ErrorMessage
 import Data.KeyMap (KeyMap, HasKey(..))
 import Data.Path (FullPath, FileType(..))
@@ -62,8 +58,6 @@ data Module a = Module
   , modAllSymbols       :: !SymbolMap
     -- | File the module was loaded from.
   , modFile             :: !(FullPath 'File)
-    -- | Time as reported by getModificationTime.
-  , modLastModified     :: !UTCTime
     -- | All names that this module brings into scope
   , modAllExportedNames :: !a
     -- | Whether some imports of this module were updated and thus revolved
@@ -78,22 +72,16 @@ type UnresolvedModule = Module ()
 type ResolvedModule   = Module SymbolMap
 
 instance Semigroup a => Semigroup (Module a) where
-  Module mh mas mf mlm maen mid <> Module mh' mas' _mf' mlm' maen' mid' =
-    Module (mh <> mh') (mas <> mas') mf (max mlm mlm') (maen <> maen') (mid || mid')
-
-moduleNeedsReloading :: MonadFS m => Module a -> m (Bool, UTCTime)
-moduleNeedsReloading Module{modFile, modIsDirty, modLastModified} = do
-  modifTime <- MonadFS.getModificationTime modFile
-  pure (modIsDirty || modLastModified /= modifTime, modifTime)
+  Module mh mas mf maen mid <> Module mh' mas' _mf' maen' mid' =
+    Module (mh <> mh') (mas <> mas') mf (maen <> maen') (mid || mid')
 
 instance Pretty a => Pretty (Module a) where
   pretty mod =
     ppDictHeader "Module"
-      [ "Name"          --> mhModName $ modHeader mod
-      , "File"          --> modFile mod
-      , "Last modified" :-> docFromString $ show $ modLastModified mod
-      , "Header"        --> modHeader mod
-      , "AllSymbols"    --> modAllSymbols mod
+      [ "Name"       --> mhModName $ modHeader mod
+      , "File"       --> modFile mod
+      , "Header"     --> modHeader mod
+      , "AllSymbols" --> modAllSymbols mod
       ]
 
 -- | Result of analysing module's export list and any subsequent imports. E.g.

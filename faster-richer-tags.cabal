@@ -114,7 +114,6 @@ library
     , store
     , streaming-commons
     , text
-    , time
     , transformers
     , transformers-base
     , unsafe
@@ -296,7 +295,6 @@ test-suite test-faster-richer-tags
     , tasty-hunit >= 0.4
     , tasty-quickcheck
     , text
-    , time
     , transformers
     , transformers-base
   ghc-options:

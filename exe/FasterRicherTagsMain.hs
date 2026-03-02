@@ -154,14 +154,12 @@ loadMany conf filename = do
   case classifyPath conf filename of
     Nothing         -> pure M.empty
     Just importType -> do
-      modTime       <- MonadFS.getModificationTime filename
       suggestedName <- fileNameToModuleName filename
       source        <- MonadFS.readFile filename
       M.mapKeys (ImportKey importType) . NEMap.toMap <$>
         loadModuleFromSource
           (Just suggestedName)
           (modeFromFilename filename)
-          modTime
           filename
           source
 

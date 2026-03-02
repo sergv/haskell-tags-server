@@ -31,7 +31,6 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer (MonadWriter(..))
 import Control.Monad.Writer qualified as Lazy
-import Control.Monad.Writer.Strict qualified as Strict
 import Control.Parallel.Strategies.Ext
 import Data.ByteString qualified as BS
 import Data.Either
@@ -39,6 +38,7 @@ import Data.Foldable.Ext
 import Data.Foldable1 (foldMap1)
 import Data.Functor.Product (Product(..))
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Data.Maybe hiding (Maybe(Just))
@@ -47,7 +47,6 @@ import Data.Monoid qualified as Monoid
 import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import Data.Set qualified as S
-import Data.Time.Clock (UTCTime)
 import Data.Traversable (for)
 import Data.Void (Void)
 import Prettyprinter qualified as PP
@@ -92,8 +91,6 @@ loadModule' key = do
     (NameResolutionLax,    Nothing)    -> pure mempty
     (_,                    Just mods') -> pure $ toList mods'
 
--- | Fetch module by it's name from cache or load it. Check modification time
--- of module files and reload if anything changed
 loadModule
   :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
   => ImportKey
@@ -112,35 +109,20 @@ loadModule key@ImportKey{ikModuleName} = do
   else do
     mods <- case M.lookup key (lsLoadedModules s) of
       Nothing -> do
-        mods' <- doLoad
-        case mods' of
-          []     -> pure Nothing
-          m : ms -> do
-            let mods'' = m :| ms
-            Just mods'' <$ modify (\s' -> s' { lsLoadedModules = M.insert key mods'' $ lsLoadedModules s' })
-      Just ms -> do
+        mods' <- NE.nonEmpty <$> doLoad s
+        for_ mods' $ \mods'' ->
+          modify (\s' -> s' { lsLoadedModules = M.insert key mods'' $ lsLoadedModules s' })
+        pure mods'
+      res@Just{} -> do
         logDebug $ "[loadModule] module was loaded before, reusing:" <+> pretty key
-        (ms', Any anyReloaded) <- fmap (first catMaybes) $ Strict.runWriterT $ for (toList ms) $ \m -> do
-          m' <- lift $ reloadIfNecessary key m
-          case m' of
-            Gone            -> pure Nothing
-            AlreadyUpToDate -> pure $ Just m
-            Reloaded m''    -> Just m'' <$ tell (Any True)
-        case ms' of
-          []       -> pure Nothing
-          m : ms'' -> do
-            let ms''' = m :| ms''
-            when anyReloaded $
-              modify $ \s' -> s' { lsLoadedModules = M.insert key ms''' $ lsLoadedModules s' }
-            pure $ Just ms'''
+        pure res
     -- for_ mods $ \mods' ->
     --   logDebug $ ppFoldableHeader "[loadModule] loaded modules:" mods'
     pure mods
   where
-    doLoad :: WithCallStack => m [ResolvedModule]
-    doLoad = do
+    doLoad :: WithCallStack => LoadState -> m [ResolvedModule]
+    doLoad LoadState{lsUnloadedFiles} = do
       logDebug $ "[loadModule.doLoad] module was not loaded before, loading now:" <+> pretty ikModuleName
-      LoadState{lsUnloadedFiles} <- get
       case M.updateLookupWithKey (\_ _ -> Nothing) key lsUnloadedFiles of
         (Nothing, _) -> do
           let msg = "Cannot load module " <> pretty ikModuleName Semigroup.<> ": no paths found"
@@ -150,37 +132,7 @@ loadModule key@ImportKey{ikModuleName} = do
             NameResolutionLax    -> [] <$ logWarning msg
         (Just mods, lsUnloadedFiles') -> do
           modify $ \s -> s { lsUnloadedFiles = lsUnloadedFiles' }
-          fmap catMaybes $ for (toList mods) $ \m -> do
-            m' <- reloadIfNecessary key m
-            case m' of
-              Gone            -> pure Nothing
-              AlreadyUpToDate -> Just <$> registerAndResolve key m
-              Reloaded m''    -> pure $ Just m''
-
-data ReloadResult a =
-    Reloaded a
-  | AlreadyUpToDate
-  | Gone
-  deriving (Eq, Ord, Show)
-
--- TODO: consider using hashes to track whether a module needs reloading?
-reloadIfNecessary
-  :: (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
-  => ImportKey
-  -> Module b
-  -> m (ReloadResult ResolvedModule)
-reloadIfNecessary key@ImportKey{ikModuleName} m@Module{modFile, modHeader} = do
-  exists <- MonadFS.doesFileExist modFile
-  if exists
-  then do
-    (needsReloading, modifTime) <- moduleNeedsReloading m
-    if needsReloading
-    then do
-      logInfo $ "[reloadIfNecessary] reloading module" <+> pretty (mhModName modHeader)
-      fmap Reloaded $
-        registerAndResolve key =<< readFileAndLoad (Just ikModuleName) modifTime modFile
-    else pure AlreadyUpToDate
-  else pure Gone
+          traverse (registerAndResolve key) $ toList mods
 
 registerAndResolve
   :: (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
@@ -204,13 +156,12 @@ registerAndResolve key unresolvedMod@Module{modFile} = do
 readFileAndLoad
   :: (MonadFS m, MonadError ErrorMessage m, MonadLog m)
   => Maybe ModuleName
-  -> UTCTime
   -> FullPath 'File
   -> m UnresolvedModule
-readFileAndLoad suggestedModName modTime filename = do
+readFileAndLoad suggestedModName filename = do
   source <- MonadFS.readFile filename
   logInfo $ "[readFileAndLoad] Loading" <+> PP.dquotes (pretty filename)
-  mods <- loadModuleFromSource suggestedModName (modeFromFilename filename) modTime filename source
+  mods <- loadModuleFromSource suggestedModName (modeFromFilename filename) filename source
   case NEMap.elemsNE mods of
     mod :| [] -> pure mod
     _ ->
@@ -236,16 +187,15 @@ loadModuleFromSource
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => Maybe ModuleName
   -> LitMode Void
-  -> UTCTime
   -> FullPath 'File
   -> BS.ByteString
   -> m (NonEmptyMap ModuleName UnresolvedModule)
-loadModuleFromSource suggestedModuleName mode modifTime filename source =
+loadModuleFromSource suggestedModuleName mode filename source =
   tokenizeModule mode source
     `catchError`
       (\(err :: ErrorMessage) ->
         CME.throwError $ err { errorMessageBody = "Failed to get tokens from" <+> pretty filename <> ":" ## errorMessageBody err })
-       >>= makeModule suggestedModuleName modifTime filename
+       >>= makeModule suggestedModuleName filename
 
 tokenizeModule
   :: (WithCallStack, MonadError ErrorMessage m)
@@ -266,14 +216,13 @@ tokenizeModule mode contents =
 makeModule
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => Maybe ModuleName -- ^ Suggested module name, will be used if source does not define it's own name.
-  -> UTCTime
   -> FullPath 'File
   -> [Pos ServerToken]
   -> m (NonEmptyMap ModuleName UnresolvedModule)
-makeModule suggestedModuleName modifTime filename tokens =
+makeModule suggestedModuleName filename tokens =
   getAp $
     foldMap1
-      (Ap . fmap mkMap . makeSingleModule suggestedModuleName modifTime filename)
+      (Ap . fmap mkMap . makeSingleModule suggestedModuleName filename)
       (resolveAlternativesLinearly (preprocessorBlocks tokens))
   where
     mkMap :: UnresolvedModule -> NonEmptyMap ModuleName UnresolvedModule
@@ -283,11 +232,10 @@ makeModule suggestedModuleName modifTime filename tokens =
 makeSingleModule
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => Maybe ModuleName -- ^ Suggested module name, will be used if source does not define it's own name.
-  -> UTCTime
   -> FullPath 'File
   -> [Pos ServerToken]
   -> m UnresolvedModule
-makeSingleModule suggestedModuleName modifTime filename tokens = do
+makeSingleModule suggestedModuleName filename tokens = do
   let tokens' = resolveAlexHappyBlocks tokens
   (header, tokens'') <- analyzeHeader suggestedModuleName filename tokens'
   let syms           :: [ResolvedSymbol]
@@ -319,7 +267,6 @@ makeSingleModule suggestedModuleName modifTime filename tokens = do
         { modHeader           = header
         , modAllSymbols       = allSymbols
         , modFile             = filename
-        , modLastModified     = modifTime
         , modAllExportedNames = ()
         , modIsDirty          = False
         }
