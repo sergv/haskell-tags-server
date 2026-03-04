@@ -8,7 +8,7 @@
 
 {-# LANGUAGE CPP #-}
 
-module Main (main) where
+module TestMain (main) where
 
 import Network.Socket (withSocketsDo)
 import System.IO

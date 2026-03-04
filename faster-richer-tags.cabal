@@ -254,7 +254,7 @@ test-suite test-faster-richer-tags
   hs-source-dirs:
     tests
   main-is:
-    Main.hs
+    TestMain.hs
   other-modules:
     Control.Monad.Logging.DiscardLogs
     Data.GenericDiff
@@ -300,4 +300,5 @@ test-suite test-faster-richer-tags
   ghc-options:
     -rtsopts
     -threaded
+    -main-is TestMain
     "-with-rtsopts=-A32m -N"
