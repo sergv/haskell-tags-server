@@ -99,15 +99,15 @@ withWorkingDir mode dir =
 withFile
   :: a                   -- ^ Filepath within the working directory
   -> TestSet
-       ( String          -- ^ Test name
-       , Text            -- ^ Symbol to search for
-       , SearchResult  -- ^ Expected response
+       ( String       -- Test name
+       , Text         -- Symbol to search for
+       , SearchResult -- Expected response
        )
   -> TestSet
-       ( String          -- ^ Test name
-       , a               -- ^ Filepath within the working directory
-       , Text            -- ^ Symbol to search for
-       , SearchResult  -- ^ Expected response
+       ( String       -- Test name
+       , a            -- Filepath within the working directory
+       , Text         -- Symbol to search for
+       , SearchResult -- Expected response
        )
 withFile file =
   fmap (\(name, sym, response) -> (name, file, sym, response))
@@ -117,9 +117,9 @@ withDirAndFile
   -> WorkingDirectory    -- ^ Working directory under testDataDir
   -> PathFragment        -- ^ Filepath within the working directory
   -> TestSet
-       ( String          -- ^ Test name
-       , Text            -- ^ Symbol to search for
-       , SearchResult  -- ^ Expected response
+       ( String        -- Test name
+       , Text          -- Symbol to search for
+       , SearchResult  -- Expected response
        )
   -> TestSet SearchTest
 withDirAndFile mode dir file =
