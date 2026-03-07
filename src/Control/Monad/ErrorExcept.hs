@@ -25,6 +25,8 @@ import Control.Monad.Writer
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging (MonadLog)
 
+-- | Error monad like standard 'Control.Monad.Except.ExceptT' but uses underlying IO
+-- for exception management.
 newtype ErrorExceptT e m a = ErrorExceptT { unErrorExceptT :: m a }
   deriving
     ( Functor
