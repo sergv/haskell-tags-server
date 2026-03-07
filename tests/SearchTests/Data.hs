@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------------
 -- |
--- Module      :  ServerTests.Data
+-- Module      :  SearchTests.Data
 -- Copyright   :  (c) Sergey Vinokurov 2018
 -- License     :  BSD-2 (see LICENSE)
 -- Maintainer  :  serg.foo@gmail.com
@@ -8,11 +8,11 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
-module ServerTests.Data
+module SearchTests.Data
   ( SymbolType
-  , ServerResponse(..)
+  , SearchResult(..)
   , WorkingDirectory(..)
-  , ServerTest(..)
+  , SearchTest(..)
   , TestSet(..)
   , testData
   ) where
@@ -30,14 +30,14 @@ s str = fromMaybe err . mkUnqualifiedSymbolName . mkSymbolName $ str
   where
     err = error $ "Invalid unqualified symbol: " ++ T.unpack str
 
-known :: Text -> PathFragment -> Int -> SymbolType -> ServerResponse
+known :: Text -> PathFragment -> Int -> SymbolType -> SearchResult
 known sym file line typ = Known (s sym) file line typ
 
 
 type SymbolType = Text
 
 -- | Type that encodes all possible BERT responses.
-data ServerResponse
+data SearchResult
   = Known UnqualifiedSymbolName PathFragment Int SymbolType
   | Ambiguous [(UnqualifiedSymbolName, PathFragment, Int, SymbolType)]
   | NotFound
@@ -49,13 +49,13 @@ data WorkingDirectory
   | RecursiveWithIgnored PathFragment [Text]
   deriving (Eq, Ord, Show)
 
-data ServerTest = ServerTest
+data SearchTest = SearchTest
   { stTestName                 :: String
   , stNameResolutionStrictness :: NameResolutionStrictness
   , stWorkingDirectory         :: WorkingDirectory
   , stFile                     :: PathFragment
   , stSymbol                   :: Text
-  , stExpectedResponse         :: ServerResponse
+  , stExpectedResponse         :: SearchResult
   } deriving (Eq, Ord, Show)
 
 data TestSet a =
@@ -83,11 +83,11 @@ withWorkingDir
        ( String          -- ^ Test name
        , PathFragment    -- ^ Filepath within the working directory
        , Text            -- ^ Symbol to search for
-       , ServerResponse  -- ^ Expected response
+       , SearchResult  -- ^ Expected response
        )
-  -> TestSet ServerTest
+  -> TestSet SearchTest
 withWorkingDir mode dir =
-  fmap $ \(name, file, sym, response) -> ServerTest
+  fmap $ \(name, file, sym, response) -> SearchTest
     { stTestName                 = name
     , stNameResolutionStrictness = mode
     , stWorkingDirectory         = dir
@@ -101,13 +101,13 @@ withFile
   -> TestSet
        ( String          -- ^ Test name
        , Text            -- ^ Symbol to search for
-       , ServerResponse  -- ^ Expected response
+       , SearchResult  -- ^ Expected response
        )
   -> TestSet
        ( String          -- ^ Test name
        , a               -- ^ Filepath within the working directory
        , Text            -- ^ Symbol to search for
-       , ServerResponse  -- ^ Expected response
+       , SearchResult  -- ^ Expected response
        )
 withFile file =
   fmap (\(name, sym, response) -> (name, file, sym, response))
@@ -119,15 +119,15 @@ withDirAndFile
   -> TestSet
        ( String          -- ^ Test name
        , Text            -- ^ Symbol to search for
-       , ServerResponse  -- ^ Expected response
+       , SearchResult  -- ^ Expected response
        )
-  -> TestSet ServerTest
+  -> TestSet SearchTest
 withDirAndFile mode dir file =
   withWorkingDir mode dir . fmap (\(name, sym, response) -> (name, file, sym, response))
 
-testData :: TestSet ServerTest
+testData :: TestSet SearchTest
 testData = GroupTest "server tests"
-  [ AtomicTest ServerTest
+  [ AtomicTest SearchTest
       { stTestName                 = "single module"
       , stNameResolutionStrictness = NameResolutionStrict
       , stWorkingDirectory         = ShallowDir "0000single_module"

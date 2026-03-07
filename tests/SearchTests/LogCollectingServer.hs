@@ -11,7 +11,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeFamilies   #-}
 
-module ServerTests.LogCollectingServer
+module SearchTests.LogCollectingServer
   ( LogCollectingServer
   , mkLogCollectingServer
   , stopLogCollectingServer

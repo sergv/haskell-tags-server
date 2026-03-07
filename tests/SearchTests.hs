@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------------
 -- |
--- Module      :  ServerTests
+-- Module      :  SearchTests
 -- Copyright   :  (c) Sergey Vinokurov 2015
 -- License     :  BSD3-style (see LICENSE)
 -- Maintainer  :  serg.foo@gmail.com
@@ -11,7 +11,7 @@
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module ServerTests (tests) where
+module SearchTests (tests) where
 
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as BSL
@@ -50,8 +50,8 @@ import Haskell.Language.Server.Tags
 import Haskell.Language.Server.Tags.Types (NameResolutionStrictness(..))
 import PortPool
 
-import ServerTests.Data
-import ServerTests.LogCollectingServer
+import SearchTests.Data
+import SearchTests.LogCollectingServer
 
 -- | Directory with test projects.
 testDataDir :: PathFragment
@@ -60,7 +60,8 @@ testDataDir = "test-data"
 mkTestsConfig
   :: (MonadBase IO m, MonadError ErrorMessage m)
   => NameResolutionStrictness
-  -> WorkingDirectory  -> m (SearchCfg, TagsServerConf)
+  -> WorkingDirectory
+  -> m (SearchCfg, TagsServerConf)
 mkTestsConfig tsconfNameResolution srcDir = do
   searchDirs <- case srcDir of
     ShallowDir   dir -> do
@@ -88,13 +89,13 @@ tests =
     (const (pure ()))
     (\pool -> makeTestTree pool testData)
   where
-    makeTestTree :: HasCallStack => IO PortPool -> TestSet ServerTest -> TestTree
+    makeTestTree :: HasCallStack => IO PortPool -> TestSet SearchTest -> TestTree
     makeTestTree pool = go
       where
         go (GroupTest name xs)     = testGroup name $ map go xs
         go (AtomicTest serverTest) = mkFindSymbolTest pool serverTest
 
-responseToSexp :: ServerResponse -> Sexp
+responseToSexp :: SearchResult -> Sexp
 responseToSexp resp =
   case resp of
     Known symName filename line typ ->
@@ -176,9 +177,9 @@ getSocketContents sock = loop
 mkFindSymbolTest
   :: HasCallStack
   => IO PortPool
-  -> ServerTest
+  -> SearchTest
   -> TestTree
-mkFindSymbolTest pool ServerTest{stTestName, stNameResolutionStrictness, stWorkingDirectory, stFile, stSymbol, stExpectedResponse} =
+mkFindSymbolTest pool SearchTest{stTestName, stNameResolutionStrictness, stWorkingDirectory, stFile, stSymbol, stExpectedResponse} =
   testCase stTestName $ do
     result <- runErrorExceptT $ do
       (searchDirs, conf) <- mkTestsConfig stNameResolutionStrictness stWorkingDirectory

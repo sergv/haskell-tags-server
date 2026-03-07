@@ -268,9 +268,9 @@ test-suite test-faster-richer-tags
     Haskell.Language.Server.Tags.TypesTests
     Haskell.Language.ModuleTests
     PortPool
-    ServerTests
-    ServerTests.Data
-    ServerTests.LogCollectingServer
+    SearchTests
+    SearchTests.Data
+    SearchTests.LogCollectingServer
     TestUtils
   build-depends:
     , QuickCheck

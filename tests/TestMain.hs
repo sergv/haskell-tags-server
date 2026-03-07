@@ -24,7 +24,7 @@ import Haskell.Language.Lexer.Preprocessor.Tests qualified as PreprocessorTests
 import Haskell.Language.Server.Tags.AnalyzeHeaderTests qualified as AnalyzeHeaderTests
 import Haskell.Language.Server.Tags.TypesTests qualified as TypesTests
 import Haskell.Language.ModuleTests qualified as ModuleTests
-import ServerTests qualified
+import SearchTests qualified
 
 main :: IO ()
 main = withSocketsDo $ do
@@ -37,7 +37,7 @@ main = withSocketsDo $ do
   hSetEncoding stderr utf8
   let tests = testGroup "Tests"
         [ Data.Map.NonEmptyTests.tests
-        , ServerTests.tests
+        , SearchTests.tests
         , TypesTests.tests
         , AnalyzeHeaderTests.tests
         , LexerTests.tests
