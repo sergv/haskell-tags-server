@@ -190,12 +190,12 @@ loadModuleFromSource
   -> FullPath 'File
   -> BS.ByteString
   -> m (NonEmptyMap ModuleName UnresolvedModule)
-loadModuleFromSource suggestedModuleName mode filename source =
-  tokenizeModule mode source
+loadModuleFromSource suggestedModuleName mode filename source = do
+  toks <- tokenizeModule mode source
     `catchError`
       (\(err :: ErrorMessage) ->
         CME.throwError $ err { errorMessageBody = "Failed to get tokens from" <+> pretty filename <> ":" ## errorMessageBody err })
-       >>= makeModule suggestedModuleName filename
+  makeModule suggestedModuleName filename toks
 
 tokenizeModule
   :: (WithCallStack, MonadError ErrorMessage m)
