@@ -149,7 +149,7 @@ loadMany
   :: (MonadFS m, MonadError ErrorMessage m, MonadLog m)
   => TagsServerConf
   -> FullPath 'File
-  -> m (Map ImportKey UnresolvedModule)
+  -> m (Map ImportKey (NonEmpty UnresolvedModule))
 loadMany conf filename = do
   case classifyPath conf filename of
     Nothing         -> pure M.empty
@@ -214,12 +214,13 @@ generate GenConfig{gcfgNullSeparated} = do
     runSimpleLoggerT (Nothing @(Destination IO)) Debug $
       runErrorExceptT $ do
         (unresolvedMods :: Map ImportKey (NonEmpty UnresolvedModule)) <-
-          fmap (M.unionsWith (<>) . fmap (M.map NE.singleton)) $ for files $ \path -> do
-            path'  <- liftIO $ Path.fromFileOsPath path
-            isFile <- liftIO $ doesFileExist $ Path.toOsPath path'
-            unless isFile $
-              liftIO $ die $ "Input path does not point to file: " ++ show path'
-            loadMany conf path'
+          fmap (M.unionsWith (<>)) $ for files $ \modPath -> do
+            (loadMany conf =<<) $ liftIO $ do
+              modPath' <- Path.fromFileOsPath modPath
+              isFile   <- doesFileExist $ Path.toOsPath modPath'
+              unless isFile $
+                die $ "Input path does not point to file: " ++ show modPath'
+              pure modPath'
 
         let ls = LoadState
               { lsLoadedModules   = mempty
@@ -227,7 +228,10 @@ generate GenConfig{gcfgNullSeparated} = do
               , lsUnloadedFiles   = mempty
               }
 
-            unresolvedMods' = M.filterWithKey (\k _ -> not $ T.null $ getModuleName $ ikModuleName k) unresolvedMods
+            unresolvedMods' =
+              M.filterWithKey
+                (\k _ -> not $ T.null $ getModuleName $ ikModuleName k)
+                unresolvedMods
         -- hPutDocLn stderr $ "Import keys:" ## pretty mods'
 
         -- TODO: T.null . getModuleName . ikModuleName
@@ -312,12 +316,13 @@ search SearchConfig{scfgNullSeparated, scfgSymbol, scfgFile} = do
         path <- Path.mkFullPath scfgFile
 
         (unresolvedMods :: Map ImportKey (NonEmpty UnresolvedModule)) <-
-          fmap (M.unionsWith (<>) . fmap (M.map NE.singleton)) $ for files $ \modPath -> do
-            modPath' <- liftIO $ Path.fromFileOsPath modPath
-            isFile   <- liftIO $ doesFileExist $ Path.toOsPath modPath'
-            unless isFile $
-              liftIO $ die $ "Input path does not point to file: " ++ show modPath'
-            loadMany conf modPath'
+          fmap (M.unionsWith (<>)) $ for files $ \modPath -> do
+            (loadMany conf =<<) $ liftIO $ do
+              modPath' <- Path.fromFileOsPath modPath
+              isFile   <- doesFileExist $ Path.toOsPath modPath'
+              unless isFile $
+                die $ "Input path does not point to file: " ++ show modPath'
+              pure modPath'
 
         let ls = LoadState
               { lsLoadedModules   = mempty

@@ -19,6 +19,7 @@ import Control.Monad
 import Control.Monad.ErrorExcept
 import Control.Monad.Writer
 import Data.Foldable
+import Data.List.NonEmpty (NonEmpty)
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
 import Data.Maybe
@@ -49,7 +50,7 @@ import Haskell.Language.Server.Tags.Types.Modules as Mods
 
 import TestUtils
 
-type Test = TestCase (Text, LitMode Void) (NonEmptyMap ModuleName UnresolvedModule)
+type Test = TestCase (Text, LitMode Void) (NonEmptyMap ModuleName (NonEmpty UnresolvedModule))
 
 filename :: FullPath 'File
 filename = "/foo/bar/test.hs"
@@ -57,8 +58,8 @@ filename = "/foo/bar/test.hs"
 pt :: Int -> Type -> PosAndType
 pt n = PosAndType filename (Line n)
 
-mkSingleton :: UnresolvedModule -> NonEmptyMap ModuleName UnresolvedModule
-mkSingleton mod = NEMap.singleton (mhModName (modHeader mod)) mod
+mkSingleton :: UnresolvedModule -> NonEmptyMap ModuleName (NonEmpty UnresolvedModule)
+mkSingleton mod = NEMap.singleton (mhModName (modHeader mod)) $ NE.singleton mod
 
 defaultModHeader :: ModuleHeader
 defaultModHeader = ModuleHeader
@@ -1352,9 +1353,9 @@ tests = testGroup "Whole module tests"
   ]
 
 doTest :: HasCallStack => Test -> TestTree
-doTest TestCase{testName, input = (src, mode), expectedResult = expectedResult :: NonEmptyMap ModuleName UnresolvedModule} =
+doTest TestCase{testName, input = (src, mode), expectedResult} =
   testCase testName $ do
-    (res :: Either ErrorMessage (NonEmptyMap ModuleName UnresolvedModule), logs) <-
+    (res :: Either ErrorMessage (NonEmptyMap ModuleName (NonEmpty UnresolvedModule)), logs) <-
       runWriterT $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runErrorExceptT $
         loadModuleFromSource Nothing mode filename $ TE.encodeUtf8 src
     let logsDoc = "Logs, size " <> pretty (length logs) <> ":" ## PP.indent 2 (PP.vcat logs)
