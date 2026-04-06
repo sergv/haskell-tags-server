@@ -13,8 +13,6 @@
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
-
 module Haskell.Language.Server.Tags.AnalyzeHeaderTests (tests) where
 
 import Control.Arrow

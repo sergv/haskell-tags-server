@@ -14,8 +14,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
-
 module Data.Symbols
   ( ModuleName
   , getModuleName
