@@ -31,7 +31,6 @@ module Data.Path
   , MkSomeFullPath(..)
   , doesFileExist
   , doesDirectoryExist
-  , listDirectory
   , splitDirectories
   , PathFragment
   , mkPathFragment
@@ -60,7 +59,6 @@ module Data.Path
 import Control.Monad
 import Control.Monad.Base
 import Control.Monad.Except.Ext
-import Control.Monad.Ext
 
 import Data.ByteString qualified as BS
 import Data.Coerce
@@ -182,18 +180,6 @@ doesFileExist =
 doesDirectoryExist :: MonadBase IO m => FullPath 'Dir -> m Bool
 doesDirectoryExist =
   liftBase . Directory.doesDirectoryExist . T.unpack . unFullPath
-
-{-# INLINE listDirectory #-}
-listDirectory
-  :: MonadBase IO m
-  => FullPath 'Dir
-  -> m ([FullPath 'File], [FullPath 'Dir])
-listDirectory (FullPath path) = do
-  (dirs, files) <- liftBase $
-    partitionIO Directory.doesDirectoryExist . map (path' FilePath.</>) =<< Directory.listDirectory path'
-  pure $ coerce (map T.pack files, map T.pack dirs)
-  where
-    path' = T.unpack path
 
 {-# INLINE splitDirectories #-}
 splitDirectories :: FullPath 'File -> ([BaseName 'Dir], BaseName 'File)
