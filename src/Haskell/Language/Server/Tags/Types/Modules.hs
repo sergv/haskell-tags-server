@@ -71,10 +71,6 @@ instance Store  a => Store  (Module a)
 type UnresolvedModule = Module ()
 type ResolvedModule   = Module SymbolMap
 
-instance Semigroup a => Semigroup (Module a) where
-  Module mh mas mf maen mid <> Module mh' mas' _mf' maen' mid' =
-    Module (mh <> mh') (mas <> mas') mf (maen <> maen') (mid || mid')
-
 instance Pretty a => Pretty (Module a) where
   pretty mod =
     ppDictHeader "Module"
