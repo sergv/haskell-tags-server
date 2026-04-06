@@ -9,8 +9,6 @@
 {-# LANGUAGE MultilineStrings  #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
-
 module Haskell.Language.ModuleTests (tests) where
 
 import Prelude hiding (mod)

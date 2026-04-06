@@ -7,9 +7,7 @@
 -- Created     :  Tuesday, 30 August 2016
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE OverloadedStrings     #-}
-
-{-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Prettyprinter.Ext
   ( Pretty(..)
