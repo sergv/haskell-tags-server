@@ -26,7 +26,6 @@ module Haskell.Language.Server.Tags
   , emptyTagsServerState
 
   , loadMod
-  , classifyPath
   ) where
 
 import Prelude hiding (mod)
@@ -256,12 +255,15 @@ startTagsServer searchCfg conf = do
                 serverState' <- preloadFiles searchCfg' conf serverState
                 let serverState'' = serverState' { tssNamespace = tssNamespace serverState' <> ns }
 
+                name <- fileNameToModuleName filename
+                mod  <- readFileAndLoad (Just name) filename
+
                 (response, loadState) <- runSearchT conf (tssLoadState serverState'') $ do
                   symbols <- case request' of
                     FindSymbol scope symbol ->
-                      findSymbol scope filename symbol
+                      findSymbol scope mod symbol
                     FindSymbolByRegex scope regexp ->
-                      findSymbolByRegexp scope filename regexp
+                      findSymbolByRegexp scope mod regexp
                   logInfo $ "[startTagsServer.handleReq] requested namespace:" ## pretty ns
                   pure $ case filter (isPathWithinNamespace ns . resolvedSymbolFile) $ toList symbols of
                     []   -> NotFound
@@ -269,15 +271,6 @@ startTagsServer searchCfg conf = do
                 logInfo $ "[startTagsServer.handleReq] response:" ## either pretty pretty response
                 Promise.putValue respPromise response
                 pure $ Just $ serverState'' { tssLoadState = loadState }
-
--- todo: handle header files here
-classifyPath :: TakeExtension a => TagsServerConf -> a -> Maybe ImportTarget
-classifyPath TagsServerConf{tsconfVanillaExtensions, tsconfHsBootExtensions} path
-  | ext `S.member` tsconfVanillaExtensions = Just VanillaModule
-  | ext `S.member` tsconfHsBootExtensions  = Just HsBootModule
-  | otherwise                              = Nothing
-  where
-    ext = takeExtension path
 
 loadMod
   :: (MonadFS m, MonadError ErrorMessage m, MonadLog m)
