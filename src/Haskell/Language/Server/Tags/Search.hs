@@ -11,59 +11,128 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Haskell.Language.Server.Tags.Search
-  ( findSymbol
+  ( findSymbolInFiles
+
+  , findSymbol
   , findSymbolByRegexp
+
+  , classifyPath
   ) where
 
 import Prelude hiding (mod)
 
-import Control.Arrow (second)
+import Control.Monad
 import Control.Monad.Base
+import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Except
 import Control.Monad.Except.Ext
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Parallel.Strategies.Ext
-
+import Data.Bifunctor
 import Data.Foldable.Ext
 import Data.List qualified as L
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as M
 import Data.Maybe
 import Data.Set (Set)
 import Data.Set qualified as S
 import Data.Traversable
 import Prettyprinter qualified as PP
 import Prettyprinter.Ext
+import System.OsPath (OsPath)
 
 import Control.Monad.Filesystem (MonadFS)
+import Control.Monad.Filesystem qualified as MonadFS
 import Control.Monad.Logging
 import Data.CompiledRegex
 import Data.ErrorMessage
-import Data.Path
+import Data.Map.NonEmpty qualified as NEMap
+import Data.Path as Path
 import Data.SubkeyMap qualified as SubkeyMap
 import Data.SymbolMap (SymbolMap)
 import Data.SymbolMap qualified as SM
 import Data.Symbols
+import Haskell.Language.Lexer (modeFromFilename)
 import Haskell.Language.Lexer.Types qualified as Types
 import Haskell.Language.Server.Tags.LoadModule
+import Haskell.Language.Server.Tags.SearchM (runSearchT)
 import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
 
-findSymbol
-  :: (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m, MonadBase IO m)
-  => NameResolutionScope
+-- todo: handle header files here
+classifyPath :: TakeExtension a => TagsServerConf -> a -> Maybe ImportTarget
+classifyPath TagsServerConf{tsconfVanillaExtensions, tsconfHsBootExtensions} path
+  | ext `S.member` tsconfVanillaExtensions = Just VanillaModule
+  | ext `S.member` tsconfHsBootExtensions  = Just HsBootModule
+  | otherwise                              = Nothing
+  where
+    ext = takeExtension path
+
+loadMany
+  :: (MonadFS m, MonadError ErrorMessage m, MonadLog m)
+  => TagsServerConf
+  -> FullPath 'File
+  -> m (Map ImportKey (NonEmpty UnresolvedModule))
+loadMany conf filename = do
+  case classifyPath conf filename of
+    Nothing         -> pure M.empty
+    Just importType -> do
+      suggestedName <- fileNameToModuleName filename
+      source        <- MonadFS.readFile filename
+      M.mapKeys (ImportKey importType) . NEMap.toMap <$>
+        loadModuleFromSource
+          (Just suggestedName)
+          (modeFromFilename filename)
+          filename
+          source
+
+findSymbolInFiles
+  :: (WithCallStack, MonadError ErrorMessage m, MonadLog m, MonadFS m, MonadBase IO m, MonadCatch m)
+  => TagsServerConf
+  -> [OsPath]
+  -> NameResolutionScope
   -> FullPath 'File
   -> SymbolName             -- ^ Symbol to find. Can be either qualified, unqualified, ascii name/utf name/operator.
   -> m (Set ResolvedSymbol) -- ^ Found tags, may be empty when nothing was found.
-findSymbol scope filename sym = do
+findSymbolInFiles conf files scope path sym = do
+  name <- fileNameToModuleName path
+  mod  <- readFileAndLoad (Just name) path
+
+  (unresolvedMods :: Map ImportKey (NonEmpty UnresolvedModule)) <-
+    fmap (M.unionsWith (<>)) $ for files $ \modPath -> do
+      -- todo: move this operation to MonadFS?
+      modPath' <- liftBase $ Path.fromFileOsPath modPath
+      isFile   <- doesFileExist modPath'
+      unless isFile $
+        throwErrorWithCallStack $ "Input path does not point to file:" <+> pretty modPath'
+      loadMany conf modPath'
+
+  let loadState = LoadState
+        { lsLoadedModules   = mempty
+        , lsLoadsInProgress = mempty
+        , lsUnloadedFiles   = unresolvedMods
+        }
+
+  (symbols, _loadState2) <- runSearchT conf loadState $
+    findSymbol scope mod sym
+
+  either throwError pure symbols
+
+findSymbol
+  :: (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadBase IO m)
+  => NameResolutionScope
+  -> UnresolvedModule
+  -> SymbolName             -- ^ Symbol to find. Can be either qualified, unqualified, ascii name/utf name/operator.
+  -> m (Set ResolvedSymbol) -- ^ Found tags, may be empty when nothing was found.
+findSymbol scope mod sym = do
   logVerboseDebug $
-    "[findSymbol] searching for" <+> pretty sym <+> "within" <+> pretty filename
+    "[findSymbol] searching for" <+> pretty sym <+> "within" <+> pretty (mhModName (modHeader mod))
   currMod <- do
-    name           <- fileNameToModuleName filename
     nameResolution <- asks tsconfNameResolution
-    resolveModule nameResolution checkLoadingModules loadModule =<<
-      readFileAndLoad (Just name) filename
+    resolveModule nameResolution checkLoadingModules loadModule mod
   case scope of
     ScopeCurrentModule -> findInModule sym currMod
     ScopeAllModules    ->
@@ -72,19 +141,16 @@ findSymbol scope filename sym = do
         (_, sym') = splitQualifiedPart sym
 
 findSymbolByRegexp
-  :: (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m)
   => NameResolutionScope
-  -> FullPath 'File
+  -> UnresolvedModule
   -> CompiledRegex          -- ^ Regexp to look for.
   -> m (Set ResolvedSymbol) -- ^ Found tags, may be empty when nothing was found.
-findSymbolByRegexp scope filename re = do
+findSymbolByRegexp scope mod re = do
   logVerboseDebug $
-    "[findSymbolByRegexp] searching for" <+> pretty re <+> "within" <+> pretty filename
-  name           <- fileNameToModuleName filename
+    "[findSymbolByRegexp] searching for" <+> pretty re <+> "within" <+> pretty (mhModName (modHeader mod))
   nameResolution <- asks tsconfNameResolution
-  currMod        <-
-    resolveModule nameResolution checkLoadingModules loadModule =<<
-      readFileAndLoad (Just name) filename
+  currMod        <- resolveModule nameResolution checkLoadingModules loadModule mod
   (mods :: NonEmpty SymbolMap) <-
     case scope of
       ScopeCurrentModule -> do
@@ -118,7 +184,7 @@ foldMapPar f xs = runEval $
 
 -- | Try to find out what @sym@ refers to in the context of module @mod@.
 findInModule
-  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m)
   => SymbolName
   -> ResolvedModule
   -> m (Set ResolvedSymbol)
@@ -167,7 +233,7 @@ data AllowedNamesKind = OnlyUnqualifiedNames | AllNames
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 visibleNamesFromImports
-  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m)
   => AllowedNamesKind
   -> ModuleName
   -> [(ImportKey, NonEmpty ImportSpec)] -- ^ Imports of a module
@@ -189,7 +255,7 @@ visibleNamesFromImports namesToConsider currMod imports = do
         Right x  -> pure x
 
 lookUpInImportedModules
-  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m)
   => AllowedNamesKind
   -> ModuleName
   -> UnqualifiedSymbolName

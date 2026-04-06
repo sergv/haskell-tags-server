@@ -79,7 +79,7 @@ import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
 
 loadModule'
-  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m)
   => ImportKey
   -> m [ResolvedModule]
 loadModule' key = do
@@ -92,7 +92,7 @@ loadModule' key = do
     (_,                    Just mods') -> pure $ toList mods'
 
 loadModule
-  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m)
   => ImportKey
   -> m (Maybe (NonEmpty ResolvedModule))
 loadModule key@ImportKey{ikModuleName} = do
@@ -135,7 +135,7 @@ loadModule key@ImportKey{ikModuleName} = do
           traverse (registerAndResolve key) $ toList mods
 
 registerAndResolve
-  :: (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m, MonadFS m)
+  :: (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m)
   => ImportKey
   -> UnresolvedModule
   -> m ResolvedModule

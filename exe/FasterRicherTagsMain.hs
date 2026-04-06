@@ -16,6 +16,8 @@ module FasterRicherTagsMain (main) where
 
 import Debug.Trace qualified
 
+import Prelude hiding (mod)
+
 import Control.Concurrent
 import Control.Monad
 import Control.Monad.Error.Class (MonadError)
@@ -68,7 +70,7 @@ import Haskell.Language.Lexer (modeFromFilename)
 import Haskell.Language.Server.Tags
 import Haskell.Language.Server.Tags.LoadFiles
 import Haskell.Language.Server.Tags.LoadModule
-import Haskell.Language.Server.Tags.Search (findSymbol)
+import Haskell.Language.Server.Tags.Search (findSymbol, classifyPath, findSymbolInFiles)
 import Haskell.Language.Server.Tags.SearchM
 import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports
@@ -315,26 +317,15 @@ search SearchConfig{scfgNullSeparated, scfgSymbol, scfgFile} = do
 
         path <- Path.mkFullPath scfgFile
 
-        (unresolvedMods :: Map ImportKey (NonEmpty UnresolvedModule)) <-
-          fmap (M.unionsWith (<>)) $ for files $ \modPath -> do
-            (loadMany conf =<<) $ liftIO $ do
-              modPath' <- Path.fromFileOsPath modPath
-              isFile   <- doesFileExist $ Path.toOsPath modPath'
-              unless isFile $
-                die $ "Input path does not point to file: " ++ show modPath'
-              pure modPath'
-
-        let ls = LoadState
-              { lsLoadedModules   = mempty
-              , lsLoadsInProgress = mempty
-              , lsUnloadedFiles   = unresolvedMods
-              }
-
-        (symbols, _) <- runSearchT conf ls $
-          findSymbol ScopeCurrentModule path $ mkSymbolName scfgSymbol
+        symbols <- findSymbolInFiles
+          conf
+          files
+          ScopeCurrentModule
+          path
+          (mkSymbolName scfgSymbol)
 
         Debug.Trace.traceM $ renderString $ "search" ##
-          either pretty ppSet symbols
+          ppSet symbols
 
         pure ()
 

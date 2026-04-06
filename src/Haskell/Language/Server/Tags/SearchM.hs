@@ -20,9 +20,7 @@ import Control.Monad.Except
 import Control.Monad.ErrorExcept
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Trans.Control
 
-import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging (MonadLog)
 import Data.ErrorMessage
 import Haskell.Language.Server.Tags.Types
@@ -40,7 +38,6 @@ newtype SearchT m a = SearchM (ErrorExceptT ErrorMessage (StateT LoadState (Read
     )
 
 deriving instance (MonadBase IO m, MonadCatch m) => MonadError ErrorMessage (SearchT m)
-deriving instance (MonadBaseControl IO m, MonadMask m) => MonadFS (SearchT m)
 
 runSearchT
   :: MonadCatch m
