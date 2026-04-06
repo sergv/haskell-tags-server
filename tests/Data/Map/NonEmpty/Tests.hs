@@ -52,5 +52,6 @@ instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (NonEmptyMap k v) where
   -> NonEmpty (k, v)
   -> Bool
 (=====) f g xs ys =
-  toList (NEMap.toNonEmpty (f (NEMap.fromNonEmpty xs) (NEMap.fromNonEmpty ys))) == M.toAscList (g (M.fromList (toList xs)) (M.fromList (toList ys)))
+  toList (NEMap.toNonEmpty (f (NEMap.fromNonEmpty xs) (NEMap.fromNonEmpty ys))) ==
+    M.toAscList (g (M.fromList (toList xs)) (M.fromList (toList ys)))
 

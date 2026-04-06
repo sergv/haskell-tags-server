@@ -142,7 +142,7 @@ registerAndResolve
 registerAndResolve key unresolvedMod@Module{modFile} = do
   modify $ \s -> s
     { lsLoadsInProgress =
-      M.insertWith NEMap.union key (NEMap.singleton modFile unresolvedMod) $ lsLoadsInProgress s
+        M.insertWith NEMap.union key (NEMap.singleton modFile unresolvedMod) $ lsLoadsInProgress s
     }
   nameResoultion <- asks tsconfNameResolution
   resolved <- resolveModule nameResoultion checkLoadingModules loadModule unresolvedMod
@@ -284,7 +284,8 @@ resolveModule nameResolution checkIfModuleIsAlreadyBeingLoaded readAndLoad mod =
   logDebug $ "[resolveModule] resolving names of module" <+> pretty (mhModName header)
   symbols <- resolveExportedNames mod
   logVerboseDebug $ ppDictHeader ("[resolveModule] Resolved items for module" <+> pretty (mhModName header))
-    [ -- "imports"                          :-> ppSubkeyMapWith pretty pretty ppNE imports
+    [
+      -- "imports"                          :-> ppSubkeyMapWith pretty pretty ppNE imports
     -- ,
       "all symbols exported by a module" --> symbols
     ]
