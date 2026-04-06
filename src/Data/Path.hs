@@ -70,7 +70,7 @@ import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Prettyprinter.Ext
 import System.Directory qualified as Directory
-import System.Directory.OsPath qualified
+import System.Directory.OsPath qualified as Directory.OsPath
 import System.FilePath qualified as FilePath
 import System.OsPath.Ext (pathToText, pathFromText)
 import System.OsPath.Types (OsPath)
@@ -86,13 +86,14 @@ import System.Posix.Files as Posix
 #endif
 
 class MkSomeFullPath a m where
-  mkSomeFullPath :: a -> m (Either (FullPath 'File) (FullPath 'Dir))
+  mkSomeFullPath :: WithCallStack => a -> m (Either (FullPath 'File) (FullPath 'Dir))
 
 instance (MonadBase IO m, MonadError ErrorMessage m) => MkSomeFullPath FilePath.FilePath m where
   {-# INLINE mkSomeFullPath #-}
 #ifdef WINDOWS
   mkSomeFullPath
-    :: FilePath.FilePath
+    :: WithCallStack
+    => FilePath.FilePath
     -> m (Either (FullPath 'File) (FullPath 'Dir))
   mkSomeFullPath path = do
     path'  <- liftBase $ do
@@ -112,7 +113,8 @@ instance (MonadBase IO m, MonadError ErrorMessage m) => MkSomeFullPath FilePath.
 #endif
 #ifndef WINDOWS
   mkSomeFullPath
-    :: FilePath.FilePath
+    :: WithCallStack
+    => FilePath.FilePath
     -> m (Either (FullPath 'File) (FullPath 'Dir))
   mkSomeFullPath path = do
     exists <- liftBase $ Posix.fileExist path
@@ -145,7 +147,7 @@ instance MkSomeFullPath Text m => MkSomeFullPath PathFragment m where
   mkSomeFullPath = mkSomeFullPath . unPathFragment
 
 class MkFullPath a typ m where
-  mkFullPath :: a -> m (FullPath typ)
+  mkFullPath :: WithCallStack => a -> m (FullPath typ)
 
 instance (MkSomeFullPath FilePath.FilePath m, MonadError ErrorMessage m) => MkFullPath FilePath.FilePath 'File m where
   {-# INLINE mkFullPath #-}
@@ -174,12 +176,12 @@ instance MkFullPath FilePath.FilePath a m => MkFullPath PathFragment a m where
 {-# INLINE doesFileExist #-}
 doesFileExist :: MonadBase IO m => FullPath 'File -> m Bool
 doesFileExist =
-  liftBase . Directory.doesFileExist . T.unpack . unFullPath
+  liftBase . Directory.OsPath.doesFileExist . toOsPath
 
 {-# INLINE doesDirectoryExist #-}
 doesDirectoryExist :: MonadBase IO m => FullPath 'Dir -> m Bool
 doesDirectoryExist =
-  liftBase . Directory.doesDirectoryExist . T.unpack . unFullPath
+  liftBase . Directory.OsPath.doesDirectoryExist . toOsPath
 
 {-# INLINE splitDirectories #-}
 splitDirectories :: FullPath 'File -> ([BaseName 'Dir], BaseName 'File)
@@ -348,4 +350,4 @@ toOsPath :: FullPath typ -> OsPath
 toOsPath = pathFromText . unFullPath
 
 fromFileOsPath :: OsPath -> IO (FullPath 'File)
-fromFileOsPath = fmap (FullPath . pathToText) . System.Directory.OsPath.makeAbsolute
+fromFileOsPath = fmap (FullPath . pathToText) . Directory.OsPath.makeAbsolute
