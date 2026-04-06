@@ -163,7 +163,7 @@ readFileAndLoad suggestedModName filename = do
   logInfo $ "[readFileAndLoad] Loading" <+> PP.dquotes (pretty filename)
   mods <- loadModuleFromSource suggestedModName (modeFromFilename filename) filename source
   case NEMap.elemsNE mods of
-    mod :| [] -> pure mod
+    (mod :| []) :| [] -> pure mod
     _ ->
       throwErrorWithCallStack $
         "File" <+> pretty filename <+> "produced multiple modules"
@@ -189,7 +189,7 @@ loadModuleFromSource
   -> LitMode Void
   -> FullPath 'File
   -> BS.ByteString
-  -> m (NonEmptyMap ModuleName UnresolvedModule)
+  -> m (NonEmptyMap ModuleName (NonEmpty UnresolvedModule))
 loadModuleFromSource suggestedModuleName mode filename source = do
   toks <- tokenizeModule mode source
     `catchError`
@@ -218,16 +218,16 @@ makeModule
   => Maybe ModuleName -- ^ Suggested module name, will be used if source does not define it's own name.
   -> FullPath 'File
   -> [Pos ServerToken]
-  -> m (NonEmptyMap ModuleName UnresolvedModule)
+  -> m (NonEmptyMap ModuleName (NonEmpty UnresolvedModule))
 makeModule suggestedModuleName filename tokens =
   getAp $
     foldMap1
       (Ap . fmap mkMap . makeSingleModule suggestedModuleName filename)
       (resolveAlternativesLinearly (preprocessorBlocks tokens))
   where
-    mkMap :: UnresolvedModule -> NonEmptyMap ModuleName UnresolvedModule
+    mkMap :: UnresolvedModule -> NonEmptyMap ModuleName (NonEmpty UnresolvedModule)
     mkMap m@Module{modHeader = ModuleHeader{mhModName}} =
-      NEMap.singleton mhModName m
+      NEMap.singleton mhModName $ NE.singleton m
 
 makeSingleModule
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
