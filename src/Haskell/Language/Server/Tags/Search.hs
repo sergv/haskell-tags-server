@@ -89,6 +89,11 @@ loadMany conf filename = do
           filename
           source
 
+-- TODO: make it tokenize lazily only the modules that are needed.
+-- I.e. if some module we depend on doesn’t reexport any names then
+-- never even tokenize its children.
+--
+-- Tokenization is still costly when applied to all modules indiscreetely.
 findSymbolInFiles
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m, MonadFS m, MonadBase IO m, MonadCatch m)
   => TagsServerConf
