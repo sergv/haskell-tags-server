@@ -14,6 +14,7 @@
 module Data.SymbolMap
   ( SymbolMap
   , null
+  , empty
   , insert
   , registerChildren
   , lookup
@@ -73,7 +74,7 @@ instance Semigroup SymbolMap where
 
 instance Monoid SymbolMap where
   {-# INLINE mempty #-}
-  mempty  = SymbolMap mempty mempty mempty
+  mempty  = empty
 
 instance Pretty SymbolMap where
   pretty SymbolMap{smParentMap, smChildrenMap, smAllSymbols} = ppDictHeader "SymbolMap"
@@ -86,6 +87,9 @@ instance Pretty SymbolMap where
 null :: SymbolMap -> Bool
 null SymbolMap{smParentMap, smChildrenMap, smAllSymbols} =
   M.null smAllSymbols && M.null smParentMap && M.null smChildrenMap
+
+empty :: SymbolMap
+empty = SymbolMap mempty mempty mempty
 
 insert :: ResolvedSymbol -> SymbolMap -> SymbolMap
 insert sym m = SymbolMap
