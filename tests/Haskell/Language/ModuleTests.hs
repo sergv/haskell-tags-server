@@ -17,7 +17,7 @@ import Control.Monad
 import Control.Monad.ErrorExcept
 import Control.Monad.Writer
 import Data.Foldable
-import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
 import Data.Maybe
@@ -58,6 +58,9 @@ pt n = PosAndType filename (Line n)
 
 mkSingleton :: UnresolvedModule -> NonEmptyMap ModuleName (NonEmpty UnresolvedModule)
 mkSingleton mod = NEMap.singleton (mhModName (modHeader mod)) $ NE.singleton mod
+
+mkSingleton' :: NonEmpty UnresolvedModule -> NonEmptyMap ModuleName (NonEmpty UnresolvedModule)
+mkSingleton' mods@(m :| _) = NEMap.singleton (mhModName (modHeader m)) $ mods
 
 defaultModHeader :: ModuleHeader
 defaultModHeader = ModuleHeader
@@ -294,28 +297,40 @@ preprocessorOverExportList = TestCase
       foo :: Int -> Int
       foo = id
       """
-  , expectedResult = mkSingleton $ defaultMod
-    { modHeader     = defaultModHeader
-      { mhModName = mkModuleName "Foo"
-      , mhExports = SpecificExports $ ModuleExports
-        { meReexports          = mempty
-        , meHasWildcardExports = Any False
-        , meExportedEntries    = KeyMap.fromList
-            [ EntryWithChildren (mkSymbolName "xyz1", PosAndType filename (Line 3) Function) Nothing
-            , EntryWithChildren (mkSymbolName "xyz2", PosAndType filename (Line 4) Function) Nothing
-            ]
-        }
-      , mhImports = SubkeyMap.fromList
-        [ let key = ImportKey VanillaModule (mkModuleName "Bar") in
-          ( key
-          , NE.singleton $ ImportSpec key Unqualified NoImportList
-          )
-        ]
-      }
-    , modAllSymbols = SymbolMap.fromList
-        [ mkResolvedSymbolFromParts filename (Line 12) (mkSymName "foo") Function Nothing
-        ]
-    }
+  , expectedResult = mkSingleton' $ nePair
+      ( defaultMod
+          { modHeader     = defaultModHeader
+              { mhModName = mkModuleName "Foo"
+              , mhExports = EmptyExports
+              , mhImports = mempty
+              }
+          , modAllSymbols = SymbolMap.fromList
+              [ mkResolvedSymbolFromParts filename (Line 12) (mkSymName "foo") Function Nothing
+              ]
+          }
+      , defaultMod
+          { modHeader     = defaultModHeader
+              { mhModName = mkModuleName "Foo"
+              , mhExports = SpecificExports $ ModuleExports
+                  { meReexports          = mempty
+                  , meHasWildcardExports = Any False
+                  , meExportedEntries    = KeyMap.fromList
+                      [ EntryWithChildren (mkSymbolName "xyz1", PosAndType filename (Line 3) Function) Nothing
+                      , EntryWithChildren (mkSymbolName "xyz2", PosAndType filename (Line 4) Function) Nothing
+                      ]
+                  }
+              , mhImports = SubkeyMap.fromList
+                  [ let key = ImportKey VanillaModule (mkModuleName "Bar") in
+                    ( key
+                    , NE.singleton $ ImportSpec key Unqualified NoImportList
+                    )
+                  ]
+              }
+          , modAllSymbols = SymbolMap.fromList
+              [ mkResolvedSymbolFromParts filename (Line 12) (mkSymName "foo") Function Nothing
+              ]
+          }
+      )
   }
 
 preprocessorOverWholeModule :: Test
@@ -339,35 +354,46 @@ preprocessorOverWholeModule = TestCase
       foo = id
       #endif
       """
-  , expectedResult = mkSingleton $ defaultMod
-    { modHeader     = defaultModHeader
-      { mhModName = mkModuleName "Foo"
-      , mhExports = NoExportsWithSomeGuaranteed $ ModuleExports
-        { meReexports          = mempty
-        , meHasWildcardExports = Any False
-        , meExportedEntries    = KeyMap.fromList
-            [ EntryWithChildren (mkSymbolName "xyz1", PosAndType filename (Line 7) Function) Nothing
-            , EntryWithChildren (mkSymbolName "xyz2", PosAndType filename (Line 8) Function) Nothing
-            ]
-        }
-      , mhImports = SubkeyMap.fromList
-        [ let key = ImportKey VanillaModule (mkModuleName "Bar") in
-          ( key
-          , NE.singleton $ ImportSpec key Unqualified $ SpecificImports $ ImportList
-              { ilImportType = Imported
-              , ilEntries    = mempty
+  , expectedResult = mkSingleton' $ nePair
+      ( defaultMod
+          { modHeader     = defaultModHeader
+              { mhModName = mkModuleName "Foo"
+              , mhExports = SpecificExports $ ModuleExports
+                  { meReexports          = mempty
+                  , meHasWildcardExports = Any False
+                  , meExportedEntries    = KeyMap.fromList
+                      [ EntryWithChildren (mkSymbolName "xyz1", PosAndType filename (Line 7) Function) Nothing
+                      , EntryWithChildren (mkSymbolName "xyz2", PosAndType filename (Line 8) Function) Nothing
+                      ]
+                  }
+              , mhImports = uncurry SubkeyMap.singleton $
+                  let key = ImportKey VanillaModule (mkModuleName "Baz") in
+                  ( key
+                  , NE.singleton $ ImportSpec key Unqualified NoImportList
+                  )
+
               }
-          )
-        , let key = ImportKey VanillaModule (mkModuleName "Baz") in
-          ( key
-          , NE.singleton $ ImportSpec key Unqualified NoImportList
-          )
-        ]
-      }
-    , modAllSymbols = SymbolMap.fromList
-        [ mkResolvedSymbolFromParts filename (Line 13) (mkSymName "foo") Function Nothing
-        ]
-    }
+          , modAllSymbols = SymbolMap.fromList
+              [ mkResolvedSymbolFromParts filename (Line 13) (mkSymName "foo") Function Nothing
+              ]
+          }
+      , defaultMod
+          { modHeader     = defaultModHeader
+              { mhModName = mkModuleName "Foo"
+              , mhExports = NoExports
+              , mhImports = uncurry SubkeyMap.singleton $
+                  let key = ImportKey VanillaModule (mkModuleName "Bar") in
+                  ( key
+                  , NE.singleton $ ImportSpec key Unqualified $ SpecificImports $ ImportList
+                      { ilImportType = Imported
+                        , ilEntries    = mempty
+                        }
+                    )
+
+              }
+          , modAllSymbols = mempty
+          }
+      )
   }
 
 includeWithCStyleComment :: Test
@@ -1369,3 +1395,5 @@ doTest TestCase{testName, input = (src, mode), expectedResult} =
         unless (mod == expectedResult) $
           assertFailure $ renderStringWide $ msg ## logsDoc
 
+nePair :: (a, a) -> NonEmpty a
+nePair (x, y) = x :| [y]
