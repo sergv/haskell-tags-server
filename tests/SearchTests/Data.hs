@@ -126,7 +126,7 @@ withDirAndFile mode dir file =
   withWorkingDir mode dir . fmap (\(name, sym, response) -> (name, file, sym, response))
 
 testData :: TestSet SearchTest
-testData = GroupTest "server tests"
+testData = GroupTest "search tests"
   [ AtomicTest SearchTest
       { stTestName                 = "single module"
       , stNameResolutionStrictness = NameResolutionStrict

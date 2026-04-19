@@ -100,7 +100,6 @@ library
     , microlens
     , monad-control >= 1.0
     , mtl >= 2.2
-    , network >= 2.6
     , parallel
     , pointed
     , prettyprinter
@@ -108,7 +107,6 @@ library
     , profunctors >= 5.2
     , regex-tdfa >= 1.2.2
     , scientific
-    , sexp-grammar
     , stm
     , stm-chans
     , store
@@ -169,7 +167,6 @@ library
     Haskell.Language.Lexer.RulePredicate
     Haskell.Language.Lexer.State
 
-    Haskell.Language.Server.Sexp
     Haskell.Language.Server.Tags
     Haskell.Language.Server.Tags.AnalyzeHeader
     Haskell.Language.Server.Tags.LoadFiles
@@ -226,25 +223,6 @@ executable faster-richer-tags
     -- "-with-rtsopts=-N -A32M"
     -main-is FasterRicherTagsMain
 
-executable haskell-tags-server
-  import: ghc-options
-  if !os(windows)
-    build-depends: unix >= 2.6
-  main-is:
-    exe/HaskellTagsServerMain.hs
-  build-depends:
-    , base
-    , containers
-    , directory
-    , faster-richer-tags
-    , network
-    , optparse-applicative
-  ghc-options:
-    -rtsopts
-    -threaded
-    "-with-rtsopts=-N"
-    -main-is HaskellTagsServerMain
-
 test-suite test-faster-richer-tags
   import: ghc-options
   if !os(windows)
@@ -267,10 +245,8 @@ test-suite test-faster-richer-tags
     Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions
     Haskell.Language.Server.Tags.TypesTests
     Haskell.Language.ModuleTests
-    PortPool
     SearchTests
     SearchTests.Data
-    SearchTests.LogCollectingServer
     TestUtils
   build-depends:
     , QuickCheck
@@ -287,11 +263,9 @@ test-suite test-faster-richer-tags
     , filepath >= 1.5
     , monad-control
     , mtl
-    , network
     , prettyprinter
     , prettyprinter-combinators
     , scientific
-    , sexp-grammar
     , tasty >= 0.7
     , tasty-hunit >= 0.4
     , tasty-quickcheck
