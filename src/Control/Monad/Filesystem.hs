@@ -64,7 +64,11 @@ class Monad m => MonadFS m where
   doesDirectoryExist   :: FullPath 'Dir  -> m Bool
   findRec
     :: (Ord k, Semigroup v)
-    => SearchCfg -> CompiledRegex -> (FullPath 'File -> m (Maybe (k, v))) -> (FullPath 'Dir -> m (Maybe (k, v))) -> m (Map k v)
+    => SearchCfg
+    -> CompiledRegex
+    -> (FullPath 'File -> m (Maybe (k, v)))
+    -> (FullPath 'Dir -> m (Maybe (k, v)))
+    -> m (Map k v)
 
 instance {-# OVERLAPS #-} (Monad m, MonadBaseControl IO m, MonadMask m) => MonadFS m where
   {-# INLINE readFile             #-}
