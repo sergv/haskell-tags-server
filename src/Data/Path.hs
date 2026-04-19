@@ -53,6 +53,7 @@ module Data.Path
   , unBaseName
 
   , toOsPath
+  , pathFragmentToOsPath
   , fromFileOsPath
   ) where
 
@@ -348,6 +349,9 @@ toFilePath = T.unpack . unFullPath
 {-# INLINE toOsPath #-}
 toOsPath :: FullPath typ -> OsPath
 toOsPath = pathFromText . unFullPath
+
+pathFragmentToOsPath :: PathFragment -> OsPath
+pathFragmentToOsPath = pathFromText . unPathFragment
 
 fromFileOsPath :: OsPath -> IO (FullPath 'File)
 fromFileOsPath = fmap (FullPath . pathToText) . Directory.OsPath.makeAbsolute
