@@ -198,7 +198,7 @@ testData = GroupTest "server tests"
                   )
                 ]
             ]
-      -- test extraction and subsequent parsing of multiline import list
+        -- test extraction and subsequent parsing of multiline import list
       , withDirAndFile NameResolutionStrict (WorkingDirectory "0001module_with_imports") "ModuleWithMultilineImportList.hs" $
           group "multiline import list"
             [ ("import #1"
@@ -580,319 +580,319 @@ testData = GroupTest "server tests"
   , withWorkingDir NameResolutionStrict (WorkingDirectory "0007resolvable_import_cycle") $
       GroupTest "Resolvable import cycle"
         [ withFile "A.hs" $
-          group "A imports B with import list"
-            [ ( "Local function 1"
-              , "foo"
-              , known "foo" "A.hs" 14 Function
-              )
-            , ( "Local function 2"
-              , "bar"
-              , known "bar" "A.hs" 17 Function
-              )
-            , ( "Local function 3"
-              , "baz"
-              , known "baz" "A.hs" 20 Function
-              )
-             , ( "Imported visible type 1"
-              , "FooTyp"
-              , known "FooTyp" "B.hs" 14 Type
-              )
-            , ( "Imported visible constructor"
-              , "Foo"
-              , known' "Foo" "B.hs" 14 Constructor (ParentTag "FooTyp" Type)
-              )
-            , ( "Imported visible type 2"
-              , "BarTyp"
-              , known "BarTyp" "B.hs" 16 Type
-              )
-            , ( "Imported hidden constructor"
-              , "Bar"
-              , NotFound
-              )
-            , ( "Non-imported type"
-              , "BazTyp"
-              , NotFound
-              )
-            , ( "Constructor of non-imported type"
-              , "Baz"
-              , NotFound
-              )
-            ]
+            group "A imports B with import list"
+              [ ( "Local function 1"
+                , "foo"
+                , known "foo" "A.hs" 14 Function
+                )
+              , ( "Local function 2"
+                , "bar"
+                , known "bar" "A.hs" 17 Function
+                )
+              , ( "Local function 3"
+                , "baz"
+                , known "baz" "A.hs" 20 Function
+                )
+              , ( "Imported visible type 1"
+                , "FooTyp"
+                , known "FooTyp" "B.hs" 14 Type
+                )
+              , ( "Imported visible constructor"
+                , "Foo"
+                , known' "Foo" "B.hs" 14 Constructor (ParentTag "FooTyp" Type)
+                )
+              , ( "Imported visible type 2"
+                , "BarTyp"
+                , known "BarTyp" "B.hs" 16 Type
+                )
+              , ( "Imported hidden constructor"
+                , "Bar"
+                , NotFound
+                )
+              , ( "Non-imported type"
+                , "BazTyp"
+                , NotFound
+                )
+              , ( "Constructor of non-imported type"
+                , "Baz"
+                , NotFound
+                )
+              ]
         , withFile "B.hs" $
-          group "B imports A with import list"
-            [ ( "Local type 1"
-              , "FooTyp"
-              , known "FooTyp" "B.hs" 14 Type
-              )
-            , ( "Local constructor 1"
-              , "Foo"
-              , known' "Foo" "B.hs" 14 Constructor (ParentTag "FooTyp" Type)
-              )
-            , ( "Local type 2"
-              , "BarTyp"
-              , known "BarTyp" "B.hs" 16 Type
-              )
-            , ( "Local constructor 2"
-              , "Bar"
-              , known' "Bar" "B.hs" 16 Constructor (ParentTag "BarTyp" Type)
-              )
-            , ( "Local type 3"
-              , "BazTyp"
-              , known "BazTyp" "B.hs" 18 Type
-              )
-            , ( "Local constructor 3"
-              , "Baz"
-              , known' "Baz" "B.hs" 18 Constructor (ParentTag "BazTyp" Type)
-              )
-            , ( "Imported function 1"
-              , "foo"
-              , known "foo" "A.hs" 14 Function
-              )
-            , ( "Imported function 2"
-              , "bar"
-              , known "bar" "A.hs" 17 Function
-              )
-            , ( "Not imported function"
-              , "baz"
-              , NotFound
-              )
-            ]
+            group "B imports A with import list"
+              [ ( "Local type 1"
+                , "FooTyp"
+                , known "FooTyp" "B.hs" 14 Type
+                )
+              , ( "Local constructor 1"
+                , "Foo"
+                , known' "Foo" "B.hs" 14 Constructor (ParentTag "FooTyp" Type)
+                )
+              , ( "Local type 2"
+                , "BarTyp"
+                , known "BarTyp" "B.hs" 16 Type
+                )
+              , ( "Local constructor 2"
+                , "Bar"
+                , known' "Bar" "B.hs" 16 Constructor (ParentTag "BarTyp" Type)
+                )
+              , ( "Local type 3"
+                , "BazTyp"
+                , known "BazTyp" "B.hs" 18 Type
+                )
+              , ( "Local constructor 3"
+                , "Baz"
+                , known' "Baz" "B.hs" 18 Constructor (ParentTag "BazTyp" Type)
+                )
+              , ( "Imported function 1"
+                , "foo"
+                , known "foo" "A.hs" 14 Function
+                )
+              , ( "Imported function 2"
+                , "bar"
+                , known "bar" "A.hs" 17 Function
+                )
+              , ( "Not imported function"
+                , "baz"
+                , NotFound
+                )
+              ]
         , withFile "C.hs" $
-          group "C imports D with import list"
-            [ ( "Local function 1"
-              , "foo"
-              , known "foo" "C.hs" 14 Function
-              )
-            , ( "Local function 2"
-              , "bar"
-              , known "bar" "C.hs" 17 Function
-              )
-            , ( "Local function 3"
-              , "baz"
-              , known "baz" "C.hs" 20 Function
-              )
-             , ( "Imported visible type 1"
-              , "FooTyp"
-              , known "FooTyp" "D.hs" 14 Type
-              )
-            , ( "Imported visible constructor"
-              , "Foo"
-              , known' "Foo" "D.hs" 14 Constructor (ParentTag "FooTyp" Type)
-              )
-            , ( "Imported visible type 2"
-              , "BarTyp"
-              , known "BarTyp" "D.hs" 16 Type
-              )
-            , ( "Imported hidden constructor"
-              , "Bar"
-              , NotFound
-              )
-            , ( "Non-imported type"
-              , "BazTyp"
-              , NotFound
-              )
-            , ( "Constructor of non-imported type"
-              , "Baz"
-              , NotFound
-              )
-            ]
+            group "C imports D with import list"
+              [ ( "Local function 1"
+                , "foo"
+                , known "foo" "C.hs" 14 Function
+                )
+              , ( "Local function 2"
+                , "bar"
+                , known "bar" "C.hs" 17 Function
+                )
+              , ( "Local function 3"
+                , "baz"
+                , known "baz" "C.hs" 20 Function
+                )
+              , ( "Imported visible type 1"
+                , "FooTyp"
+                , known "FooTyp" "D.hs" 14 Type
+                )
+              , ( "Imported visible constructor"
+                , "Foo"
+                , known' "Foo" "D.hs" 14 Constructor (ParentTag "FooTyp" Type)
+                )
+              , ( "Imported visible type 2"
+                , "BarTyp"
+                , known "BarTyp" "D.hs" 16 Type
+                )
+              , ( "Imported hidden constructor"
+                , "Bar"
+                , NotFound
+                )
+              , ( "Non-imported type"
+                , "BazTyp"
+                , NotFound
+                )
+              , ( "Constructor of non-imported type"
+                , "Baz"
+                , NotFound
+                )
+              ]
         , withFile "D.hs" $
-          group "D imports C without import list"
-            [ ( "Local type 1"
-              , "FooTyp"
-              , known "FooTyp" "D.hs" 14 Type
-              )
-            , ( "Local constructor 1"
-              , "Foo"
-              , known' "Foo" "D.hs" 14 Constructor (ParentTag "FooTyp" Type)
-              )
-            , ( "Local type 2"
-              , "BarTyp"
-              , known "BarTyp" "D.hs" 16 Type
-              )
-            , ( "Local constructor 2"
-              , "Bar"
-              , known' "Bar" "D.hs" 16 Constructor (ParentTag "BarTyp" Type)
-              )
-            , ( "Local type 3"
-              , "BazTyp"
-              , known "BazTyp" "D.hs" 18 Type
-              )
-            , ( "Local constructor 3"
-              , "Baz"
-              , known' "Baz" "D.hs" 18 Constructor (ParentTag "BazTyp" Type)
-              )
-            , ( "Imported function 1"
-              , "foo"
-              , known "foo" "C.hs" 14 Function
-              )
-            , ( "Imported function 2"
-              , "bar"
-              , known "bar" "C.hs" 17 Function
-              )
-            , ( "Imported function 3"
-              , "baz"
-              , known "baz" "C.hs" 20 Function
-              )
-            ]
+            group "D imports C without import list"
+              [ ( "Local type 1"
+                , "FooTyp"
+                , known "FooTyp" "D.hs" 14 Type
+                )
+              , ( "Local constructor 1"
+                , "Foo"
+                , known' "Foo" "D.hs" 14 Constructor (ParentTag "FooTyp" Type)
+                )
+              , ( "Local type 2"
+                , "BarTyp"
+                , known "BarTyp" "D.hs" 16 Type
+                )
+              , ( "Local constructor 2"
+                , "Bar"
+                , known' "Bar" "D.hs" 16 Constructor (ParentTag "BarTyp" Type)
+                )
+              , ( "Local type 3"
+                , "BazTyp"
+                , known "BazTyp" "D.hs" 18 Type
+                )
+              , ( "Local constructor 3"
+                , "Baz"
+                , known' "Baz" "D.hs" 18 Constructor (ParentTag "BazTyp" Type)
+                )
+              , ( "Imported function 1"
+                , "foo"
+                , known "foo" "C.hs" 14 Function
+                )
+              , ( "Imported function 2"
+                , "bar"
+                , known "bar" "C.hs" 17 Function
+                )
+              , ( "Imported function 3"
+                , "baz"
+                , known "baz" "C.hs" 20 Function
+                )
+              ]
 
         , withFile "E.hs" $
-          group "E without export list imports F with import list"
-            [ ( "Local function 1"
-              , "foo"
-              , known "foo" "E.hs" 14 Function
-              )
-            , ( "Local function 2"
-              , "bar"
-              , known "bar" "E.hs" 17 Function
-              )
-            , ( "Local function 3"
-              , "baz"
-              , known "baz" "E.hs" 20 Function
-              )
-             , ( "Imported visible type 1"
-              , "FooTyp"
-              , known "FooTyp" "F.hs" 14 Type
-              )
-            , ( "Imported visible constructor"
-              , "Foo"
-              , known' "Foo" "F.hs" 14 Constructor (ParentTag "FooTyp" Type)
-              )
-            , ( "Imported visible type 2"
-              , "BarTyp"
-              , known "BarTyp" "F.hs" 16 Type
-              )
-            , ( "Imported hidden constructor"
-              , "Bar"
-              , NotFound
-              )
-            , ( "Non-imported type"
-              , "BazTyp"
-              , NotFound
-              )
-            , ( "Constructor of non-imported type"
-              , "Baz"
-              , NotFound
-              )
-            ]
+            group "E without export list imports F with import list"
+              [ ( "Local function 1"
+                , "foo"
+                , known "foo" "E.hs" 14 Function
+                )
+              , ( "Local function 2"
+                , "bar"
+                , known "bar" "E.hs" 17 Function
+                )
+              , ( "Local function 3"
+                , "baz"
+                , known "baz" "E.hs" 20 Function
+                )
+              , ( "Imported visible type 1"
+                , "FooTyp"
+                , known "FooTyp" "F.hs" 14 Type
+                )
+              , ( "Imported visible constructor"
+                , "Foo"
+                , known' "Foo" "F.hs" 14 Constructor (ParentTag "FooTyp" Type)
+                )
+              , ( "Imported visible type 2"
+                , "BarTyp"
+                , known "BarTyp" "F.hs" 16 Type
+                )
+              , ( "Imported hidden constructor"
+                , "Bar"
+                , NotFound
+                )
+              , ( "Non-imported type"
+                , "BazTyp"
+                , NotFound
+                )
+              , ( "Constructor of non-imported type"
+                , "Baz"
+                , NotFound
+                )
+              ]
         , withFile "F.hs" $
-          group "F imports E without import list"
-            [ ( "Local type 1"
-              , "FooTyp"
-              , known "FooTyp" "F.hs" 14 Type
-              )
-            , ( "Local constructor 1"
-              , "Foo"
-              , known' "Foo" "F.hs" 14 Constructor (ParentTag "FooTyp" Type)
-              )
-            , ( "Local type 2"
-              , "BarTyp"
-              , known "BarTyp" "F.hs" 16 Type
-              )
-            , ( "Local constructor 2"
-              , "Bar"
-              , known' "Bar" "F.hs" 16 Constructor (ParentTag "BarTyp" Type)
-              )
-            , ( "Local type 3"
-              , "BazTyp"
-              , known "BazTyp" "F.hs" 18 Type
-              )
-            , ( "Local constructor 3"
-              , "Baz"
-              , known' "Baz" "F.hs" 18 Constructor (ParentTag "BazTyp" Type)
-              )
-            , ( "Imported function 1"
-              , "foo"
-              , known "foo" "E.hs" 14 Function
-              )
-            , ( "Imported function 2"
-              , "bar"
-              , known "bar" "E.hs" 17 Function
-              )
-            , ( "Imported function 3"
-              , "baz"
-              , known "baz" "E.hs" 20 Function
-              )
-            ]
+            group "F imports E without import list"
+              [ ( "Local type 1"
+                , "FooTyp"
+                , known "FooTyp" "F.hs" 14 Type
+                )
+              , ( "Local constructor 1"
+                , "Foo"
+                , known' "Foo" "F.hs" 14 Constructor (ParentTag "FooTyp" Type)
+                )
+              , ( "Local type 2"
+                , "BarTyp"
+                , known "BarTyp" "F.hs" 16 Type
+                )
+              , ( "Local constructor 2"
+                , "Bar"
+                , known' "Bar" "F.hs" 16 Constructor (ParentTag "BarTyp" Type)
+                )
+              , ( "Local type 3"
+                , "BazTyp"
+                , known "BazTyp" "F.hs" 18 Type
+                )
+              , ( "Local constructor 3"
+                , "Baz"
+                , known' "Baz" "F.hs" 18 Constructor (ParentTag "BazTyp" Type)
+                )
+              , ( "Imported function 1"
+                , "foo"
+                , known "foo" "E.hs" 14 Function
+                )
+              , ( "Imported function 2"
+                , "bar"
+                , known "bar" "E.hs" 17 Function
+                )
+              , ( "Imported function 3"
+                , "baz"
+                , known "baz" "E.hs" 20 Function
+                )
+              ]
 
         , withFile "G.hs" $
-          group "G without export list imports H with import list"
-            [ ( "Local function 1"
-              , "foo"
-              , known "foo" "G.hs" 14 Function
-              )
-            , ( "Local function 2"
-              , "bar"
-              , known "bar" "G.hs" 17 Function
-              )
-            , ( "Local function 3"
-              , "baz"
-              , known "baz" "G.hs" 20 Function
-              )
-             , ( "Imported visible type 1"
-              , "FooTyp"
-              , known "FooTyp" "H.hs" 14 Type
-              )
-            , ( "Imported visible constructor 1"
-              , "Foo"
-              , known' "Foo" "H.hs" 14 Constructor (ParentTag "FooTyp" Type)
-              )
-            , ( "Imported visible type 2"
-              , "BarTyp"
-              , known "BarTyp" "H.hs" 16 Type
-              )
-            , ( "Imported visible constructor 2"
-              , "Bar"
-              , known' "Bar" "H.hs" 16 Constructor (ParentTag "BarTyp" Type)
-              )
-            , ( "Non-imported type"
-              , "BazTyp"
-              , NotFound
-              )
-            , ( "Constructor of non-imported type"
-              , "Baz"
-              , NotFound
-              )
-            ]
+            group "G without export list imports H with import list"
+              [ ( "Local function 1"
+                , "foo"
+                , known "foo" "G.hs" 14 Function
+                )
+              , ( "Local function 2"
+                , "bar"
+                , known "bar" "G.hs" 17 Function
+                )
+              , ( "Local function 3"
+                , "baz"
+                , known "baz" "G.hs" 20 Function
+                )
+              , ( "Imported visible type 1"
+                , "FooTyp"
+                , known "FooTyp" "H.hs" 14 Type
+                )
+              , ( "Imported visible constructor 1"
+                , "Foo"
+                , known' "Foo" "H.hs" 14 Constructor (ParentTag "FooTyp" Type)
+                )
+              , ( "Imported visible type 2"
+                , "BarTyp"
+                , known "BarTyp" "H.hs" 16 Type
+                )
+              , ( "Imported visible constructor 2"
+                , "Bar"
+                , known' "Bar" "H.hs" 16 Constructor (ParentTag "BarTyp" Type)
+                )
+              , ( "Non-imported type"
+                , "BazTyp"
+                , NotFound
+                )
+              , ( "Constructor of non-imported type"
+                , "Baz"
+                , NotFound
+                )
+              ]
         , withFile "H.hs" $
-          group "H imports G with import list"
-            [ ( "Local type 1"
-              , "FooTyp"
-              , known "FooTyp" "H.hs" 14 Type
-              )
-            , ( "Local constructor 1"
-              , "Foo"
-              , known' "Foo" "H.hs" 14 Constructor (ParentTag "FooTyp" Type)
-              )
-            , ( "Local type 2"
-              , "BarTyp"
-              , known "BarTyp" "H.hs" 16 Type
-              )
-            , ( "Local constructor 2"
-              , "Bar"
-              , known' "Bar" "H.hs" 16 Constructor (ParentTag "BarTyp" Type)
-              )
-            , ( "Local type 3"
-              , "BazTyp"
-              , known "BazTyp" "H.hs" 18 Type
-              )
-            , ( "Local constructor 3"
-              , "Baz"
-              , known' "Baz" "H.hs" 18 Constructor (ParentTag "BazTyp" Type)
-              )
-            , ( "Imported function 1"
-              , "foo"
-              , known "foo" "G.hs" 14 Function
-              )
-            , ( "Imported function 2"
-              , "bar"
-              , known "bar" "G.hs" 17 Function
-              )
-            , ( "Not imported function"
-              , "baz"
-              , NotFound
-              )
-            ]
+            group "H imports G with import list"
+              [ ( "Local type 1"
+                , "FooTyp"
+                , known "FooTyp" "H.hs" 14 Type
+                )
+              , ( "Local constructor 1"
+                , "Foo"
+                , known' "Foo" "H.hs" 14 Constructor (ParentTag "FooTyp" Type)
+                )
+              , ( "Local type 2"
+                , "BarTyp"
+                , known "BarTyp" "H.hs" 16 Type
+                )
+              , ( "Local constructor 2"
+                , "Bar"
+                , known' "Bar" "H.hs" 16 Constructor (ParentTag "BarTyp" Type)
+                )
+              , ( "Local type 3"
+                , "BazTyp"
+                , known "BazTyp" "H.hs" 18 Type
+                )
+              , ( "Local constructor 3"
+                , "Baz"
+                , known' "Baz" "H.hs" 18 Constructor (ParentTag "BazTyp" Type)
+                )
+              , ( "Imported function 1"
+                , "foo"
+                , known "foo" "G.hs" 14 Function
+                )
+              , ( "Imported function 2"
+                , "bar"
+                , known "bar" "G.hs" 17 Function
+                )
+              , ( "Not imported function"
+                , "baz"
+                , NotFound
+                )
+              ]
         ]
   , withDirAndFile NameResolutionStrict (WorkingDirectory "0008module_reexport") "ModuleWithImportsThatHaveModuleReexports.hs" $
       group "Module reexport"
@@ -961,102 +961,102 @@ testData = GroupTest "server tests"
           )
         ]
   , withWorkingDir NameResolutionLax (WorkingDirectory "0010exported_name_defined_via_macro") $
-    GroupTest "Import of module that defines some entities via macro"
-      [ withFile groupModule $
-        group groupName
-          [ ( "Type defined via macro #1"
-            , "ViaMacroWithWildcardChildren"
-            , known "ViaMacroWithWildcardChildren" "Definitions.hs" 12 Type
-            )
-          , ( "Wildcard-exported constructor defined via macro #1.1"
-            , "MWWC1"
-            , NotFound
-            )
-          , ( "Wildcard-exported constructor defined via macro #1.2"
-            , "MWWC2"
-            , NotFound
-            )
+      GroupTest "Import of module that defines some entities via macro"
+        [ withFile groupModule $
+            group groupName
+              [ ( "Type defined via macro #1"
+                , "ViaMacroWithWildcardChildren"
+                , known "ViaMacroWithWildcardChildren" "Definitions.hs" 12 Type
+                )
+              , ( "Wildcard-exported constructor defined via macro #1.1"
+                , "MWWC1"
+                , NotFound
+                )
+              , ( "Wildcard-exported constructor defined via macro #1.2"
+                , "MWWC2"
+                , NotFound
+                )
 
-          , ( "Type defined via macro #2"
-            , "ViaMacroWithExplicitChildren"
-            , known "ViaMacroWithExplicitChildren" "Definitions.hs" 13 Type
-            )
-          , ( "Unexported constructor defined via macro #2.1"
-            , "MWEC1"
-            , NotFound
-            )
-          , ( "Explicitly exported constructor defined via macro #2.2"
-            , "MWEC2"
-            , known' "MWEC2" "Definitions.hs" 13 Constructor (ParentTag "ViaMacroWithExplicitChildren" Type)
-            )
+              , ( "Type defined via macro #2"
+                , "ViaMacroWithExplicitChildren"
+                , known "ViaMacroWithExplicitChildren" "Definitions.hs" 13 Type
+                )
+              , ( "Unexported constructor defined via macro #2.1"
+                , "MWEC1"
+                , NotFound
+                )
+              , ( "Explicitly exported constructor defined via macro #2.2"
+                , "MWEC2"
+                , known' "MWEC2" "Definitions.hs" 13 Constructor (ParentTag "ViaMacroWithExplicitChildren" Type)
+                )
 
-          , ( "Type defined via macro #3"
-            , "ViaMacroNoChildren"
-            , known "ViaMacroNoChildren" "Definitions.hs" 14 Type
-            )
-          , ( "Unexported constructor defined via macro #3.1"
-            , "MNC1"
-            , NotFound
-            )
-          , ( "Unexported constructor defined via macro #3.2"
-            , "MNC2"
-            , NotFound
-            )
+              , ( "Type defined via macro #3"
+                , "ViaMacroNoChildren"
+                , known "ViaMacroNoChildren" "Definitions.hs" 14 Type
+                )
+              , ( "Unexported constructor defined via macro #3.1"
+                , "MNC1"
+                , NotFound
+                )
+              , ( "Unexported constructor defined via macro #3.2"
+                , "MNC2"
+                , NotFound
+                )
 
-          , ( "Function defined via macro"
-            , "viaMacro"
-            , known "viaMacro" "Definitions.hs" 15 Function
-            )
+              , ( "Function defined via macro"
+                , "viaMacro"
+                , known "viaMacro" "Definitions.hs" 15 Function
+                )
 
-          , ( "Vanilla type #1"
-            , "ViaDefWithWildcardChildren"
-            , known "ViaDefWithWildcardChildren" "Definitions.hs" 34 Type
-            )
-          , ( "Vanilla wildcard-exported constructor #1"
-            , "DWWC1"
-            , known' "DWWC1" "Definitions.hs" 35 Constructor (ParentTag "ViaDefWithWildcardChildren" Type)
-            )
-          , ( "Vanilla wildcard-exported constructor #2"
-            , "DWWC2"
-            , known' "DWWC2" "Definitions.hs" 36 Constructor (ParentTag "ViaDefWithWildcardChildren" Type)
-            )
+              , ( "Vanilla type #1"
+                , "ViaDefWithWildcardChildren"
+                , known "ViaDefWithWildcardChildren" "Definitions.hs" 34 Type
+                )
+              , ( "Vanilla wildcard-exported constructor #1"
+                , "DWWC1"
+                , known' "DWWC1" "Definitions.hs" 35 Constructor (ParentTag "ViaDefWithWildcardChildren" Type)
+                )
+              , ( "Vanilla wildcard-exported constructor #2"
+                , "DWWC2"
+                , known' "DWWC2" "Definitions.hs" 36 Constructor (ParentTag "ViaDefWithWildcardChildren" Type)
+                )
 
-          , ( "Vanilla type #2"
-            , "ViaDefWithExplicitChildren"
-            , known "ViaDefWithExplicitChildren" "Definitions.hs" 39 Type
-            )
-          , ( "Vanilla unexported constructor #2.1"
-            , "DWEC1"
-            , NotFound
-            )
-          , ( "Vanilla explicitly exported constructor"
-            , "DWEC2"
-            , known' "DWEC2" "Definitions.hs" 41 Constructor (ParentTag "ViaDefWithExplicitChildren" Type)
-            )
+              , ( "Vanilla type #2"
+                , "ViaDefWithExplicitChildren"
+                , known "ViaDefWithExplicitChildren" "Definitions.hs" 39 Type
+                )
+              , ( "Vanilla unexported constructor #2.1"
+                , "DWEC1"
+                , NotFound
+                )
+              , ( "Vanilla explicitly exported constructor"
+                , "DWEC2"
+                , known' "DWEC2" "Definitions.hs" 41 Constructor (ParentTag "ViaDefWithExplicitChildren" Type)
+                )
 
-          , ( "Vanilla type #3"
-            , "ViaDefNoChildren"
-            , known "ViaDefNoChildren" "Definitions.hs" 44 Type
-            )
-          , ( "Vanilla unexported constructor #3.1"
-            , "DNC1"
-            , NotFound
-            )
-          , ( "Vanilla unexported constructor #3.2"
-            , "DNC2"
-            , NotFound
-            )
+              , ( "Vanilla type #3"
+                , "ViaDefNoChildren"
+                , known "ViaDefNoChildren" "Definitions.hs" 44 Type
+                )
+              , ( "Vanilla unexported constructor #3.1"
+                , "DNC1"
+                , NotFound
+                )
+              , ( "Vanilla unexported constructor #3.2"
+                , "DNC2"
+                , NotFound
+                )
 
-          , ( "Vanilla function"
-            , "viaDef"
-            , known "viaDef" "Definitions.hs" 51 Function
-            )
-          ]
-      | (groupName, groupModule) <-
-        [ ("Direct import", "ImportDirectly.hs")
-        , ("Via reexport", "ImportViaReexport.hs")
+              , ( "Vanilla function"
+                , "viaDef"
+                , known "viaDef" "Definitions.hs" 51 Function
+                )
+              ]
+        | (groupName, groupModule) <-
+            [ ("Direct import", "ImportDirectly.hs")
+            , ("Via reexport", "ImportViaReexport.hs")
+            ]
         ]
-      ]
   , withDirAndFile NameResolutionStrict (WorkingDirectory "0011hide_constructor_named_as_type") "MainModule.hs" $
       group "When constructor has the same name as its type then only type will be found"
         [ ( "Same name - record"
@@ -1122,200 +1122,200 @@ testData = GroupTest "server tests"
           )
         ]
   , withWorkingDir NameResolutionStrict (WorkingDirectory "0012resolve_reexport_import_cycles") $
-    GroupTest "Resolve import cycles caused by module that reexports stuff"
-      [ withFile "import1NoListImport2WithListChildrenWildcardsReexportModule/ImportReexports.hs" $
-        group "Import1 - NoList Import2 - WithListChildrenWildcards ReexportModule - ImportReexports"
-          [ (T.unpack sym, sym, response)
-          | (sym, response) <-
-            [ ("FooA",          known  "FooA"   "ANoExportList.hs" 15 Type)
-            , ("FooA1",         known' "FooA1"  "ANoExportList.hs" 15 Constructor (ParentTag "FooA" Type))
-            , ("fooA1",         known' "fooA1"  "ANoExportList.hs" 16 Function (ParentTag "FooA" Type))
-            , ("fooA2",         known' "fooA2"  "ANoExportList.hs" 17 Function (ParentTag "FooA" Type))
-            , ("BarA",          known  "BarA"   "ANoExportList.hs" 20 Type)
-            , ("BarA1",         known' "BarA1"  "ANoExportList.hs" 21 Constructor (ParentTag "BarA" Type))
-            , ("unBarA",        known' "unBarA" "ANoExportList.hs" 22 Function (ParentTag "BarA" Type))
-            , ("BazAP",         known  "BazAP"  "ANoExportList.hs" 24 Pattern)
-            , ("quuxA",         known  "quuxA"  "ANoExportList.hs" 27 Function)
-            , ("FrobAP",        known  "FrobAP" "ANoExportList.hs" 30 Pattern)
-            , ("QuuxA",         known  "QuuxA"  "ANoExportList.hs" 33 Type)
-            , ("QuuxA1",        known' "QuuxA1" "ANoExportList.hs" 34 Constructor (ParentTag "QuuxA" Type))
-            , ("QuuxA2",        known' "QuuxA2" "ANoExportList.hs" 35 Constructor (ParentTag "QuuxA" Type))
-            , ("QuuxAP",        known  "QuuxAP" "ANoExportList.hs" 37 Pattern)
-            , ("derivedA",      NotFound)
+      GroupTest "Resolve import cycles caused by module that reexports stuff"
+        [ withFile "import1NoListImport2WithListChildrenWildcardsReexportModule/ImportReexports.hs" $
+            group "Import1 - NoList Import2 - WithListChildrenWildcards ReexportModule - ImportReexports"
+              [ (T.unpack sym, sym, response)
+              | (sym, response) <-
+                  [ ("FooA",          known  "FooA"   "ANoExportList.hs" 15 Type)
+                  , ("FooA1",         known' "FooA1"  "ANoExportList.hs" 15 Constructor (ParentTag "FooA" Type))
+                  , ("fooA1",         known' "fooA1"  "ANoExportList.hs" 16 Function (ParentTag "FooA" Type))
+                  , ("fooA2",         known' "fooA2"  "ANoExportList.hs" 17 Function (ParentTag "FooA" Type))
+                  , ("BarA",          known  "BarA"   "ANoExportList.hs" 20 Type)
+                  , ("BarA1",         known' "BarA1"  "ANoExportList.hs" 21 Constructor (ParentTag "BarA" Type))
+                  , ("unBarA",        known' "unBarA" "ANoExportList.hs" 22 Function (ParentTag "BarA" Type))
+                  , ("BazAP",         known  "BazAP"  "ANoExportList.hs" 24 Pattern)
+                  , ("quuxA",         known  "quuxA"  "ANoExportList.hs" 27 Function)
+                  , ("FrobAP",        known  "FrobAP" "ANoExportList.hs" 30 Pattern)
+                  , ("QuuxA",         known  "QuuxA"  "ANoExportList.hs" 33 Type)
+                  , ("QuuxA1",        known' "QuuxA1" "ANoExportList.hs" 34 Constructor (ParentTag "QuuxA" Type))
+                  , ("QuuxA2",        known' "QuuxA2" "ANoExportList.hs" 35 Constructor (ParentTag "QuuxA" Type))
+                  , ("QuuxAP",        known  "QuuxAP" "ANoExportList.hs" 37 Pattern)
+                  , ("derivedA",      NotFound)
 
-            , ("FooB",          known  "FooB"     "BWildcardExportListWithChildren.hs" 25 Type)
-            , ("FooB1",         known' "FooB1"    "BWildcardExportListWithChildren.hs" 25 Constructor (ParentTag "FooB" Type))
-            , ("fooB1",         known' "fooB1"    "BWildcardExportListWithChildren.hs" 26 Function (ParentTag "FooB" Type))
-            , ("fooB2",         known' "fooB2"    "BWildcardExportListWithChildren.hs" 27 Function (ParentTag "FooB" Type))
-            , ("BarB",          known  "BarB"     "BWildcardExportListWithChildren.hs" 30 Type)
-            , ("BarB1",         known' "BarB1"    "BWildcardExportListWithChildren.hs" 31 Constructor (ParentTag "BarB" Type))
-            , ("unBarB",        known' "unBarB"   "BWildcardExportListWithChildren.hs" 32 Function (ParentTag "BarB" Type))
-            , ("BazBP",         known  "BazBP"    "BWildcardExportListWithChildren.hs" 34 Pattern)
-            , ("quuxB",         known  "quuxB"    "BWildcardExportListWithChildren.hs" 37 Function)
-            , ("FrobBP",        known  "FrobBP"   "BWildcardExportListWithChildren.hs" 40 Pattern)
-            , ("QuuxB",         known  "QuuxB"    "BWildcardExportListWithChildren.hs" 43 Type)
-            , ("QuuxB1",        known' "QuuxB1"   "BWildcardExportListWithChildren.hs" 44 Constructor (ParentTag "QuuxB" Type))
-            , ("QuuxB2",        known' "QuuxB2"   "BWildcardExportListWithChildren.hs" 45 Constructor (ParentTag "QuuxB" Type))
-            , ("QuuxBP",        known  "QuuxBP"   "BWildcardExportListWithChildren.hs" 47 Pattern)
-            , ("derivedB",      known  "derivedB" "BWildcardExportListWithChildren.hs" 22 Function)
+                  , ("FooB",          known  "FooB"     "BWildcardExportListWithChildren.hs" 25 Type)
+                  , ("FooB1",         known' "FooB1"    "BWildcardExportListWithChildren.hs" 25 Constructor (ParentTag "FooB" Type))
+                  , ("fooB1",         known' "fooB1"    "BWildcardExportListWithChildren.hs" 26 Function (ParentTag "FooB" Type))
+                  , ("fooB2",         known' "fooB2"    "BWildcardExportListWithChildren.hs" 27 Function (ParentTag "FooB" Type))
+                  , ("BarB",          known  "BarB"     "BWildcardExportListWithChildren.hs" 30 Type)
+                  , ("BarB1",         known' "BarB1"    "BWildcardExportListWithChildren.hs" 31 Constructor (ParentTag "BarB" Type))
+                  , ("unBarB",        known' "unBarB"   "BWildcardExportListWithChildren.hs" 32 Function (ParentTag "BarB" Type))
+                  , ("BazBP",         known  "BazBP"    "BWildcardExportListWithChildren.hs" 34 Pattern)
+                  , ("quuxB",         known  "quuxB"    "BWildcardExportListWithChildren.hs" 37 Function)
+                  , ("FrobBP",        known  "FrobBP"   "BWildcardExportListWithChildren.hs" 40 Pattern)
+                  , ("QuuxB",         known  "QuuxB"    "BWildcardExportListWithChildren.hs" 43 Type)
+                  , ("QuuxB1",        known' "QuuxB1"   "BWildcardExportListWithChildren.hs" 44 Constructor (ParentTag "QuuxB" Type))
+                  , ("QuuxB2",        known' "QuuxB2"   "BWildcardExportListWithChildren.hs" 45 Constructor (ParentTag "QuuxB" Type))
+                  , ("QuuxBP",        known  "QuuxBP"   "BWildcardExportListWithChildren.hs" 47 Pattern)
+                  , ("derivedB",      known  "derivedB" "BWildcardExportListWithChildren.hs" 22 Function)
 
-            , ("FooC",          known  "FooC"     "CWildcardExportListWithChildrenPlusSome.hs" 22 Type)
-            , ("FooC1",         known' "FooC1"    "CWildcardExportListWithChildrenPlusSome.hs" 22 Constructor (ParentTag "FooC" Type))
-            , ("fooC1",         known' "fooC1"    "CWildcardExportListWithChildrenPlusSome.hs" 23 Function (ParentTag "FooC" Type))
-            , ("fooC2",         known' "fooC2"    "CWildcardExportListWithChildrenPlusSome.hs" 24 Function (ParentTag "FooC" Type))
-            , ("BarC",          known  "BarC"     "CWildcardExportListWithChildrenPlusSome.hs" 27 Type)
-            , ("BarC1",         known' "BarC1"    "CWildcardExportListWithChildrenPlusSome.hs" 28 Constructor (ParentTag "BarC" Type))
-            , ("unBarC",        known' "unBarC"   "CWildcardExportListWithChildrenPlusSome.hs" 29 Function (ParentTag "BarC" Type))
-            , ("BazCP",         known  "BazCP"    "CWildcardExportListWithChildrenPlusSome.hs" 31 Pattern)
-            , ("quuxC",         known  "quuxC"    "CWildcardExportListWithChildrenPlusSome.hs" 34 Function)
-            , ("FrobCP",        known  "FrobCP"   "CWildcardExportListWithChildrenPlusSome.hs" 37 Pattern)
-            , ("QuuxC",         known  "QuuxC"    "CWildcardExportListWithChildrenPlusSome.hs" 40 Type)
-            , ("QuuxC1",        known' "QuuxC1"   "CWildcardExportListWithChildrenPlusSome.hs" 41 Constructor (ParentTag "QuuxC" Type))
-            , ("QuuxC2",        known' "QuuxC2"   "CWildcardExportListWithChildrenPlusSome.hs" 42 Constructor (ParentTag "QuuxC" Type))
-            , ("QuuxCP",        known  "QuuxCP"   "CWildcardExportListWithChildrenPlusSome.hs" 44 Pattern)
-            , ("derivedC",      known  "derivedC" "CWildcardExportListWithChildrenPlusSome.hs" 19 Function)
+                  , ("FooC",          known  "FooC"     "CWildcardExportListWithChildrenPlusSome.hs" 22 Type)
+                  , ("FooC1",         known' "FooC1"    "CWildcardExportListWithChildrenPlusSome.hs" 22 Constructor (ParentTag "FooC" Type))
+                  , ("fooC1",         known' "fooC1"    "CWildcardExportListWithChildrenPlusSome.hs" 23 Function (ParentTag "FooC" Type))
+                  , ("fooC2",         known' "fooC2"    "CWildcardExportListWithChildrenPlusSome.hs" 24 Function (ParentTag "FooC" Type))
+                  , ("BarC",          known  "BarC"     "CWildcardExportListWithChildrenPlusSome.hs" 27 Type)
+                  , ("BarC1",         known' "BarC1"    "CWildcardExportListWithChildrenPlusSome.hs" 28 Constructor (ParentTag "BarC" Type))
+                  , ("unBarC",        known' "unBarC"   "CWildcardExportListWithChildrenPlusSome.hs" 29 Function (ParentTag "BarC" Type))
+                  , ("BazCP",         known  "BazCP"    "CWildcardExportListWithChildrenPlusSome.hs" 31 Pattern)
+                  , ("quuxC",         known  "quuxC"    "CWildcardExportListWithChildrenPlusSome.hs" 34 Function)
+                  , ("FrobCP",        known  "FrobCP"   "CWildcardExportListWithChildrenPlusSome.hs" 37 Pattern)
+                  , ("QuuxC",         known  "QuuxC"    "CWildcardExportListWithChildrenPlusSome.hs" 40 Type)
+                  , ("QuuxC1",        known' "QuuxC1"   "CWildcardExportListWithChildrenPlusSome.hs" 41 Constructor (ParentTag "QuuxC" Type))
+                  , ("QuuxC2",        known' "QuuxC2"   "CWildcardExportListWithChildrenPlusSome.hs" 42 Constructor (ParentTag "QuuxC" Type))
+                  , ("QuuxCP",        known  "QuuxCP"   "CWildcardExportListWithChildrenPlusSome.hs" 44 Pattern)
+                  , ("derivedC",      known  "derivedC" "CWildcardExportListWithChildrenPlusSome.hs" 19 Function)
 
-            , ("FooD",          known  "FooD"     "DSpecificExportListWithChildren.hs" 26 Type)
-            , ("FooD1",         known' "FooD1"    "DSpecificExportListWithChildren.hs" 26 Constructor (ParentTag "FooD" Type))
-            , ("fooD1",         NotFound)
-            , ("fooD2",         NotFound)
-            , ("BarD",          known  "BarD"     "DSpecificExportListWithChildren.hs" 31 Type)
-            , ("BarD1",         known' "BarD1"    "DSpecificExportListWithChildren.hs" 32 Constructor (ParentTag "BarD" Type))
-            , ("unBarD",        known' "unBarD"   "DSpecificExportListWithChildren.hs" 33 Function (ParentTag "BarD" Type))
-            , ("BazDP",         known  "BazDP"    "DSpecificExportListWithChildren.hs" 35 Pattern)
-            , ("quuxD",         known  "quuxD"    "DSpecificExportListWithChildren.hs" 38 Function)
-            , ("FrobDP",        known  "FrobDP"   "DSpecificExportListWithChildren.hs" 41 Pattern)
-            , ("QuuxD",         known  "QuuxD"    "DSpecificExportListWithChildren.hs" 44 Type)
-            , ("QuuxD1",        NotFound)
-            , ("QuuxD2",        known' "QuuxD2"   "DSpecificExportListWithChildren.hs" 46 Constructor (ParentTag "QuuxD" Type))
-            , ("QuuxDP",        known  "QuuxDP"   "DSpecificExportListWithChildren.hs" 48 Pattern)
-            , ("derivedD",      known  "derivedD" "DSpecificExportListWithChildren.hs" 22 Function)
+                  , ("FooD",          known  "FooD"     "DSpecificExportListWithChildren.hs" 26 Type)
+                  , ("FooD1",         known' "FooD1"    "DSpecificExportListWithChildren.hs" 26 Constructor (ParentTag "FooD" Type))
+                  , ("fooD1",         NotFound)
+                  , ("fooD2",         NotFound)
+                  , ("BarD",          known  "BarD"     "DSpecificExportListWithChildren.hs" 31 Type)
+                  , ("BarD1",         known' "BarD1"    "DSpecificExportListWithChildren.hs" 32 Constructor (ParentTag "BarD" Type))
+                  , ("unBarD",        known' "unBarD"   "DSpecificExportListWithChildren.hs" 33 Function (ParentTag "BarD" Type))
+                  , ("BazDP",         known  "BazDP"    "DSpecificExportListWithChildren.hs" 35 Pattern)
+                  , ("quuxD",         known  "quuxD"    "DSpecificExportListWithChildren.hs" 38 Function)
+                  , ("FrobDP",        known  "FrobDP"   "DSpecificExportListWithChildren.hs" 41 Pattern)
+                  , ("QuuxD",         known  "QuuxD"    "DSpecificExportListWithChildren.hs" 44 Type)
+                  , ("QuuxD1",        NotFound)
+                  , ("QuuxD2",        known' "QuuxD2"   "DSpecificExportListWithChildren.hs" 46 Constructor (ParentTag "QuuxD" Type))
+                  , ("QuuxDP",        known  "QuuxDP"   "DSpecificExportListWithChildren.hs" 48 Pattern)
+                  , ("derivedD",      known  "derivedD" "DSpecificExportListWithChildren.hs" 22 Function)
 
-            , ("FooE",          known  "FooE"     "ESpecificExportListWithChildrenPlusSome.hs" 22 Type)
-            , ("FooE1",         known' "FooE1"    "ESpecificExportListWithChildrenPlusSome.hs" 22 Constructor (ParentTag "FooE" Type))
-            , ("fooE1",         NotFound)
-            , ("fooE2",         NotFound)
-            , ("BarE",          known  "BarE"     "ESpecificExportListWithChildrenPlusSome.hs" 27 Type)
-            , ("BarE1",         known' "BarE1"    "ESpecificExportListWithChildrenPlusSome.hs" 28 Constructor (ParentTag "BarE" Type))
-            , ("unBarE",        known' "unBarE"   "ESpecificExportListWithChildrenPlusSome.hs" 29 Function (ParentTag "BarE" Type))
-            , ("BazEP",         known  "BazEP"    "ESpecificExportListWithChildrenPlusSome.hs" 31 Pattern)
-            , ("quuxE",         known  "quuxE"    "ESpecificExportListWithChildrenPlusSome.hs" 34 Function)
-            , ("FrobEP",        known  "FrobEP"   "ESpecificExportListWithChildrenPlusSome.hs" 37 Pattern)
-            , ("QuuxE",         known  "QuuxE"    "ESpecificExportListWithChildrenPlusSome.hs" 40 Type)
-            , ("QuuxE1",        NotFound)
-            , ("QuuxE2",        known' "QuuxE2"   "ESpecificExportListWithChildrenPlusSome.hs" 42 Constructor (ParentTag "QuuxE" Type))
-            , ("QuuxEP",        known  "QuuxEP"   "ESpecificExportListWithChildrenPlusSome.hs" 44 Pattern)
-            , ("derivedE",      known  "derivedE" "ESpecificExportListWithChildrenPlusSome.hs" 19 Function)
+                  , ("FooE",          known  "FooE"     "ESpecificExportListWithChildrenPlusSome.hs" 22 Type)
+                  , ("FooE1",         known' "FooE1"    "ESpecificExportListWithChildrenPlusSome.hs" 22 Constructor (ParentTag "FooE" Type))
+                  , ("fooE1",         NotFound)
+                  , ("fooE2",         NotFound)
+                  , ("BarE",          known  "BarE"     "ESpecificExportListWithChildrenPlusSome.hs" 27 Type)
+                  , ("BarE1",         known' "BarE1"    "ESpecificExportListWithChildrenPlusSome.hs" 28 Constructor (ParentTag "BarE" Type))
+                  , ("unBarE",        known' "unBarE"   "ESpecificExportListWithChildrenPlusSome.hs" 29 Function (ParentTag "BarE" Type))
+                  , ("BazEP",         known  "BazEP"    "ESpecificExportListWithChildrenPlusSome.hs" 31 Pattern)
+                  , ("quuxE",         known  "quuxE"    "ESpecificExportListWithChildrenPlusSome.hs" 34 Function)
+                  , ("FrobEP",        known  "FrobEP"   "ESpecificExportListWithChildrenPlusSome.hs" 37 Pattern)
+                  , ("QuuxE",         known  "QuuxE"    "ESpecificExportListWithChildrenPlusSome.hs" 40 Type)
+                  , ("QuuxE1",        NotFound)
+                  , ("QuuxE2",        known' "QuuxE2"   "ESpecificExportListWithChildrenPlusSome.hs" 42 Constructor (ParentTag "QuuxE" Type))
+                  , ("QuuxEP",        known  "QuuxEP"   "ESpecificExportListWithChildrenPlusSome.hs" 44 Pattern)
+                  , ("derivedE",      known  "derivedE" "ESpecificExportListWithChildrenPlusSome.hs" 19 Function)
 
-            , ("reexportsFunc", known  "reexportsFunc" "import1NoListImport2WithListChildrenWildcardsReexportModule/Reexports.hs" 27 Function)
-            , ("ReexportType",  known  "ReexportType"  "import1NoListImport2WithListChildrenWildcardsReexportModule/Reexports.hs" 30 Type)
-            , ("ReexportC1",    known' "ReexportC1"    "import1NoListImport2WithListChildrenWildcardsReexportModule/Reexports.hs" 31 Constructor (ParentTag "ReexportType" Type))
-            , ("ReexportC2",    known' "ReexportC2"    "import1NoListImport2WithListChildrenWildcardsReexportModule/Reexports.hs" 32 Constructor (ParentTag "ReexportType" Type))
-            , ("commonFunc"
-              , Ambiguous $ map (\(sym, file, n) -> (sym, file, n, Function, Nothing))
-                [ (s "commonFunc", "ANoExportList.hs", 40)
-                , (s "commonFunc", "BWildcardExportListWithChildren.hs", 50)
-                , (s "commonFunc", "CWildcardExportListWithChildrenPlusSome.hs", 47)
-                , (s "commonFunc", "DSpecificExportListWithChildren.hs", 51)
-                , (s "commonFunc", "ESpecificExportListWithChildrenPlusSome.hs", 47)
-                ]
-              )
-            ]
-          ]
-      , withFile "import1NoListImport2WithListChildrenWildcardsReexportModule/ImportCausesImportCycle.hs" $
-        group "Import1 - NoList Import2 - WithListChildrenWildcards ReexportModule - ImportCausesImportCycle"
-          [ (T.unpack sym, sym, response)
-          | (sym, response) <-
-            [ ("foo", known "foo" "import1NoListImport2WithListChildrenWildcardsReexportModule/CausesImportCycle.hs" 17 Function)
-            ]
-          ]
-      ]
+                  , ("reexportsFunc", known  "reexportsFunc" "import1NoListImport2WithListChildrenWildcardsReexportModule/Reexports.hs" 27 Function)
+                  , ("ReexportType",  known  "ReexportType"  "import1NoListImport2WithListChildrenWildcardsReexportModule/Reexports.hs" 30 Type)
+                  , ("ReexportC1",    known' "ReexportC1"    "import1NoListImport2WithListChildrenWildcardsReexportModule/Reexports.hs" 31 Constructor (ParentTag "ReexportType" Type))
+                  , ("ReexportC2",    known' "ReexportC2"    "import1NoListImport2WithListChildrenWildcardsReexportModule/Reexports.hs" 32 Constructor (ParentTag "ReexportType" Type))
+                  , ("commonFunc"
+                    , Ambiguous $ map (\(sym, file, n) -> (sym, file, n, Function, Nothing))
+                        [ (s "commonFunc", "ANoExportList.hs", 40)
+                        , (s "commonFunc", "BWildcardExportListWithChildren.hs", 50)
+                        , (s "commonFunc", "CWildcardExportListWithChildrenPlusSome.hs", 47)
+                        , (s "commonFunc", "DSpecificExportListWithChildren.hs", 51)
+                        , (s "commonFunc", "ESpecificExportListWithChildrenPlusSome.hs", 47)
+                        ]
+                    )
+                  ]
+              ]
+        , withFile "import1NoListImport2WithListChildrenWildcardsReexportModule/ImportCausesImportCycle.hs" $
+            group "Import1 - NoList Import2 - WithListChildrenWildcards ReexportModule - ImportCausesImportCycle"
+              [ (T.unpack sym, sym, response)
+              | (sym, response) <-
+                  [ ("foo", known "foo" "import1NoListImport2WithListChildrenWildcardsReexportModule/CausesImportCycle.hs" 17 Function)
+                  ]
+              ]
+        ]
   , withDirAndFile NameResolutionStrict (WorkingDirectory "0013module_imports_same_name") "MainModule.hs" $
       group "Some dependent module imports another module with the same name but different location"
         [ (T.unpack sym, sym, response)
         | (sym, response) <-
-          [ ("foo",       known "foo" "module1/Dependency.hs" 16 Function)
-          , ("bar",       known "bar" "module2/Dependency.hs" 11 Function)
-          , ("ambiguous"
-            , Ambiguous $ map (\(sym, file, n) -> (sym, file, n, Function, Nothing))
-              [ (s "ambiguous", "module1/Dependency.hs", 13)
-              , (s "ambiguous", "module2/Dependency.hs", 14)
-              ]
-            )
-          ]
+            [ ("foo",       known "foo" "module1/Dependency.hs" 16 Function)
+            , ("bar",       known "bar" "module2/Dependency.hs" 11 Function)
+            , ( "ambiguous"
+              , Ambiguous $ map (\(sym, file, n) -> (sym, file, n, Function, Nothing))
+                  [ (s "ambiguous", "module1/Dependency.hs", 13)
+                  , (s "ambiguous", "module2/Dependency.hs", 14)
+                  ]
+              )
+            ]
         ]
   , withDirAndFile NameResolutionStrict (WorkingDirectory "0014module_imports_same_name_multiple_occurrences") "MainModule.hs" $
       group "Several dependent modules imports another module with the same name but different location"
         [ (T.unpack sym, sym, response)
         | (sym, response) <-
-          [ ("foo",       known "foo" "module1/Dependency.hs" 16 Function)
-          , ("foofoo",    known "foofoo" "module1/Foo.hs"        15 Function)
-          , ("bar",       known "bar" "module2/Dependency.hs" 11 Function)
-          , ("frob",      known "frob" "module3/Dependency.hs" 18 Function)
-          , ("ambiguous"
-            , Ambiguous $ map (\(sym, file, n) -> (sym, file, n, Function, Nothing))
-              [ (s "ambiguous", "module1/Dependency.hs", 13)
-              , (s "ambiguous", "module2/Dependency.hs", 14)
-              , (s "ambiguous", "module3/Dependency.hs", 15)
-              ]
-            )
-          ]
+            [ ("foo",       known "foo" "module1/Dependency.hs" 16 Function)
+            , ("foofoo",    known "foofoo" "module1/Foo.hs"        15 Function)
+            , ("bar",       known "bar" "module2/Dependency.hs" 11 Function)
+            , ("frob",      known "frob" "module3/Dependency.hs" 18 Function)
+            , ("ambiguous"
+              , Ambiguous $ map (\(sym, file, n) -> (sym, file, n, Function, Nothing))
+                  [ (s "ambiguous", "module1/Dependency.hs", 13)
+                  , (s "ambiguous", "module2/Dependency.hs", 14)
+                  , (s "ambiguous", "module3/Dependency.hs", 15)
+                  ]
+              )
+            ]
         ]
   , withDirAndFile NameResolutionStrict (WorkingDirectory "0015reexport_via_implicit_qualifier") "Main.hs" $
       group "Reexport name via implicit module qualifier"
         [ (T.unpack sym, sym, response)
         | (sym, response) <-
-          [ ("foo",       known "foo" "Source.hs" 11 Function)
-          , ("Bar",       known "Bar" "Source.hs" 14 Type)
-          , ("unBar",     NotFound)
-          , ("lookup",    known "lookup" "ModuleWithReexport.hs" 17 Function)
-          ]
+            [ ("foo",       known "foo" "Source.hs" 11 Function)
+            , ("Bar",       known "Bar" "Source.hs" 14 Type)
+            , ("unBar",     NotFound)
+            , ("lookup",    known "lookup" "ModuleWithReexport.hs" 17 Function)
+            ]
         ]
   , withDirAndFile NameResolutionLax (WorkingDirectory "0016reexport_of_missing_module") "Main.hs" $
       group "Reexport of missing module"
         [ (T.unpack sym, sym, response)
         | (sym, response) <-
-          [ ("foo",       known "foo" "Source.hs" 11 Function)
-          , ("Bar",       known "Bar" "Source.hs" 14 Type)
-          , ("unBar",     NotFound)
-          , ("lookup",    known "lookup" "ModuleWithReexport.hs" 21 Function)
-          -- These names come from missing modules and should default
-          -- to the export list of the module that refers to them.
-          , ("foo2",      known "foo2" "ModuleWithReexport.hs" 13 Function)
-          , ("Quux",      known "Quux" "ModuleWithReexport.hs" 14 Type)
-          ]
+            [ ("foo",       known "foo" "Source.hs" 11 Function)
+            , ("Bar",       known "Bar" "Source.hs" 14 Type)
+            , ("unBar",     NotFound)
+            , ("lookup",    known "lookup" "ModuleWithReexport.hs" 21 Function)
+              -- These names come from missing modules and should default
+              -- to the export list of the module that refers to them.
+            , ("foo2",      known "foo2" "ModuleWithReexport.hs" 13 Function)
+            , ("Quux",      known "Quux" "ModuleWithReexport.hs" 14 Type)
+            ]
         ]
   , withDirAndFile NameResolutionLax (WorkingDirectory "0017ignored_dirs_and_files") "Main.hs" $
       group "Recursive dir does find dependency in subdirectory"
         [ (T.unpack sym, sym, response)
         | (sym, response) <-
-          [ ("foo",       known "foo" "dep/Dependency.hs" 12 Function)
-          , ("bar",       NotFound)
-          ]
+            [ ("foo",       known "foo" "dep/Dependency.hs" 12 Function)
+            , ("bar",       NotFound)
+            ]
         ]
   , withDirAndFile NameResolutionLax (WorkingDirectory "0018definitions_between_import_and_foreign_import") "Main.hs" $
       group "Recursive dir with ignored glob that matches all files"
         [ (T.unpack sym, sym, response)
         | (sym, response) <-
-          [ ("foo",       known "foo" "Dependency1.hs" 14 Function)
-          , ("bar",       known "bar" "Dependency1.hs" 19 Function)
-          , ("test",      known "test" "Dependency1.hs" 22 Function)
-          , ("baz",       known "baz" "Dependency1.hs" 24 Function)
-          , ("quux",      known "quux" "Dependency2.hs" 11 Function)
-          ]
+            [ ("foo",       known "foo" "Dependency1.hs" 14 Function)
+            , ("bar",       known "bar" "Dependency1.hs" 19 Function)
+            , ("test",      known "test" "Dependency1.hs" 22 Function)
+            , ("baz",       known "baz" "Dependency1.hs" 24 Function)
+            , ("quux",      known "quux" "Dependency2.hs" 11 Function)
+            ]
         ]
   , withDirAndFile NameResolutionLax (WorkingDirectory "0019field_names") "Main.hs" $
       group "Record fields enter scope as unqualified, even from qualified-only imports"
         [ (T.unpack sym, sym, response)
         | (sym, response) <-
-          [ ("foo",       NotFound)
-          , ("D.foo",     known  "foo" "Dependency.hs" 11 Function)
-          , ("Foo",       NotFound)
-          , ("D.Foo",     known  "Foo" "Dependency.hs" 14 Type)
-          , ("bar",       known' "bar" "Dependency.hs" 15 Function (ParentTag "Foo" Type))
-          , ("baz",       known' "baz" "Dependency.hs" 16 Function (ParentTag "Foo" Type))
-          , ("D.bar",     known' "bar" "Dependency.hs" 15 Function (ParentTag "Foo" Type))
-          , ("D.baz",     known' "baz" "Dependency.hs" 16 Function (ParentTag "Foo" Type))
-          ]
+            [ ("foo",       NotFound)
+            , ("D.foo",     known  "foo" "Dependency.hs" 11 Function)
+            , ("Foo",       NotFound)
+            , ("D.Foo",     known  "Foo" "Dependency.hs" 14 Type)
+            , ("bar",       known' "bar" "Dependency.hs" 15 Function (ParentTag "Foo" Type))
+            , ("baz",       known' "baz" "Dependency.hs" 16 Function (ParentTag "Foo" Type))
+            , ("D.bar",     known' "bar" "Dependency.hs" 15 Function (ParentTag "Foo" Type))
+            , ("D.baz",     known' "baz" "Dependency.hs" 16 Function (ParentTag "Foo" Type))
+            ]
         ]
   ]
