@@ -60,6 +60,7 @@ import Data.Store (Store)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Prettyprinter.Ext
+import Prettyprinter.Symbols.Ascii (dquotes)
 
 import Haskell.Language.Lexer.Types (Pos(..), TagVal(..), SrcPos(..))
 
@@ -72,7 +73,10 @@ import FasterRicherTags.Types
 -- | e.g. Foo, Foo.Bar. Assume that this is not an import qualifier.
 -- Import qualifiers should be labeled as 'ImportQualifer'.
 newtype ModuleName = ModuleName { getModuleName :: Text }
-  deriving (Eq, Ord, Show, Pretty, Hashable, NFData, Store)
+  deriving (Eq, Ord, Show, Hashable, NFData, Store)
+
+instance Pretty ModuleName where
+  pretty = dquotes . pretty . getModuleName
 
 {-# INLINE mkModuleName #-}
 mkModuleName :: Text -> ModuleName
