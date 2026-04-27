@@ -70,7 +70,7 @@ import Haskell.Language.Lexer (modeFromFilename)
 import Haskell.Language.Server.Tags
 import Haskell.Language.Server.Tags.LoadFiles
 import Haskell.Language.Server.Tags.LoadModule
-import Haskell.Language.Server.Tags.Search (findSymbol, classifyPath, findSymbolInFiles)
+import Haskell.Language.Server.Tags.Search (findSymbol, classifyPath, findSymbolInFiles, loadMany)
 import Haskell.Language.Server.Tags.SearchM
 import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports
@@ -141,24 +141,6 @@ progInfo = info
 
 -- shouldCollectHaskellFile :: AbsDir -> AbsFile -> Basename OsPath -> IO (Maybe OsPath)
 -- shouldCollectHaskellFile absDir absFile (Basename basePath) = undefined
-
-loadMany
-  :: (MonadFS m, MonadError ErrorMessage m, MonadLog m)
-  => TagsServerConf
-  -> FullPath 'File
-  -> m (Map ImportKey (NonEmpty UnresolvedModule))
-loadMany conf filename = do
-  case classifyPath conf filename of
-    Nothing         -> pure M.empty
-    Just importType -> do
-      suggestedName <- fileNameToModuleName filename
-      source        <- MonadFS.readFile filename
-      M.mapKeys (ImportKey importType) . NEMap.toMap <$>
-        loadModuleFromSource
-          (Just suggestedName)
-          (modeFromFilename filename)
-          filename
-          source
 
 main :: IO ()
 main = do
