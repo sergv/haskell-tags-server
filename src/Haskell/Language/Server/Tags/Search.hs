@@ -17,6 +17,7 @@ module Haskell.Language.Server.Tags.Search
   , findSymbolByRegexp
 
   , classifyPath
+  , loadMany
   ) where
 
 import Prelude hiding (mod)
