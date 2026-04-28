@@ -15,6 +15,7 @@
 module FasterRicherTagsMain (main) where
 
 import Debug.Trace qualified
+import Prettyprinter.Instances ()
 
 import Prelude hiding (mod)
 
@@ -34,7 +35,7 @@ import Data.Map.NonEmpty (NonEmptyMap)
 import Data.Map.NonEmpty qualified as NEMap
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
-import Data.Maybe (catMaybes)
+import Data.Maybe
 import Data.Ord (comparing)
 import Data.SymbolMap qualified as SM
 import Data.Text (Text)
@@ -185,8 +186,6 @@ generate GenConfig{gcfgNullSeparated} = do
 
   let conf = defaultTagsServerConf
 
-  hPutDocLn stderr $ "files count" <+> pretty (length files)
-
   -- (res, logs) <-
   --   runWriterT $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $
   res <-
@@ -261,13 +260,38 @@ generate GenConfig{gcfgNullSeparated} = do
   --         (toList resolvedMod)
   --     HsBootModule  -> mempty
 
-  writeTo stdout $ (`M.foldMapWithKey` resolvedMods) $ \importKey (resolvedMod :: NonEmpty ResolvedModule) ->
-    case ikImportTarget importKey of
-      VanillaModule ->
-        map
-          (\m -> (Path.unFullPath (modFile m), SM.toList (modAllSymbols m)))
-          (toList resolvedMod)
-      HsBootModule  -> mempty
+  -- hPutDocLn stderr $ pretty $ (`M.foldMapWithKey` resolvedMods) $ \importKey (resolvedMod :: NonEmpty ResolvedModule) ->
+  --   case ikImportTarget importKey of
+  --     VanillaModule ->
+  --       map
+  --         (\m -> (ikModuleName importKey, Path.unFullPath (modFile m), SM.toList (modAllSymbols m)))
+  --         (toList resolvedMod)
+  --     HsBootModule  -> mempty
+
+  -- writeTo stdout $ (`M.foldMapWithKey` resolvedMods) $ \importKey (resolvedMod :: NonEmpty ResolvedModule) ->
+  --   -- todo: ignore ‘Main’ module?
+  --   case ikImportTarget importKey of
+  --     VanillaModule ->
+  --       map
+  --         (\m -> (Path.unFullPath (modFile m), SM.toList (modAllSymbols m)))
+  --         (toList resolvedMod)
+  --     HsBootModule  -> mempty
+
+  let byFile :: Map (FullPath 'File) (NonEmpty (ImportKey, ResolvedModule))
+      byFile =
+        M.fromListWith (<>) $
+          foldMap (\(importKey, mods) -> map (\m -> (modFile m, NE.singleton (importKey, m))) $ toList mods) $
+            M.toList resolvedMods
+
+  writeTo stdout $ (`M.foldMapWithKey` byFile) $ \path (mods :: NonEmpty (ImportKey, ResolvedModule)) ->
+    let mods' :: [ResolvedModule]
+        mods' =
+          (`mapMaybe` toList mods) $ \(importKey, mod) ->
+            -- todo: ignore ‘Main’ module?
+            case ikImportTarget importKey of
+              VanillaModule -> Just mod
+              HsBootModule  -> Nothing
+    in [(Path.unFullPath path, SM.toList $ foldMap modAllSymbols mods')]
 
 -- writeTo stdout $ (`foldMap` resolvedModules) $ \
 
