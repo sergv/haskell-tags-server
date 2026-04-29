@@ -23,8 +23,8 @@ import Data.Text qualified as T
 
 import Data.Path
 import Data.Symbols
-import FasterRicherTags.Types
 import Haskell.Language.Server.Tags.Types (NameResolutionStrictness(..))
+import Haskell.Language.Tags.Types
 
 s :: Text -> UnqualifiedSymbolName
 s str = fromMaybe err . mkUnqualifiedSymbolName . mkSymbolName $ str

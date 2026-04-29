@@ -40,11 +40,11 @@ import Data.Semigroup (Any(..))
 import Data.SubkeyMap qualified as SubkeyMap
 import Data.SymbolMap qualified as SymbolMap
 import Data.Symbols
-import FasterRicherTags.Types
 import Haskell.Language.Lexer.Types (LitMode(..))
 import Haskell.Language.Server.Tags.LoadModule (loadModuleFromSource)
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules as Mods
+import Haskell.Language.Tags.Types
 
 import TestUtils
 

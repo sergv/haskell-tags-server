@@ -27,7 +27,7 @@ flag dev
 
 common ghc-options
   default-language:
-    GHC2021
+    GHC2024
 
   default-extensions:
     LambdaCase
@@ -75,11 +75,9 @@ library
   else
     build-depends: unix >= 2.6
 
-  mixins:
-    fast-tags hiding ( System.OsPath.Ext )
-
   build-depends:
     , abstract-par
+    , alfred-margaret >= 2.1.1
     , array
     , attoparsec >= 0.13.1.0
     , base >= 4
@@ -93,9 +91,7 @@ library
     , dlist
     , emacs-native
     , exceptions >= 0.8
-    , fast-tags >= 1.3
     , filepath
-    , hashable
     , lifted-async
     , microlens
     , monad-control >= 1.0
@@ -109,13 +105,13 @@ library
     , scientific
     , stm
     , stm-chans
-    , store
     , streaming-commons
     , text
     , transformers
     , transformers-base
     , unsafe
     , utf8-string >= 0.3
+
   exposed-modules:
     Control.Monad.Ext
     Control.Monad.ErrorExcept
@@ -143,8 +139,6 @@ library
     Data.Symbols
     Data.Symbols.MacroName
 
-    FasterRicherTags.Types
-
     GHC.Stack.Ext
 
     Haskell.Language.Blocks
@@ -167,7 +161,9 @@ library
     Haskell.Language.Lexer.RulePredicate
     Haskell.Language.Lexer.State
 
-    Haskell.Language.Server.Tags
+    Haskell.Language.Tags.Analyze
+    Haskell.Language.Tags.Types
+
     Haskell.Language.Server.Tags.AnalyzeHeader
     Haskell.Language.Server.Tags.LoadFiles
     Haskell.Language.Server.Tags.Search
@@ -258,7 +254,6 @@ test-suite test-faster-richer-tags
     , directory-ospath-streaming
     , dlist
     , exceptions
-    , fast-tags
     , faster-richer-tags
     , filepath >= 1.5
     , monad-control

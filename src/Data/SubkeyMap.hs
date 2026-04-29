@@ -51,7 +51,6 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Data.Set (Set)
 import Data.Set qualified as S
-import Data.Store (Store)
 import GHC.Generics (Generic)
 import Prettyprinter.Combinators
 
@@ -78,7 +77,6 @@ deriving instance (Eq   k,  Eq  (Subkey k), Eq   v) => Eq   (SubkeyMap k v)
 deriving instance (Ord  k, Ord  (Subkey k), Ord  v) => Ord  (SubkeyMap k v)
 deriving instance (Show k, Show (Subkey k), Show v) => Show (SubkeyMap k v)
 
-instance (Ord k, Ord (Subkey k), Store k, Store (Subkey k), Store v) => Store (SubkeyMap k v)
 instance (NFData k, NFData (Subkey k), NFData v) => NFData (SubkeyMap k v)
 
 instance (HasSubkey k, Semigroup v) => Semigroup (SubkeyMap k v) where

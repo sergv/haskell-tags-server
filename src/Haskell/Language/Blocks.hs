@@ -15,11 +15,12 @@ import Data.List qualified as L
 import Data.List.NonEmpty (NonEmpty(..))
 
 import Haskell.Language.Lexer.Types
+import Haskell.Language.Tags.Types
 
 data DirectivesMode = KeepDirectives | StripDirectives
 
 -- | Break the input up into blocks based on indentation.
-breakBlocks :: DirectivesMode -> [Pos ServerToken] -> [NonEmpty (Pos ServerToken)]
+breakBlocks :: DirectivesMode -> [Pos Token] -> [NonEmpty (Pos Token)]
 breakBlocks dirMode
   = go
   . stripSemicolonsNotInBraces
@@ -28,7 +29,7 @@ breakBlocks dirMode
       StripDirectives -> stripToplevelHscDirectives)
   . filterBlank
   where
-    go :: [Pos ServerToken] -> [NonEmpty (Pos ServerToken)]
+    go :: [Pos Token] -> [NonEmpty (Pos Token)]
     go []     = []
     go tokens = case pre of
       []     -> go post
@@ -37,13 +38,13 @@ breakBlocks dirMode
         (pre, post) = breakBlock tokens
 
 -- Blank lines mess up the indentation.
-filterBlank :: [Pos ServerToken] -> [Pos ServerToken]
+filterBlank :: [Pos Token] -> [Pos Token]
 filterBlank = \case
   []                                             -> []
   Pos _ (Newline _) : xs@(Pos _ (Newline _) : _) -> filterBlank xs
   x : xs                                         -> x : filterBlank xs
 
-resolveAlexHappyBlocks :: [Pos ServerToken] -> [Pos ServerToken]
+resolveAlexHappyBlocks :: [Pos Token] -> [Pos Token]
 resolveAlexHappyBlocks xs =
   case L.dropWhile (isNewline . valOf) xs of
     Pos _ LBrace : restFront ->
@@ -52,17 +53,17 @@ resolveAlexHappyBlocks xs =
         _                       -> xs
     _                   -> xs
 
-isNewline :: ServerToken -> Bool
+isNewline :: Token -> Bool
 isNewline Newline{} = True
 isNewline _         = False
 
 -- | Collect tokens between toplevel braces. Motivated by Alex/Happy
 -- file format that uses braced blocks to separate Haskell source from
 -- other directives.
-firstBracedBlock :: [Pos ServerToken] -> [Pos ServerToken]
+firstBracedBlock :: [Pos Token] -> [Pos Token]
 firstBracedBlock = forward 1
   where
-    forward :: Int -> [Pos ServerToken] -> [Pos ServerToken]
+    forward :: Int -> [Pos Token] -> [Pos Token]
     forward !_ []                       = []
     forward  0 (Pos _ LBrace      : ts) = forward 1 ts
     forward  0 (_                 : ts) = forward 0 ts
@@ -72,10 +73,10 @@ firstBracedBlock = forward 1
     forward  n (t@(Pos _ RBrace)  : ts) = t : forward (n - 1) ts
     forward  n (t                 : ts) = t : forward n ts
 
-lastBracedBlockRev :: [Pos ServerToken] -> [Pos ServerToken]
+lastBracedBlockRev :: [Pos Token] -> [Pos Token]
 lastBracedBlockRev = backward 1 []
   where
-    backward :: Int -> [Pos ServerToken] -> [Pos ServerToken] -> [Pos ServerToken]
+    backward :: Int -> [Pos Token] -> [Pos Token] -> [Pos Token]
     backward !_ acc []                       = acc
     backward  0 acc (Pos _ RBrace      : ts) = backward 1 acc ts
     backward  0 acc (_                 : ts) = backward 0 acc ts
@@ -88,10 +89,10 @@ lastBracedBlockRev = backward 1 []
 -- | Take until a newline, then take lines until the indent established after
 -- that newline decreases. Or, alternatively, if "{" is encountered then count
 -- it as a block until closing "}" is found taking nesting into account.
-breakBlock :: [Pos ServerToken] -> ([Pos ServerToken], [Pos ServerToken])
+breakBlock :: [Pos Token] -> ([Pos Token], [Pos Token])
 breakBlock = go []
   where
-    go :: [Pos ServerToken] -> [Pos ServerToken] -> ([Pos ServerToken], [Pos ServerToken])
+    go :: [Pos Token] -> [Pos Token] -> ([Pos Token], [Pos Token])
     go acc [] =
       (reverse acc, [])
     go acc (Pos _ Newline{} : t@(Pos _ KWModule) : ts) =
@@ -105,7 +106,7 @@ breakBlock = go []
         HSCEnum        -> collectBracedBlock (t : acc) go ts 1
         _              -> go (t : acc) ts
 
-    collectIndented :: [Pos ServerToken] -> Int -> [Pos ServerToken] -> ([Pos ServerToken], [Pos ServerToken])
+    collectIndented :: [Pos Token] -> Int -> [Pos Token] -> ([Pos Token], [Pos Token])
     collectIndented acc indent = goIndented acc
       where
         goIndented acc' toks = case toks of
@@ -132,11 +133,11 @@ breakBlock = go []
 
     collectBracedBlock
         :: Show b
-        => [Pos ServerToken]
-        -> ([Pos ServerToken] -> [Pos ServerToken] -> ([Pos ServerToken], [b]))
-        -> [Pos ServerToken]
+        => [Pos Token]
+        -> ([Pos Token] -> [Pos Token] -> ([Pos Token], [b]))
+        -> [Pos Token]
         -> Int
-        -> ([Pos ServerToken], [b])
+        -> ([Pos Token], [b])
     collectBracedBlock acc cont = goBraced acc
       where
         goBraced acc' []       _ = (reverse acc', [])
@@ -146,15 +147,15 @@ breakBlock = go []
           Pos _ RBrace -> n - 1
           _            -> n
 
-stripSemicolonsNotInBraces :: [Pos ServerToken] -> [Pos ServerToken]
+stripSemicolonsNotInBraces :: [Pos Token] -> [Pos Token]
 stripSemicolonsNotInBraces =
   go False 0 0
   where
     go  :: Bool -- Whether inside let or where block or case expression
         -> Int -- Indent of last newline
         -> Int -- Parenthesis nesting depth
-        -> [Pos ServerToken]
-        -> [Pos ServerToken]
+        -> [Pos Token]
+        -> [Pos Token]
     go !_     !_ !_ []                                                       = []
     go  b      k  n (tok@(Pos _ KWWhere)     : tok'@(Pos _ LBrace) : ts)     = tok : tok' : skipBalancedParens b k (inc n) ts
     go  _      k  n (tok@(Pos _ KWWhere)     : ts)                           = tok : go True k n ts
@@ -183,11 +184,11 @@ stripSemicolonsNotInBraces =
         :: Bool -- Whether inside where block or after equals sign
         -> Int -- Indent of last newline
         -> Int -- Parenthesis nesting depth
-        -> [Pos ServerToken]
-        -> [Pos ServerToken]
+        -> [Pos Token]
+        -> [Pos Token]
     skipBalancedParens b k = skip
       where
-        skip :: Int -> [Pos ServerToken] -> [Pos ServerToken]
+        skip :: Int -> [Pos Token] -> [Pos Token]
         skip _ []                          = []
         skip 0 ts                          = go b k 0 ts
         skip n (tok@(Pos _ LParen)      : ts) = tok : skip (inc n) ts
@@ -206,16 +207,16 @@ stripSemicolonsNotInBraces =
     dec :: Int -> Int
     dec n = max 0 (n - 1)
 
-stripToplevelHscDirectives :: [Pos ServerToken] -> [Pos ServerToken]
+stripToplevelHscDirectives :: [Pos Token] -> [Pos Token]
 stripToplevelHscDirectives = scan
   where
-    scan :: [Pos ServerToken] -> [Pos ServerToken]
+    scan :: [Pos Token] -> [Pos Token]
     scan = \case
       []                            -> []
       Pos _ HSCDirectiveBraced : ts -> skip 1 ts
       t : ts                        -> t : scan ts
 
-    skip :: Int -> [Pos ServerToken] -> [Pos ServerToken]
+    skip :: Int -> [Pos Token] -> [Pos Token]
     skip !_ []                              = []
     skip  0 ts                              = scan ts
     skip  n (Pos _ HSCDirectiveBraced : ts) = skip (n + 1) ts

@@ -8,7 +8,7 @@
 -- Very important to have this one as it enables GHC to infer proper type of
 -- Alex 3.2.1 actions.
 --
--- The basic type is (Monad m => AlexInput -> Int -> AlexT m ServerToken), but
+-- The basic type is (Monad m => AlexInput -> Int -> AlexT m Token), but
 -- monomorphism restriction breaks its inference.
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
@@ -35,6 +35,7 @@ import Haskell.Language.Lexer.CppTypes qualified as Cpp
 import Haskell.Language.Lexer.Types
 import Haskell.Language.LexerSimple.LensBlaze
 import Haskell.Language.LexerSimple.Types
+import Haskell.Language.Tags.Types
 
 }
 
@@ -344,7 +345,7 @@ $reserved_symbol        { \input _len -> reservedSymbol (unsafeTextHead (aiPtr i
 
 {
 
-type AlexAction = AlexInput -> Int# -> AlexM ServerToken
+type AlexAction = AlexInput -> Int# -> AlexM Token
 type AlexPred a = a -> AlexInput -> Int -> AlexInput -> Bool
 
 alex_actions :: Array Int AlexAction
@@ -390,7 +391,7 @@ alex_action_98 :: AlexAction
 
 
 {-# INLINE kw #-}
-kw :: ServerToken -> AlexAction
+kw :: Token -> AlexAction
 kw tok = \_ _ -> pure tok
 
 isLiterateEnabled'
@@ -412,7 +413,7 @@ shouldEndLiterateLatex litLoc _inputBefore _len _inputAfter =
   isLiterateLatexInside litLoc
 
 tokenize
-  :: WithCallStack => LitMode Void -> BS.ByteString -> Either ErrorMessage [Pos ServerToken]
+  :: WithCallStack => LitMode Void -> BS.ByteString -> Either ErrorMessage [Pos Token]
 tokenize litLoc input =
   case runAlexM litLoc code input scanTokens of
     (Nothing, xs) -> Right xs
@@ -422,7 +423,7 @@ tokenize litLoc input =
       LitVanilla -> startCode
       LitOutside -> literateCode
 
-scanTokens :: WithCallStack => AlexM (Maybe ErrorMessage, [(AlexInput, ServerToken)])
+scanTokens :: WithCallStack => AlexM (Maybe ErrorMessage, [(AlexInput, Token)])
 scanTokens = go []
   where
     go acc = do
@@ -437,15 +438,15 @@ scanTokens = go []
           go ((asInput, nextTok) : acc)
 
 -- {-# INLINE continueScanning #-}
-continueScanning :: AlexM ServerToken
+continueScanning :: AlexM Token
 continueScanning = do
   !s@AlexState{asInput} <- get
   go (view asCodeL s) (view asLiterateLocL s) asInput
   where
-    go :: AlexCode -> LitMode LitStyle -> AlexInput -> AlexM ServerToken
+    go :: AlexCode -> LitMode LitStyle -> AlexInput -> AlexM Token
     go !code !litLoc = go'
       where
-        go' :: AlexInput -> AlexM ServerToken
+        go' :: AlexInput -> AlexM Token
         go' !input =
           case alexScanUser' litLoc input (unAlexCode code) :: AlexReturn AlexAction of
             AlexEOF                             -> pure EOF
@@ -525,50 +526,50 @@ dropUntilNL_ :: AlexM ()
 dropUntilNL_ =
   modify $ \s -> s { asInput = dropUntilNL $ asInput s }
 
-dropUntilNL' :: AlexM ServerToken
+dropUntilNL' :: AlexM Token
 dropUntilNL' = dropUntilNL_ *> continueScanning
 
-dropUntilNLOr' :: Word8 -> AlexM ServerToken
+dropUntilNLOr' :: Word8 -> AlexM Token
 dropUntilNLOr' w = do
   modify $ \s -> s { asInput = dropUntilNLOr w $ asInput s }
   continueScanning
 
-dropUntilNLOrEither' :: Word8 -> Word8 -> AlexM ServerToken
+dropUntilNLOrEither' :: Word8 -> Word8 -> AlexM Token
 dropUntilNLOrEither' w1 w2 = do
   modify $ \s -> s { asInput = dropUntilNLOrEither w1 w2 $ asInput s }
   continueScanning
 
-startIndentationCounting :: Int -> AlexM ServerToken
+startIndentationCounting :: Int -> AlexM Token
 startIndentationCounting !n = do
   modify (\s -> set asCommentDepthL 1 $ set asIndentationSizeL (fromIntegral n) s)
   alexSetNextCode indentCommentCode
   continueScanning
 
-endIndentationCounting :: Int# -> AlexM ServerToken
+endIndentationCounting :: Int# -> AlexM Token
 endIndentationCounting n = do
   alexSetNextCode startCode
   Newline . (+ (I# n)) . fromIntegral <$> gets (view asIndentationSizeL)
 
-startIndentComment :: AlexM ServerToken
+startIndentComment :: AlexM Token
 startIndentComment = do
   void $ modifyCommentDepth (+ 1)
   alexSetNextCode indentCommentCode
   continueScanning
 
-startComment :: AlexM ServerToken
+startComment :: AlexM Token
 startComment = do
   void $ modifyCommentDepth (+ 1)
   alexSetNextCode commentCode
   continueScanning
 
-endComment :: AlexCode -> AlexM ServerToken
+endComment :: AlexCode -> AlexM Token
 endComment nextCode = do
   newDepth <- modifyCommentDepth (\x -> x - 1)
   when (newDepth == 0) $
     alexSetNextCode nextCode
   continueScanning
 
-startQuasiquoter :: AlexInput -> AlexM ServerToken
+startQuasiquoter :: AlexInput -> AlexM Token
 startQuasiquoter AlexInput{aiPtr} = do
   !haveEnd     <- gets (view asHaveQQEndL)
   isEndPresent <- case haveEnd of
@@ -584,17 +585,17 @@ startQuasiquoter AlexInput{aiPtr} = do
     False -> pure LBracket
     True  -> startUnconditionalQuasiQuoter
 
-startUnconditionalQuasiQuoter :: AlexM ServerToken
+startUnconditionalQuasiQuoter :: AlexM Token
 startUnconditionalQuasiQuoter =
   QuasiquoterStart <$ alexSetNextCode qqCode
 
-startSplice :: Context -> AlexM ServerToken
+startSplice :: Context -> AlexM Token
 startSplice ctx = do
   alexSetNextCode startCode
   pushContext ctx
   pure SpliceStart
 
-endQuasiquoter :: AlexM ServerToken
+endQuasiquoter :: AlexM Token
 endQuasiquoter =
   QuasiquoterEnd <$ alexSetNextCode startCode
 
@@ -617,7 +618,7 @@ popRParen _ _ = do
 {-# INLINE errorAtLine #-}
 errorAtLine
   :: MonadState AlexState m
-  => Doc Void -> m ServerToken
+  => Doc Void -> m Token
 errorAtLine msg = do
   line <- gets (unLine . view aiLineL . asInput)
   pure $ Error $ IgnoreEqOrdHashNFData $
@@ -638,13 +639,13 @@ endLiterate = do
   alexSetNextCode literateCode
   alexExitLiterateEnv
 
-endLiterate' :: AlexM ServerToken
+endLiterate' :: AlexM Token
 endLiterate' = do
   alexSetNextCode literateCode
   alexExitLiterateEnv
   continueScanning
 
-reservedSymbol :: Char -> AlexM ServerToken
+reservedSymbol :: Char -> AlexM Token
 reservedSymbol = \case
   '→' -> pure Arrow
   '∷' -> pure DoubleColon
@@ -656,7 +657,7 @@ reservedSymbol = \case
   '⟧' -> endQuasiquoter
   c   -> error $ "Unexpected reserved symbol: " ++ show c
 
-reservedSymbolQQ :: Char -> AlexM ServerToken
+reservedSymbolQQ :: Char -> AlexM Token
 reservedSymbolQQ c = case ord c of
   0x27e7 -> endQuasiquoter -- '\⟧'
   _      -> continueScanning

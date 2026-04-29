@@ -30,13 +30,11 @@ import Prelude hiding (mod)
 import Control.DeepSeq
 import Control.Monad.Except.Ext
 import Control.Parallel.Strategies.Ext
-import Data.Hashable
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Data.Semigroup
 import Data.Set (Set)
-import Data.Store (Store)
 import Data.Traversable (for)
 import GHC.Generics (Generically(..))
 import Prettyprinter.Ext
@@ -48,8 +46,8 @@ import Data.SubkeyMap (SubkeyMap)
 import Data.SubkeyMap qualified as SubkeyMap
 import Data.SymbolMap (SymbolMap)
 import Data.Symbols
-import Haskell.Language.Lexer.Types (Type, Line)
 import Haskell.Language.Server.Tags.Types.Imports
+import Haskell.Language.Tags.Types (Type, Line)
 
 data Module a = Module
   { modHeader           :: !ModuleHeader
@@ -66,7 +64,6 @@ data Module a = Module
   } deriving (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
 
 instance NFData a => NFData (Module a)
-instance Store  a => Store  (Module a)
 
 type UnresolvedModule = Module ()
 type ResolvedModule   = Module SymbolMap
@@ -99,7 +96,6 @@ data ModuleHeader = ModuleHeader
   } deriving (Eq, Ord, Show, Generic)
 
 instance NFData ModuleHeader
-instance Store  ModuleHeader
 
 instance Semigroup ModuleHeader where
   ModuleHeader a b c d <> ModuleHeader a' b' c' d'
@@ -158,7 +154,6 @@ data ModuleExportSpec a
   deriving Pretty via PPGeneric (ModuleExportSpec a)
 
 instance NFData a => NFData (ModuleExportSpec a)
-instance Store  a => Store  (ModuleExportSpec a)
 
 instance Semigroup a => Semigroup (ModuleExportSpec a) where
   (<>) NoExports                       (SpecificExports y)             = NoExportsWithSomeGuaranteed y
@@ -197,7 +192,6 @@ data ModuleExports = ModuleExports
   deriving Pretty via PPGeneric ModuleExports
 
 instance NFData ModuleExports
-instance Store  ModuleExports
 
 instance HasKey (EntryWithChildren ann (SymbolName, PosAndType)) where
   type Key (EntryWithChildren ann (SymbolName, PosAndType)) = SymbolName
@@ -213,7 +207,5 @@ data PosAndType = PosAndType
   deriving (Eq, Ord, Show, Generic)
   deriving Pretty via PPGeneric PosAndType
 
-instance Hashable PosAndType
-instance NFData   PosAndType
-instance Store    PosAndType
+instance NFData PosAndType
 

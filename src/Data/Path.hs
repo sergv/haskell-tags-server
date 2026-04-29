@@ -73,6 +73,7 @@ import Prettyprinter.Ext
 import System.Directory qualified as Directory
 import System.Directory.OsPath qualified as Directory.OsPath
 import System.FilePath qualified as FilePath
+import System.OsPath qualified as OsPath
 import System.OsPath.Ext (pathToText, pathFromText)
 import System.OsPath.Types (OsPath)
 
@@ -313,10 +314,12 @@ getDirectory =
   T.dropEnd 1 . T.dropWhileEnd (not . FilePath.isPathSeparator)
 
 {-# INLINE getExtension #-}
+-- |
+-- >>> getExtension "/foo/bar.txt"
+-- ".txt"
 getExtension :: Text -> Text
 getExtension =
-  T.cons FilePath.extSeparator . T.takeWhileEnd (/= FilePath.extSeparator)
--- T.pack . FilePath.takeExtension . T.unpack
+  pathToText . OsPath.takeExtension . pathFromText
 
 {-# INLINE joinPath #-}
 joinPath :: Text -> Text -> Text

@@ -43,9 +43,8 @@ import Prettyprinter qualified as PP
 import Prettyprinter.Combinators
 import Prettyprinter.Ext
 
-import Haskell.Language.Lexer.Types
-  (stripNewlines, tokToName, Pos(..), Line, SrcPos(..), Type, posLine, PragmaType(..), ServerToken(..), Type(..), ppTokens)
-import Haskell.Language.Lexer.Types qualified as Types
+import Haskell.Language.Lexer.Types (tokToName, PragmaType(..), Token(..), ppTokens)
+import Haskell.Language.Tags.Types (Pos(..), Line, SrcPos(..), Type, posLine, Type(..))
 
 import Control.Monad.Logging
 import Data.ErrorMessage
@@ -62,17 +61,17 @@ import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
 
 extractImportBlocks
-  :: [Pos ServerToken]
-  -> ( [NonEmpty (Pos ServerToken)] -- each import in its own block
-     , [Pos ServerToken]            -- remaining tokens
+  :: [Pos Token]
+  -> ( [NonEmpty (Pos Token)] -- each import in its own block
+     , [Pos Token]            -- remaining tokens
      )
 extractImportBlocks = go [] [] . breakBlocks KeepDirectives
   where
     go
-      :: [NonEmpty (Pos ServerToken)]
-      -> [[(Pos ServerToken)]]
-      -> [NonEmpty (Pos ServerToken)]
-      -> ([NonEmpty (Pos ServerToken)], [Pos ServerToken])
+      :: [NonEmpty (Pos Token)]
+      -> [[(Pos Token)]]
+      -> [NonEmpty (Pos Token)]
+      -> ([NonEmpty (Pos Token)], [Pos Token])
     go imports other = \case
       (kw@(Pos _ KWImport{}) :| block) : tss ->
         go ((kw :| block') : imports) (cpp : other) tss
@@ -89,18 +88,18 @@ extractImportBlocks = go [] [] . breakBlocks KeepDirectives
         )
 
 -- CPP needs all the surrounding newlines for proper analysis later
-extractCpp :: [Pos ServerToken] -> [Pos ServerToken]
+extractCpp :: [Pos Token] -> [Pos Token]
 extractCpp = filter isCppOrNewline
 
-dummyNewline :: Pos ServerToken
+dummyNewline :: Pos Token
 dummyNewline = Pos (SrcPos 0 0 mempty mempty) (Newline 0)
 
-isCpp :: Pos ServerToken -> Bool
+isCpp :: Pos Token -> Bool
 isCpp = \case
   Pos _ Cpp{}     -> True
   _               -> False
 
-isCppOrNewline :: Pos ServerToken -> Bool
+isCppOrNewline :: Pos Token -> Bool
 isCppOrNewline = \case
   Pos _ Cpp{}     -> True
   Pos _ Newline{} -> True
@@ -110,12 +109,12 @@ analyzeHeader
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => Maybe ModuleName
   -> FullPath 'File
-  -> [Pos ServerToken]
-  -> m (ModuleHeader, [Pos ServerToken])
+  -> [Pos Token]
+  -> m (ModuleHeader, [Pos Token])
 analyzeHeader suggestedModName filename ts = do
   -- logDebug $ "[analyzeHeader] ts =" <+> ppTokens ts
 
-  let preModule :: [Pos ServerToken]
+  let preModule :: [Pos Token]
       (preModule, modStart) = L.span ((/= KWModule) . valOf) ts
 
   (modName, preCpp, exportList, body) <- case modStart of
@@ -138,49 +137,49 @@ analyzeHeader suggestedModName filename ts = do
         }
   pure (header, preCpp ++ rest)
 
-pattern PAs           :: Pos ServerToken
+pattern PAs           :: Pos Token
 pattern PAs           <- Pos _ (T "as")
-pattern PComma        :: Pos ServerToken
+pattern PComma        :: Pos Token
 pattern PComma        <- Pos _ Comma
-pattern PHiding       :: Pos ServerToken
+pattern PHiding       :: Pos Token
 pattern PHiding       <- Pos _ (T "hiding")
-pattern PImport       :: Pos ServerToken
+pattern PImport       :: Pos Token
 pattern PImport       <- Pos _ KWImport
-pattern PForeign      :: Pos ServerToken
+pattern PForeign      :: Pos Token
 pattern PForeign      <- Pos _ KWForeign
-pattern PLParen       :: Pos ServerToken
+pattern PLParen       :: Pos Token
 pattern PLParen       <- Pos _ LParen
-pattern PModule       :: Pos ServerToken
+pattern PModule       :: Pos Token
 pattern PModule       <- Pos _ KWModule
-pattern PName         :: Text -> Pos ServerToken
+pattern PName         :: Text -> Pos Token
 pattern PName name    <- Pos _ (T name)
-pattern PPattern      :: Pos ServerToken
+pattern PPattern      :: Pos Token
 pattern PPattern      <- Pos _ (T "pattern")
-pattern PQualified    :: Pos ServerToken
+pattern PQualified    :: Pos Token
 pattern PQualified    <- Pos _ (T "qualified")
-pattern PRParen       :: Pos ServerToken
+pattern PRParen       :: Pos Token
 pattern PRParen       <- Pos _ RParen
-pattern PSourcePragma :: Pos ServerToken
+pattern PSourcePragma :: Pos Token
 pattern PSourcePragma <- Pos _ (Pragma SourcePragma)
-pattern PString       :: Pos ServerToken
+pattern PString       :: Pos Token
 pattern PString       <- Pos _ String
-pattern PType         :: Pos ServerToken
+pattern PType         :: Pos Token
 pattern PType         <- Pos _ KWType
-pattern PData         :: Pos ServerToken
+pattern PData         :: Pos Token
 pattern PData         <- Pos _ KWData
 
-pattern PAnyName      :: Text -> Pos ServerToken
+pattern PAnyName      :: Text -> Pos Token
 pattern PAnyName name <- Pos _ (tokToName -> Just name)
 
-pattern PName'              :: Line -> Text -> Pos ServerToken
+pattern PName'              :: Line -> Text -> Pos Token
 pattern PName' line name    <- Pos SrcPos{posLine = line} (T name)
-pattern PAnyName'           :: Line -> Text -> Pos ServerToken
+pattern PAnyName'           :: Line -> Text -> Pos Token
 pattern PAnyName' line name <- Pos SrcPos{posLine = line} (tokToName -> Just name)
 
 analyzeImports
   :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => FullPath 'File
-  -> [NonEmpty (Pos ServerToken)]
+  -> [NonEmpty (Pos Token)]
   -> m ( SubkeyMap ImportKey (NonEmpty ImportSpec)
        , MonoidalMap ImportQualifier (NonEmpty ModuleName)
        )
@@ -189,7 +188,7 @@ analyzeImports filename = getAp . foldMap (Ap . go . dropAllNLs . toList)
     mkQual = mkImportQualifier . mkModuleName
 
     go
-      :: [Pos ServerToken]
+      :: [Pos Token]
       -> m ( SubkeyMap ImportKey (NonEmpty ImportSpec)
            , MonoidalMap ImportQualifier (NonEmpty ModuleName)
            )
@@ -202,20 +201,20 @@ analyzeImports filename = getAp . foldMap (Ap . go . dropAllNLs . toList)
           PImport  :                 rest -> pure (rest, VanillaModule)
           _                               ->
             throwErrorWithCallStack $ "Invalid shape of import block:" ## ppTokens ts
-        let dropSafeImport :: [Pos ServerToken] -> [Pos ServerToken]
+        let dropSafeImport :: [Pos Token] -> [Pos Token]
             dropSafeImport = \case
               PName "safe" : rest -> rest
               rest                -> rest
-            dropPackageImport :: [Pos ServerToken] -> [Pos ServerToken]
+            dropPackageImport :: [Pos Token] -> [Pos Token]
             dropPackageImport = \case
               PString : rest      -> rest
               rest                -> rest
-            extractQualified :: [Pos ServerToken] -> ([Pos ServerToken], Bool)
+            extractQualified :: [Pos Token] -> ([Pos Token], Bool)
             extractQualified = \case
               PQualified : rest -> (rest, True)
               rest              -> (rest, False)
 
-            ts3       :: [Pos ServerToken]
+            ts3       :: [Pos Token]
             isQualPre :: Bool
             (ts3, isQualPre)
               = first dropPackageImport
@@ -250,7 +249,7 @@ analyzeImports filename = getAp . foldMap (Ap . go . dropAllNLs . toList)
           :: Text
           -> ImportQualification
           -> ImportTarget
-          -> [Pos ServerToken]
+          -> [Pos Token]
           -> m ( SubkeyMap ImportKey (NonEmpty ImportSpec)
                , MonoidalMap ImportQualifier (NonEmpty ModuleName)
                )
@@ -291,8 +290,8 @@ analyzeImports filename = getAp . foldMap (Ap . go . dropAllNLs . toList)
 analyzeImportList
   :: (WithCallStack, Applicative m, MonadError ErrorMessage m)
   => FullPath 'File
-  -> [Pos ServerToken]
-  -> m (ImportListSpec ImportList, [Pos ServerToken])
+  -> [Pos Token]
+  -> m (ImportListSpec ImportList, [Pos Token])
 analyzeImportList filename toks = do
   -- logDebug $ "[analyzeImpotrList] toks =" <+> ppTokens toks
   case toks of
@@ -306,8 +305,8 @@ findImportListEntries
   => FullPath 'File
   -> ImportType
   -> KeyMap Set (EntryWithChildren () UnqualifiedSymbolName)
-  -> [Pos ServerToken]
-  -> m (ImportListSpec ImportList, [Pos ServerToken])
+  -> [Pos Token]
+  -> m (ImportListSpec ImportList, [Pos Token])
 findImportListEntries filename importType = go'
   where
     go' acc toks' = do
@@ -381,15 +380,15 @@ findImportListEntries filename importType = go'
         entryWithChildren
           :: Doc Void
           -> Text
-          -> [Pos ServerToken]
-          -> m (ImportListSpec ImportList, [Pos ServerToken])
+          -> [Pos Token]
+          -> m (ImportListSpec ImportList, [Pos Token])
         entryWithChildren descr name rest = do
           (children, rest') <- snd $ analyzeChildren descr filename rest
           name'             <- mkUnqualName name
           let newEntry = EntryWithChildren name' $ (() <$) <$> children
           go' (KM.insert newEntry acc) $ dropCommas rest'
 
-        entryWithoutChildren :: Text -> [Pos ServerToken] -> m (ImportListSpec ImportList, [Pos ServerToken])
+        entryWithoutChildren :: Text -> [Pos Token] -> m (ImportListSpec ImportList, [Pos Token])
         entryWithoutChildren name rest = do
           name' <- mkUnqualName name
           let newEntry = mkEntryWithoutChildren name'
@@ -402,11 +401,17 @@ mkUnqualName name =
       throwErrorWithCallStack $ "Invalid qualified entry on import list:" <+> docFromText name
     Just name' -> pure name'
 
+stripNewlines :: [Pos Token] -> [Pos Token]
+stripNewlines = filter isNonNewline
+  where
+    isNonNewline (Pos _ (Newline _)) = False
+    isNonNewline _                   = True
+
 analyzeExports
   :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => FullPath 'File
   -> Map ImportQualifier (NonEmpty ModuleName)
-  -> [Pos ServerToken]
+  -> [Pos Token]
   -> m (ModuleExportSpec ModuleExports)
 analyzeExports filename importQualifiers ts = do
   -- logDebug $ "[analyzeExports] ts =" <+> ppTokens ts
@@ -427,7 +432,7 @@ analyzeExports filename importQualifiers ts = do
     -- - module Data.Foo.Bar
     go :: KeyMap NonEmpty (EntryWithChildren PosAndType (SymbolName, PosAndType))
        -> Set ModuleName
-       -> [Pos ServerToken]
+       -> [Pos Token]
        -> m ModuleExports
     go entries reexports toks = do
       -- logDebug $ "[analyzeExports.go] toks =" <+> ppTokens toks
@@ -440,25 +445,25 @@ analyzeExports filename importQualifiers ts = do
         PPattern : restWithName@(PName' line name : rest)
           | isVanillaTypeName name
           , not $ isChildrenList filename rest ->
-            entryWithoutChildren name line Types.Pattern rest
+            entryWithoutChildren name line Pattern rest
           | otherwise                          ->
-            entryWithoutChildren "pattern" line Types.Function restWithName
+            entryWithoutChildren "pattern" line Function restWithName
         PPattern : restWithName@(PLParen : PAnyName' line name : PRParen : rest)
           | isOpTypeName name
           , not $ isChildrenList filename rest ->
-            entryWithoutChildren name line Types.Pattern rest
+            entryWithoutChildren name line Pattern rest
           | otherwise                          ->
-            entryWithoutChildren "pattern" line Types.Function restWithName
+            entryWithoutChildren "pattern" line Function restWithName
         -- Type export
         PType : PName' line name : rest ->
-          entryWithoutChildren name line Types.Family rest
+          entryWithoutChildren name line Family rest
         PType : PLParen : PAnyName' line name : PRParen : rest ->
-          entryWithoutChildren name line Types.Family rest
+          entryWithoutChildren name line Family rest
         -- Data export
         PData : PName' line name : rest ->
-          entryWithoutChildren name line Types.Constructor rest
+          entryWithoutChildren name line Constructor rest
         PData : PLParen : PAnyName' line name : PRParen : rest ->
-          entryWithoutChildren name line Types.Constructor rest
+          entryWithoutChildren name line Constructor rest
         -- Module reexport
         PModule : PName name : rest ->
           consumeComma entries (newReexports <> reexports) rest
@@ -471,11 +476,11 @@ analyzeExports filename importQualifiers ts = do
               $ M.findWithDefault (NE.singleton modName) (mkImportQualifier modName) importQualifiers
         -- Vanilla function/operator/consturtor/type export
         PLParen : PName' line name : PRParen : rest ->
-          entryWithChildren "operator in export list" name line (typeForName Types.Type name) rest
+          entryWithChildren "operator in export list" name line (typeForName Type name) rest
         PLParen : Pos SrcPos{posLine} (tokToName -> Just name) : PRParen : rest ->
-          entryWithChildren "operator in export list" name posLine (typeForName Types.Type name) rest
+          entryWithChildren "operator in export list" name posLine (typeForName Type name) rest
         PName' line name : rest ->
-          entryWithChildren "name in export list" name line (typeForName Types.Type name) rest
+          entryWithChildren "name in export list" name line (typeForName Type name) rest
         PLParen : rest ->
           go entries reexports rest
         toks' ->
@@ -492,12 +497,12 @@ analyzeExports filename importQualifiers ts = do
           -> Text
           -> Line
           -> Type
-          -> [Pos ServerToken]
+          -> [Pos Token]
           -> m ModuleExports
         entryWithChildren listType name !line typIfNoChildren rest = do
           -- logDebug $ "[analyzeExports.entryWithChildren] rest =" <+> ppTokens rest
           let presence    :: ChildrenPresence
-              getChildren :: m (Maybe (ChildrenVisibility PosAndType), [Pos ServerToken])
+              getChildren :: m (Maybe (ChildrenVisibility PosAndType), [Pos Token])
               (presence, getChildren) = analyzeChildren listType filename rest
           (children, rest') <- getChildren
           entryType <-
@@ -518,7 +523,7 @@ analyzeExports filename importQualifiers ts = do
           :: Text
           -> Line
           -> Type
-          -> [Pos ServerToken]
+          -> [Pos Token]
           -> m ModuleExports
         entryWithoutChildren name !line typ rest = do
           -- logDebug $ "[analyzeExports.entryWithoutChildren] rest =" <+> ppTokens rest
@@ -536,26 +541,26 @@ analyzeExports filename importQualifiers ts = do
     consumeComma
       :: KeyMap NonEmpty (EntryWithChildren PosAndType (SymbolName, PosAndType))
       -> Set ModuleName
-      -> [Pos ServerToken]
+      -> [Pos Token]
       -> m ModuleExports
     consumeComma entries reexports = go entries reexports . dropCommas
 
-typeForName :: Types.Type -> Text -> Types.Type
+typeForName :: Type -> Text -> Type
 typeForName constructorLikeTag name =
   case T.uncons $ unqualSymNameText $ stripQualifiedPart name of
     Just (':', _) -> constructorLikeTag
     Just (c, _)
-      | isAlpha c -> if isUpper c then constructorLikeTag else Types.Function
-      | otherwise -> Types.Operator
-    Nothing -> Types.Function
+      | isAlpha c -> if isUpper c then constructorLikeTag else Function
+      | otherwise -> Operator
+    Nothing -> Function
 
-isChildrenList :: FullPath 'File -> [Pos ServerToken] -> Bool
+isChildrenList :: FullPath 'File -> [Pos Token] -> Bool
 isChildrenList filename toks =
   case fst res of
     ChildrenPresent -> True
     ChildrenAbsent  -> False
   where
-    res :: (ChildrenPresence, Either ErrorMessage (Maybe (ChildrenVisibility PosAndType), [Pos ServerToken]))
+    res :: (ChildrenPresence, Either ErrorMessage (Maybe (ChildrenVisibility PosAndType), [Pos Token]))
     res = analyzeChildren mempty filename toks
 
 data ChildrenPresence = ChildrenPresent | ChildrenAbsent
@@ -576,8 +581,8 @@ analyzeChildren
   :: forall m. (WithCallStack, MonadError ErrorMessage m)
   => Doc Void
   -> FullPath 'File
-  -> [Pos ServerToken]
-  -> (ChildrenPresence, m (Maybe (ChildrenVisibility PosAndType), [Pos ServerToken]))
+  -> [Pos Token]
+  -> (ChildrenPresence, m (Maybe (ChildrenVisibility PosAndType), [Pos Token]))
 analyzeChildren listType filename toks =
   case toks of
     []                                    -> (ChildrenAbsent, pure (Nothing, []))
@@ -609,8 +614,8 @@ analyzeChildren listType filename toks =
   where
     analyzeList
       :: WithCallStack
-      => [Pos ServerToken]
-      -> (ChildrenPresence, m (Maybe (ChildrenVisibility PosAndType), [Pos ServerToken]))
+      => [Pos Token]
+      -> (ChildrenPresence, m (Maybe (ChildrenVisibility PosAndType), [Pos Token]))
     analyzeList = second (fmap mkVisibility) . extractChildren mempty mempty
       where
         mkVisibility
@@ -632,8 +637,8 @@ analyzeChildren listType filename toks =
       :: WithCallStack
       => WildcardPresence
       -> Map UnqualifiedSymbolName PosAndType
-      -> [Pos ServerToken]
-      -> (ChildrenPresence, m (Map UnqualifiedSymbolName PosAndType, WildcardPresence, [Pos ServerToken]))
+      -> [Pos Token]
+      -> (ChildrenPresence, m (Map UnqualifiedSymbolName PosAndType, WildcardPresence, [Pos Token]))
     extractChildren wildcardPresence !names = \case
       []                                                     ->
         (childrenPresence, pure (names, wildcardPresence, []))
@@ -681,18 +686,18 @@ isNonOperatorName str = T.all check str' && T.any (/= '#') str'
     check c    = isAlphaNum c
 
 -- | Drop prefix of newlines.
-dropNLs :: [Pos ServerToken] -> [Pos ServerToken]
+dropNLs :: [Pos Token] -> [Pos Token]
 dropNLs (Pos _ Newline{} : ts) = dropNLs ts
 dropNLs ts                     = ts
 
 -- | Drop prefix of newlines.
-dropAllNLs :: [Pos ServerToken] -> [Pos ServerToken]
+dropAllNLs :: [Pos Token] -> [Pos Token]
 dropAllNLs = filter $ \case
   Pos _ Newline{} -> False
   _               -> True
 
 -- | Drop prefix of commas.
-dropCommas :: [Pos ServerToken] -> [Pos ServerToken]
+dropCommas :: [Pos Token] -> [Pos Token]
 dropCommas = go
   where
     go (Pos _ Comma : ts)     = dropCommas ts
@@ -705,7 +710,7 @@ isVanillaTypeName = maybe False (isUpper . fst) . T.uncons
 isOpTypeName :: Text -> Bool
 isOpTypeName = maybe False ((== ':') . fst) . T.uncons
 
-dropBalancedBraces :: Int -> [Pos ServerToken] -> [Pos ServerToken]
+dropBalancedBraces :: Int -> [Pos Token] -> [Pos Token]
 dropBalancedBraces _ []                              = []
 dropBalancedBraces 0 ts                              = ts
 dropBalancedBraces n (Pos _ HSCDirectiveBraced : ts) = dropBalancedBraces (n + 1) ts
@@ -713,7 +718,7 @@ dropBalancedBraces n (Pos _ LBrace       : ts)       = dropBalancedBraces (n + 1
 dropBalancedBraces n (Pos _ RBrace       : ts)       = dropBalancedBraces (n - 1) ts
 dropBalancedBraces n (_                  : ts)       = dropBalancedBraces n ts
 
-dropAllCpp :: [Pos ServerToken] -> [Pos ServerToken]
+dropAllCpp :: [Pos Token] -> [Pos Token]
 dropAllCpp = filter $ \case
   Pos _ Cpp{} -> False
   _           -> True

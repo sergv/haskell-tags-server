@@ -11,7 +11,6 @@ module Haskell.Language.Lexer.CppTypes
   ) where
 
 import Control.DeepSeq
-import Data.Hashable
 import Data.Text (Text)
 import Prettyprinter.Ext
 
@@ -31,5 +30,4 @@ data Directive
   deriving (Eq, Ord, Show, Generic)
   deriving Pretty via PPGeneric Directive
 
-instance Hashable Directive
 instance NFData Directive

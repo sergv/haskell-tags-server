@@ -15,9 +15,6 @@ module Haskell.Language.Server.Tags.Search
 
   , findSymbol
   , findSymbolByRegexp
-
-  , classifyPath
-  , loadMany
   ) where
 
 import Prelude hiding (mod)
@@ -45,50 +42,20 @@ import Prettyprinter.Ext
 import System.OsPath (OsPath)
 
 import Control.Monad.Filesystem (MonadFS)
-import Control.Monad.Filesystem qualified as MonadFS
 import Control.Monad.Logging
 import Data.CompiledRegex
 import Data.ErrorMessage
-import Data.Map.NonEmpty qualified as NEMap
 import Data.Path as Path
 import Data.SubkeyMap qualified as SubkeyMap
 import Data.SymbolMap (SymbolMap)
 import Data.SymbolMap qualified as SM
 import Data.Symbols
-import Haskell.Language.Lexer (modeFromFilename)
-import Haskell.Language.Lexer.Types qualified as Types
 import Haskell.Language.Server.Tags.LoadModule
 import Haskell.Language.Server.Tags.SearchM (runSearchT)
 import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
-
--- todo: handle header files here
-classifyPath :: TakeExtension a => TagsServerConf -> a -> Maybe ImportTarget
-classifyPath TagsServerConf{tsconfVanillaExtensions, tsconfHsBootExtensions} path
-  | ext `S.member` tsconfVanillaExtensions = Just VanillaModule
-  | ext `S.member` tsconfHsBootExtensions  = Just HsBootModule
-  | otherwise                              = Nothing
-  where
-    ext = takeExtension path
-
-loadMany
-  :: (MonadFS m, MonadError ErrorMessage m, MonadLog m)
-  => TagsServerConf
-  -> FullPath 'File
-  -> m (Map ImportKey (NonEmpty UnresolvedModule))
-loadMany conf filename = do
-  case classifyPath conf filename of
-    Nothing         -> pure M.empty
-    Just importType -> do
-      suggestedName <- fileNameToModuleName filename
-      source        <- MonadFS.readFile filename
-      M.mapKeys (ImportKey importType) . NEMap.toMap <$>
-        loadModuleFromSource
-          (Just suggestedName)
-          (modeFromFilename filename)
-          filename
-          source
+import Haskell.Language.Tags.Types
 
 -- TODO: make it tokenize lazily only the modules that are needed.
 -- I.e. if some module we depend on doesn’t reexport any names then
@@ -104,8 +71,7 @@ findSymbolInFiles
   -> SymbolName             -- ^ Symbol to find. Can be either qualified, unqualified, ascii name/utf name/operator.
   -> m (Set ResolvedSymbol) -- ^ Found tags, may be empty when nothing was found.
 findSymbolInFiles conf files scope path sym = do
-  name <- fileNameToModuleName path
-  mod  <- readFileAndLoad (Just name) path
+  mod <- readFileAndLoad path
 
   (unresolvedMods :: Map ImportKey (NonEmpty UnresolvedModule)) <-
     fmap (M.unionsWith (<>)) $ for files $ \modPath -> do
@@ -114,7 +80,7 @@ findSymbolInFiles conf files scope path sym = do
       isFile   <- doesFileExist modPath'
       unless isFile $
         throwErrorWithCallStack $ "Input path does not point to file:" <+> pretty modPath'
-      loadMany conf modPath'
+      loadMany modPath'
 
   let loadState = LoadState
         { lsLoadedModules   = mempty
@@ -294,5 +260,5 @@ lookUpInSymbolMap sym sm
     isRedundantConstructor :: ResolvedSymbol -> Bool
     isRedundantConstructor x =
       case (resolvedSymbolType x, resolvedSymbolParentName x) of
-        (Types.Constructor, Just p) -> p == resolvedSymbolName x
-        _                           -> False
+        (Constructor, Just p) -> p == resolvedSymbolName x
+        _                     -> False

@@ -11,7 +11,6 @@
 
 module Haskell.Language.Lexer
   ( tokenize
-  , modeFromFilename
   , LitMode(..)
   ) where
 
@@ -22,19 +21,12 @@ import Data.ErrorMessage
 import Data.Void (Void)
 import GHC.Stack.Ext (WithCallStack)
 
-import Data.Path
 -- import Haskell.Language.Lexer.Lexer (tokenizeM)
 import Haskell.Language.LexerSimple.Lexer qualified as SimpleLexer
 
 import Haskell.Language.Lexer.Types
+import Haskell.Language.Tags.Types
 
-modeFromFilename :: TakeExtension a => a -> LitMode b
-modeFromFilename filename
-  | takeExtension filename `elem` [mkExtension ".lhs", mkExtension ".lhs-boot"]
-  = LitOutside
-  | otherwise
-  = LitVanilla
-
-tokenize :: WithCallStack => LitMode Void -> BS.ByteString -> Either ErrorMessage [Pos ServerToken]
+tokenize :: WithCallStack => LitMode Void -> BS.ByteString -> Either ErrorMessage [Pos Token]
 -- tokenize mode = runIdentity . tokenizeM mode . T.decodeUtf8
 tokenize = SimpleLexer.tokenize

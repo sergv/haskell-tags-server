@@ -14,7 +14,6 @@ module Haskell.Language.Lexer.TokenisationUtils
   , testTagNames
   , untag
   , tokenize'
-  , stripServerTokens'
   , module Haskell.Language.Lexer.Types
   ) where
 
@@ -30,24 +29,11 @@ import GHC.Stack.Ext (WithCallStack)
 import Prettyprinter.Ext qualified as PP
 
 import Haskell.Language.Lexer (LitMode(..), tokenize)
-import TestUtils (makeTest)
+import Haskell.Language.Lexer.Types (PragmaType(..), Token(..))
+import Haskell.Language.Tags.Analyze (processTokens, ProcessMode(..))
+import Haskell.Language.Tags.Types (TagVal(..), Pos(..))
 
-import Haskell.Language.Lexer.Types
-  ( PragmaType(..)
-  , ServerToken(..)
-  , TokenVal
-  , TagVal(..)
-  , Pos(..)
-  , Type(..)
-  , SrcPos(..)
-  , Line(..)
-  , whereBlock
-  , processTokens
-  , UnstrippedTokens(..)
-  , unstrippedTokensOf
-  , stripServerTokens
-  , embedServerToken
-  )
+import TestUtils (makeTest)
 
 filename :: FilePath
 filename = "/foo/bar/fn.hs"
@@ -56,7 +42,7 @@ testFullTagsWithoutPrefixes
   :: WithCallStack
   => LitMode Void -> T.Text -> [Pos TagVal] -> TestTree
 testFullTagsWithoutPrefixes mode = \source tags ->
-  makeTest ((sort *** map PP.renderStringWide) . processTokens . tokenize' mode) source (tags, warnings)
+  makeTest ((sort *** map PP.renderStringWide) . processTokens ProcessVanilla . tokenize' mode) source (tags, warnings)
   where
     warnings :: [String]
     warnings = []
@@ -72,22 +58,15 @@ testTagNames mode source tags =
 
     process :: T.Text -> ([String], [String])
     process =
-      (sort . map untag *** map PP.renderStringWide) . processTokens . tokenize' mode
+      (sort . map untag *** map PP.renderStringWide) . processTokens ProcessVanilla . tokenize' mode
 
 untag :: Pos TagVal -> String
 untag (Pos _ (TagVal name _ _)) = T.unpack name
 
 tokenize'
   :: WithCallStack
-  => LitMode Void -> T.Text -> [Pos ServerToken]
+  => LitMode Void -> T.Text -> [Pos Token]
 tokenize' mode
   = either (error . PP.renderStringWide . PP.pretty) id
   . tokenize mode
   . TE.encodeUtf8
-
-stripServerTokens' :: [Pos ServerToken] -> [Pos TokenVal]
-stripServerTokens' ts =
-  case stripServerTokens ts of
-    (ts', [])       -> ts'
-    (_,   es@(_:_)) -> error $ PP.renderStringWide $
-      PP.ppFoldableHeaderWith id "Errors while stripping server tokens:" es

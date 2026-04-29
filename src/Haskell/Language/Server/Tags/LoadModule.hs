@@ -19,6 +19,8 @@ module Haskell.Language.Server.Tags.LoadModule
   , resolveModule
   , checkLoadingModules
   , visibleNamesFromImportSpec
+
+  , loadMany
   ) where
 
 import Prelude hiding (mod)
@@ -47,6 +49,7 @@ import Data.Monoid qualified as Monoid
 import Data.Semigroup as Semigroup
 import Data.Set (Set)
 import Data.Set qualified as S
+import Data.Text.AhoCorasick.Automaton qualified as Aho
 import Data.Traversable (for)
 import Data.Void (Void)
 import Prettyprinter qualified as PP
@@ -69,14 +72,16 @@ import Data.SymbolMap (SymbolMap)
 import Data.SymbolMap qualified as SM
 import Data.Symbols
 import Haskell.Language.Blocks (resolveAlexHappyBlocks)
-import Haskell.Language.Lexer (tokenize, modeFromFilename)
-import Haskell.Language.Lexer.Types (LitMode, Pos, ServerToken, processTokens)
-import Haskell.Language.Lexer.Types qualified as Types
+import Haskell.Language.Lexer (tokenize)
+import Haskell.Language.Lexer.Types (Token, removeDuplicatePatterns, LitMode(..))
 import Haskell.Language.Preprocessor.ResolvePreprocessor
 import Haskell.Language.Server.Tags.AnalyzeHeader
 import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
+import Haskell.Language.Tags.Analyze (processTokens, ProcessMode(..))
+import Haskell.Language.Tags.Types (Pos, Type, ParentTag(..))
+import Haskell.Language.Tags.Types qualified as Types
 
 loadModule'
   :: forall m. (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m)
@@ -155,16 +160,17 @@ registerAndResolve key unresolvedMod@Module{modFile} = do
 
 readFileAndLoad
   :: (MonadFS m, MonadError ErrorMessage m, MonadLog m)
-  => Maybe ModuleName
-  -> FullPath 'File
+  => FullPath 'File
   -> m UnresolvedModule
-readFileAndLoad suggestedModName filename = do
-  source <- MonadFS.readFile filename
+readFileAndLoad filename = do
   logInfo $ "[readFileAndLoad] Loading" <+> PP.dquotes (pretty filename)
-  mods <- loadModuleFromSource suggestedModName (modeFromFilename filename) filename source
-  case NEMap.elemsNE mods of
-    (mod :| []) :| [] -> pure mod
-    _ ->
+  result <- loadMany filename
+  case M.elems result of
+    (mod :| []) : [] -> pure mod
+    []               ->
+      throwErrorWithCallStack $
+        "File" <+> pretty filename <+> "produced no modules"
+    _                ->
       throwErrorWithCallStack $
         "File" <+> pretty filename <+> "produced multiple modules"
 
@@ -201,7 +207,7 @@ tokenizeModule
   :: (WithCallStack, MonadError ErrorMessage m)
   => LitMode Void
   -> BS.ByteString
-  -> m [Pos ServerToken]
+  -> m [Pos Token]
 tokenizeModule mode contents =
   case tokens of
     Left  err     ->
@@ -210,14 +216,14 @@ tokenizeModule mode contents =
     Right tokens' ->
       pure tokens'
   where
-    tokens :: Either ErrorMessage [Pos ServerToken]
+    tokens :: Either ErrorMessage [Pos Token]
     tokens = tokenize mode contents
 
 makeModule
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => Maybe ModuleName -- ^ Suggested module name, will be used if source does not define it's own name.
   -> FullPath 'File
-  -> [Pos ServerToken]
+  -> [Pos Token]
   -> m (NonEmptyMap ModuleName (NonEmpty UnresolvedModule))
 makeModule suggestedModuleName filename tokens =
   getAp $
@@ -233,15 +239,15 @@ makeSingleModule
   :: (WithCallStack, MonadError ErrorMessage m, MonadLog m)
   => Maybe ModuleName -- ^ Suggested module name, will be used if source does not define it's own name.
   -> FullPath 'File
-  -> [Pos ServerToken]
+  -> [Pos Token]
   -> m UnresolvedModule
 makeSingleModule suggestedModuleName filename tokens = do
   let tokens' = resolveAlexHappyBlocks tokens
   (header, tokens'') <- analyzeHeader suggestedModuleName filename tokens'
   let syms           :: [ResolvedSymbol]
       errors         :: [Doc Void]
-      (syms, errors) = first (fmap (mkResolvedSymbol filename) . Types.removeDuplicatePatterns)
-                     $ processTokens tokens''
+      (syms, errors) = first (fmap (mkResolvedSymbol filename) . removeDuplicatePatterns)
+                     $ processTokens ProcessVanilla tokens''
       allSymbols     :: SymbolMap
       allSymbols     = SM.fromList syms
 
@@ -444,15 +450,15 @@ resolveModule nameResolution checkIfModuleIsAlreadyBeingLoaded readAndLoad mod =
                         Just sm -> do
                           (extraChildrenExports :: Set UnqualifiedSymbolName) <-
                             childrenNamesFromEntry nameResolution' mhModName sm $ name' <$ entry
-                          let childrenType :: Types.Type
+                          let childrenType :: Type
                               childrenType = case typ of
                                 Types.Type   -> Types.Constructor
                                 Types.Family -> Types.Type
                                 typ'         -> typ'
-                              parent :: Types.ParentTag
-                              parent = Types.ParentTag
-                                { Types.ptName = getSymbolName $ getUnqualifiedSymbolName name'
-                                , Types.ptType = typ
+                              parent :: ParentTag
+                              parent = ParentTag
+                                { ptName = getSymbolName $ getUnqualifiedSymbolName name'
+                                , ptType = typ
                                 }
                               names :: Map UnqualifiedSymbolName ResolvedSymbol
                               names
@@ -852,3 +858,60 @@ childrenNamesFromEntry nameResolution moduleName allImportedNames (EntryWithChil
             "is missing from the imports symbol map for the module" <+> PP.squotes (pretty moduleName)
         (NameResolutionLax,    Nothing)       -> pure mempty
         (_,                    Just children) -> pure children
+
+
+loadMany
+  :: (MonadFS m, MonadError ErrorMessage m, MonadLog m)
+  => FullPath 'File
+  -> m (Map ImportKey (NonEmpty UnresolvedModule))
+loadMany filename = do
+  case classifyExt $ takeExtension filename of
+    Nothing                       -> pure M.empty
+    Just (importType, _, litMode) -> do
+      suggestedName <- fileNameToModuleName filename
+      source        <- MonadFS.readFile filename
+      M.mapKeys (ImportKey importType) . NEMap.toMap <$>
+        loadModuleFromSource
+          (Just suggestedName)
+          litMode
+          filename
+          source
+
+-- -- todo: handle header files here
+-- classifyPath :: TakeExtension a => TagsServerConf -> a -> Maybe ImportTarget
+-- classifyPath TagsServerConf{tsconfVanillaExtensions, tsconfHsBootExtensions} path
+--   | ext `S.member` tsconfVanillaExtensions = Just VanillaModule
+--   | ext `S.member` tsconfHsBootExtensions  = Just HsBootModule
+--   | otherwise                              = Nothing
+--   where
+--     ext = takeExtension path
+
+-- [".hs", ".lhs", ".hsc", ".chs", ".x", ".y", ".lx", ".ly"]
+{-# NOINLINE extensions #-}
+extensions :: Aho.AcMachine (ImportTarget, ProcessMode, LitMode a)
+extensions = Aho.build
+  [ (".hs",       (VanillaModule, ProcessVanilla,   LitVanilla))
+  , (".hs-boot",  (HsBootModule,  ProcessVanilla,   LitVanilla))
+  , (".lhs",      (VanillaModule, ProcessVanilla,   LitOutside))
+  , (".lhs-boot", (HsBootModule,  ProcessVanilla,   LitOutside))
+  , (".hsc",      (VanillaModule, ProcessVanilla,   LitVanilla))
+  , (".chs",      (VanillaModule, ProcessVanilla,   LitVanilla))
+  , (".x",        (VanillaModule, ProcessAlexHappy, LitVanilla))
+  , (".y",        (VanillaModule, ProcessAlexHappy, LitVanilla))
+  , (".lx",       (VanillaModule, ProcessAlexHappy, LitOutside))
+  , (".ly",       (VanillaModule, ProcessAlexHappy, LitOutside))
+  ]
+
+--   [osp|.hs|]  -> Just (ProcessVanilla, LitVanilla)
+--   [osp|.hsc|] -> Just (ProcessVanilla, LitVanilla)
+--   [osp|.lhs|] -> Just (ProcessVanilla, LitOutside)
+--   [osp|.x|]   -> Just (ProcessAlexHappy, LitVanilla)
+--   [osp|.y|]   -> Just (ProcessAlexHappy, LitVanilla)
+--   [osp|.lx|]  -> Just (ProcessAlexHappy, LitOutside)
+--   [osp|.ly|]  -> Just (ProcessAlexHappy, LitOutside)
+--   _           -> Nothing
+
+-- todo: handle header files here
+classifyExt :: Extension -> Maybe (ImportTarget, ProcessMode, LitMode Void)
+classifyExt =
+  Aho.runText Nothing (\_acc m -> Aho.Step (Just (Aho.matchValue m))) extensions . unExtension

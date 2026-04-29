@@ -30,10 +30,9 @@ import Control.Monad.Logging.Simple (Destination, runSimpleLoggerT, Severity(..)
 import Data.ErrorMessage
 import Data.Path
 import Data.Symbols
-import FasterRicherTags.Types
-import Haskell.Language.Server.Tags
 import Haskell.Language.Server.Tags.Search (findSymbolInFiles)
-import Haskell.Language.Server.Tags.Types (NameResolutionStrictness(..), NameResolutionScope(..))
+import Haskell.Language.Server.Tags.Types
+import Haskell.Language.Tags.Types
 
 import SearchTests.Data
 
