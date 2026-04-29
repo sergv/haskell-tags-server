@@ -67,11 +67,9 @@ import Data.MonoidalMap (MonoidalMap(..))
 import Data.Path (FullPath, FileType(..))
 import Data.Path qualified as Path
 import Data.Symbols
-import Haskell.Language.Lexer (modeFromFilename)
-import Haskell.Language.Server.Tags
 import Haskell.Language.Server.Tags.LoadFiles
 import Haskell.Language.Server.Tags.LoadModule
-import Haskell.Language.Server.Tags.Search (findSymbol, classifyPath, findSymbolInFiles, loadMany)
+import Haskell.Language.Server.Tags.Search (findSymbol, findSymbolInFiles)
 import Haskell.Language.Server.Tags.SearchM
 import Haskell.Language.Server.Tags.Types
 import Haskell.Language.Server.Tags.Types.Imports
@@ -193,7 +191,7 @@ generate GenConfig{gcfgNullSeparated} = do
       runErrorExceptT $ do
         (unresolvedMods :: Map ImportKey (NonEmpty UnresolvedModule)) <-
           fmap (M.unionsWith (<>)) $ for files $ \modPath -> do
-            (loadMany conf =<<) $ liftIO $ do
+            (loadMany =<<) $ liftIO $ do
               modPath' <- Path.fromFileOsPath modPath
               isFile   <- doesFileExist $ Path.toOsPath modPath'
               unless isFile $

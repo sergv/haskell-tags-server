@@ -27,9 +27,9 @@ import Data.Set qualified as S
 import Data.Text qualified as T
 
 import Data.Symbols
-import Haskell.Language.Lexer.Types (Type(..), Line(..))
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
+import Haskell.Language.Tags.Types (Type(..), Line(..))
 
 import Data.KeyMap qualified as KM
 import Data.Path

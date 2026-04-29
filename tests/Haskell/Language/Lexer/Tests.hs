@@ -18,13 +18,13 @@ import Data.Text qualified as T
 import Test.Tasty
 import Test.Tasty.HUnit (testCase)
 
-import FastTags.Tag qualified as FastTags
-
 import Haskell.Language.Lexer (LitMode(..))
 
 import Haskell.Language.Lexer.CppTypes qualified as Cpp
 import Haskell.Language.Lexer.Tokenisation qualified as Tokenisation
 import Haskell.Language.Lexer.TokenisationUtils
+import Haskell.Language.Tags.Analyze
+import Haskell.Language.Tags.Types
 import TestUtils (makeAssertion, makeTest)
 
 tests :: TestTree
@@ -915,7 +915,7 @@ testFullPipeline = testGroup "Full processing pipeline"
     ==>
     [ Pos (SrcPos (Line 1) 0 mempty mempty) (TagVal "Z" Module Nothing)
     , Pos (SrcPos (Line 2) 0 mempty mempty) (TagVal "X" Type Nothing)
-    , Pos (SrcPos (Line 2) 0 mempty mempty) (TagVal "Y" Constructor (Just (FastTags.ParentTag "X" Type)))
+    , Pos (SrcPos (Line 2) 0 mempty mempty) (TagVal "Y" Constructor (Just (ParentTag "X" Type)))
     ]
   , [ """
       module Z where
@@ -926,7 +926,7 @@ testFullPipeline = testGroup "Full processing pipeline"
     ==>
     [ Pos (SrcPos (Line 1) 0 mempty mempty) (TagVal "Z" Module Nothing)
     , Pos (SrcPos (Line 2) 0 mempty mempty) (TagVal "X" Type Nothing)
-    , Pos (SrcPos (Line 3) 0 mempty mempty) (TagVal "Y" Constructor (Just (FastTags.ParentTag "X" Type)))
+    , Pos (SrcPos (Line 3) 0 mempty mempty) (TagVal "Y" Constructor (Just (ParentTag "X" Type)))
     ]
   , [ """
       newtype A f a b = A
@@ -935,15 +935,15 @@ testFullPipeline = testGroup "Full processing pipeline"
     ]
     ==>
     [ Pos (SrcPos (Line 1) 0 mempty mempty) (TagVal "A" Type Nothing)
-    , Pos (SrcPos (Line 1) 0 mempty mempty) (TagVal "A" Constructor (Just (FastTags.ParentTag "A" Type)))
-    , Pos (SrcPos (Line 2) 0 mempty mempty) (TagVal "unA" Function (Just (FastTags.ParentTag "A" Type)))
+    , Pos (SrcPos (Line 1) 0 mempty mempty) (TagVal "A" Constructor (Just (ParentTag "A" Type)))
+    , Pos (SrcPos (Line 2) 0 mempty mempty) (TagVal "unA" Function (Just (ParentTag "A" Type)))
     ]
   ]
   where
     (==>) = makeTest f'
     f' :: [Text] -> [Pos TagVal]
     f' = sort
-       . concatMap (fst . processTokens . tokenize' LitVanilla)
+       . concatMap (fst . processTokens ProcessVanilla . tokenize' LitVanilla)
 
 textShowSource :: T.Text
 textShowSource =

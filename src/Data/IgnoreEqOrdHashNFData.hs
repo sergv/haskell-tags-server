@@ -13,7 +13,6 @@ module Data.IgnoreEqOrdHashNFData
 import Control.DeepSeq
 
 import Data.Coerce
-import Data.Hashable
 import Prettyprinter.Ext
 
 newtype IgnoreEqOrdHashNFData a =
@@ -31,10 +30,6 @@ instance Eq (IgnoreEqOrdHashNFData a) where
 instance Ord (IgnoreEqOrdHashNFData a) where
   {-# INLINE compare #-}
   compare _ _ = EQ
-
-instance Hashable (IgnoreEqOrdHashNFData a) where
-  {-# INLINE hashWithSalt #-}
-  hashWithSalt = const
 
 instance Show a => Show (IgnoreEqOrdHashNFData a) where
   {-# INLINE showsPrec #-}

@@ -30,11 +30,8 @@ module Haskell.Language.Server.Tags.Types.Imports
   ) where
 
 import Control.DeepSeq
-
-import Data.Hashable
 import Data.Map.Strict (Map)
 import Data.Set (Set)
-import Data.Store (Store)
 import Prettyprinter.Ext
 
 import Data.KeyMap (KeyMap, HasKey(..))
@@ -42,7 +39,7 @@ import Data.SubkeyMap (HasSubkey(..))
 import Data.SymbolMap (SymbolMap)
 import Data.SymbolMap qualified as SM
 import Data.Symbols
-import Haskell.Language.Lexer.Types qualified as Types
+import Haskell.Language.Tags.Types
 
 -- | Handle for when particular module enters another module's scope.
 data ImportKey = ImportKey
@@ -53,9 +50,7 @@ data ImportKey = ImportKey
   , ikModuleName   :: !ModuleName
   } deriving (Eq, Ord, Show, Generic)
 
-instance Hashable ImportKey
-instance NFData   ImportKey
-instance Store    ImportKey
+instance NFData ImportKey
 
 instance HasSubkey ImportKey where
   type Subkey ImportKey = ModuleName
@@ -70,9 +65,7 @@ data ImportTarget = VanillaModule | HsBootModule
   deriving (Eq, Ord, Show, Enum, Bounded, Generic)
   deriving Pretty via PPGeneric ImportTarget
 
-instance Hashable ImportTarget
-instance NFData   ImportTarget
-instance Store    ImportTarget
+instance NFData ImportTarget
 
 
 -- | Information about import statement
@@ -84,7 +77,6 @@ data ImportSpec = ImportSpec
   deriving Pretty via PPGeneric ImportSpec
 
 instance NFData ImportSpec
-instance Store  ImportSpec
 
 
 -- NB See [Record fields visibility] why this function must not be
@@ -100,8 +92,8 @@ importBringsUnqualifiedNames exportedNames ImportSpec{ispecQualification} =
           -- fields, which do come unqualified. But actual functions don't (!).
           -- That's why this logic is not incorporated into main name resolution,
           -- but only in search.
-          if resolvedSymbolType p == Types.Type
-          then filter ((== Types.Function) . resolvedSymbolType) children
+          if resolvedSymbolType p == Type
+          then filter ((== Function) . resolvedSymbolType) children
           else [])
         (SM.childrenRelations exportedNames) of
         [] -> Nothing
@@ -140,9 +132,7 @@ data ImportQualification
   deriving (Eq, Ord, Show, Generic)
   deriving Pretty via PPGeneric ImportQualification
 
-instance Hashable ImportQualification
-instance NFData   ImportQualification
-instance Store    ImportQualification
+instance NFData ImportQualification
 
 hasQualifier :: ImportQualifier -> ImportQualification -> Bool
 hasQualifier qual = maybe False (== qual) . getQualifier
@@ -167,9 +157,7 @@ data ImportType
   deriving (Eq, Ord, Show, Generic)
   deriving Pretty via PPGeneric ImportType
 
-instance Hashable ImportType
-instance NFData   ImportType
-instance Store    ImportType
+instance NFData ImportType
 
 
 data ImportListSpec a
@@ -182,7 +170,6 @@ data ImportListSpec a
   deriving Pretty via PPGeneric (ImportListSpec a)
 
 instance NFData a => NFData (ImportListSpec a)
-instance Store  a => Store  (ImportListSpec a)
 
 
 -- | User-provided import/hiding list.
@@ -192,7 +179,6 @@ data ImportList = ImportList
   } deriving (Eq, Ord, Show, Generic)
 
 instance NFData ImportList
-instance Store  ImportList
 
 instance Pretty ImportList where
   pretty ImportList{ilImportType, ilEntries} =
@@ -207,7 +193,6 @@ data EntryWithChildren childAnn name = EntryWithChildren
   deriving Pretty via PPGeneric (EntryWithChildren childAnn name)
 
 instance (NFData a, NFData b) => NFData (EntryWithChildren a b)
-instance (Store  a, Store  b) => Store  (EntryWithChildren a b)
 
 mkEntryWithoutChildren :: a -> EntryWithChildren ann a
 mkEntryWithoutChildren name = EntryWithChildren name Nothing
@@ -240,4 +225,3 @@ data ChildrenVisibility ann
   deriving Pretty via PPGeneric (ChildrenVisibility ann)
 
 instance NFData a => NFData (ChildrenVisibility a)
-instance Store  a => Store  (ChildrenVisibility a)

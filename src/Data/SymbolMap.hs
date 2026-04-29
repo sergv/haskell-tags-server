@@ -40,7 +40,6 @@ import Data.Map.Strict qualified as M
 import Data.Maybe
 import Data.Set (Set)
 import Data.Set qualified as S
-import Data.Store (Store)
 import Prettyprinter.Ext
 
 import Data.Symbols
@@ -61,7 +60,6 @@ data SymbolMap = SymbolMap
   , smAllSymbols  :: !(Map UnqualifiedSymbolName (Set ResolvedSymbol))
   } deriving (Eq, Ord, Show, Generic)
 
-instance Store SymbolMap
 instance NFData SymbolMap
 
 instance Semigroup SymbolMap where

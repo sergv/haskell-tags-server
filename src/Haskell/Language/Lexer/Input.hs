@@ -34,7 +34,7 @@ import Lens.Micro
 
 import Haskell.Language.Lexer.InputStack (InputStack(..), InputType(..))
 import Haskell.Language.Lexer.InputStack qualified as InputStack
-import Haskell.Language.Lexer.Types
+import Haskell.Language.Tags.Types
 
 -- | Type that represents current position in the analyzed module.
 data AlexInput = AlexInput

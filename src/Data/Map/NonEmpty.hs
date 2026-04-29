@@ -33,7 +33,6 @@ import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
-import Data.Store (Store)
 import GHC.Generics
 import Prettyprinter.Combinators
 
@@ -43,8 +42,6 @@ data NonEmptyMap k v =
   -- @k@ is always the smallest key.
   NonEmptyMap !k !v !(Map k v)
   deriving (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
-
-instance (Store k, Store v, Ord k) => Store (NonEmptyMap k v)
 
 instance (Ord k, Pretty k, Pretty v) => Pretty (NonEmptyMap k v) where
   pretty = ppMap . toMap

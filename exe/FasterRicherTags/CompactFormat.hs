@@ -28,7 +28,7 @@ import System.IO (Handle, hPutChar)
 
 import Data.Symbols
 
-import FasterRicherTags.Types
+import Haskell.Language.Tags.Types
 
 getUniqKey :: ResolvedSymbol -> (UnqualifiedSymbolName, Type, Maybe ParentTag)
 getUniqKey x =

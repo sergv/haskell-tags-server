@@ -32,18 +32,18 @@ import Prettyprinter.Ext
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import Haskell.Language.Lexer (tokenize, modeFromFilename)
-import Haskell.Language.Lexer.Types (Pos, ServerToken, Line(..), Type(..))
-
 import Control.Monad.Logging.Simple
 import Data.GenericDiff
 import Data.KeyMap qualified as KM
 import Data.Path
 import Data.SubkeyMap qualified as SubkeyMap
 import Data.Symbols
+import Haskell.Language.Lexer (tokenize)
+import Haskell.Language.Lexer.Types (Token, LitMode(..))
 import Haskell.Language.Server.Tags.AnalyzeHeader
 import Haskell.Language.Server.Tags.Types.Imports
 import Haskell.Language.Server.Tags.Types.Modules
+import Haskell.Language.Tags.Types (Pos, Line(..), Type(..))
 
 import TestUtils
 import Haskell.Language.Server.Tags.AnalyzeHeaderTests.Regressions
@@ -2818,8 +2818,8 @@ doTest :: HasCallStack => Test -> TestTree
 doTest TestCase{testName, input, expectedResult} =
   testCase testName $ do
     (res, logs) <- runWriterT $ runSimpleLoggerT (Just (Custom (tell . (:[])))) Debug $ runErrorExceptT $ do
-      (tokens :: [Pos ServerToken]) <-
-        case tokenize (modeFromFilename filename) $ TE.encodeUtf8 input of
+      (tokens :: [Pos Token]) <-
+        case tokenize LitVanilla $ TE.encodeUtf8 input of
           Left err -> liftIO $ assertFailure $ renderStringWide $ "Failed to get tokens:" ## pretty err
           Right xs -> pure xs
       analyzeHeader Nothing filename tokens

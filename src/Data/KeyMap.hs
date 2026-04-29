@@ -42,7 +42,6 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Data.Pointed
 import Data.Set (Set)
-import Data.Store (Store)
 import GHC.Generics
 
 import Prettyprinter.Combinators
@@ -58,7 +57,6 @@ deriving instance (Eq   (f a), Eq   (Key a)) => Eq   (KeyMap f a)
 deriving instance (Ord  (f a), Ord  (Key a)) => Ord  (KeyMap f a)
 deriving instance (Show (f a), Show (Key a)) => Show (KeyMap f a)
 
-instance (Store (f a), Store (Key a), Ord (Key a)) => Store (KeyMap f a)
 instance (NFData (f a), NFData (Key a)) => NFData (KeyMap f a)
 
 instance (Pretty (Key a), Pretty (f a)) => Pretty (KeyMap f a) where

@@ -9,8 +9,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module SearchTests.Data
-  ( SymbolType
-  , SearchResult(..)
+  ( SearchResult(..)
   , WorkingDirectory(..)
   , SearchTest(..)
   , TestSet(..)
@@ -23,8 +22,8 @@ import Data.Text qualified as T
 
 import Data.Path
 import Data.Symbols
-import FasterRicherTags.Types
 import Haskell.Language.Server.Tags.Types (NameResolutionStrictness(..))
+import Haskell.Language.Tags.Types
 
 s :: Text -> UnqualifiedSymbolName
 s str = fromMaybe err . mkUnqualifiedSymbolName . mkSymbolName $ str
@@ -36,8 +35,6 @@ known sym file line typ = Known (s sym) file line typ Nothing
 
 known' :: Text -> PathFragment -> Int -> Type -> ParentTag -> SearchResult
 known' sym file line typ = Known (s sym) file line typ . Just
-
-type SymbolType = Text
 
 -- | Type that encodes all possible BERT responses.
 data SearchResult

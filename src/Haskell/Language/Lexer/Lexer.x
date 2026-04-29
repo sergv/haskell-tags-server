@@ -42,6 +42,7 @@ import Haskell.Language.Lexer.Preprocessor
 import Haskell.Language.Lexer.RulePredicate
 import Haskell.Language.Lexer.State
 import Haskell.Language.Lexer.Types
+import Haskell.Language.Tags.Types
 
 }
 
@@ -410,17 +411,17 @@ $nl $space*             { \_ len -> pure $! one $! Newline $! len - 1 }
 
 {
 
-type AlexAction m = AlexInput -> Int -> m (NonEmpty ServerToken)
+type AlexAction m = AlexInput -> Int -> m (NonEmpty Token)
 
 one :: a -> NonEmpty a
 one x = x :| []
 
-kw :: Applicative m => ServerToken -> AlexAction m
+kw :: Applicative m => Token -> AlexAction m
 kw tok = \_ _ -> pure $ one tok
 
 tokenizeM
   :: (WithCallStack, Monad m)
-  => LitMode Void -> Text -> m (Either ErrorMessage [Pos ServerToken])
+  => LitMode Void -> Text -> m (Either ErrorMessage [Pos Token])
 tokenizeM mode input =
   runAlexT mode code toplevelCode input scanTokens
   where
@@ -433,19 +434,19 @@ tokenizeM mode input =
     toplevelCode = startCode
 
 -- TODO: add unsafe interleave here for producing tokens
-scanTokens :: (WithCallStack, Monad m) => AlexT m [Pos ServerToken]
+scanTokens :: (WithCallStack, Monad m) => AlexT m [Pos Token]
 scanTokens = do
   toks <- alexMonadScan
   case valOf $ NE.last toks of
     EOF -> pure []
     _   -> (toList toks <>) <$> scanTokens
 
-alexMonadScan :: (WithCallStack, Monad m) => AlexT m (NonEmpty (Pos ServerToken))
+alexMonadScan :: (WithCallStack, Monad m) => AlexT m (NonEmpty (Pos Token))
 alexMonadScan = do
   line <- gets (aiLine . asInput)
   fmap (Pos (mkSrcPos line)) <$> continueScanning
 
-continueScanning :: forall m. (WithCallStack, Monad m) => AlexT m (NonEmpty ServerToken)
+continueScanning :: forall m. (WithCallStack, Monad m) => AlexT m (NonEmpty Token)
 continueScanning = do
   env <- ask
   s   <- get
@@ -469,31 +470,31 @@ continueScanning = do
       action (asInput s) tokLen
   pure toks
 
-startRecursiveComment :: Monad m => AlexT m (NonEmpty ServerToken)
+startRecursiveComment :: Monad m => AlexT m (NonEmpty Token)
 startRecursiveComment = do
   void $ modifyCommentDepth (+ 1)
   alexSetCode commentCode
   continueScanning
 
-endRecursiveComment :: Monad m => AlexT m (NonEmpty ServerToken)
+endRecursiveComment :: Monad m => AlexT m (NonEmpty Token)
 endRecursiveComment = do
   newDepth <- modifyCommentDepth (\x -> max 0 (x - 1))
   when (newDepth == 0) $
     alexSetToplevelCode
   continueScanning
 
-startQuasiquoter :: Monad m => AlexT m (NonEmpty ServerToken)
+startQuasiquoter :: Monad m => AlexT m (NonEmpty Token)
 startQuasiquoter = do
   alexSetCode qqCode
   pure $ one QuasiquoterStart
 
-startSplice :: Monad m => Context -> AlexT m (NonEmpty ServerToken)
+startSplice :: Monad m => Context -> AlexT m (NonEmpty Token)
 startSplice ctx = do
   alexSetToplevelCode
   pushContext ctx
   pure $ one SpliceStart
 
-endQuasiquoter :: Monad m => AlexT m (NonEmpty ServerToken)
+endQuasiquoter :: Monad m => AlexT m (NonEmpty Token)
 endQuasiquoter = do
   alexSetToplevelCode
   pure $ one QuasiquoterEnd
@@ -544,7 +545,7 @@ startLiterateLatex = do
   alexSetToplevelCode
   alexEnterLatexCodeEnv
 
-endLiterate :: Monad m => AlexT m (NonEmpty ServerToken)
+endLiterate :: Monad m => AlexT m (NonEmpty Token)
 endLiterate = do
   alexSetCode literateCode
   alexExitLiterateEnv
@@ -585,7 +586,7 @@ data PredEnv = PredEnv
 
 resolvePossibleMacroArgumentOrConstantMacro
   :: (WithCallStack, Monad m)
-  => AlexInput -> Text -> AlexT m (NonEmpty ServerToken)
+  => AlexInput -> Text -> AlexT m (NonEmpty Token)
 resolvePossibleMacroArgumentOrConstantMacro input matchedText = do
   let macroName   = mkMacroName matchedText
   case InputStack.lookupMacroArg macroName $ aiInput input of

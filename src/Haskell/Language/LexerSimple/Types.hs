@@ -69,7 +69,8 @@ import GHC.Ptr
 import GHC.Word
 import Text.Printf
 
-import Haskell.Language.Lexer.Types (Context(..), AlexCode(..), LitMode(..), LitStyle(..), SrcPos(..), ServerToken(..), Pos(..), Line(..), increaseLine, Offset(..))
+import Haskell.Language.Lexer.Types (Context(..), AlexCode(..), LitMode(..), LitStyle(..), Token(..))
+import Haskell.Language.Tags.Types (SrcPos(..), Pos(..), Line(..), increaseLine, Offset(..))
 import Haskell.Language.LexerSimple.LensBlaze
 
 data AlexState = AlexState
@@ -243,13 +244,13 @@ runAlexM
   :: forall a. LitMode Void
   -> AlexCode
   -> C8.ByteString
-  -> AlexM (a, [(AlexInput, ServerToken)])
-  -> (a, [Pos ServerToken])
+  -> AlexM (a, [(AlexInput, Token)])
+  -> (a, [Pos Token])
 runAlexM litLoc startCode input action =
   performIO $
     withAlexInput input $ \input' _ -> do
       let a  :: a
-          xs :: [(AlexInput, ServerToken)]
+          xs :: [(AlexInput, Token)]
           (# (a, xs), _ #) = unAlexM action
                            $ mkAlexState litLoc startCode input'
       -- Contents of 'xs' has been seq'ed so TokenVals in there should

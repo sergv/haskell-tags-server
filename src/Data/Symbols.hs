@@ -48,32 +48,26 @@ import Control.Applicative
 import Control.Arrow ((&&&))
 import Control.DeepSeq
 import Control.Monad.Except.Ext
-
 import Data.Attoparsec.Text
 import Data.Attoparsec.Text qualified as Attoparsec
 import Data.Char (isUpper, isAlphaNum)
 import Data.Coerce
-import Data.Hashable
 import Data.List qualified as L
 import Data.Maybe
-import Data.Store (Store)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Prettyprinter.Ext
 import Prettyprinter.Symbols.Ascii (dquotes)
 
-import Haskell.Language.Lexer.Types (Pos(..), TagVal(..), SrcPos(..))
-
 import Data.ErrorMessage
 import Data.KeyMap (HasKey(..))
 import Data.Path
-
-import FasterRicherTags.Types
+import Haskell.Language.Tags.Types
 
 -- | e.g. Foo, Foo.Bar. Assume that this is not an import qualifier.
 -- Import qualifiers should be labeled as 'ImportQualifer'.
 newtype ModuleName = ModuleName { getModuleName :: Text }
-  deriving (Eq, Ord, Show, Hashable, NFData, Store)
+  deriving (Eq, Ord, Show, NFData)
 
 instance Pretty ModuleName where
   pretty = dquotes . pretty . getModuleName
@@ -112,7 +106,7 @@ fileNameToModuleName fname =
 -- import Foo.Bar as XXX
 -- import qualified Fizz.Buzz as XXX
 newtype ImportQualifier = ImportQualifier { getImportQualifier :: ModuleName }
-  deriving (Eq, Ord, Show, Pretty, Hashable, NFData, Store)
+  deriving (Eq, Ord, Show, Pretty, NFData)
 
 {-# INLINE mkImportQualifier #-}
 mkImportQualifier :: ModuleName -> ImportQualifier
@@ -120,7 +114,7 @@ mkImportQualifier = ImportQualifier
 
 -- | Name the @ResolvedSymbol@ refers to. Can be either qualified or unqualified.
 newtype SymbolName = SymbolName { getSymbolName :: Text }
-  deriving (Eq, Ord, Show, Pretty, Hashable, NFData, Store)
+  deriving (Eq, Ord, Show, Pretty, NFData)
 
 {-# INLINE mkSymbolName #-}
 mkSymbolName :: Text -> SymbolName
@@ -128,7 +122,7 @@ mkSymbolName = SymbolName
 
 -- | Name the @ResolvedSymbol@ refers to.
 newtype UnqualifiedSymbolName = UnqualifiedSymbolName { getUnqualifiedSymbolName :: SymbolName }
-  deriving (Eq, Ord, Show, Hashable, NFData, Store)
+  deriving (Eq, Ord, Show, NFData)
 
 instance Pretty UnqualifiedSymbolName where
   pretty = pretty . getUnqualifiedSymbolName
@@ -181,9 +175,7 @@ data ResolvedSymbol = ResolvedSymbol
   , rsParent :: !(Maybe ParentTag)
   } deriving (Eq, Ord, Show, Generic)
 
-instance Hashable ResolvedSymbol
 instance NFData   ResolvedSymbol
-instance Store    ResolvedSymbol
 
 instance HasKey ResolvedSymbol where
   type Key ResolvedSymbol = UnqualifiedSymbolName

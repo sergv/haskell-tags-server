@@ -24,7 +24,8 @@ import Data.SizedList qualified as SL
 import Prettyprinter.Generics
 
 import Haskell.Language.Lexer.CppTypes qualified as Cpp
-import Haskell.Language.Lexer.Types (Pos(..), ServerToken(..))
+import Haskell.Language.Lexer.Types (Token(..))
+import Haskell.Language.Tags.Types (Pos(..))
 
 data Tree a
   = Leaf a
@@ -47,10 +48,10 @@ mkSeq' :: Maybe (Tree [a]) -> Tree [a] -> Tree [a]
 mkSeq' Nothing   ys = ys
 mkSeq' (Just xs) ys = mkSeq xs ys
 
-preprocessorBlocks :: [Pos ServerToken] -> Tree [Pos ServerToken]
+preprocessorBlocks :: [Pos Token] -> Tree [Pos Token]
 preprocessorBlocks = goTop []
   where
-    goTop :: [Pos ServerToken] -> [Pos ServerToken] -> Tree [Pos ServerToken]
+    goTop :: [Pos Token] -> [Pos Token] -> Tree [Pos Token]
     goTop = go
       where
         go acc = \case
@@ -82,7 +83,7 @@ preprocessorBlocks = goTop []
           t : ts -> go (t : acc) ts
           []     -> Leaf $ reverse acc
 
-    goNest :: Bool -> [Pos ServerToken] -> (Maybe (Tree [Pos ServerToken]), [Pos ServerToken])
+    goNest :: Bool -> [Pos Token] -> (Maybe (Tree [Pos Token]), [Pos Token])
     goNest dropAlt = go [] id []
       where
         produceAlt :: (Tree [a] -> Tree b) -> [a] -> Maybe (Tree b)
@@ -90,22 +91,22 @@ preprocessorBlocks = goTop []
           if dropAlt then Nothing else Just $ f (Leaf (reverse acc))
 
         produceResult
-          :: [Tree [Pos ServerToken]]
-          -> (Tree [Pos ServerToken] -> Tree [Pos ServerToken])
-          -> [Pos ServerToken]
-          -> [Pos ServerToken]
-          -> (Maybe (Tree [Pos ServerToken]), [Pos ServerToken])
+          :: [Tree [Pos Token]]
+          -> (Tree [Pos Token] -> Tree [Pos Token])
+          -> [Pos Token]
+          -> [Pos Token]
+          -> (Maybe (Tree [Pos Token]), [Pos Token])
         produceResult alts f acc ts = case (produceAlt f acc, alts) of
           (x,       [])     -> (x, ts)
           (Nothing, a : as) -> (Just $ mkAlt $ a :| as, ts)
           (Just x,  as)     -> (Just $ mkAlt $ x :| as, ts)
 
         go
-          :: [Tree [Pos ServerToken]]
-          -> (Tree [Pos ServerToken] -> Tree [Pos ServerToken])
-          -> [Pos ServerToken]
-          -> [Pos ServerToken]
-          -> (Maybe (Tree [Pos ServerToken]), [Pos ServerToken])
+          :: [Tree [Pos Token]]
+          -> (Tree [Pos Token] -> Tree [Pos Token])
+          -> [Pos Token]
+          -> [Pos Token]
+          -> (Maybe (Tree [Pos Token]), [Pos Token])
         go alts f acc ts@[]    = produceResult alts f acc ts
         go alts f acc (t : ts) = case t of
 
@@ -137,10 +138,10 @@ prepend :: Maybe a -> [a] -> [a]
 prepend Nothing  xs = xs
 prepend (Just x) xs = x : xs
 
-resolveAlternativesLinearly :: Tree [Pos ServerToken] -> NonEmpty [Pos ServerToken]
+resolveAlternativesLinearly :: Tree [Pos Token] -> NonEmpty [Pos Token]
 resolveAlternativesLinearly = fmap SL.toList . go . fmap SL.fromList
   where
-    go :: Tree (SizedList (Pos ServerToken)) -> NonEmpty (SizedList (Pos ServerToken))
+    go :: Tree (SizedList (Pos Token)) -> NonEmpty (SizedList (Pos Token))
     go = \case
       Leaf x  -> NE.singleton x
       Alt xs  -> diag $ go <$> xs

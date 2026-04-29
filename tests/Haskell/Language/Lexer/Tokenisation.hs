@@ -6,8 +6,9 @@
 -- Maintainer  :  serg.foo@gmail.com
 ----------------------------------------------------------------------------
 
-{-# LANGUAGE MultilineStrings  #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE MultilineStrings          #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE OverloadedStrings         #-}
 
 module Haskell.Language.Lexer.Tokenisation (tests) where
 
@@ -16,7 +17,6 @@ import Test.Tasty
 
 import Data.Foldable (toList)
 import Data.List qualified as L
-import Data.Maybe (mapMaybe)
 import Data.Text qualified as T
 import Data.Void (Void)
 
@@ -24,6 +24,8 @@ import Haskell.Language.Blocks
 import Haskell.Language.Lexer.CppTypes qualified as Cpp
 import Haskell.Language.Lexer.TokenisationUtils
 import Haskell.Language.Lexer.Types
+import Haskell.Language.Tags.Analyze
+import Haskell.Language.Tags.Types
 import TestUtils (makeTest)
 
 tests :: TestTree
@@ -286,9 +288,9 @@ testTokenise = testGroup "Tokenise"
   , tokenizePreprocessor
   ]
   where
-    (==>) :: HasCallStack => T.Text -> [ServerToken] -> TestTree
+    (==>) :: HasCallStack => T.Text -> [Token] -> TestTree
     (==>) = makeTest f
-    f :: T.Text -> [ServerToken]
+    f :: T.Text -> [Token]
     f = L.drop 1 -- strip uninteresting initial newline
       . map valOf
       . tokenize' LitVanilla
@@ -925,11 +927,11 @@ testBreakBlocks = testGroup "Break blocks"
     ]
   ]
   where
-    (==>) :: HasCallStack => T.Text -> [[ServerToken]] -> TestTree
+    (==>) :: HasCallStack => T.Text -> [[Token]] -> TestTree
     (==>) = makeTest (f LitVanilla)
-    (|=>) :: HasCallStack => T.Text -> [[ServerToken]] -> TestTree
+    (|=>) :: HasCallStack => T.Text -> [[Token]] -> TestTree
     (|=>) = makeTest (f LitOutside)
-    f :: LitMode Void -> T.Text -> [[ServerToken]]
+    f :: LitMode Void -> T.Text -> [[Token]]
     f mode
       = map (map valOf . toList)
       . breakBlocks StripDirectives
@@ -967,10 +969,9 @@ testWhereBlock = testGroup "whereBlock"
   ]
   where
     (==>) = makeTest f
-    f = map (mapMaybe (embedServerToken . valOf) . unstrippedTokensOf)
+    f = map (map valOf . unUnstrippedTokens)
       . whereBlock
       . UnstrippedTokens
-      . stripServerTokens'
       . tokenize' LitVanilla
 
 testProcess :: TestTree
