@@ -177,8 +177,6 @@ library
   other-modules:
     Control.Monad.EitherCPS
 
-    Data.Filesystem
-    Data.NBSem
     Data.Path.Internal
     Data.Strict.Pair
   hs-source-dirs:
