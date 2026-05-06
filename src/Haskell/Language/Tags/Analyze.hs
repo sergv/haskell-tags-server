@@ -15,7 +15,7 @@ module Haskell.Language.Tags.Analyze
   ( ProcessMode(..)
   , processTokens
 
-  -- for tests
+  -- For tests.
   , UnstrippedTokens(..)
   , whereBlock
   ) where
@@ -39,6 +39,11 @@ import Prettyprinter.Generics (Generic, PPGeneric(..), Pretty)
 import Haskell.Language.Lexer.CppTypes qualified as CPP
 import Haskell.Language.Lexer.Types
 import Haskell.Language.Tags.Types
+
+{-# WARNING in "x-tests-only" type UnstrippedTokens
+    "This type is exported for tests only" #-}
+{-# WARNING in "x-tests-only" data UnstrippedTokens
+    "This constructor is exported for tests only" #-}
 
 -- | Newlines have to remain in the tokens because 'breakBlocks' relies on
 -- them.  But they make pattern matching on the tokens unreliable because
@@ -907,6 +912,9 @@ classBodyTags unstripped = case stripNewlines unstripped of
   Pos _ KWType : Pos pos (T name) : _ -> [mkTag pos name Family]
   Pos _ KWData : Pos pos (T name) : _ -> [mkTag pos name Family]
   tokens -> fst $ functionTags ExpectFunctions tokens
+
+{-# WARNING in "x-tests-only" whereBlock
+    "This function is exported for tests only" #-}
 
 -- | Skip to the where and split the indented block below it.
 whereBlock :: UnstrippedTokens -> [UnstrippedTokens]

@@ -10,6 +10,8 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverloadedStrings         #-}
 
+{-# OPTIONS_GHC -Wno-x-tests-only #-}
+
 module Haskell.Language.Lexer.Tokenisation (tests) where
 
 import GHC.Stack.Types (HasCallStack)
