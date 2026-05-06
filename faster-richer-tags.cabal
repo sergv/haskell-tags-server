@@ -68,8 +68,10 @@ common ghc-options
 
 library
   import: ghc-options
+
   if flag(dev)
     cpp-options: -DDEVELOPMENT
+
   if os(windows)
     build-depends: unix-compat
   else
@@ -83,29 +85,21 @@ library
     , base >= 4
     , bimap
     , bytestring
-    , conduit
-    , conduit-extra
     , containers
     , deepseq
     , directory
     , dlist
-    , emacs-native
     , exceptions >= 0.8
     , filepath
-    , lifted-async
     , microlens
     , monad-control >= 1.0
     , mtl >= 2.2
+    , os-string
     , parallel
     , pointed
     , prettyprinter
     , prettyprinter-combinators
     , profunctors >= 5.2
-    , regex-tdfa >= 1.2.2
-    , scientific
-    , stm
-    , stm-chans
-    , streaming-commons
     , text
     , transformers
     , transformers-base
@@ -122,7 +116,6 @@ library
     Control.Monad.Par.Combinator.Ext
     Control.Parallel.Strategies.Ext
 
-    Data.CompiledRegex
     Data.ErrorMessage
     Data.Foldable.Ext
     Data.HasLens
@@ -172,15 +165,20 @@ library
 
     Prettyprinter.Ext
 
+    System.OsPath.Ext
+
     -- Interface for tests
     Haskell.Language.Server.Tags.LoadModule
+
   other-modules:
     Control.Monad.EitherCPS
 
     Data.Path.Internal
     Data.Strict.Pair
+
   hs-source-dirs:
     src
+
   build-tool-depends:
     alex:alex >= 3.1.7
 
@@ -199,7 +197,6 @@ executable faster-richer-tags
     , containers
     , directory
     , directory-ospath-streaming
-    , emacs-native
     , file-io
     , filepath >= 1.4.100
     , ghc-prim
@@ -217,8 +214,6 @@ executable faster-richer-tags
 
 test-suite test-faster-richer-tags
   import: ghc-options
-  if !os(windows)
-    build-depends: unix >= 2.6
   type:
     exitcode-stdio-1.0
   hs-source-dirs:
@@ -244,9 +239,7 @@ test-suite test-faster-richer-tags
     , QuickCheck
     -- For MultilineStrings, GHC >= 9.12
     , base >= 4.21
-    , bytestring
     , containers
-    , deepseq
     , directory-ospath-streaming
     , dlist
     , exceptions
@@ -256,7 +249,6 @@ test-suite test-faster-richer-tags
     , mtl
     , prettyprinter
     , prettyprinter-combinators
-    , scientific
     , tasty >= 0.7
     , tasty-hunit >= 0.4
     , tasty-quickcheck

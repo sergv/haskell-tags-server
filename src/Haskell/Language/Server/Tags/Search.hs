@@ -14,7 +14,6 @@ module Haskell.Language.Server.Tags.Search
   ( findSymbolInFiles
 
   , findSymbol
-  , findSymbolByRegexp
   ) where
 
 import Prelude hiding (mod)
@@ -43,7 +42,6 @@ import System.OsPath (OsPath)
 
 import Control.Monad.Filesystem (MonadFS)
 import Control.Monad.Logging
-import Data.CompiledRegex
 import Data.ErrorMessage
 import Data.Path as Path
 import Data.SubkeyMap qualified as SubkeyMap
@@ -111,32 +109,6 @@ findSymbol scope mod sym = do
       foldMapPar (SM.lookup sym') <$> gets (scopeFromAllModules currMod)
       where
         (_, sym') = splitQualifiedPart sym
-
-findSymbolByRegexp
-  :: (WithCallStack, MonadError ErrorMessage m, MonadState LoadState m, MonadReader TagsServerConf m, MonadLog m)
-  => NameResolutionScope
-  -> UnresolvedModule
-  -> CompiledRegex          -- ^ Regexp to look for.
-  -> m (Set ResolvedSymbol) -- ^ Found tags, may be empty when nothing was found.
-findSymbolByRegexp scope mod re = do
-  logVerboseDebug $
-    "[findSymbolByRegexp] searching for" <+> pretty re <+> "within" <+> pretty (mhModName (modHeader mod))
-  nameResolution <- asks tsconfNameResolution
-  currMod        <- resolveModule nameResolution checkLoadingModules loadModule mod
-  (mods :: NonEmpty SymbolMap) <-
-    case scope of
-      ScopeCurrentModule -> do
-        importNames <-
-          visibleNamesFromImports
-            AllNames
-            (mhModName (modHeader currMod))
-            (SubkeyMap.toList (mhImports (modHeader currMod)))
-        pure $ modAllSymbols currMod :| importNames
-      ScopeAllModules    -> gets $ scopeFromAllModules currMod
-  pure $
-    foldMapPar
-      (S.fromList . filter (reMatches re . unqualSymNameText . resolvedSymbolName) . SM.toList)
-      mods
 
 scopeFromAllModules :: Module a -> LoadState -> NonEmpty SymbolMap
 scopeFromAllModules currMod LoadState{lsLoadedModules, lsUnloadedFiles} =

@@ -61,8 +61,6 @@ import Control.Monad.Filesystem qualified as MonadFS
 import Control.Monad.Logging
 import Control.Monad.Logging.Simple
 import Data.ErrorMessage
-import Data.Filesystem.Find
-import Data.Ignores
 import Data.MonoidalMap (MonoidalMap(..))
 import Data.Path (FullPath, FileType(..))
 import Data.Path qualified as Path
