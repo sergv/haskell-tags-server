@@ -422,7 +422,7 @@ analyzeExports filename importQualifiers ts = do
     PLParen : PRParen : _    -> pure EmptyExports
     PLParen : rest           -> SpecificExports <$> go mempty mempty rest
     toks                     ->
-      throwErrorWithCallStack $ "Unrecognised shape of export list:" ## ppTokens toks
+      throwErrorWithCallStack $ "Unrecognised shape of export list in" <+> pretty filename <> ":" ## ppTokens toks
   where
     -- Analyze comma-separated list of entries like
     -- - Foo
