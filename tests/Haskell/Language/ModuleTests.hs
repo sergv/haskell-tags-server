@@ -386,9 +386,9 @@ preprocessorOverWholeModule = TestCase
                   ( key
                   , NE.singleton $ ImportSpec key Unqualified $ SpecificImports $ ImportList
                       { ilImportType = Imported
-                        , ilEntries    = mempty
-                        }
-                    )
+                      , ilEntries    = mempty
+                      }
+                  )
 
               }
           , modAllSymbols = mempty
