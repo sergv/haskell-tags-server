@@ -209,12 +209,12 @@ $hexdigit   = [0-9a-fA-F]
 @nl ">" $space*
   / { isLiterateEnabled' }
   { \input len -> pure $! Newline $! countInputSpace input len }
-@nl
+@nl $space*
   / { shouldEndLiterateBird }
-  { \_ _   -> Newline 0 <$ endLiterate }
+  { \_ len     -> Newline (I# len - 1) <$ endLiterate }
 @nl "\end{code}"
   / { shouldEndLiterateLatex }
-  { \_ _   -> endLiterate' }
+  { \_ _       -> endLiterate' }
 
 [\\]? @nl $space* "{-"  { \input len -> startIndentationCounting (countInputSpace input len) }
 [\\]? @nl $space*       { \input len -> pure $! Newline $! I# len - countBackslashCR input - 1 }

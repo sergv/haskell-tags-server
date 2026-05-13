@@ -681,14 +681,79 @@ testTokeniseWithNewlines = testGroup "Tokenise with newlines"
       , T "m", DoubleColon, T "a", Arrow, T "b", Newline 1
       , T "n", DoubleColon, T "c"
       ]
+    , testGroup "end of literate bird"
+      [ """
+        > foo :: Int -> Int
+
+        bar1 :: Int -> Int
+
+        > foo x = x
+        """
+        |=>
+        [ Newline 1
+        , T "foo", DoubleColon, T "Int", Arrow, T "Int", Newline 0
+        , Newline 1
+        , T "foo", T "x", Equals, T "x", Newline 0
+        ]
+      , """
+        > foo :: Int -> Int
+
+        \tbar2 :: Int -> Int
+
+        > foo x = x
+        """
+        |=>
+        [ Newline 1
+        , T "foo", DoubleColon, T "Int", Arrow, T "Int", Newline 0
+        , Newline 1
+        , T "foo", T "x", Equals, T "x", Newline 0
+        ]
+      , """
+        > foo :: Int -> Int
+        \t
+        \tbar3 :: Int -> Int
+
+        > foo x = x
+        """
+        |=>
+        [ Newline 1
+        , T "foo", DoubleColon, T "Int", Arrow, T "Int", Newline 1
+        , Newline 1
+        , T "foo", T "x", Equals, T "x", Newline 0
+        ]
+      , """
+        > foo :: Int -> Int
+
+        \tbar4 :: Int -> Int
+        \t
+        > foo x = x
+        """
+        |=>
+        [ Newline 1
+        , T "foo", DoubleColon, T "Int", Arrow, T "Int", Newline 0
+        , Newline 1
+        , T "foo", T "x", Equals, T "x", Newline 0
+        ]
+      , """
+        > foo :: Int -> Int
+        \t
+        \tbar5 :: Int -> Int
+        \t
+        > foo x = x
+        """
+        |=>
+        [ Newline 1
+        , T "foo", DoubleColon, T "Int", Arrow, T "Int", Newline 1
+        , Newline 1
+        , T "foo", T "x", Equals, T "x", Newline 0
+        ]
+      ]
     ]
   ]
   where
     (==>) = makeTest (f LitVanilla)
     (|=>) = makeTest (f LitOutside)
-    f mode =
-      map valOf
-      . tokenize' mode
+    f mode = map valOf . tokenize' mode
 
 
 testStripComments :: TestTree
@@ -2321,6 +2386,33 @@ testLiterate = testGroup "Literate"
     """
     ==>
     ["C", "m", "n"]
+  , """
+    > foo :: Int -> Int
+
+    \tbar :: Int -> Int
+
+    > foo x = x
+    """
+    ==>
+    ["foo"]
+  , """
+    > foo :: Int -> Int
+
+    \tbar :: Int -> Int
+    \t
+    > foo x = x
+    """
+    ==>
+    ["foo"]
+  , """
+    > foo :: Int -> Int
+    \t
+    \tbar :: Int -> Int
+    \t
+    > foo x = x
+    """
+    ==>
+    ["foo"]
   , """
     Test
     \\begin{code}

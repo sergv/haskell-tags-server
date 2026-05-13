@@ -745,6 +745,62 @@ alexPreprocessing = TestCase
     }
   }
 
+literateTests :: TestTree
+literateTests = testGroup "Literate"
+  [ doTest $ TestCase
+      { testName       = "Comment before export list"
+      , input          = (, LitOutside) $
+          """
+          > module Foo
+          \t
+          \tModule to deal with the screen and mouse initialisation.
+          \tAlso contains function to control active screen regions.
+          \t
+          >\t(\tfoo,bar,
+          >\t\tbaz
+          >\t\t)
+
+          > where
+          > import Bar (bar)
+          """
+      , expectedResult = mkSingleton $ defaultMod
+        { modHeader = defaultModHeader
+          { mhModName = mkModuleName "Foo"
+          , mhExports = SpecificExports ModuleExports
+              { meExportedEntries    = KeyMap.fromList
+                  [ EntryWithChildren
+                    { entryName               = (mkSymbolName "foo", pt 6 Function)
+                    , entryChildrenVisibility = Nothing
+                    }
+                  , EntryWithChildren
+                    { entryName               = (mkSymbolName "bar", pt 6 Function)
+                    , entryChildrenVisibility = Nothing
+                    }
+                  , EntryWithChildren
+                    { entryName               = (mkSymbolName "baz", pt 7 Function)
+                    , entryChildrenVisibility = Nothing
+                    }
+                  ]
+              , meReexports          = mempty
+              , meHasWildcardExports = Any False
+              }
+          , mhImports = SubkeyMap.fromList
+            [ let key = ImportKey VanillaModule (mkModuleName "Bar") in
+              ( key
+              , NE.singleton $ ImportSpec key Unqualified $ SpecificImports $ ImportList
+                  { ilImportType = Imported
+                  , ilEntries    = KeyMap.fromList
+                      [ EntryWithChildren (mkSymName "bar") Nothing
+                      ]
+                  }
+              )
+            ]
+          }
+        , modAllSymbols = mempty
+        }
+      }
+  ]
+
 alexTests :: TestTree
 alexTests = testGroup "Alex"
   [ testGroup "vanilla"
@@ -1372,6 +1428,7 @@ tests = testGroup "Whole module tests"
     , doTest moduleWithDisabledSectionTest2
     , doTest moduleWithDisabledAndEnabledSectionsTest
     ]
+  , literateTests
   , alexTests
   , happyTests
   ]
