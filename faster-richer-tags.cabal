@@ -98,7 +98,7 @@ library
     , parallel
     , pointed
     , prettyprinter
-    , prettyprinter-combinators
+    , prettyprinter-combinators >= 0.1.4
     , profunctors >= 5.2
     , text
     , transformers
