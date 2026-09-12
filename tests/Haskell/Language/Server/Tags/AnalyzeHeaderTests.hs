@@ -1008,6 +1008,7 @@ moduleImportNamespaces = TestCase
         , data Typ2
         , data (:**)
         , C(type (#))
+        , type (|?) (InL, InR)
         )
       """
   , expectedResult = ModuleHeader
@@ -1047,6 +1048,13 @@ moduleImportNamespaces = TestCase
                           { entryName               = mkUnqualSymName "C"
                           , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
                               [ mkUnqualSymName "#"
+                              ]
+                          }
+                      , EntryWithChildren
+                          { entryName               = mkUnqualSymName "|?"
+                          , entryChildrenVisibility = Just $ VisibleSpecificChildren $ M.fromSet (const ()) $ S.fromList
+                              [ mkUnqualSymName "InL"
+                              , mkUnqualSymName "InR"
                               ]
                           }
                       ]

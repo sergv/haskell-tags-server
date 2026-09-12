@@ -333,9 +333,9 @@ findImportListEntries filename importType = go'
           pure (SpecificImports importList, rest)
         -- Type import
         (PType; PData) : PName name : rest                                ->
-          entryWithoutChildren name rest
+          entryWithChildren "namespaced name in import list" name rest
         (PType; PData) : PLParen : PAnyName name : PRParen : rest         ->
-          entryWithoutChildren name rest
+          entryWithChildren "namespaced operator in import list" name rest
         -- Pattern import
         PPattern : restWithName@(PName name : rest)
           | isVanillaTypeName name
